@@ -30,6 +30,18 @@
 import type { AgentTask, IssueWakeup } from "@multica/core/types";
 import { isActiveWakeupRun } from "./wakeup-presentation";
 
+/**
+ * A wakeup as every read on this side of the wire hands it over.
+ *
+ * The workspace table's rows (`WorkspaceWakeup`) carry no `instruction` —
+ * the endpoint does not send it (`data/schemas.ts`) — while the issue-level
+ * reads do. Every predicate below reads only lifecycle fields, so widening
+ * the parameter to the `Omit` lets both surfaces share one implementation
+ * instead of the table re-deriving "can this be switched off" for itself.
+ * Web types the same helpers against `Omit<IssueWakeup, "instruction">`.
+ */
+type WakeupLike = Omit<IssueWakeup, "instruction">;
+
 /** The server's own ceilings, read from the Go source rather than guessed:
  *  `issue_wakeup.go:287` (`instruction must be 1–12000 bytes`) and
  *  `issue_wakeup_system.go:34` (`MaxSystemWakeupInstruction = 4000`). Both are
@@ -72,7 +84,7 @@ export interface WakeupRunFacts {
 
 /** Fold a rule and its run into the facts the controls read. */
 export function wakeupRunFacts(
-  wakeup: IssueWakeup,
+  wakeup: WakeupLike,
   task?: AgentTask,
 ): WakeupRunFacts {
   return {
@@ -94,7 +106,7 @@ export function wakeupRunFacts(
  * write on every tap.
  */
 export function canDisableWakeup(
-  wakeup: IssueWakeup,
+  wakeup: WakeupLike,
   facts: WakeupRunFacts,
 ): boolean {
   return (
@@ -115,7 +127,7 @@ export function canDisableWakeup(
  * re-enable it without an explicit `rearm` ("consumed one-shot requires
  * explicit rearm").
  */
-export function isConsumedWakeup(wakeup: IssueWakeup): boolean {
+export function isConsumedWakeup(wakeup: WakeupLike): boolean {
   return (
     !wakeup.enabled &&
     wakeup.mode === "once" &&
@@ -130,7 +142,7 @@ export function isConsumedWakeup(wakeup: IssueWakeup): boolean {
  * safe one: an `at` rule with no deadline can never fire, so offering "enable
  * again" would send an enable the server rejects with "choose a future time".
  */
-export function isExpiredWakeup(wakeup: IssueWakeup, now = Date.now()): boolean {
+export function isExpiredWakeup(wakeup: WakeupLike, now = Date.now()): boolean {
   return (
     wakeup.kind === "at" &&
     (!wakeup.next_fire_at ||
@@ -145,7 +157,7 @@ export function isExpiredWakeup(wakeup: IssueWakeup, now = Date.now()): boolean 
  * a consumed one-shot; sending it for a rule that is merely paused would
  * silently move its deadline.
  */
-export function needsWakeupRearm(wakeup: IssueWakeup, now = Date.now()): boolean {
+export function needsWakeupRearm(wakeup: WakeupLike, now = Date.now()): boolean {
   return (
     !wakeup.enabled && (isConsumedWakeup(wakeup) || isExpiredWakeup(wakeup, now))
   );
@@ -170,7 +182,7 @@ export interface WakeupEnableGate {
  * 409 for the ones this refuses ("previous run is still active").
  */
 export function canEnableWakeup(
-  wakeup: IssueWakeup,
+  wakeup: WakeupLike,
   gate: WakeupEnableGate,
 ): boolean {
   return (
@@ -208,7 +220,7 @@ export interface WakeupControlState {
 }
 
 export interface WakeupControlInput {
-  wakeup: IssueWakeup;
+  wakeup: WakeupLike;
   status?: string | null;
   startedAt?: string | null;
   closed?: boolean;

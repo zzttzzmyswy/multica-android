@@ -35,7 +35,8 @@ import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { MultiSelectSheet } from "@/components/agent/multi-select-sheet";
-import { TextField } from "@/components/ui/text-field";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { WorkspaceWakeupsTable } from "@/components/autopilot/workspace-wakeups-table";
 import { autopilotListOptions } from "@/data/queries/autopilots";
 import { agentListOptions } from "@/data/queries/agents";
 import { squadListOptions } from "@/data/queries/squads";
@@ -199,6 +200,13 @@ export default function AutopilotsPage() {
   const members = membersRead.items;
 
   const [filterOpen, setFilterOpen] = useState(false);
+  // Web's 自动化 page is a Tabs holding 自动化 and 任务唤醒. Mobile had no tab
+  // structure at all; this is that choice, as a segmented control above the
+  // list — the shape the projects and skills lists already use.
+  const [tab, setTab] = useState<"autopilots" | "wakeups">("autopilots");
+  // Owned here rather than in the table so the header action can open it; the
+  // table mounts the picker + form when it is set.
+  const [wakeupCreateOpen, setWakeupCreateOpen] = useState(false);
   const scope = useAutopilotMobileViewStore((s) => s.scope);
   const sortField = useAutopilotMobileViewStore((s) => s.sortField);
   const sortDirection = useAutopilotMobileViewStore((s) => s.sortDirection);
@@ -246,6 +254,17 @@ export default function AutopilotsPage() {
 
   const headerRight = useCallback(() => {
     if (!wsSlug) return null;
+    // The header action belongs to the ACTIVE tab, as web's does: 自动化 adds an
+    // autopilot, 任务唤醒 adds a wakeup, and the two land on different routes.
+    if (tab === "wakeups") {
+      return (
+        <IconButton
+          name="add"
+          onPress={() => setWakeupCreateOpen(true)}
+          accessibilityLabel={t("autopilots.wakeups.create")}
+        />
+      );
+    }
     return (
       <IconButton
         name="add"
@@ -253,13 +272,31 @@ export default function AutopilotsPage() {
         accessibilityLabel={t("autopilots.new.title")}
       />
     );
-  }, [wsSlug, t]);
+  }, [wsSlug, t, tab]);
 
   return (
     <>
       <Stack.Screen options={{ headerRight }} />
       <View className="flex-1 bg-background">
-      {isLoading ? (
+      {/* The tab strip sits above BOTH bodies, loading and error states
+          included: the wakeups tab has its own read, so an autopilot list that
+          failed to load must not hide the tab that still works. */}
+      <View className="px-4 pt-2 pb-1">
+        <SegmentedControl
+          options={[
+            { value: "autopilots", label: t("autopilots.wakeups.tab") },
+            { value: "wakeups", label: t("autopilots.wakeups.title") },
+          ]}
+          value={tab}
+          onChange={setTab}
+        />
+      </View>
+      {tab === "wakeups" ? (
+        <WorkspaceWakeupsTable
+          createOpen={wakeupCreateOpen}
+          onCreateClose={() => setWakeupCreateOpen(false)}
+        />
+      ) : isLoading ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator />
         </View>

@@ -64,6 +64,9 @@ import type {
   IssuePropertyValue,
   IssueSubscriber,
   IssueWakeup,
+  WorkspaceWakeupFilters,
+  WorkspaceWakeupPage,
+  WorkspaceSystemWakeup,
   IssueWakeupInput,
   SystemWakeup,
   WakeupRun,
@@ -383,6 +386,10 @@ import {
   EMPTY_ISSUE_WAKEUP_LIST,
   SystemWakeupListSchema,
   EMPTY_SYSTEM_WAKEUP_LIST,
+  WorkspaceWakeupPageSchema,
+  EMPTY_WORKSPACE_WAKEUP_PAGE,
+  WorkspaceSystemWakeupListSchema,
+  EMPTY_WORKSPACE_SYSTEM_WAKEUP_LIST,
   WakeupRunListSchema,
   EMPTY_WAKEUP_RUN_LIST,
   SubscribeStatusSchema,
@@ -3110,6 +3117,80 @@ class ApiClient {
       EMPTY_SYSTEM_WAKEUP_LIST,
       { method: "PUT", body: JSON.stringify(input) },
       { endpoint: "PUT /api/issues/:id/system-wakeups/:rule" },
+    );
+  }
+
+  // ---- Workspace wakeups (MYS-2043) ---------------------------------------
+  // The issue's rules live above; these three are the WORKSPACE's two other
+  // wakeup surfaces, both of which had no mobile caller before this round:
+  // the cross-issue rule table (web's 自动化 → 任务唤醒 tab) and the platform
+  // rule's workspace default (web's 设置 → 唤醒 tab).
+  //
+  // All three are workspace-scoped and name no workspace in their path: the
+  // server resolves the workspace from `X-Workspace-Slug`, which `fetch()`
+  // already attaches (see its header block), and answers
+  // `400 workspace_id or workspace_slug is required` without it
+  // (`middleware/workspace.go:204`). Passing an id in the query string too
+  // would be a second source of truth for the same fact.
+
+  /**
+   * One page of the workspace-wide rule table.
+   *
+   * Degrades to an empty page on a broken payload, like the other wakeup
+   * READS: the table is a whole screen made of rows, and a server that renames
+   * a field should show "nothing here" rather than take the screen down. The
+   * fallback's `counts` are all zero for the same reason the real ones come
+   * from the server — this client never derives a scope inventory it was not
+   * given.
+   */
+  async listWorkspaceWakeups(
+    filters: WorkspaceWakeupFilters,
+    opts?: { signal?: AbortSignal },
+  ): Promise<WorkspaceWakeupPage> {
+    const query = new URLSearchParams(
+      Object.entries(filters).map(([key, value]) => [key, String(value)]),
+    );
+    return this.fetchValidated(
+      `/api/issue-wakeups?${query}`,
+      WorkspaceWakeupPageSchema,
+      EMPTY_WORKSPACE_WAKEUP_PAGE,
+      { ...opts, endpoint: "GET /api/issue-wakeups" },
+    );
+  }
+
+  /** The platform rule's workspace default, for Settings. Degrades to an empty
+   *  list; the tab then shows its load-error line rather than a phantom rule. */
+  async listWorkspaceSystemWakeups(opts?: {
+    signal?: AbortSignal;
+  }): Promise<WorkspaceSystemWakeup[]> {
+    return this.fetchValidated(
+      "/api/system-wakeups",
+      WorkspaceSystemWakeupListSchema,
+      EMPTY_WORKSPACE_SYSTEM_WAKEUP_LIST,
+      { ...opts, endpoint: "GET /api/system-wakeups" },
+    );
+  }
+
+  /**
+   * Change the workspace default. An omitted field keeps its value, so the
+   * switch sends `enabled` alone and the instruction survives.
+   *
+   * Throws on failure, like every wakeup WRITE: the endpoint is owner/admin
+   * only (`issue_system_wakeup.go:305-308`, 403 otherwise) and a write that
+   * degraded would report a default the server never stored while every issue
+   * that follows it keeps the old one. Returns the workspace's rule list — the
+   * endpoint answers with it.
+   */
+  async updateWorkspaceSystemWakeup(
+    rule: WorkspaceSystemWakeup["rule"],
+    input: { enabled?: boolean; instruction?: string },
+  ): Promise<WorkspaceSystemWakeup[]> {
+    return this.fetchValidatedWith(
+      `/api/system-wakeups/${encodeURIComponent(rule)}`,
+      WorkspaceSystemWakeupListSchema,
+      EMPTY_WORKSPACE_SYSTEM_WAKEUP_LIST,
+      { method: "PUT", body: JSON.stringify(input) },
+      { endpoint: "PUT /api/system-wakeups/:rule" },
     );
   }
 

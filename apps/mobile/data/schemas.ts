@@ -103,6 +103,9 @@ import type {
   SystemWakeup,
   WakeupRun,
   WakeupCondition,
+  WorkspaceWakeup,
+  WorkspaceWakeupPage,
+  WorkspaceSystemWakeup,
 } from "@multica/core/types";
 import type { CloudRuntimeNode } from "@multica/core/runtimes";
 import type { MikaBootstrapResponse } from "@multica/core/types";
@@ -2746,13 +2749,37 @@ export const WakeupConditionSchema = z
   .object({ type: z.string() })
   .loose() as unknown as z.ZodType<WakeupCondition>;
 
-export const IssueWakeupSchema: z.ZodType<IssueWakeup> = z.object({
+/**
+ * The rule object itself, kept un-cast so a LATER schema can derive from it.
+ *
+ * `IssueWakeupSchema` below is annotated `z.ZodType<IssueWakeup>`, which erases
+ * the concrete `ZodObject` type — and with it `.omit()` / `.extend()`. The
+ * workspace table's row is this same rule minus `instruction` plus the issue's
+ * own facts, so it derives from this const rather than re-listing thirty
+ * fields that would drift the first time the server adds one.
+ */
+const IssueWakeupObject = z.object({
   id: z.string(),
   issue_id: z.string().default(""),
-  agent_id: z.string().default(""),
-  // The server hydrates this; a rule whose agent was deleted still has an id,
-  // so an empty name degrades the row rather than dropping it.
-  agent_name: z.string().default(""),
+  // NULLABLE, and that is not defensive padding: the live server sends
+  // `agent_id: null` for a rule whose target agent was deleted. Measured on
+  // mu.zztweb.top — one of nine active rows came back with a null agent_id and
+  // a `created_by_agent` source, and a `z.string()` here rejects the WHOLE
+  // page, so that single row blanked the entire workspace table (caught on the
+  // Pixel 5, not by the mocked suite). An empty string is the right degrade:
+  // the row still renders, and `wakeups.no_target` says it has no agent.
+  agent_id: z
+    .string()
+    .nullable()
+    .transform((value) => value ?? "")
+    .default(""),
+  // The server hydrates this; a rule whose agent was deleted sends no name, so
+  // the row degrades to "no target" rather than being dropped.
+  agent_name: z
+    .string()
+    .nullable()
+    .transform((value) => value ?? "")
+    .default(""),
   instruction: z.string().default(""),
   // Unknown kind → "event", the conservative reading: the row still renders,
   // and `trigger()` describes it as waiting rather than claiming a schedule it
@@ -2789,6 +2816,8 @@ export const IssueWakeupSchema: z.ZodType<IssueWakeup> = z.object({
   fire_count: z.number().default(0),
   paused_reason: z.enum(["max_fires", "loop", "rate"]).nullable().catch(null),
 }).loose();
+
+export const IssueWakeupSchema: z.ZodType<IssueWakeup> = IssueWakeupObject;
 
 export const IssueWakeupListSchema = z.array(IssueWakeupSchema).default([]);
 export const EMPTY_ISSUE_WAKEUP_LIST: IssueWakeup[] = [];
@@ -2844,3 +2873,76 @@ export const WakeupRunSchema: z.ZodType<WakeupRun> = z.object({
 
 export const WakeupRunListSchema = z.array(WakeupRunSchema).default([]);
 export const EMPTY_WAKEUP_RUN_LIST: WakeupRun[] = [];
+
+/**
+ * GET /api/issue-wakeups — the workspace-wide rule table (MYS-2043).
+ *
+ * `IssueWakeupSchema` minus `instruction`, plus the issue's own facts, the
+ * manage flag and the run counters. Built by omitting the one field the
+ * endpoint does not send rather than by re-listing the other thirty: a rule
+ * table row and a rule are the same rule, and two hand-maintained field lists
+ * would drift the first time the server adds one.
+ */
+export const WorkspaceWakeupSchema: z.ZodType<WorkspaceWakeup> =
+  IssueWakeupObject.omit({ instruction: true }).extend({
+    issue_title: z.string().default(""),
+    issue_identifier: z.string().default(""),
+    issue_closed: z.boolean().default(false),
+    // Defaults to false — the conservative reading. Web derives the same
+    // gate server-side (`issue_wakeup.go:74-90`); a client that assumed true
+    // would draw live controls on rows the server will refuse.
+    can_manage: z.boolean().default(false),
+    active_runs: z.number().default(0),
+    task: AgentTaskSchema.nullable().default(null),
+    // An unknown source degrades to "member", web's own `catch` default: the
+    // row still renders and its source cell still names a person.
+    source: z.enum(["member", "agent", "system"]).catch("member"),
+    runs_7d: z.number().default(0),
+    rule: z.literal("child_done").nullable().default(null),
+    system_stage: z.number().nullable().default(null),
+    system_remaining: z.number().nullable().default(null),
+    target_type: z.string().nullable().default(null),
+  }) as unknown as z.ZodType<WorkspaceWakeup>;
+
+/** The five scope inventories. Every one defaults to 0: a server that omits a
+ *  scope shows "—"-less zeros rather than crashing the segmented control. */
+export const WorkspaceWakeupPageSchema: z.ZodType<WorkspaceWakeupPage> = z.object({
+  items: z.array(WorkspaceWakeupSchema).default([]),
+  total: z.number().default(0),
+  counts: z
+    .object({
+      active: z.number().default(0),
+      all: z.number().default(0),
+      paused: z.number().default(0),
+      disabled: z.number().default(0),
+      ended: z.number().default(0),
+    })
+    .default({ active: 0, all: 0, paused: 0, disabled: 0, ended: 0 }),
+  agents: z
+    .array(z.object({ id: z.string(), name: z.string() }))
+    .default([]),
+}) as unknown as z.ZodType<WorkspaceWakeupPage>;
+
+export const EMPTY_WORKSPACE_WAKEUP_PAGE: WorkspaceWakeupPage = {
+  items: [],
+  total: 0,
+  counts: { active: 0, all: 0, paused: 0, disabled: 0, ended: 0 },
+  agents: [],
+};
+
+/** GET /api/system-wakeups — the platform rule's workspace default. */
+export const WorkspaceSystemWakeupSchema: z.ZodType<WorkspaceSystemWakeup> =
+  z.object({
+    // `catch` rather than a literal: a future platform rule must still render
+    // its row instead of failing the whole page's parse.
+    rule: z.literal("child_done").catch("child_done"),
+    enabled: z.boolean().default(false),
+    instruction: z.string().default(""),
+    builtin_instruction: z.string().default(""),
+    customized: z.number().default(0),
+  }) as unknown as z.ZodType<WorkspaceSystemWakeup>;
+
+export const WorkspaceSystemWakeupListSchema = z
+  .array(WorkspaceSystemWakeupSchema)
+  .default([]);
+export const EMPTY_WORKSPACE_SYSTEM_WAKEUP_LIST: WorkspaceSystemWakeup[] = [];
