@@ -46,7 +46,18 @@ export default function IssueWakeupsRoute() {
         ) : null}
       </View>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <WakeupsSection issueId={id} closed={issue?.status === "done" || issue?.status === "cancelled"} />
+        <WakeupsSection
+          issueId={id}
+          closed={issue?.status === "done" || issue?.status === "cancelled"}
+          // Same seed as the issue header's section: the issue's agent
+          // assignee, so a rule created from either surface starts on the
+          // agent the issue actually runs.
+          defaultAgentId={
+            issue?.assignee_type === "agent"
+              ? (issue.assignee_id ?? undefined)
+              : undefined
+          }
+        />
         <View className="h-8" />
       </ScrollView>
     </View>
