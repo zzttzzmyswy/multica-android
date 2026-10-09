@@ -59,6 +59,10 @@ import {
 } from "@/lib/workspace-wakeups";
 
 /** Ionicons per trigger kind, matching the autopilots list's own vocabulary. */
+/** The scope chip row's height. Fixed rather than intrinsic: see the note at
+ *  the ScrollView for why a horizontal row in RN cannot size itself here. */
+const CHIP_ROW_HEIGHT = 48;
+
 const KIND_ICONS: Record<string, React.ComponentProps<typeof Ionicons>["name"]> = {
   event: "notifications-outline",
   at: "time-outline",
@@ -106,36 +110,42 @@ function WakeupTableRow({
   // reason.
   const isSystem = !!row.rule;
 
+  // The checkbox is offered only where the batch can act (see
+  // `workspaceWakeupSelectable`) and stays visible while ANY row is selected —
+  // a phone has no hover to reveal it on.
+  const showCheckbox = selectable || selecting;
+
   return (
     <Pressable
-      onPress={onOpen}
+      // WHERE THE CHECKBOX SHOWS, THE ROW TOGGLES SELECTION INSTEAD OF OPENING.
+      //
+      // A nested Pressable does NOT shield the outer one in RN: tapping the
+      // checkbox fired BOTH handlers, so selecting a row also opened its action
+      // sheet on top of the list (caught on the Pixel 5). The app's own
+      // `issue-row.tsx` avoids the problem the other way — it draws the checkbox
+      // as a bare icon and lets the ROW carry the gesture. Same here, so the two
+      // list surfaces behave alike.
+      onPress={showCheckbox ? onToggleSelect : onOpen}
+      disabled={showCheckbox && (pending || !selectable)}
       className="px-4 py-3 active:bg-secondary"
-      accessibilityRole="button"
-      accessibilityLabel={`${row.issue_identifier} ${row.issue_title}`}
-    >
-      <View className="flex-row items-start gap-2">
-        {/* The checkbox is offered only where the batch can act (see
-            `workspaceWakeupSelectable`) and stays visible while ANY row is
-            selected — a phone has no hover to reveal it on. */}
-        {selectable || selecting ? (
-          <Pressable
-            onPress={onToggleSelect}
-            disabled={pending || !selectable}
-            hitSlop={8}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: selected, disabled: !selectable }}
-            accessibilityLabel={t("autopilots.wakeups.select_row", {
+      accessibilityRole={showCheckbox ? "checkbox" : "button"}
+      accessibilityState={showCheckbox ? { checked: selected } : undefined}
+      accessibilityLabel={
+        showCheckbox
+          ? t("autopilots.wakeups.select_row", {
               issue: row.issue_identifier,
               agent: row.agent_name,
-            })}
-            className={pending || !selectable ? "opacity-40" : ""}
-          >
-            <Ionicons
-              name={selected ? "checkbox" : "square-outline"}
-              size={18}
-              color={selected ? theme.brand : theme.mutedForeground}
-            />
-          </Pressable>
+            })
+          : `${row.issue_identifier} ${row.issue_title}`
+      }
+    >
+      <View className="flex-row items-start gap-2">
+        {showCheckbox ? (
+          <Ionicons
+            name={selected ? "checkbox" : "square-outline"}
+            size={18}
+            color={selected ? theme.brand : theme.mutedForeground}
+          />
         ) : null}
 
         <View className="flex-1 min-w-0">
@@ -255,12 +265,15 @@ function ScopeChips({
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      // `flexGrow-0` + `items-start` are load-bearing, not cosmetic: a
-      // horizontal ScrollView in RN stretches its content to the cross axis,
-      // so without them each chip swelled to ~260px tall on the Pixel 5 while
-      // the labels stayed on one line. `shrink-0` keeps the row scrollable
-      // instead of letting the chips compress to fit.
-      contentContainerClassName="flex-grow-0 items-start gap-2 px-4 py-2"
+      // An EXPLICIT height on the SCROLLVIEW, found the hard way on the Pixel 5.
+      // A horizontal ScrollView in RN hands its content the container's
+      // cross-axis size, so a chip with no height of its own swelled to the
+      // whole remaining space (~260px). `items-start` did not fix it — it
+      // collapsed the chips to a clipped sliver, because the CONTENT was then
+      // sized to nothing. Pinning the row's height and centering the chips in it
+      // is the only combination that renders them at their natural size.
+      style={{ height: CHIP_ROW_HEIGHT }}
+      contentContainerClassName="items-center gap-2 px-4"
     >
       {scopes.map((scope) => {
         const active = value === scope;
