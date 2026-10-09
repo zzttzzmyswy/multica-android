@@ -22,8 +22,9 @@
  * where the data the user is looking at actually changed.
  */
 import { queryOptions } from "@tanstack/react-query";
-import type { WorkspaceWakeupFilters } from "@multica/core/types";
+import type { WakeupScope, WorkspaceWakeupFilters } from "@multica/core/types";
 import { api } from "@/data/api";
+import { EMPTY_WORKSPACE_WAKEUP_FILTERS } from "@/lib/workspace-wakeups";
 import { issueKeys } from "./issue-keys";
 
 /**
@@ -67,4 +68,49 @@ export const workspaceSystemWakeupsOptions = (wsId: string | null) =>
     queryKey: issueKeys.workspaceSystemWakeups(wsId),
     queryFn: ({ signal }) => api.listWorkspaceSystemWakeups({ signal }),
     enabled: !!wsId,
+  });
+
+/** The window a first visit starts from. Re-exported so the controller and the
+ *  screen read the same constant instead of each building one. */
+export const FIRST_WORKSPACE_WAKEUP_PAGE: WorkspaceWakeupFilters = {
+  ...EMPTY_WORKSPACE_WAKEUP_FILTERS,
+};
+
+/**
+ * The newest PAUSED rule, for the banner above the table.
+ *
+ * A separate query rather than a slice of the current page, and enabled only
+ * when the server's own `counts.paused` says there is something to find. Web
+ * does exactly this (`workspace-wakeups.tsx`'s `pausedQuery`): the current page
+ * is the `active` scope by default, so the paused row the banner needs is
+ * usually NOT in it, and asking for it separately is one row
+ * (`limit: 1`) instead of a second full page.
+ *
+ * Disabled at zero on purpose: on a workspace with nothing paused this is a
+ * request whose only possible answer is an empty list.
+ */
+export const workspaceWakeupBannerOptions = (
+  wsId: string | null,
+  counts: Record<WakeupScope, number>,
+) =>
+  queryOptions({
+    queryKey: [
+      ...issueKeys.workspaceWakeupsAll(wsId),
+      "banner",
+    ] as const,
+    queryFn: ({ signal }) =>
+      api.listWorkspaceWakeups(
+        {
+          scope: "paused",
+          kind: "all",
+          source: "",
+          search: "",
+          agent_id: "",
+          offset: 0,
+          limit: 1,
+        },
+        { signal },
+      ),
+    enabled: !!wsId && (counts.paused ?? 0) > 0,
+    staleTime: WORKSPACE_WAKEUP_STALE_MS,
   });

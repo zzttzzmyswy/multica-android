@@ -30,6 +30,7 @@
  * write to another.
  */
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Alert, Platform, Pressable, View } from "react-native";
 import DateTimePicker, {
   DateTimePickerAndroid,
@@ -37,10 +38,13 @@ import DateTimePicker, {
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { IssueWakeup } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
+import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { AutosizeTextArea } from "@/components/ui/autosize-textarea";
 import { PickerSheet } from "@/components/issue/pickers/picker-sheet";
 import { formatIssueDate } from "@/lib/format-date";
+import { issueWakeupsOptions } from "@/data/queries/issue-wakeups";
+import { useWorkspaceStore } from "@/data/workspace-store";
 import { toDateOnly } from "@multica/core/issues/date";
 import {
   useDeleteIssueWakeup,
@@ -109,7 +113,7 @@ export function WakeupControl({
   onEnable,
   onDisable,
 }: {
-  wakeup: IssueWakeup;
+  wakeup: WakeupRow;
   control: WakeupControlState;
   pending: boolean;
   onEnable: (input?: { at?: string; rearm?: boolean }) => void;
@@ -208,6 +212,17 @@ function ControlButton({
 }
 
 /**
+ * The rule shapes this module accepts.
+ *
+ * `Omit<IssueWakeup, "instruction">` rather than `IssueWakeup`: the workspace
+ * table's rows (`WorkspaceWakeup`) do not carry the prompt — the list endpoint
+ * does not send it — and nothing below READS it except
+ * `WakeupInstructionEditor`, which fetches its own copy through the per-rule
+ * edit endpoint anyway. Web types the same controls against the same `Omit`.
+ */
+type WakeupRow = Omit<IssueWakeup, "instruction">;
+
+/**
  * The action sheet for one rule: wake now, edit the prompt, delete.
  *
  * Split out of the row so the row stays readable and so the editor's state
@@ -222,7 +237,7 @@ export function WakeupRowSheet({
 }: {
   visible: boolean;
   onClose: () => void;
-  wakeup: IssueWakeup;
+  wakeup: WakeupRow;
   /** False once the rule is switched off server-side: a withdrawn rule has no
    *  run to re-fire. Web hides "wake now" in exactly that case. */
   canTrigger: boolean;
@@ -262,8 +277,14 @@ export function WakeupRowSheet({
       }}
     >
       {editing ? (
-        <WakeupInstructionEditor
-          wakeup={wakeup}
+        // A workspace-table row carries no `instruction`, so the rule is
+        // re-read here before the field is seeded. The issue surface's rows do
+        // carry it, and this route costs them nothing: the read is the same
+        // cache entry the section is already rendering from, so it resolves
+        // synchronously and the loader never paints.
+        <WakeupInstructionLoader
+          issueId={wakeup.issue_id}
+          wakeupId={wakeup.id}
           onDone={() => {
             setEditing(false);
             onClose();
@@ -349,6 +370,73 @@ function SheetAction({
         {label}
       </Text>
     </Pressable>
+  );
+}
+
+/**
+ * The prompt editor's front door: fetch the FULL rule, then edit it.
+ *
+ * The two halves exist because a rule reaches a surface in one of two shapes.
+ * The issue surface holds a full `IssueWakeup` (its endpoint sends
+ * `instruction`); the workspace table holds a `WorkspaceWakeup`, which does not
+ * carry the prompt at all. Rather than teach the form to edit a field it was
+ * not given, the editor loads the rule by id and hands the form the complete
+ * one — which is also what web does (`InstructionLoader` in
+ * `packages/views/issues/components/wakeup-instruction-editor.tsx`).
+ *
+ * The read is `issueWakeupsOptions`, i.e. the SAME cache entry the issue
+ * section renders from, so on the issue surface it is already warm and resolves
+ * without a request or a paint. On the table it is usually cold, and the loader
+ * says so rather than opening an empty editor.
+ */
+function WakeupInstructionLoader({
+  issueId,
+  wakeupId,
+  onDone,
+  onCancel,
+}: {
+  issueId: string;
+  wakeupId: string;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const { t } = useTranslation();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const query = useQuery(issueWakeupsOptions(wsId, issueId));
+  const wakeup = (query.data ?? []).find((row) => row.id === wakeupId);
+  if (query.isPending) {
+    return (
+      <View className="px-4 py-6">
+        <Text className="text-xs text-muted-foreground">
+          {t("wakeups.instructionLoading")}
+        </Text>
+      </View>
+    );
+  }
+  if (!wakeup) {
+    // The rule is gone (deleted on another device) or the read failed. Offering
+    // a retry beats an editor whose Save would 404 against a rule that is not
+    // there.
+    return (
+      <View className="gap-3 px-4 py-6">
+        <Text className="text-xs text-muted-foreground">
+          {t("wakeups.instructionLoadError")}
+        </Text>
+        <Button variant="outline" onPress={() => void query.refetch()}>
+          <Text>{t("wakeups.retry")}</Text>
+        </Button>
+      </View>
+    );
+  }
+  return (
+    <WakeupInstructionEditor
+      // Keyed by rule so switching rows mid-edit cannot inherit the previous
+      // rule's draft.
+      key={wakeupId}
+      wakeup={wakeup}
+      onDone={onDone}
+      onCancel={onCancel}
+    />
   );
 }
 
@@ -472,7 +560,7 @@ export function WakeupRescheduleSheet({
   visible: boolean;
   pending: boolean;
   /** The rule being rescheduled; supplies the seed day and time. */
-  wakeup: IssueWakeup;
+  wakeup: WakeupRow;
   onClose: () => void;
   onSubmit: (at: string) => void;
 }) {
@@ -565,7 +653,7 @@ export function WakeupRescheduleSheet({
 
 /** The instant the reschedule sheet opens on: the rule's own deadline when it
  *  still has one, else an hour from now. */
-function useSeedInstant(wakeup: IssueWakeup): Date {
+function useSeedInstant(wakeup: WakeupRow): Date {
   const [seed] = useState(() => {
     const existing = wakeup.next_fire_at ? new Date(wakeup.next_fire_at) : null;
     if (existing && Number.isFinite(existing.getTime())) return existing;

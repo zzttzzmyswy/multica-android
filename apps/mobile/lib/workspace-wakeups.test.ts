@@ -239,10 +239,15 @@ describe("paging", () => {
     });
   });
 
-  it("floors a previous tap at zero", () => {
+  it("walks back a page, and offers nothing on the first", () => {
     expect(previousWorkspaceWakeupOffset(40)).toBe(20);
     expect(previousWorkspaceWakeupOffset(10)).toBe(0);
-    expect(previousWorkspaceWakeupOffset(0)).toBe(0);
+    // `null` on the first page rather than a floored 0: the pager button is
+    // `disabled={previousOffset === null}`, so a 0 here would leave the button
+    // live and send a request for the page the reader is already on. Same
+    // reason the next-page helper answers null instead of an offset past the
+    // end.
+    expect(previousWorkspaceWakeupOffset(0)).toBeNull();
   });
 });
 

@@ -15,7 +15,14 @@
  * server will refuse, or that reports a partial failure as a success, is
  * lying to the user about what happened.
  */
-import type { WorkspaceWakeup, WorkspaceWakeupFilters } from "@multica/core/types";
+import type { WorkspaceWakeup, WorkspaceWakeupFilters, WakeupScope } from "@multica/core/types";
+import type { WakeupTextDeps } from "./wakeup-presentation";
+import {
+  formatWakeupTime,
+  wakeupPausedText,
+  wakeupTrigger,
+  wakeupRunStateText,
+} from "./wakeup-presentation";
 
 /** The five scopes, in web's display order. */
 export const WORKSPACE_WAKEUP_SCOPES = [
@@ -24,6 +31,14 @@ export const WORKSPACE_WAKEUP_SCOPES = [
   "disabled",
   "ended",
   "all",
+] as const;
+
+/** The four SOURCES the filter offers, `""` meaning "every source". */
+export const WORKSPACE_WAKEUP_SOURCES = [
+  "",
+  "member",
+  "agent",
+  "system",
 ] as const;
 
 /** The four trigger filters, in web's order. */
@@ -267,14 +282,6 @@ export function workspaceWakeupPager({
   };
 }
 
-/** The offset a "previous" tap lands on, floored at 0. */
-export function previousWorkspaceWakeupOffset(
-  offset: number,
-  limit = WORKSPACE_WAKEUP_PAGE_SIZE,
-): number {
-  return Math.max(0, offset - limit);
-}
-
 /**
  * Whether the reader's search text must be shortened before it is sent.
  *
@@ -347,4 +354,291 @@ export function workspaceWakeupInvalidationKeys(
     // per-issue task key would otherwise be invalidated once per rule.
     taskIssueIds: Array.from(new Set(touchedIssueIds)),
   };
+}
+
+// ---------------------------------------------------------------------------
+// The names the table's controller and rows read.
+//
+// Several of the predicates above are spelled the way WEB spells them
+// (`workspaceWakeupsAreFiltered`, `workspaceWakeupSelectionState`); the
+// controller calls the shape this app's other list surfaces use. Rather than
+// rename one side and re-test it, the web-named implementation stays the single
+// source of truth and these are thin, documented aliases over it — so a reader
+// looking for the behaviour has exactly one body to find.
+// ---------------------------------------------------------------------------
+
+/** The neutral window a fresh visit starts from, web's initial state. Same
+ *  object `emptyWorkspaceWakeupFilters()` builds; the controller wants a
+ *  constant it can spread when clearing. */
+export const EMPTY_WORKSPACE_WAKEUP_FILTERS: WorkspaceWakeupFilters =
+  emptyWorkspaceWakeupFilters();
+
+/** The filters a first visit starts from, with the first page's window. */
+export const FIRST_WORKSPACE_WAKEUP_PAGE: WorkspaceWakeupFilters =
+  emptyWorkspaceWakeupFilters();
+
+/** Whether anything narrows the current result set. See
+ *  `workspaceWakeupsAreFiltered` for why the default `active` scope counts. */
+export const isWorkspaceWakeupFiltered = workspaceWakeupsAreFiltered;
+
+/** The 1-based page number, for the results line. */
+export function workspaceWakeupPageNumber(
+  offset: number,
+  limit = WORKSPACE_WAKEUP_PAGE_SIZE,
+): number {
+  return workspaceWakeupPage(offset, limit);
+}
+
+/**
+ * The offset "next" lands on, or `null` when there is no next page.
+ *
+ * Returning `null` rather than an out-of-range offset is what lets the pager
+ * button be `disabled={nextOffset === null}` instead of re-deriving the
+ * end-of-list test at the call site — the same reason `enableRevision` is
+ * returned as a value in `lib/wakeup-controls.ts` rather than recomputed.
+ */
+export function nextWorkspaceWakeupOffset(
+  offset: number,
+  total: number,
+  limit = WORKSPACE_WAKEUP_PAGE_SIZE,
+): number | null {
+  const { hasNext } = workspaceWakeupPager({ offset, limit, total });
+  return hasNext ? offset + limit : null;
+}
+
+/** The offset "previous" lands on, or `null` on the first page. */
+export function previousWorkspaceWakeupOffset(
+  offset: number,
+  limit = WORKSPACE_WAKEUP_PAGE_SIZE,
+): number | null {
+  const { hasPrevious } = workspaceWakeupPager({
+    offset,
+    limit,
+    total: Number.MAX_SAFE_INTEGER,
+  });
+  return hasPrevious ? Math.max(0, offset - limit) : null;
+}
+
+/** Whether a row may be put in a batch selection. */
+export const workspaceWakeupSelectable = canSelectWorkspaceWakeup;
+
+/** Toggle one id in a selection, immutably. */
+export function toggleWorkspaceWakeupSelection(
+  selected: ReadonlySet<string>,
+  id: string,
+): ReadonlySet<string> {
+  const next = new Set(selected);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  return next;
+}
+
+/** The selection set, folded into the three facts the table's chrome needs. */
+export interface WorkspaceWakeupSelection {
+  /** The selectable rows on this page the user has ticked. */
+  picked: WorkspaceWakeup[];
+  /** Any row is ticked, so the checkboxes are visible. */
+  selecting: boolean;
+  allSelected: boolean;
+  someSelected: boolean;
+}
+
+/**
+ * Fold a raw id set against the page on screen.
+ *
+ * Reconciled against the ROWS, not carried as-is, because a filter change can
+ * leave an id selected that is no longer on the page — the footer would then
+ * report "3 selected" with nothing ticked anywhere, and the batch would act on
+ * a rule the user cannot see. Every id that survives is one the current page
+ * still shows.
+ */
+export function workspaceWakeupSelection(
+  rows: readonly WorkspaceWakeup[],
+  selected: ReadonlySet<string>,
+): WorkspaceWakeupSelection {
+  const selectable = selectableWorkspaceWakeups(rows);
+  const picked = selectable.filter((row) => selected.has(row.id));
+  const state = workspaceWakeupSelectionState(selectable, selected);
+  return {
+    picked,
+    selecting: picked.length > 0,
+    allSelected: state === "all",
+    someSelected: state === "some",
+  };
+}
+
+/** Why a row's own switch is inert, in the vocabulary the row renders. `null`
+ *  means it is live. */
+export type WorkspaceWakeupRowBlock = "read_only" | "closed" | null;
+
+/**
+ * Whether a row's switch may be pressed, and if not, why.
+ *
+ * Two distinct refusals, and they read differently to the user, which is why
+ * they are not collapsed into one boolean:
+ *   - `read_only` — the server refuses this reader's write at all
+ *     (`can_manage` false: neither the creator nor a workspace admin).
+ *   - `closed` — the issue is finished, so the server refuses to enable a rule
+ *     on it. The row says so with `wakeups.closedHint`, the same line the
+ *     issue-level section prints.
+ *
+ * `pending` wins over both: while a batch is in flight every row's switch is
+ * inert, and saying "read only" then would be a lie about a permission.
+ */
+export function workspaceWakeupRowBlock({
+  row,
+  pending,
+}: {
+  row: WorkspaceWakeup;
+  pending: boolean;
+}): WorkspaceWakeupRowBlock {
+  if (pending) return "read_only";
+  if (!row.can_manage) return "read_only";
+  if (row.issue_closed) return "closed";
+  return null;
+}
+
+/** What the rule's trigger line says — web's `TriggerCell`. */
+export function workspaceWakeupTriggerText(
+  deps: WakeupTextDeps,
+  row: WorkspaceWakeup,
+): string {
+  return wakeupTrigger(deps, row);
+}
+
+/**
+ * The line under the trigger: the rule's cadence and its schedule.
+ *
+ * Web puts these in the same cell as a `title` attribute (a phone has no
+ * hover) and adds the timezone for a cron. Kept separate from the trigger so
+ * the row can show one line and the sheet the other.
+ */
+export function workspaceWakeupTriggerDetail(
+  deps: WakeupTextDeps,
+  row: WorkspaceWakeup,
+): string | null {
+  const { t } = deps;
+  if (row.kind === "every" && row.interval_seconds != null) {
+    return t("wakeups.everySeconds", { seconds: row.interval_seconds });
+  }
+  if (row.kind === "cron" && row.cron_expression) {
+    return `${row.cron_expression} · ${row.timezone}`;
+  }
+  if (row.kind === "at" && row.next_fire_at) {
+    return formatWakeupTime(row.next_fire_at);
+  }
+  return row.mode === "continuous" ? t("wakeups.continuous") : t("wakeups.once");
+}
+
+/**
+ * The 有效期 cell: when the rule stops, as one sentence.
+ *
+ * Web's branch order, kept exactly (`workspace-wakeups.tsx` `ends`): an
+ * ENABLED rule reads as when it will end (its expiry, or "until the issue
+ * ends" for a system rule), and anything else reads as its lifecycle state —
+ * because "when does this stop" is only a live question while it is running.
+ * A paused rule prefers its paused reason, which is the one state a reader has
+ * to act on.
+ */
+export function workspaceWakeupEndsText(
+  deps: WakeupTextDeps,
+  row: WorkspaceWakeup,
+): string {
+  const { t } = deps;
+  if (row.source === "system") return t("autopilots.wakeups.until_issue_ends");
+  if (!row.enabled) {
+    const paused = wakeupPausedText(deps, row);
+    if (paused) return paused;
+    return t(`wakeups.ruleStates.${row.issue_closed ? "issue_closed" : stateKeyOf(row)}`);
+  }
+  if (row.expires_at) {
+    return row.kind === "event" || row.expiry_seconds
+      ? remainingText(deps, row.expires_at)
+      : t("wakeups.untilDate", { date: shortDate(row.expires_at) });
+  }
+  return row.mode === "once"
+    ? t("autopilots.wakeups.fires_once")
+    : t("wakeups.ruleStates.waiting");
+}
+
+/** The lifecycle key for an enabled rule, which reads as "waiting"/"scheduled". */
+function stateKeyOf(row: WorkspaceWakeup): string {
+  return row.kind === "event" ? "waiting" : "scheduled";
+}
+
+/** "In 3 days" / "in 4 hours", or the date once it has passed. */
+function remainingText(deps: WakeupTextDeps, value: string): string {
+  const ms = Date.parse(value) - Date.now();
+  if (!Number.isFinite(ms) || ms <= 0) return deps.t("wakeups.ruleStates.expired");
+  const minute = 60_000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  const days = Math.floor(ms / day);
+  const hours = Math.floor((ms % day) / hour);
+  if (days >= 3) return deps.t("wakeups.remainingDays", { days });
+  if (days >= 1)
+    return deps.t("wakeups.remainingDaysHours", { days, hours });
+  if (hours >= 1) return deps.t("wakeups.remainingHours", { hours });
+  return deps.t("wakeups.remainingMinutes", {
+    minutes: Math.max(1, Math.ceil(ms / minute)),
+  });
+}
+
+function shortDate(value: string): string {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return value;
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+  }).format(date);
+}
+
+/** A rule's latest run state, or null when it has none. */
+export function workspaceWakeupRunState(
+  deps: WakeupTextDeps,
+  row: WorkspaceWakeup,
+): string | null {
+  return row.task ? wakeupRunStateText(deps, row.task.status) : null;
+}
+
+/**
+ * The banner over the table, or null when nothing is paused.
+ *
+ * Web shows it only when the `paused` count is non-zero AND the reader is not
+ * already looking at the paused scope — the banner's whole purpose is to say
+ * "there is something you have not seen", which is false once you are looking
+ * at it. It names the newest paused rule, which is why the caller fetches one
+ * paused row separately rather than reusing the current page (the current page
+ * is whatever scope the reader chose).
+ */
+export function workspaceWakeupBanner(
+  deps: WakeupTextDeps,
+  filters: WorkspaceWakeupFilters,
+  counts: Record<WakeupScope, number>,
+  latest: WorkspaceWakeup | undefined,
+): { count: number; issue: string; condition: string; reason: string } | null {
+  if (!counts.paused || !latest || filters.scope === "paused") return null;
+  return {
+    count: counts.paused,
+    issue: latest.issue_identifier,
+    condition: workspaceWakeupTriggerText(deps, latest),
+    reason: wakeupPausedText(deps, latest) ?? "",
+  };
+}
+
+/**
+ * The post-batch line, or null when no batch has run.
+ *
+ * A separate function from `workspaceWakeupBatchOutcome` because the two answer
+ * different questions: that one decides what a result MEANS (and which ids stay
+ * selected), this one produces the sentence the footer prints. Keeping them
+ * apart is what lets the outcome — the must-agree part with web — be tested
+ * without a translator.
+ */
+export function workspaceWakeupBatchMessage(
+  result: WorkspaceWakeupBatchResult | null,
+): { key: string; params: Record<string, number> } | null {
+  if (!result) return null;
+  const outcome = workspaceWakeupBatchOutcome(result);
+  return { key: outcome.key, params: outcome.params };
 }

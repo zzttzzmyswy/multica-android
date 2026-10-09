@@ -53,7 +53,10 @@ import { useDebouncedTableSearch } from "@/lib/use-debounced-table-search";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
-import { workspaceWakeupBatchMessage } from "@/lib/workspace-wakeups";
+import {
+  clampWorkspaceWakeupSearch,
+  workspaceWakeupBatchMessage,
+} from "@/lib/workspace-wakeups";
 
 /** Ionicons per trigger kind, matching the autopilots list's own vocabulary. */
 const KIND_ICONS: Record<string, React.ComponentProps<typeof Ionicons>["name"]> = {
@@ -395,8 +398,13 @@ export function WorkspaceWakeupsTable({
           <Ionicons name="search" size={14} color={theme.mutedForeground} />
           <TextField
             value={searchText}
-            onChangeText={setSearchText}
-            maxLength={256}
+            // The cap is applied in BYTES, not with `maxLength`. Web uses
+            // `maxLength={256}`, a CHARACTER cap, while the server's limit is
+            // 256 BYTES — measured live: 85 CJK characters (255 bytes) is
+            // accepted, 100 (300 bytes) is refused with `search too long`. A
+            // char cap therefore accepts text the server rejects, for a user
+            // who watched the field take it.
+            onChangeText={(text) => setSearchText(clampWorkspaceWakeupSearch(text))}
             editable={!c.batch.isPending}
             placeholder={t("autopilots.wakeups.search")}
             accessibilityLabel={t("autopilots.wakeups.search")}
