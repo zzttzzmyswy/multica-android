@@ -1,6 +1,8 @@
 import { cn } from '@/lib/utils';
 import * as SwitchPrimitives from '@rn-primitives/switch';
 import { Platform } from 'react-native';
+import { useColorScheme } from '@/lib/use-color-scheme';
+import { THEME } from '@/lib/theme';
 
 /**
  * The switch's box, as NUMBERS rather than utility classes.
@@ -32,6 +34,8 @@ function Switch({
   // it — the spread types it that way, and silently dropping it would ignore a
   // caller's sizing.
   const resolved = typeof style === 'function' ? style({ pressed: false }) : style;
+  const { colorScheme } = useColorScheme();
+  const theme = THEME[colorScheme];
   return (
     <SwitchPrimitives.Root
       style={[
@@ -39,6 +43,14 @@ function Switch({
           width: TRACK_WIDTH,
           height: TRACK_HEIGHT,
           borderRadius: TRACK_HEIGHT / 2,
+          // The TRACK COLOUR is inline too, and for a reason found the same way:
+          // with the size fixed the switch laid out correctly but painted the
+          // SAME COLOUR as the card behind it (sampled off the live screenshot:
+          // track and card both rgb(10,10,10)), so it was still invisible. The
+          // `bg-primary` / `bg-input` classes did not resolve on this primitive
+          // either. `theme` is the documented token mirror of global.css and is
+          // already an `hsl(...)` string RN accepts.
+          backgroundColor: props.checked ? theme.primary : theme.input,
           // The thumb travels from inset to (width - thumb - inset); the
           // distance is derived so a change to either number cannot leave the
           // thumb parked outside the track.
@@ -62,6 +74,7 @@ function Switch({
           width: THUMB_SIZE,
           height: THUMB_SIZE,
           borderRadius: THUMB_SIZE / 2,
+          backgroundColor: theme.background,
           // Positioned by the flex row rather than a translate class: the
           // arbitrary translate did not resolve either, which is what left the
           // thumb overlapping the track's left edge in both states.
