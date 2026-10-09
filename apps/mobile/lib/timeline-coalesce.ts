@@ -24,10 +24,28 @@
  * Returns a new array; the input is not mutated.
  */
 import type { TimelineEntry } from "@multica/core/types";
+import {
+  NEVER_COALESCE_WAKEUP_ACTIONS,
+  NO_TIME_LIMIT_WAKEUP_ACTIONS,
+} from "./wakeup-presentation";
 
 const COALESCE_MS = 2 * 60 * 1000;
-const NO_TIME_LIMIT_ACTIONS = new Set(["task_completed", "task_failed"]);
-const NEVER_COALESCE_ACTIONS = new Set(["squad_leader_evaluated"]);
+const NO_TIME_LIMIT_ACTIONS = new Set([
+  "task_completed",
+  "task_failed",
+  // A wakeup rule checking in hourly produces one row per check-in, and a rule
+  // that checks in every minute for a day would otherwise be 1440 rows. Web
+  // gives these no time limit (issue-detail.tsx:1684) — a run of check-ins is
+  // one fact ("still nothing to do"), however far apart they are.
+  ...NO_TIME_LIMIT_WAKEUP_ACTIONS,
+]);
+const NEVER_COALESCE_ACTIONS = new Set([
+  "squad_leader_evaluated",
+  // Each of these carries its own audit facts — the condition that fired, the
+  // outcome, who pressed it. Merging two of them keeps only the newer, which
+  // silently drops the older trigger from the record. Mirrors web.
+  ...NEVER_COALESCE_WAKEUP_ACTIONS,
+]);
 
 export function coalesceTimeline(
   entries: TimelineEntry[],

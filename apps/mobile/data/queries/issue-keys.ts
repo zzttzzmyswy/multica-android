@@ -152,4 +152,17 @@ export const issueKeys = {
     [...issueKeys.all(wsId), "subscribers"] as const,
   subscribers: (wsId: string | null, id: string) =>
     [...issueKeys.subscribersAll(wsId), id] as const,
+  // Wakeup rules waiting on this issue (MYS-2023). Keyed under `all(wsId)` so a
+  // workspace-wide invalidation reaches them, and under their own segment so
+  // they refetch independently of the detail/timeline caches.
+  wakeups: (wsId: string | null, id: string) =>
+    [...issueKeys.all(wsId), "wakeups", id] as const,
+  // The platform's own rules (the child-done rule) on this issue. A separate
+  // key from `wakeups`: they come from a different endpoint, carry different
+  // fields, and the header chip reads both.
+  systemWakeups: (wsId: string | null, id: string) =>
+    [...issueKeys.all(wsId), "system-wakeups", id] as const,
+  // One rule's trigger history — fetched only when the reader opens that row.
+  wakeupRuns: (wsId: string | null, id: string, wakeupId: string) =>
+    [...issueKeys.wakeups(wsId, id), "runs", wakeupId] as const,
 };

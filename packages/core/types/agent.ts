@@ -350,6 +350,14 @@ export interface AgentTask {
    */
   handoff_note?: string;
   /**
+   * The wakeup rule that started this run (MYS-2023). It is the only link
+   * between a rule and its runs — the rule's own `last_task_id` covers only
+   * the newest one. Verified on the wire against mu.zztweb.top: present on
+   * every wakeup-launched task, absent from every task no rule started, so
+   * read it conditionally.
+   */
+  wakeup_id?: string;
+  /**
    * Server-computed source discriminator used by the activity row to label
    * tasks that have no linked issue (so e.g. quick-create tasks render
    * with a meaningful title instead of falling through to "Untracked").

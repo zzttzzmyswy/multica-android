@@ -98,6 +98,8 @@ import { IssueChildrenSection } from "./issue-children-section";
 import { PullRequestList } from "./pull-request-list";
 import { DeliverablesSection } from "./deliverables-section";
 import { QuickActionsSection } from "@/components/quick-action/quick-actions-section";
+import { WakeupsSection } from "./wakeups-section";
+import { isClosedIssue } from "@/lib/wakeup-presentation";
 import { IssueMetadataSection } from "./issue-metadata-section";
 import { SubscriptionControl } from "./subscription-control";
 import { ActivityRow } from "./activity-row";
@@ -519,6 +521,13 @@ export function TimelineList({
        * Renders null when the workspace has no active quick action, so it
        * doesn't crowd the header in the common case. */}
       <QuickActionsSection issueId={issue.id} />
+      {/* Issue wakeup rules (MYS-2023) — the conditions this issue is waiting
+       * on, mirroring web's sidebar section. Web's order is QuickActions →
+       * Wakeups → Plugin → Parent (issue-detail.tsx:2870); mobile has no
+       * plugin panel, so it lands directly after QuickActions. Renders
+       * nothing when the issue is closed and has no rules, so the common
+       * issue gains no row. */}
+      <WakeupsSection issueId={issue.id} closed={isClosedIssue(issue)} />
       {/* Raw metadata bag (G26) — renders null when the issue has none, so an
           issue that never used metadata gains no row. Read-only: the bag is
           the agents' channel and web has no write path either. */}

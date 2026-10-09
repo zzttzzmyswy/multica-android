@@ -86,6 +86,15 @@ export function invalidateIssueAfterReconnect(
   qc.invalidateQueries({ queryKey: issueKeys.attachments(wsId, issueId) });
   qc.invalidateQueries({ queryKey: issueKeys.activeTasks(wsId, issueId) });
   qc.invalidateQueries({ queryKey: issueKeys.tasks(wsId, issueId) });
+  // Wakeup rules (MYS-2023). A rule fires on the SERVER, and this build
+  // subscribes to no wakeup event, so a reconnect is the one moment the client
+  // can learn that a rule it was showing as "waiting" already fired. Covered
+  // here rather than by a poll: a 10s poll over a weak link timed out and
+  // starved the other caches (see data/queries/issue-wakeups.ts).
+  // One call covers the runs key too: TanStack matches by key PREFIX, and
+  // `issueKeys.wakeupRuns` hangs off `issueKeys.wakeups`.
+  qc.invalidateQueries({ queryKey: issueKeys.wakeups(wsId, issueId) });
+  qc.invalidateQueries({ queryKey: issueKeys.systemWakeups(wsId, issueId) });
 }
 
 // =====================================================
