@@ -56,6 +56,35 @@ beforeEach(() => {
  * that reach them, using response bodies copied from the live deployment
  * (`mu.zztweb.top`, probed this round) rather than invented ones.
  */
+/** A row shaped like the live `/api/issue-wakeups` payload (mu.zztweb.top). */
+function liveRow(over: Record<string, unknown>): Record<string, unknown> {
+  return {
+    id: "w-1",
+    issue_id: "i-1",
+    issue_identifier: "MYS-1",
+    issue_title: "迭代",
+    issue_closed: false,
+    can_manage: true,
+    active_runs: 0,
+    runs_7d: 0,
+    source: "member",
+    rule: null,
+    system_stage: null,
+    system_remaining: null,
+    target_type: null,
+    task: null,
+    kind: "event",
+    mode: "once",
+    event_types: ["issue.status_changed"],
+    timezone: "UTC",
+    enabled: true,
+    revision: 1,
+    fire_count: 0,
+    condition: { type: "issue_field", field: "status", value: "in_review" },
+    ...over,
+  };
+}
+
 describe("workspace wakeup API", () => {
   it("GETs one page of the workspace table with every filter on the query string", async () => {
     const spy = fetchSpy().mockResolvedValue({
@@ -255,6 +284,38 @@ describe("workspace wakeup API", () => {
     await expect(
       api.updateWorkspaceSystemWakeup("child_done", { enabled: true }),
     ).rejects.toThrow(/only owners and admins/);
+  });
+
+  it("keeps a row whose target agent was DELETED, instead of blanking the page", async () => {
+    // The defect this pins was found on the Pixel 5, not by this suite: the
+    // live server returned a 200 with nine rows, one of them carrying
+    // `agent_id: null` (its agent had been deleted), and a `z.string()` on that
+    // field rejected the WHOLE response — so ONE row emptied a table of 135
+    // rules, and the screen said 「暂无唤醒规则」 about a workspace full of them.
+    // Measured on mu.zztweb.top: 1 of 9 active rows has a null `agent_id`.
+    const spy = fetchSpy().mockResolvedValue({
+      items: [
+        liveRow({ id: "w-live", agent_id: "d85c4c9a-6527-4310-bc12-48dd82e50684", agent_name: "技术负责人-贵" }),
+        liveRow({ id: "w-deleted", agent_id: null, agent_name: null, source: "agent" }),
+      ],
+      total: 2,
+      counts: { active: 2, all: 2, paused: 0, disabled: 0, ended: 0 },
+      agents: [],
+    });
+    const page = await api.listWorkspaceWakeups({
+      scope: "active",
+      kind: "all",
+      source: "",
+      search: "",
+      agent_id: "",
+      offset: 0,
+      limit: 20,
+    });
+    expect(page.items.map((row) => row.id)).toEqual(["w-live", "w-deleted"]);
+    // An empty string, not null: every reader downstream treats `agent_id` as a
+    // string, and `wakeups.no_target` is what says the row has no agent.
+    expect(page.items[1].agent_id).toBe("");
+    expect(page.items[1].agent_name).toBe("");
   });
 
   it("names the rule in the path so a second platform rule needs no new method", async () => {

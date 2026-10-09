@@ -2761,10 +2761,25 @@ export const WakeupConditionSchema = z
 const IssueWakeupObject = z.object({
   id: z.string(),
   issue_id: z.string().default(""),
-  agent_id: z.string().default(""),
-  // The server hydrates this; a rule whose agent was deleted still has an id,
-  // so an empty name degrades the row rather than dropping it.
-  agent_name: z.string().default(""),
+  // NULLABLE, and that is not defensive padding: the live server sends
+  // `agent_id: null` for a rule whose target agent was deleted. Measured on
+  // mu.zztweb.top — one of nine active rows came back with a null agent_id and
+  // a `created_by_agent` source, and a `z.string()` here rejects the WHOLE
+  // page, so that single row blanked the entire workspace table (caught on the
+  // Pixel 5, not by the mocked suite). An empty string is the right degrade:
+  // the row still renders, and `wakeups.no_target` says it has no agent.
+  agent_id: z
+    .string()
+    .nullable()
+    .transform((value) => value ?? "")
+    .default(""),
+  // The server hydrates this; a rule whose agent was deleted sends no name, so
+  // the row degrades to "no target" rather than being dropped.
+  agent_name: z
+    .string()
+    .nullable()
+    .transform((value) => value ?? "")
+    .default(""),
   instruction: z.string().default(""),
   // Unknown kind → "event", the conservative reading: the row still renders,
   // and `trigger()` describes it as waiting rather than claiming a schedule it

@@ -255,7 +255,12 @@ function ScopeChips({
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerClassName="gap-2 px-4 py-2"
+      // `flexGrow-0` + `items-start` are load-bearing, not cosmetic: a
+      // horizontal ScrollView in RN stretches its content to the cross axis,
+      // so without them each chip swelled to ~260px tall on the Pixel 5 while
+      // the labels stayed on one line. `shrink-0` keeps the row scrollable
+      // instead of letting the chips compress to fit.
+      contentContainerClassName="flex-grow-0 items-start gap-2 px-4 py-2"
     >
       {scopes.map((scope) => {
         const active = value === scope;
