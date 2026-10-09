@@ -287,6 +287,9 @@ export default function WorkspaceLayout() {
           options={SHEET_OPTIONS}
         />
         <Stack.Screen name="issue/[id]/runs" options={SHEET_OPTIONS} />
+        {/* The issue's wakeup rules (MYS-2023) — pushed from the header badge
+            and rendering the same section the issue header shows inline. */}
+        <Stack.Screen name="issue/[id]/wakeups" options={SHEET_OPTIONS} />
         {/* Full emoji picker for a comment reaction. Pushed from the "+"
             button inside the comment long-press tapback row — see
             components/issue/comment-context-menu.tsx. */}

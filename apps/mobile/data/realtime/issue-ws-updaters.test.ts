@@ -67,6 +67,11 @@ describe("invalidateIssueAfterReconnect", () => {
       issueKeys.attachments(wsId, issueId),
       issueKeys.activeTasks(wsId, issueId),
       issueKeys.tasks(wsId, issueId),
+      // Wakeup rules (MYS-2023). A rule fires on the SERVER and this build
+      // subscribes to no wakeup event, so a reconnect is the one moment the
+      // client can learn that a rule it showed as "waiting" already fired.
+      issueKeys.wakeups(wsId, issueId),
+      issueKeys.systemWakeups(wsId, issueId),
     ]);
   });
 });

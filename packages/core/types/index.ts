@@ -125,6 +125,14 @@ export type {
   AssigneeFrequencyEntry,
 } from "./activity";
 export type { IssueSubscriber } from "./subscriber";
+export type {
+  IssueWakeup,
+  WakeupPausedReason,
+  WakeupCondition,
+  WakeupRun,
+  WakeupPreview,
+  SystemWakeup,
+} from "./issue-wakeup";
 export type * from "./events";
 export type * from "./api";
 export type { Attachment } from "./attachment";

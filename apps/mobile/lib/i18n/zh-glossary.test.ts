@@ -155,11 +155,17 @@ describe("zh glossary: issue entity is 任务", () => {
       ...RUN_SENSE_KEYS,
     ]);
     const offenders = keys
-      .filter((key) => ISSUE_ENTITY_PATTERN.test(en[key] ?? ""))
+      // Classify from PROSE, not the raw bundle: `{{issue}}` is a binding that
+      // renders an identifier ("MYS-2013"), so a key whose only `issue` token
+      // is that binding names no entity in English and has no noun to
+      // translate. Upstream's own zh bundle relies on this — its
+      // `wakeups.cond.other_done` is `当 {{issue}} 完成时`, which is correct
+      // copy that this check used to flag.
+      .filter((key) => ISSUE_ENTITY_PATTERN.test(prose(en[key])))
       .filter((key) => !exempt.has(key))
       .filter((key) => {
         // `/issue` is a literal slash command and stays English.
-        const stripped = zh[key].replace(/\/issues?\b/g, "");
+        const stripped = prose(zh[key]).replace(/\/issues?\b/g, "");
         return !zh[key].includes("任务") || ISSUE_ENTITY_PATTERN.test(stripped);
       });
     expect(offenders.map((key) => mismatch(key, "a 任务 string with no raw issue token"))).toEqual(

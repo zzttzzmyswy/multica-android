@@ -63,6 +63,9 @@ import type {
   IssueProperty,
   IssuePropertyValue,
   IssueSubscriber,
+  IssueWakeup,
+  SystemWakeup,
+  WakeupRun,
   IssueTableFacetsRequest,
   IssueTableFacetsResponse,
   IssueTableGroupsRequest,
@@ -375,6 +378,12 @@ import {
   EMPTY_WORKSPACE_MCP_SERVER_LIST,
   IssueSubscriberListSchema,
   EMPTY_ISSUE_SUBSCRIBER_LIST,
+  IssueWakeupListSchema,
+  EMPTY_ISSUE_WAKEUP_LIST,
+  SystemWakeupListSchema,
+  EMPTY_SYSTEM_WAKEUP_LIST,
+  WakeupRunListSchema,
+  EMPTY_WAKEUP_RUN_LIST,
   SubscribeStatusSchema,
   type SubscribeStatusResponse,
   BatchUpdateResultSchema,
@@ -2922,6 +2931,53 @@ class ApiClient {
       { subscribed: false },
       { method: "POST" },
       { endpoint: "POST /api/issues/:id/unsubscribe/subtree" },
+    );
+  }
+
+  // ---- Issue wakeups (MYS-2023) -------------------------------------------
+  // Read-only this round. The endpoints and their envelope shapes mirror web's
+  // (packages/core/api/client.ts:1313-1389) verbatim; the write half
+  // (create / enable / disable / trigger / delete) is deliberately absent —
+  // see lib/wakeup-presentation.ts for why it is a separate round.
+  //
+  // All three degrade to an empty list on a broken payload rather than
+  // throwing: a wakeup section is an addition to the issue page, and a server
+  // that renames a field must not take the page down with it.
+
+  async listIssueWakeups(
+    issueId: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<IssueWakeup[]> {
+    return this.fetchValidated(
+      `/api/issues/${encodeURIComponent(issueId)}/wakeups`,
+      IssueWakeupListSchema,
+      EMPTY_ISSUE_WAKEUP_LIST,
+      { ...opts, endpoint: "GET /api/issues/:id/wakeups" },
+    );
+  }
+
+  async listIssueSystemWakeups(
+    issueId: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<SystemWakeup[]> {
+    return this.fetchValidated(
+      `/api/issues/${encodeURIComponent(issueId)}/system-wakeups`,
+      SystemWakeupListSchema,
+      EMPTY_SYSTEM_WAKEUP_LIST,
+      { ...opts, endpoint: "GET /api/issues/:id/system-wakeups" },
+    );
+  }
+
+  async listIssueWakeupRuns(
+    issueId: string,
+    wakeupId: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<WakeupRun[]> {
+    return this.fetchValidated(
+      `/api/issues/${encodeURIComponent(issueId)}/wakeups/${encodeURIComponent(wakeupId)}/runs`,
+      WakeupRunListSchema,
+      EMPTY_WAKEUP_RUN_LIST,
+      { ...opts, endpoint: "GET /api/issues/:id/wakeups/:wakeupId/runs" },
     );
   }
 

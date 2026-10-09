@@ -27,6 +27,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { TimelineList } from "@/components/issue/timeline-list";
 import { BatchActionBar } from "@/components/issue/batch-action-bar";
 import { AgentHeaderBadge } from "@/components/issue/agent-header-badge";
+import { IssueWakeupHeaderBadge } from "@/components/issue/issue-wakeup-header-badge";
 import { InlineCommentComposer } from "@/components/issue/inline-comment-composer";
 import {
   issueDetailOptions,
@@ -334,6 +335,7 @@ export default function IssueDetail() {
                    *  active tasks, so it doesn't crowd the header in the
                    *  common case. See agent-header-badge.tsx. */}
                   <AgentHeaderBadge issueId={id} />
+                  <IssueWakeupHeaderBadge issueId={id} />
                   <IconButton
                     name="ellipsis-horizontal"
                     onPress={onPressMore}

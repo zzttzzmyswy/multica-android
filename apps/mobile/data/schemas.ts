@@ -99,6 +99,10 @@ import type {
   PluginCatalogRelease,
   PluginCatalogResponse,
   PluginReleaseRequest,
+  IssueWakeup,
+  SystemWakeup,
+  WakeupRun,
+  WakeupCondition,
 } from "@multica/core/types";
 import type { CloudRuntimeNode } from "@multica/core/runtimes";
 import type { MikaBootstrapResponse } from "@multica/core/types";
@@ -2723,3 +2727,120 @@ export const EMPTY_FEEDBACK_RESPONSE: CreateFeedbackResponse = {
   id: "",
   created_at: "",
 };
+
+// ---- Wakeups (MYS-2023) -------------------------------------------------
+//
+// Same lenient posture as the rest of this file. The load-bearing decision is
+// `condition`: it is a seven-way discriminated union on the wire, and the
+// renderer branches on `type` / `field`. Parsing it strictly would turn a
+// server that adds an eighth variant into a dropped condition — the row would
+// render with no description at all. So it is validated as "an object with a
+// string `type`", and each variant's own fields are read defensively by the
+// renderer, which already has a fallback sentence (`wakeups.cond.childrenAll`)
+// for a shape it cannot name.
+
+/** The discriminator plus whatever else the variant carries. `loose()` keeps
+ *  the variant's own fields (`field`, `value`, `stage`, …) instead of
+ *  stripping them, and `passthrough` on `type` keeps the parse total. */
+export const WakeupConditionSchema = z
+  .object({ type: z.string() })
+  .loose() as unknown as z.ZodType<WakeupCondition>;
+
+export const IssueWakeupSchema: z.ZodType<IssueWakeup> = z.object({
+  id: z.string(),
+  issue_id: z.string().default(""),
+  agent_id: z.string().default(""),
+  // The server hydrates this; a rule whose agent was deleted still has an id,
+  // so an empty name degrades the row rather than dropping it.
+  agent_name: z.string().default(""),
+  instruction: z.string().default(""),
+  // Unknown kind → "event", the conservative reading: the row still renders,
+  // and `trigger()` describes it as waiting rather than claiming a schedule it
+  // cannot read.
+  kind: z.enum(["event", "at", "every", "cron"]).catch("event"),
+  mode: z.enum(["once", "continuous"]).catch("once"),
+  event_types: z.array(z.string()).default([]),
+  filter_agent_id: z.string().nullable().default(null),
+  filter_task_id: z.string().nullable().default(null),
+  filter_actor_type: z.enum(["member", "agent"]).nullable().catch(null),
+  filter_actor_id: z.string().nullable().default(null),
+  filter_actor_name: z.string().nullable().default(null),
+  interval_seconds: z.number().nullable().default(null),
+  cron_expression: z.string().nullable().default(null),
+  timezone: z.string().default("UTC"),
+  next_fire_at: z.string().nullable().default(null),
+  enabled: z.boolean().default(false),
+  revision: z.number().optional(),
+  disabled_at: z.string().nullable().default(null),
+  last_task_id: z.string().nullable().default(null),
+  last_error: z.string().nullable().default(null),
+  filter_agent_name: z.string().nullable().default(null),
+  last_task_status: z.string().nullable().default(null),
+  expires_at: z.string().nullable().default(null),
+  expiry_seconds: z.number().nullable().default(null),
+  on_timeout: z.enum(["wake", "end"]).nullable().catch(null),
+  timed_out_at: z.string().nullable().default(null),
+  created_by_agent: z.boolean().optional(),
+  created_by_name: z.string().nullable().default(null),
+  source_agent_id: z.string().nullable().default(null),
+  source_agent_name: z.string().nullable().default(null),
+  condition: WakeupConditionSchema.nullable().default(null),
+  max_fires: z.number().nullable().default(null),
+  fire_count: z.number().default(0),
+  paused_reason: z.enum(["max_fires", "loop", "rate"]).nullable().catch(null),
+}).loose();
+
+export const IssueWakeupListSchema = z.array(IssueWakeupSchema).default([]);
+export const EMPTY_ISSUE_WAKEUP_LIST: IssueWakeup[] = [];
+
+/** GET /api/issues/:id/system-wakeups — the platform's own rules. */
+export const SystemWakeupSchema: z.ZodType<SystemWakeup> = z.object({
+  // Empty until the rule exists on the issue (the first sub-issue change).
+  id: z.string().default(""),
+  revision: z.number().default(0),
+  // The only platform rule today; `catch` keeps an unknown one parseable so a
+  // future rule still renders its row instead of vanishing.
+  rule: z.literal("child_done").catch("child_done"),
+  enabled: z.boolean().default(false),
+  instruction: z.string().default(""),
+  default_instruction: z.string().default(""),
+  customized: z.boolean().default(false),
+  paused_reason: z.enum(["max_fires", "loop", "rate"]).nullable().catch(null),
+  staged: z.boolean().default(false),
+  stage: z.number().nullable().default(null),
+  total: z.number().default(0),
+  remaining: z.number().default(0),
+  waiting: z.array(z.string()).default([]),
+  target: z
+    .object({
+      type: z.enum(["agent", "squad", "member"]).catch("agent"),
+      id: z.string().default(""),
+      name: z.string().default(""),
+    })
+    .nullable()
+    .catch(null),
+  blocked: z
+    .enum(["", "backlog", "member_assignee", "no_assignee"])
+    .catch(""),
+  workspace_default: z.boolean().default(false),
+}).loose();
+
+export const SystemWakeupListSchema = z.array(SystemWakeupSchema).default([]);
+export const EMPTY_SYSTEM_WAKEUP_LIST: SystemWakeup[] = [];
+
+/** GET /api/issues/:id/wakeups/:wakeupId/runs — a rule's trigger history. */
+export const WakeupRunSchema: z.ZodType<WakeupRun> = z.object({
+  id: z.string(),
+  // Open string: the run statuses are the task statuses, and this build's
+  // `AgentTask` union already trails the server's.
+  status: z.string().default(""),
+  created_at: z.string().default(""),
+  started_at: z.string().nullable().default(null),
+  completed_at: z.string().nullable().default(null),
+  checkin_note: z.string().default(""),
+  triggers: z.array(z.string()).default([]),
+  commented: z.boolean().default(false),
+}).loose();
+
+export const WakeupRunListSchema = z.array(WakeupRunSchema).default([]);
+export const EMPTY_WAKEUP_RUN_LIST: WakeupRun[] = [];
