@@ -64,6 +64,7 @@ import type {
   IssuePropertyValue,
   IssueSubscriber,
   IssueWakeup,
+  IssueWakeupInput,
   SystemWakeup,
   WakeupRun,
   IssueTableFacetsRequest,
@@ -2983,6 +2984,37 @@ class ApiClient {
       WakeupRunListSchema,
       EMPTY_WAKEUP_RUN_LIST,
       { ...opts, endpoint: "GET /api/issues/:id/wakeups/:wakeupId/runs" },
+    );
+  }
+
+  /**
+   * Bring a rule into existence (MYS-2040).
+   *
+   * The tenth wakeup method, and the only one that is not "read a rule" or
+   * "write to a rule that is already there" — the nine before it could act on
+   * rules but never create one, which is exactly the hole the phone had.
+   *
+   * No `fetchValidated*`, no fallback, same as every other wakeup write: a read
+   * that degrades shows an empty section, which is visibly wrong, while a create
+   * that degraded would report a rule the server never made.
+   *
+   * The endpoint answers 201 with the created rule
+   * (`issue_wakeup.go:231-235`), and this returns void anyway — web's does too,
+   * and the mutation's `onSettled` invalidates the caches the section renders
+   * from. Reading the body would mean a second schema for the full rule just to
+   * ignore it, and the refetch is what makes the new row show the server's own
+   * id and `next_fire_at` either way.
+   *
+   * The body is built by `lib/wakeup-draft.ts`'s `buildWakeupInput`, which is
+   * where the server's own input rules live on this side of the wire.
+   */
+  async createIssueWakeup(
+    issueId: string,
+    input: IssueWakeupInput,
+  ): Promise<void> {
+    await this.fetch<void>(
+      `/api/issues/${encodeURIComponent(issueId)}/wakeups`,
+      { method: "POST", body: JSON.stringify(input) },
     );
   }
 

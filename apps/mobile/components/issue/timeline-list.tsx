@@ -527,7 +527,18 @@ export function TimelineList({
        * plugin panel, so it lands directly after QuickActions. Renders
        * nothing when the issue is closed and has no rules, so the common
        * issue gains no row. */}
-      <WakeupsSection issueId={issue.id} closed={isClosedIssue(issue)} />
+      <WakeupsSection
+        issueId={issue.id}
+        closed={isClosedIssue(issue)}
+        // The issue's agent assignee is who a new rule should wake by default —
+        // the same seed web passes (`issue-detail.tsx:2873`). Absent for a
+        // member assignee or none, and the form then asks for one.
+        defaultAgentId={
+          issue.assignee_type === "agent"
+            ? (issue.assignee_id ?? undefined)
+            : undefined
+        }
+      />
       {/* Raw metadata bag (G26) — renders null when the issue has none, so an
           issue that never used metadata gains no row. Read-only: the bag is
           the agents' channel and web has no write path either. */}

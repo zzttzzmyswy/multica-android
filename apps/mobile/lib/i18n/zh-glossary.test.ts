@@ -37,6 +37,10 @@ const ISSUE_ENTITY_PATTERN = /\b(sub-?)?issues?\b/i;
 const PROBLEM_SENSE_KEYS = [
   "agents.new.ai.description", // "will ask focused questions"
   "usage.errors.byAgent", // "Top offenders" — failed runs, not filed issues
+  // "check the result and continue if it looks right" — 没有问题 is "if nothing
+  // is wrong", the problem sense. Upstream's own zh-Hans bundle renders this
+  // key the same way; the en source carries no `issue` token at all.
+  "wakeups.create.instruction_placeholder",
 ];
 
 /** EN spells out the entity with 异常 instead: health problems, not issues. */

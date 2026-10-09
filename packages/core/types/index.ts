@@ -127,6 +127,7 @@ export type {
 export type { IssueSubscriber } from "./subscriber";
 export type {
   IssueWakeup,
+  IssueWakeupInput,
   WakeupPausedReason,
   WakeupCondition,
   WakeupRun,

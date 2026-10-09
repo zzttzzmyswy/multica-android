@@ -8,10 +8,10 @@
  * Same precedent as every other core type this fork added for mobile
  * (`property.ts`, `issue-status.ts`, `activity.ts`).
  *
- * Scope is the READ path only. `IssueWakeupInput` and the workspace-level
- * `WorkspaceWakeup*` family are deliberately NOT ported: this iteration ships
- * no create/edit/enable/trigger surface, and a type for a request nobody sends
- * is a claim the client cannot honour. They come back with the write round.
+ * Scope was the READ path through MYS-2023/MYS-2031. `IssueWakeupInput` — the
+ * body of `POST /api/issues/:id/wakeups` — arrives with MYS-2040, the round
+ * that first sends one; the workspace-level `WorkspaceWakeup*` family is still
+ * deliberately absent, because this fork ships no workspace wakeup table.
  *
  * Every field below is verified present on the wire against mu.zztweb.top —
  * `GET /api/issues/:id/wakeups`, `/system-wakeups`, `.../wakeups/:id/runs`,
@@ -66,7 +66,11 @@ export interface IssueWakeup {
 
 export type WakeupPausedReason = "max_fires" | "loop" | "rate";
 
-/** Structured predicates the platform evaluates (see WakeupCondition in Go). */
+/** One issue's field or structural predicate the PLATFORM evaluates itself.
+ *  A rule carrying one of these stores no raw `event_types` — the server
+ *  refuses the combination ("a condition cannot be combined with events or
+ *  filters", `issue_wakeup.go:154`), which is why `buildWakeupInput` sets one
+ *  or the other and never both. */
 export type WakeupCondition =
   | { type: "issue_field"; field: "status"; value: string }
   | { type: "issue_field"; field: "assignee"; assignee_type: "member" | "agent" | "squad"; assignee_id: string }
@@ -86,6 +90,37 @@ export interface WakeupRun {  id: string;
   checkin_note: string;
   triggers: string[];
   commented: boolean;
+}
+
+/**
+ * The body of `POST /api/issues/:id/wakeups` (MYS-2040).
+ *
+ * Ported from upstream's own copy. Every optional field is optional because the
+ * server derives a default for it, and the combinations it refuses are the ones
+ * the form's decision layer refuses first (`lib/wakeup-draft.ts`): `at` with any
+ * deadline or `on_timeout`, `expires_at` together with `expires_in_seconds`,
+ * `max_fires` on a one-shot, and a `condition` beside raw events or filters.
+ * The server re-validates all of it — this type only keeps the client from
+ * building a body it can already know is wrong.
+ */
+export interface IssueWakeupInput {
+  agent_id: string;
+  instruction: string;
+  kind: IssueWakeup["kind"];
+  mode?: IssueWakeup["mode"];
+  event_types?: string[];
+  filter_agent_id?: string;
+  filter_actor_type?: "member" | "agent";
+  filter_actor_id?: string;
+  at?: string;
+  interval_seconds?: number;
+  cron_expression?: string;
+  timezone?: string;
+  expires_at?: string;
+  expires_in_seconds?: number;
+  on_timeout?: "wake" | "end";
+  condition?: WakeupCondition;
+  max_fires?: number;
 }
 
 /**

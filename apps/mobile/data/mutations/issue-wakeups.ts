@@ -34,7 +34,7 @@
  *      act on where the server's raw sentence is written for a developer.
  */
 import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import type { SystemWakeup } from "@multica/core/types";
+import type { IssueWakeupInput, SystemWakeup } from "@multica/core/types";
 import { api } from "@/data/api";
 import { issueKeys } from "@/data/queries/issue-keys";
 import { useWorkspaceStore } from "@/data/workspace-store";
@@ -108,6 +108,41 @@ function useWakeupMutation(issueId: string) {
     if (wakeupWriteNeedsRefresh(error)) void settle();
   };
   return { settle, onError };
+}
+
+/**
+ * Create a rule (MYS-2040).
+ *
+ * The ten hooks above all act on a rule that already exists. This one is the
+ * only way a rule comes into being from the phone, and it is the reason the
+ * round exists at all: before it, a mobile user could stop a rule and could not
+ * start one.
+ *
+ * Same refuse-to-lie discipline as the others: no optimistic patch (a create has
+ * no id to patch yet — the server assigns it), and the shared invalidation set
+ * on settle, so the section refetches and the new rule appears with the server's
+ * own id, revision and next_fire_at rather than values this client guessed.
+ *
+ * A conflict here is NOT the revision race the other hooks classify
+ * (`wakeupWriteNeedsRefresh`): a create carries no revision to lose. The server
+ * answers two other ways instead — a full issue/workspace is a **400** carrying
+ * `{"code":"wakeup_capacity_exceeded"}` (`issue_wakeup.go:107`), which the form
+ * turns into `wakeups.create.capacityError`, and a create racing its own source
+ * run is a 409 `wakeup_source_busy`. Neither is repaired by re-reading the rule
+ * list, so this hook deliberately carries no `WRITE_FAILURE_CONFLICT_KEY` and no
+ * `onError` refresh: the alert names the failure and the user retries.
+ */
+export function useCreateIssueWakeup(issueId: string) {
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: {
+      [WRITE_FAILURE_TITLE_KEY]: "wakeups.createError",
+      [WRITE_FAILURE_PERMISSION_KEY]: "wakeups.permissionError",
+    },
+    mutationFn: (input: IssueWakeupInput) => api.createIssueWakeup(issueId, input),
+    onSettled: () => invalidateIssueWakeups(queryClient, wsId, issueId),
+  });
 }
 
 /** Turn a rule back on. `revision` fences the write; `rearm` is required for a

@@ -45,6 +45,7 @@ import {
   WakeupRowSheet,
   wakeupBlockedTextKey,
 } from "@/components/issue/wakeup-row-actions";
+import { WakeupCreateSheet } from "@/components/issue/wakeup-create-sheet";
 import { useTranslation } from "@/lib/i18n/react";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
@@ -86,6 +87,10 @@ interface Props {
   /** Woken when the reader taps the header chip and we want the section in
    *  view. Optional: the section renders the same without it. */
   expanded?: boolean;
+  /** Preselected wake target for a new rule: the issue's agent assignee, which
+   *  is what web seeds (`issue-detail.tsx:2873`). Omitted on an issue with a
+   *  member assignee or none, where the form asks for one. */
+  defaultAgentId?: string;
 }
 
 /** The `t` + catalog bundle every text helper in `wakeup-presentation` needs.
@@ -101,7 +106,7 @@ function useWakeupText(): WakeupTextDeps {
   };
 }
 
-export function WakeupsSection({ issueId, closed = false }: Props) {
+export function WakeupsSection({ issueId, closed = false, defaultAgentId }: Props) {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
@@ -110,6 +115,9 @@ export function WakeupsSection({ issueId, closed = false }: Props) {
   const [open, setOpen] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Mounted only while open: the form owns a whole draft, and one left behind a
+  // closed sheet would keep its sub-pickers' reads alive.
+  const [createOpen, setCreateOpen] = useState(false);
 
   const {
     data: rules = [],
@@ -146,25 +154,55 @@ export function WakeupsSection({ issueId, closed = false }: Props) {
 
   return (
     <View className="border-t border-border px-4 pt-2 pb-2">
-      <Pressable
-        onPress={() => setOpen((v) => !v)}
-        accessibilityRole="button"
-        accessibilityState={{ expanded: open }}
-        accessibilityLabel={`${t("wakeups.title")}, ${current.length + systemRules.length}`}
-        className="flex-row items-center gap-1.5 py-1 active:opacity-70"
-      >
-        <Ionicons
-          name={open ? "chevron-down" : "chevron-forward"}
-          size={12}
-          color={theme.mutedForeground}
+      <View className="flex-row items-center gap-1.5 py-1">
+        <Pressable
+          onPress={() => setOpen((v) => !v)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: open }}
+          accessibilityLabel={`${t("wakeups.title")}, ${current.length + systemRules.length}`}
+          className="flex-1 min-w-0 flex-row items-center gap-1.5 py-1 active:opacity-70"
+        >
+          <Ionicons
+            name={open ? "chevron-down" : "chevron-forward"}
+            size={12}
+            color={theme.mutedForeground}
+          />
+          <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+            {t("wakeups.title")}
+          </Text>
+          <Text className="text-xs tabular-nums text-muted-foreground">
+            {current.length + systemRules.length}
+          </Text>
+        </Pressable>
+
+        {/* The create entry, gated on the issue being open — web's
+            `{!closed && <WakeupCreate …/>}` (wakeups-section.tsx:438). A closed
+            issue cannot hold a new rule: the server disables them all on close
+            and refuses a create ("issue is closed"), so offering the entry
+            would be a control whose only outcome is a 400. */}
+        {!closed ? (
+          <Pressable
+            onPress={() => setCreateOpen(true)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t("wakeups.create.open")}
+            className="px-1 py-1 active:opacity-70"
+          >
+            <Ionicons name="add" size={16} color={theme.mutedForeground} />
+          </Pressable>
+        ) : null}
+      </View>
+
+      {/* Mounted only while open: the form owns a draft and four reads, and one
+          left behind a closed sheet would keep all of them alive. */}
+      {createOpen ? (
+        <WakeupCreateSheet
+          issueId={issueId}
+          visible
+          defaultAgentId={defaultAgentId}
+          onClose={() => setCreateOpen(false)}
         />
-        <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
-          {t("wakeups.title")}
-        </Text>
-        <Text className="text-xs tabular-nums text-muted-foreground">
-          {current.length + systemRules.length}
-        </Text>
-      </Pressable>
+      ) : null}
 
       {open ? (
         <View className="pt-0.5">
