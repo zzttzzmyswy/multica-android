@@ -165,4 +165,26 @@ export const issueKeys = {
   // One rule's trigger history — fetched only when the reader opens that row.
   wakeupRuns: (wsId: string | null, id: string, wakeupId: string) =>
     [...issueKeys.wakeups(wsId, id), "runs", wakeupId] as const,
+  // The WORKSPACE-wide rule table (MYS-2043) — every issue's rules on one page,
+  // behind web's 自动化 → 任务唤醒 tab. Keyed under its own `workspaceWakeups`
+  // prefix rather than under `all(wsId)`: this is a paginated, filtered query
+  // whose key carries the whole filter bag, and prefixing it onto the issue
+  // keys would make every workspace-wide issue invalidation refetch a table the
+  // change cannot have affected.
+  workspaceWakeupsAll: (wsId: string | null) =>
+    ["workspace-wakeups", wsId] as const,
+  workspaceWakeups: (
+    wsId: string | null,
+    filters: WorkspaceWakeupFilters,
+  ) =>
+    [
+      ...issueKeys.workspaceWakeupsAll(wsId),
+      issueParamsKey(filters),
+    ] as const,
+  // The workspace DEFAULTS of the platform's rules, for 设置 → 唤醒 (MYS-2043).
+  // A separate root from the table above: different endpoint, different shape
+  // (a default is not a rule with an issue), and the two are invalidated
+  // together but read independently.
+  workspaceSystemWakeups: (wsId: string | null) =>
+    ["workspace-system-wakeups", wsId] as const,
 };

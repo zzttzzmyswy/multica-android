@@ -134,6 +134,14 @@ export type {
   WakeupPreview,
   SystemWakeup,
 } from "./issue-wakeup";
+export type {
+  WorkspaceWakeup,
+  WorkspaceWakeupPage,
+  WorkspaceWakeupFilters,
+  WorkspaceSystemWakeup,
+  WakeupScope,
+  WakeupSource,
+} from "./issue-wakeup";
 export type * from "./events";
 export type * from "./api";
 export type { Attachment } from "./attachment";

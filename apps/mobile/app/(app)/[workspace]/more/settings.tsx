@@ -100,6 +100,10 @@ export default function SettingsPage() {
   const goTokens = () => router.push(`/${currentSlug}/more/settings/tokens`);
   const goIssueSettings = () =>
     router.push(`/${currentSlug}/more/settings/issues`);
+  // Settings → Wakeups (MYS-2043): the platform rule's workspace default.
+  // Web hangs this off its settings Tabs; mobile's settings page is a list of
+  // push screens, so it is one more row.
+  const goWakeups = () => router.push(`/${currentSlug}/more/settings/wakeups`);
   const goWorkspaceSettings = () =>
     router.push(`/${currentSlug}/more/settings/workspace`);
   const goBilling = () => router.push(`/${currentSlug}/more/settings/billing`);
@@ -208,6 +212,18 @@ export default function SettingsPage() {
           chevronColor={mutedFg}
           title={t("settings.issueTitle")}
           subtitle={t("settings.issueSubtitle")}
+        />
+        <Separator />
+        <NavRow
+          onPress={goWakeups}
+          chevronColor={mutedFg}
+          leading={
+            <View className="size-10 rounded-md bg-secondary items-center justify-center">
+              <Ionicons name="alarm-outline" size={20} color={mutedFg} />
+            </View>
+          }
+          title={t("settings.wakeups.title")}
+          subtitle={t("settings.wakeups.subtitle")}
         />
         <Separator />
         <NavRow

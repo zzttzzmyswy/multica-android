@@ -180,3 +180,79 @@ export interface SystemWakeup {
   workspace_default: boolean;
 }
 
+
+/**
+ * One row of the WORKSPACE-wide wakeup table (MYS-2043), the shape behind
+ * web's "任务唤醒" tab (`packages/views/autopilots/components/workspace-wakeups.tsx`).
+ *
+ * Same `IssueWakeup` fields minus `instruction` (the list does not carry the
+ * prompt; every rule's prompt is edited through the per-rule endpoint), plus
+ * the issue's own identity and the flags the table decides on: whether this
+ * reader may manage the row at all, whether the issue is closed, how many runs
+ * the rule started in the last seven days, and whether it came from a person,
+ * an agent run, or the platform.
+ */
+export interface WorkspaceWakeup extends Omit<IssueWakeup, "instruction"> {
+  issue_title: string;
+  issue_identifier: string;
+  issue_closed: boolean;
+  /** False when this reader is neither the creator nor a workspace admin.
+   *  The server computes it (handler `issue_wakeup.go:74-90`), so the row
+   *  never re-derives permission from feel. */
+  can_manage: boolean;
+  active_runs: number;
+  task: import("./agent").AgentTask | null;
+  source: WakeupSource;
+  /** Runs the rule started in the last seven days. */
+  runs_7d: number;
+  /** Set on a platform-rule row, whose `id` is the issue's own id. */
+  rule?: SystemWakeup["rule"] | null;
+  system_stage?: number | null;
+  system_remaining?: number | null;
+  target_type?: string | null;
+}
+
+export type WakeupSource = "member" | "agent" | "system";
+
+/** The five scopes the table's segmented control offers, in web's order. */
+export type WakeupScope = "active" | "all" | "paused" | "disabled" | "ended";
+
+/** The payload of `GET /api/issue-wakeups`. */
+export interface WorkspaceWakeupPage {
+  items: WorkspaceWakeup[];
+  total: number;
+  /** Scope inventories, NOT result counts: they describe the whole workspace
+   *  and never move when a filter narrows the page. */
+  counts: Record<WakeupScope, number>;
+  /** Every agent with a rule in this workspace, for the target filter. */
+  agents: { id: string; name: string }[];
+}
+
+/**
+ * The table's query string. Each field mirrors one server parameter; the
+ * server validates every enum and answers 400 on an unknown value rather than
+ * ignoring it (`issue_wakeup.go:27-56`).
+ */
+export interface WorkspaceWakeupFilters {
+  scope: WakeupScope;
+  kind: "all" | "event" | "at" | "recurring";
+  source: "" | WakeupSource;
+  search: string;
+  agent_id: string;
+  offset: number;
+  limit: number;
+}
+
+/**
+ * A platform rule's WORKSPACE default, edited in Settings (MYS-2043).
+ * `customized` counts the open issues whose rule a person changed; those stop
+ * following this default.
+ */
+export interface WorkspaceSystemWakeup {
+  rule: "child_done";
+  enabled: boolean;
+  /** The workspace's instruction; empty means runs get `builtin_instruction`. */
+  instruction: string;
+  builtin_instruction: string;
+  customized: number;
+}
