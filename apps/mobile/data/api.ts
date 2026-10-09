@@ -2934,15 +2934,20 @@ class ApiClient {
     );
   }
 
-  // ---- Issue wakeups (MYS-2023) -------------------------------------------
-  // Read-only this round. The endpoints and their envelope shapes mirror web's
-  // (packages/core/api/client.ts:1313-1389) verbatim; the write half
-  // (create / enable / disable / trigger / delete) is deliberately absent —
-  // see lib/wakeup-presentation.ts for why it is a separate round.
+  // ---- Issue wakeups (MYS-2023 reads, MYS-2031 writes) --------------------
+  // The endpoints and their envelope shapes mirror web's
+  // (packages/core/api/client.ts:1313-1389) verbatim.
   //
-  // All three degrade to an empty list on a broken payload rather than
+  // The three READS degrade to an empty list on a broken payload rather than
   // throwing: a wakeup section is an addition to the issue page, and a server
   // that renames a field must not take the page down with it.
+  //
+  // The WRITES do the opposite on purpose — there is no fallback and no
+  // `parseWithFallback` anywhere below. A read that degrades shows an empty
+  // section, which is visibly wrong; a write that degrades would report a
+  // rule as stopped/enabled/woken/deleted when the server never applied it,
+  // and the user would find out from the next run. So every one of them
+  // rethrows, including the 409 the caller uses to decide whether to refresh.
 
   async listIssueWakeups(
     issueId: string,
@@ -2978,6 +2983,101 @@ class ApiClient {
       WakeupRunListSchema,
       EMPTY_WAKEUP_RUN_LIST,
       { ...opts, endpoint: "GET /api/issues/:id/wakeups/:wakeupId/runs" },
+    );
+  }
+
+  /** Turn a rule back on. `revision` is the optimistic-concurrency fence the
+   *  server compares (`issue_wakeup.go:388`) — a stale one is a 409, never a
+   *  silent overwrite. `rearm` is mandatory for a one-shot that already fired
+   *  ("consumed one-shot requires explicit rearm"); `at` sets a new time and
+   *  is accepted only by an `at` rule. */
+  async enableIssueWakeup(
+    issueId: string,
+    wakeupId: string,
+    input: { revision: number; at?: string; rearm?: boolean },
+  ): Promise<void> {
+    await this.fetch<void>(
+      `/api/issues/${encodeURIComponent(issueId)}/wakeups/${encodeURIComponent(wakeupId)}/enable`,
+      { method: "POST", body: JSON.stringify(input) },
+    );
+  }
+
+  /** Stop a rule. No revision and no body: the disable endpoint takes neither,
+   *  which is what keeps a row with an unreadable revision stoppable. */
+  async disableIssueWakeup(
+    issueId: string,
+    wakeupId: string,
+  ): Promise<void> {
+    await this.fetch<void>(
+      `/api/issues/${encodeURIComponent(issueId)}/wakeups/${encodeURIComponent(wakeupId)}/disable`,
+      { method: "POST" },
+    );
+  }
+
+  /** "Wake now" — one run of the rule, as if it fired. */
+  async triggerIssueWakeup(
+    issueId: string,
+    wakeupId: string,
+  ): Promise<void> {
+    await this.fetch<void>(
+      `/api/issues/${encodeURIComponent(issueId)}/wakeups/${encodeURIComponent(wakeupId)}/trigger`,
+      { method: "POST" },
+    );
+  }
+
+  /** Delete a rule. Runs that have not started are withdrawn server-side. */
+  async deleteIssueWakeup(
+    issueId: string,
+    wakeupId: string,
+  ): Promise<void> {
+    await this.fetch<void>(
+      `/api/issues/${encodeURIComponent(issueId)}/wakeups/${encodeURIComponent(wakeupId)}`,
+      { method: "DELETE" },
+    );
+  }
+
+  /**
+   * Rewrite a rule's prompt.
+   *
+   * `expected_instruction` is a second fence beside the revision, and the
+   * server compares BOTH (`issue_wakeup.go:325`). Sending only the revision
+   * would let an editor that loaded before someone else's edit overwrite it in
+   * the window where revisions still match.
+   */
+  async editIssueWakeupInstruction(
+    issueId: string,
+    wakeupId: string,
+    input: {
+      instruction: string;
+      expected_instruction: string;
+      revision: number;
+    },
+  ): Promise<void> {
+    await this.fetch<void>(
+      `/api/issues/${encodeURIComponent(issueId)}/wakeups/${encodeURIComponent(wakeupId)}/instruction`,
+      { method: "PATCH", body: JSON.stringify(input) },
+    );
+  }
+
+  /**
+   * Turn the platform's child-done rule on/off for one issue, and set its
+   * prompt. An omitted field keeps its value server-side, so the toggle path
+   * sends `enabled` alone and does not blank the instruction.
+   *
+   * Returns the issue's whole rule list — the endpoint answers with it, and
+   * parsing it means the caller can refresh from the response.
+   */
+  async updateIssueSystemWakeup(
+    issueId: string,
+    rule: SystemWakeup["rule"],
+    input: { enabled?: boolean; instruction?: string },
+  ): Promise<SystemWakeup[]> {
+    return this.fetchValidatedWith(
+      `/api/issues/${encodeURIComponent(issueId)}/system-wakeups/${encodeURIComponent(rule)}`,
+      SystemWakeupListSchema,
+      EMPTY_SYSTEM_WAKEUP_LIST,
+      { method: "PUT", body: JSON.stringify(input) },
+      { endpoint: "PUT /api/issues/:id/system-wakeups/:rule" },
     );
   }
 
