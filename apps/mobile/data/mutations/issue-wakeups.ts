@@ -41,6 +41,7 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { wakeupWriteNeedsRefresh } from "@/lib/wakeup-controls";
 import {
   WRITE_FAILURE_CONFLICT_KEY,
+  WRITE_FAILURE_PERMISSION_KEY,
   WRITE_FAILURE_TITLE_KEY,
 } from "@/lib/write-failure";
 
@@ -117,6 +118,7 @@ export function useEnableIssueWakeup(issueId: string) {
     meta: {
       [WRITE_FAILURE_TITLE_KEY]: "wakeups.enableError",
       [WRITE_FAILURE_CONFLICT_KEY]: "wakeups.conflictError",
+      [WRITE_FAILURE_PERMISSION_KEY]: "wakeups.permissionError",
     },
     mutationFn: ({
       id,
@@ -141,6 +143,7 @@ export function useDisableIssueWakeup(issueId: string) {
     meta: {
       [WRITE_FAILURE_TITLE_KEY]: "wakeups.disableError",
       [WRITE_FAILURE_CONFLICT_KEY]: "wakeups.conflictError",
+      [WRITE_FAILURE_PERMISSION_KEY]: "wakeups.permissionError",
     },
     mutationFn: (id: string) => api.disableIssueWakeup(issueId, id),
     onError,
@@ -155,6 +158,7 @@ export function useTriggerIssueWakeup(issueId: string) {
     meta: {
       [WRITE_FAILURE_TITLE_KEY]: "wakeups.wakeNowError",
       [WRITE_FAILURE_CONFLICT_KEY]: "wakeups.conflictError",
+      [WRITE_FAILURE_PERMISSION_KEY]: "wakeups.permissionError",
     },
     mutationFn: (id: string) => api.triggerIssueWakeup(issueId, id),
     onError,
@@ -168,6 +172,7 @@ export function useDeleteIssueWakeup(issueId: string) {
     meta: {
       [WRITE_FAILURE_TITLE_KEY]: "wakeups.deleteError",
       [WRITE_FAILURE_CONFLICT_KEY]: "wakeups.conflictError",
+      [WRITE_FAILURE_PERMISSION_KEY]: "wakeups.permissionError",
     },
     mutationFn: (id: string) => api.deleteIssueWakeup(issueId, id),
     onError,
@@ -183,6 +188,7 @@ export function useEditWakeupInstruction(issueId: string) {
     meta: {
       [WRITE_FAILURE_TITLE_KEY]: "wakeups.instructionSaveError",
       [WRITE_FAILURE_CONFLICT_KEY]: "wakeups.conflictError",
+      [WRITE_FAILURE_PERMISSION_KEY]: "wakeups.permissionError",
     },
     mutationFn: ({
       id,
@@ -212,6 +218,7 @@ export function useUpdateIssueSystemWakeup(issueId: string) {
     meta: {
       [WRITE_FAILURE_TITLE_KEY]: "wakeups.system.saveError",
       [WRITE_FAILURE_CONFLICT_KEY]: "wakeups.conflictError",
+      [WRITE_FAILURE_PERMISSION_KEY]: "wakeups.permissionError",
     },
     mutationFn: ({
       rule,

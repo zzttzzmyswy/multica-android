@@ -28,6 +28,12 @@ function code(rel: string): string {
 describe("the issue wakeup section writes, not just reads", () => {
   const section = code("components/issue/wakeups-section.tsx");
   const actions = code("components/issue/wakeup-row-actions.tsx");
+  const mutations = code("data/mutations/issue-wakeups.ts");
+  const localeKeys = Object.keys(
+    JSON.parse(
+      readFileSync(path.join(APP_ROOT, "lib/i18n/locales/en.json"), "utf8"),
+    ),
+  );
 
   it("binds the enable and disable mutations for a rule row", () => {
     expect(section).toContain("useEnableIssueWakeup");
@@ -119,6 +125,43 @@ describe("the issue wakeup section writes, not just reads", () => {
 
   it("validates the prompt before sending it", () => {
     expect(actions).toContain("wakeupInstructionErrorKey(");
+  });
+
+  it("reports a failure through ONE channel, never two", () => {
+    // The two channels both fire while a mounted component is on screen:
+    // `mutation.js:148` calls the MutationCache handler (driven by the hook's
+    // `WRITE_FAILURE_TITLE_KEY` meta) and `mutationObserver.js:109` calls a
+    // per-call `onError`. Pairing them raises two dialogs per failure, which
+    // `lib/write-wiring.test.ts` documents as the app-wide rule.
+    //
+    // Asserted in BOTH directions, because each half alone is satisfiable by
+    // the wrong code: the hooks must carry the meta (or failures go silent),
+    // and the call sites must not hand `mutate` an error handler (or they
+    // double up). Only Alert.alert is forbidden — a per-call `onSuccess`
+    // (closing the sheet, confirming a run) is not a second error channel.
+    expect(mutations).toContain("WRITE_FAILURE_TITLE_KEY");
+    expect(mutations).toContain("WRITE_FAILURE_CONFLICT_KEY");
+    expect(mutations).toContain("WRITE_FAILURE_PERMISSION_KEY");
+    // Every `mutate(…, { … })` options object in the call sites.
+    for (const [, options] of actions.matchAll(/\.mutate\([\s\S]*?\(\s*\{([\s\S]*?)\}\s*\)/g)) {
+      expect(options, "a per-call onError would double the alert").not.toContain("onError");
+    }
+    // The failure the reader sees is therefore the one the cache raises, whose
+    // TITLE is the hook's own action-naming key (mobile's existing convention
+    // — see `data/query-client.ts`). Each must exist in the catalog, or the
+    // alert renders a raw id.
+    for (const key of [
+      "wakeups.enableError",
+      "wakeups.disableError",
+      "wakeups.wakeNowError",
+      "wakeups.deleteError",
+      "wakeups.instructionSaveError",
+      "wakeups.system.saveError",
+      "wakeups.conflictError",
+      "wakeups.permissionError",
+    ]) {
+      expect(localeKeys, `${key} must resolve`).toContain(key);
+    }
   });
 
   it("wires withdraw to the DISABLE write, not to an enable", () => {

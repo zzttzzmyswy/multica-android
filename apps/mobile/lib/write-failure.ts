@@ -99,6 +99,10 @@ export function writeFailureDetail(
   if (conflictKey && translate && isConflictError(error)) {
     return translate(conflictKey);
   }
+  const permissionKey = writeFailurePermissionKey(mutation);
+  if (permissionKey && translate && isPermissionError(error)) {
+    return translate(permissionKey);
+  }
   if (error instanceof Error) {
     const message = error.message?.trim();
     if (message) return message;
@@ -148,6 +152,39 @@ export function isConflictError(error: unknown): boolean {
     typeof error === "object" &&
     error !== null &&
     (error as { status?: unknown }).status === 409
+  );
+}
+
+/** Meta key carrying the i18n id of a SECOND line, shown in place of the
+ *  server's message when the write was refused (HTTP 403).
+ *
+ *  The twin of `WRITE_FAILURE_CONFLICT_KEY`, for the same class of failure: a
+ *  403 is not something the member can retry away, and the API's body for one
+ *  is written for a caller rather than a person ("wakeup permission denied").
+ *  Web branches on exactly this and shows a sentence naming who to ask
+ *  (`wakeup-presentation.ts:342-352` → `wakeups.permission_error`).
+ *
+ *  Absent keeps the server's own message, which stays right for every write
+ *  whose 403 has no better phrasing than the API's. */
+export const WRITE_FAILURE_PERMISSION_KEY = "writeFailurePermissionKey";
+
+/** The i18n id to substitute for the server's message on a 403, or `null`. */
+export function writeFailurePermissionKey(
+  mutation: WriteFailureMutationLike | null | undefined,
+): string | null {
+  const value = mutation?.options?.meta?.[WRITE_FAILURE_PERMISSION_KEY];
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+/** Whether the write was refused for lack of permission. Same duck-typing rule
+ *  as `isConflictError`, and for the same reason (no `@/data/api` import). */
+export function isPermissionError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { status?: unknown }).status === 403
   );
 }
 

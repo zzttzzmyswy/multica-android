@@ -22,7 +22,8 @@
  *   - **A conflict is classified, not echoed.** The server's 409 body
  *     ("wakeup changed; refresh and retry") is written for a developer; the row
  *     shows `wakeups.conflictError` and the mutation layer re-fetches. See
- *     `wakeupWriteErrorKey` / `wakeupWriteNeedsRefresh`.
+ *     `WRITE_FAILURE_CONFLICT_KEY` / `WRITE_FAILURE_PERMISSION_KEY` meta each
+ *     hook carries.
  *
  * The actions are all bound to `wakeup.issue_id`, not to a prop: a rule carries
  * its own issue, so a sheet opened from the wakeups tab of one issue can never
@@ -53,23 +54,22 @@ import {
   isFutureWakeupTime,
   rescheduleInstant,
   wakeupInstructionErrorKey,
-  wakeupWriteErrorKey,
   type WakeupControlState,
 } from "@/lib/wakeup-controls";
 
-/** The alert title for any failed wakeup write. The detail line below it is
- *  the classified one, which names the action and branches on 403/409. */
-const WRITE_FAILED_TITLE = "wakeups.writeFailedTitle";
-
-/** One alert helper for every write in this file, so the four failures cannot
- *  drift into four phrasings of the same sentence. */
-function raiseWakeupFailure(
-  t: (id: string, params?: Record<string, string | number>) => string,
-  error: unknown,
-  fallbackKey: string,
-): void {
-  Alert.alert(t(WRITE_FAILED_TITLE), t(wakeupWriteErrorKey(error, fallbackKey)));
-}
+/**
+ * Wakeup failures are reported by the QueryClient's MutationCache, from the
+ * `WRITE_FAILURE_TITLE_KEY` meta each hook in `data/mutations/issue-wakeups.ts`
+ * carries — NOT from a per-call `onError` here.
+ *
+ * That is a deliberate choice, not an omission. Both channels fire while the
+ * calling component is mounted (`mutation.js:148` calls the cache handler,
+ * `mutationObserver.js:109` calls the per-call one), so pairing them would
+ * raise TWO dialogs for one failure. `lib/write-wiring.test.ts` documents the
+ * rule for the rest of the app; `lib/wakeup-write-wiring.test.ts` pins it for
+ * these hooks. The cache channel is also the only one of the two that survives
+ * a row unmounting mid-flight — which a scrolling list makes routine.
+ */
 
 /** Why a control is inert, in the reader's words. `null` renders nothing —
  *  a live control needs no explanation. */
@@ -233,9 +233,6 @@ export function WakeupRowSheet({
   const remove = useDeleteIssueWakeup(wakeup.issue_id);
   const busy = trigger.isPending || remove.isPending;
 
-  const fail = (error: unknown, fallbackKey: string) =>
-    raiseWakeupFailure(t, error, fallbackKey);
-
   const confirmDelete = () => {
     Alert.alert(
       t("wakeups.deleteTitle"),
@@ -248,7 +245,6 @@ export function WakeupRowSheet({
           onPress: () =>
             remove.mutate(wakeup.id, {
               onSuccess: onClose,
-              onError: (err) => fail(err, "wakeups.deleteError"),
             }),
         },
       ],
@@ -292,7 +288,6 @@ export function WakeupRowSheet({
                       t("wakeups.wakeNowDone", { agent: wakeup.agent_name }),
                     );
                   },
-                  onError: (err) => fail(err, "wakeups.wakeNowError"),
                 })
               }
             />
@@ -396,10 +391,7 @@ export function WakeupInstructionEditor({
         expected_instruction: original.instruction,
         revision: original.revision ?? 0,
       },
-      {
-        onSuccess: onDone,
-        onError: (err) => raiseWakeupFailure(t, err, "wakeups.instructionSaveError"),
-      },
+      { onSuccess: onDone },
     );
   };
 
