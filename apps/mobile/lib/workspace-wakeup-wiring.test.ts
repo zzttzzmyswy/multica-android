@@ -99,6 +99,38 @@ describe("the workspace wakeup table is reachable and wired", () => {
   });
 });
 
+describe("the app Switch keeps a real box on native", () => {
+  // Found on the Pixel 5 during this round's device pass, and it was NOT
+  // caused by this round: every switch in the app laid out at zero size, so
+  // the notifications screen and the issue wakeup rows were broken too.
+  //
+  // The cause is that `h-[1.15rem] w-8` / `size-4` are NativeWind
+  // arbitrary-value classes; a UI dump showed `android.widget.Switch` nodes
+  // present with bounds "[0,0][0,0]". The fix gives the track and thumb
+  // numeric dimensions, which is what this app already does wherever a size
+  // is load-bearing (presence-dot.tsx, avatar-stack.tsx).
+  const sw = code("components/ui/switch.tsx");
+  it("sizes the track and the thumb with numbers, not utility classes", () => {
+    expect(sw).toContain("TRACK_WIDTH");
+    expect(sw).toContain("THUMB_SIZE");
+    expect(sw).toContain("width: TRACK_WIDTH");
+    expect(sw).toContain("width: THUMB_SIZE");
+  });
+
+  it("no longer relies on the arbitrary-value classes that did not resolve", () => {
+    expect(sw).not.toContain("h-[1.15rem]");
+    expect(sw).not.toContain("size-4");
+  });
+
+  it("moves the thumb by layout, not by an arbitrary translate class", () => {
+    // `translate-x-3.5` is arbitrary-value too, and it did not resolve either:
+    // the knob sat on the track's left edge in BOTH states, so "on" and "off"
+    // looked identical.
+    expect(sw).toContain("marginLeft");
+    expect(sw).not.toContain("translate-x-3.5");
+  });
+});
+
 describe("the workspace wakeup defaults are reachable and wired", () => {
   it("links the settings screen from the settings list", () => {
     expect(settings).toContain("more/settings/wakeups");
