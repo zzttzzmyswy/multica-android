@@ -108,7 +108,7 @@ export function ChatProjectContextRow({
             size={13}
             color={theme.mutedForeground}
           />
-          <Text className="text-xs text-muted-foreground">
+          <Text className="text-caption text-muted-foreground">
             {t("chat.project.add")}
           </Text>
         </Pressable>
@@ -132,7 +132,7 @@ export function ChatProjectContextRow({
           className="max-w-[180px] px-1.5 py-1 active:opacity-70"
         >
           <Text
-            className="text-xs font-medium text-foreground"
+            className="text-caption font-medium text-foreground"
             numberOfLines={1}
           >
             {context.projectName ?? t("chat.project.change")}
@@ -158,7 +158,7 @@ export function ChatProjectContextRow({
             color={theme.warning}
           />
           <Text
-            className="flex-1 text-xs text-warning"
+            className="flex-1 text-caption text-warning"
             numberOfLines={2}
           >
             {t("chat.project.unsupported")}

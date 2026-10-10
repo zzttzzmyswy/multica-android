@@ -226,7 +226,7 @@ export default function FeedbackPage() {
       >
         {/* GitHub hint — same copy as web FeedbackModal header. */}
         <View className="flex-row flex-wrap items-center gap-1 px-1">
-          <Text className="text-xs text-muted-foreground">
+          <Text className="text-caption text-muted-foreground">
             {t("feedback.githubHintPrefix")}
           </Text>
           <Pressable
@@ -234,7 +234,7 @@ export default function FeedbackPage() {
             hitSlop={6}
             accessibilityRole="link"
           >
-            <Text className="text-xs font-medium text-primary underline">
+            <Text className="text-caption font-medium text-primary underline">
               {t("feedback.githubHintLink")}
             </Text>
           </Pressable>
@@ -268,7 +268,7 @@ export default function FeedbackPage() {
                 >
                   <Text
                     className={cn(
-                      "text-xs font-medium",
+                      "text-caption font-medium",
                       active ? "text-foreground" : "text-muted-foreground",
                     )}
                   >
@@ -290,7 +290,7 @@ export default function FeedbackPage() {
             placeholderTextColor={theme.mutedForeground}
             multiline
             maxLength={MAX_MESSAGE_LEN}
-            className="px-4 py-3 text-base text-foreground"
+            className="px-4 py-3 text-title-sm text-foreground"
             style={{ minHeight: 140, maxHeight: 220, textAlignVertical: "top" }}
           />
           <View className="flex-row items-center justify-between px-4 pb-2.5">
@@ -340,7 +340,7 @@ export default function FeedbackPage() {
             ) : (
               <Ionicons name="attach-outline" size={18} color={theme.mutedForeground} />
             )}
-            <Text className="flex-1 text-sm font-medium text-foreground">
+            <Text className="flex-1 text-body font-medium text-foreground">
               {hasInFlightUpload
                 ? t("feedback.uploading")
                 : t("feedback.attach")}
@@ -423,7 +423,7 @@ function AttachmentRow({
               : theme.mutedForeground
         }
       />
-      <Text className="flex-1 text-xs text-foreground" numberOfLines={1}>
+      <Text className="flex-1 text-caption text-foreground" numberOfLines={1}>
         {item.filename}
       </Text>
       {item.status === "failed" ? (
@@ -463,7 +463,7 @@ function ExternalLinkRow({
       accessibilityRole="link"
     >
       <Ionicons name={icon} size={18} color={theme.mutedForeground} />
-      <Text className="flex-1 text-sm font-medium text-foreground">{label}</Text>
+      <Text className="flex-1 text-body font-medium text-foreground">{label}</Text>
       <Ionicons
         name="open-outline"
         size={14}

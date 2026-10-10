@@ -211,7 +211,7 @@ export function SkillFileEditor({
             size={16}
             color={theme.mutedForeground}
           />
-          <Text className="text-sm font-medium text-foreground flex-1" numberOfLines={1}>
+          <Text className="text-body font-medium text-foreground flex-1" numberOfLines={1}>
             {path}
           </Text>
           {isMd ? (
@@ -225,7 +225,7 @@ export function SkillFileEditor({
                   }`}
                 >
                   <Text
-                    className={`text-xs font-medium ${
+                    className={`text-caption font-medium ${
                       mode === value ? "text-foreground" : "text-muted-foreground"
                     }`}
                   >
@@ -250,7 +250,7 @@ export function SkillFileEditor({
             {body?.trim() ? (
               <Markdown content={body} />
             ) : (
-              <Text className="text-xs text-muted-foreground/70 italic">
+              <Text className="text-caption text-muted-foreground/70 italic">
                 {t("skills.editor.noContent")}
               </Text>
             )}
@@ -267,7 +267,7 @@ export function SkillFileEditor({
                 : "skills.editor.rawPlaceholder",
             )}
             placeholderTextColor={theme.mutedForeground}
-            className="flex-1 px-4 py-3 text-sm text-foreground font-mono leading-6"
+            className="flex-1 px-4 py-3 text-body text-foreground font-mono leading-6"
             textAlignVertical="top"
             autoFocus={mode === "raw"}
             style={{ includeFontPadding: false }}
@@ -280,7 +280,7 @@ export function SkillFileEditor({
           style={{ paddingBottom: keyboardHeight + insets.bottom }}
         >
           {dirty ? (
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-caption text-muted-foreground">
               {t("skills.editor.dirty")}
             </Text>
           ) : null}

@@ -294,18 +294,18 @@ export function MentionPickerBody({ query, mode = "comment" }: Props) {
             )}
             {item.kind === "issue" ? (
               <View className="flex-1 flex-row items-center gap-2">
-                <Text className="text-sm font-medium text-muted-foreground">
+                <Text className="text-body font-medium text-muted-foreground">
                   {item.issue.identifier}
                 </Text>
                 <Text
-                  className="flex-1 text-base text-foreground"
+                  className="flex-1 text-title-sm text-foreground"
                   numberOfLines={1}
                 >
                   {item.issue.title}
                 </Text>
               </View>
             ) : (
-              <Text className="flex-1 text-base text-foreground">
+              <Text className="flex-1 text-title-sm text-foreground">
                 {item.kind === "all"
                   ? t("picker.everyoneAtAll")
                   : item.kind === "member"
@@ -316,11 +316,11 @@ export function MentionPickerBody({ query, mode = "comment" }: Props) {
               </Text>
             )}
             {item.kind === "agent" ? (
-              <Text className="text-sm text-muted-foreground">
+              <Text className="text-body text-muted-foreground">
                 {isAgentRuntimeBound(item.agent) ? t("picker.agent") : t("picker.needsRuntime")}
               </Text>
             ) : item.kind === "squad" ? (
-              <Text className="text-sm text-muted-foreground">
+              <Text className="text-body text-muted-foreground">
                 {needsRuntime ? t("picker.leaderNeedsRuntime") : t("picker.squad")}
               </Text>
             ) : null}

@@ -107,7 +107,7 @@ export default function PropertiesPage() {
           </View>
         ) : error ? (
           <View className="px-4 gap-3 pt-4">
-            <Text className="text-sm text-destructive">
+            <Text className="text-body text-destructive">
               {t("properties.loadError")}
               {error instanceof Error ? error.message : t("common.unknownError")}
             </Text>
@@ -119,15 +119,15 @@ export default function PropertiesPage() {
           <View className="flex-1 items-center justify-center px-6 gap-1">
             <Ionicons name="options-outline" size={32} color={muted} />
             {querying ? (
-              <Text className="text-sm text-muted-foreground text-center mt-2">
+              <Text className="text-body text-muted-foreground text-center mt-2">
                 {t("properties.noResults")}
               </Text>
             ) : (
               <>
-                <Text className="text-sm text-muted-foreground text-center mt-2">
+                <Text className="text-body text-muted-foreground text-center mt-2">
                   {t("properties.emptyTitle")}
                 </Text>
-                <Text className="text-xs text-muted-foreground/70 text-center">
+                <Text className="text-caption text-muted-foreground/70 text-center">
                   {t("properties.emptyDescription")}
                 </Text>
                 {canManage ? (
@@ -197,7 +197,7 @@ function PropertiesToolbar({
           onChangeText={onQueryChange}
           placeholder={t("properties.searchPlaceholder")}
           placeholderTextColor={muted}
-          className="flex-1 py-2.5 text-sm text-foreground"
+          className="flex-1 py-2.5 text-body text-foreground"
           autoCorrect={false}
           autoCapitalize="none"
         />
@@ -208,11 +208,11 @@ function PropertiesToolbar({
             checked={showArchived}
             onCheckedChange={onShowArchivedChange}
           />
-          <Text className="text-xs text-muted-foreground">
+          <Text className="text-caption text-muted-foreground">
             {t("properties.showArchived")}
           </Text>
         </View>
-        <Text className="text-xs tabular-nums text-muted-foreground">
+        <Text className="text-caption tabular-nums text-muted-foreground">
           {t("properties.limitHint", {
             count: activeCount,
             max: MAX_ACTIVE_PROPERTIES,
@@ -220,7 +220,7 @@ function PropertiesToolbar({
         </Text>
       </View>
       {!canManage ? (
-        <Text className="text-xs text-muted-foreground/80">
+        <Text className="text-caption text-muted-foreground/80">
           {t("properties.adminHint")}
         </Text>
       ) : null}
@@ -261,21 +261,21 @@ function PropertyRow({
         <View className="flex-1 min-w-0 gap-1">
           <View className="flex-row items-center gap-1.5">
             <Text
-              className="text-sm font-medium text-foreground"
+              className="text-body font-medium text-foreground"
               numberOfLines={1}
             >
               {property.name}
             </Text>
             {property.archived ? (
               <View className="px-1.5 py-0.5 rounded border border-border">
-                <Text className="text-[10px] text-muted-foreground">
+                <Text className="text-micro text-muted-foreground">
                   {t("properties.archivedBadge")}
                 </Text>
               </View>
             ) : null}
           </View>
           <View className="flex-row items-center gap-1.5 flex-wrap">
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-caption text-muted-foreground">
               {t(propertyTypeLabelKey(property.type))}
             </Text>
             {hasOptions && chips.length > 0 ? (
@@ -301,7 +301,7 @@ function PropertyRow({
                 ) : null}
               </>
             ) : (
-              <Text className="text-xs text-muted-foreground/50">—</Text>
+              <Text className="text-caption text-muted-foreground/50">—</Text>
             )}
           </View>
         </View>
@@ -311,7 +311,7 @@ function PropertyRow({
               {t("properties.usageCount", { count: usage })}
             </Text>
           </View>
-          <Text className="text-[10px] text-muted-foreground/60">
+          <Text className="text-micro text-muted-foreground/60">
             {new Date(property.updated_at).toLocaleDateString()}
           </Text>
         </View>

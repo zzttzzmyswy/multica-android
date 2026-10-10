@@ -92,13 +92,13 @@ export function SaveViewDialog({
         <View className="flex-1 items-center justify-center px-6">
           <Pressable onPress={() => {}} className="w-full max-w-sm">
             <View className="bg-popover rounded-2xl overflow-hidden p-4 gap-3">
-              <Text className="text-base font-semibold text-foreground">
+              <Text className="text-title-sm font-semibold text-foreground">
                 {initialName
                   ? t("issueViews.editViewTitle")
                   : t("issueViews.saveViewTitle")}
               </Text>
               <View className="gap-1">
-                <Text className="text-xs text-muted-foreground">
+                <Text className="text-caption text-muted-foreground">
                   {t("issueViews.nameLabel")}
                 </Text>
                 <TextField
@@ -114,7 +114,7 @@ export function SaveViewDialog({
               </View>
               {visibilityAllowed ? (
                 <View className="gap-1">
-                  <Text className="text-xs text-muted-foreground">
+                  <Text className="text-caption text-muted-foreground">
                     {t("issueViews.visibilityLabel")}
                   </Text>
                   <View className="flex-row gap-2">
@@ -139,7 +139,7 @@ export function SaveViewDialog({
               ) : null}
               {sortDirectionAllowed ? (
                 <View className="gap-1">
-                  <Text className="text-xs text-muted-foreground">
+                  <Text className="text-caption text-muted-foreground">
                     {t("issueViews.sortLabel")}
                   </Text>
                   <View className="flex-row gap-2">

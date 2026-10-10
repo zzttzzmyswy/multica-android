@@ -106,7 +106,7 @@ export default function LabelsPage() {
               onChangeText={setQuery}
               placeholder={t("labels.searchPlaceholder")}
               placeholderTextColor={muted}
-              className="flex-1 py-2.5 text-sm text-foreground"
+              className="flex-1 py-2.5 text-body text-foreground"
               autoCorrect={false}
               autoCapitalize="none"
             />
@@ -128,7 +128,7 @@ export default function LabelsPage() {
           </View>
         ) : error ? (
           <View className="px-4 gap-3 pt-4">
-            <Text className="text-sm text-destructive">
+            <Text className="text-body text-destructive">
               {t("labels.loadError")}
               {error instanceof Error ? error.message : t("common.unknownError")}
             </Text>
@@ -139,13 +139,13 @@ export default function LabelsPage() {
         ) : showEmpty ? (
           <View className="flex-1 items-center justify-center px-6 gap-1">
             <Ionicons name="pricetags-outline" size={32} color={muted} />
-            <Text className="text-sm text-muted-foreground text-center mt-2">
+            <Text className="text-body text-muted-foreground text-center mt-2">
               {searching
                 ? t("labels.noResults")
                 : t("labels.emptyScope", { scope: scopeLabel })}
             </Text>
             {!searching ? (
-              <Text className="text-xs text-muted-foreground/70 text-center">
+              <Text className="text-caption text-muted-foreground/70 text-center">
                 {t("labels.emptyDescription")}
               </Text>
             ) : null}
@@ -205,12 +205,12 @@ function LabelRow({
           style={{ backgroundColor: label.color }}
         />
         <View className="flex-1 min-w-0 gap-0.5">
-          <Text className="text-sm font-medium text-foreground" numberOfLines={1}>
+          <Text className="text-body font-medium text-foreground" numberOfLines={1}>
             {label.name}
           </Text>
           {label.description ? (
             <Text
-              className="text-xs text-muted-foreground/70"
+              className="text-caption text-muted-foreground/70"
               numberOfLines={1}
             >
               {label.description}

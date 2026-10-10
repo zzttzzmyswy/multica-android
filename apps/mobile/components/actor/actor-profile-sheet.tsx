@@ -149,7 +149,7 @@ export function ActorProfileSheet() {
           <Pressable onPress={() => {}} className="w-full max-w-sm">
             <View className="bg-popover rounded-2xl overflow-hidden">
               <View className="flex-row items-center justify-between px-4 py-3 border-b border-border">
-                <Text className="text-base font-semibold text-foreground">
+                <Text className="text-title-sm font-semibold text-foreground">
                   {t("profileCard.title")}
                 </Text>
                 <Pressable
@@ -199,7 +199,7 @@ function CardSkeleton() {
 function Unavailable({ type }: { type: ActorProfileType }) {
   const { t } = useTranslation();
   return (
-    <Text className="text-xs text-muted-foreground">
+    <Text className="text-caption text-muted-foreground">
       {t(`profileCard.unavailable.${type}`)}
     </Text>
   );
@@ -278,7 +278,7 @@ function MemberCard({ userId }: { userId: string }) {
           <View className="flex-row items-center gap-1.5">
             <Text
               numberOfLines={1}
-              className="shrink text-sm font-semibold text-foreground"
+              className="shrink text-body font-semibold text-foreground"
             >
               {member.name}
             </Text>
@@ -286,7 +286,7 @@ function MemberCard({ userId }: { userId: string }) {
           </View>
           <Text
             numberOfLines={1}
-            className="mt-0.5 text-xs text-muted-foreground"
+            className="mt-0.5 text-caption text-muted-foreground"
           >
             {member.email}
           </Text>
@@ -295,7 +295,7 @@ function MemberCard({ userId }: { userId: string }) {
 
       {owned.length > 0 ? (
         <View className="gap-1.5">
-          <Text className="text-xs text-muted-foreground">
+          <Text className="text-caption text-muted-foreground">
             {t("profileCard.ownedAgents", { count: owned.length })}
           </Text>
           <View className="gap-0.5">
@@ -316,7 +316,7 @@ function MemberCard({ userId }: { userId: string }) {
                 <View className="flex-1 min-w-0">
                   <Text
                     numberOfLines={1}
-                    className="text-xs font-medium text-foreground"
+                    className="text-caption font-medium text-foreground"
                   >
                     {agent.name}
                   </Text>
@@ -332,7 +332,7 @@ function MemberCard({ userId }: { userId: string }) {
               </NavigableRow>
             ))}
             {overflow > 0 ? (
-              <Text className="px-1 text-xs text-muted-foreground">
+              <Text className="px-1 text-caption text-muted-foreground">
                 {t(countLabelKey("profileCard.moreAgents", overflow), {
                   count: overflow,
                 })}
@@ -390,7 +390,7 @@ function AgentCard({ agentId }: { agentId: string }) {
           <View className="flex-row items-center gap-1.5">
             <Text
               numberOfLines={1}
-              className="shrink text-sm font-semibold text-foreground"
+              className="shrink text-body font-semibold text-foreground"
             >
               {agent.name}
             </Text>
@@ -407,7 +407,7 @@ function AgentCard({ agentId }: { agentId: string }) {
       </Pressable>
 
       {agent.description ? (
-        <Text numberOfLines={2} className="text-xs text-muted-foreground">
+        <Text numberOfLines={2} className="text-caption text-muted-foreground">
           {agent.description}
         </Text>
       ) : null}
@@ -468,7 +468,7 @@ function AgentAvailabilityLine({ agentId }: { agentId: string }) {
           AVAILABILITY_DOT[detail.availability],
         )}
       />
-      <Text className={cn("text-xs", AVAILABILITY_TONE[detail.availability])}>
+      <Text className={cn("text-caption", AVAILABILITY_TONE[detail.availability])}>
         {t(`agents.availability.${detail.availability}`)}
       </Text>
     </View>
@@ -506,14 +506,14 @@ function MetaRow({
 }) {
   return (
     <View className="flex-row items-center gap-1.5">
-      <Text className="w-12 shrink-0 text-xs text-muted-foreground">
+      <Text className="w-12 shrink-0 text-caption text-muted-foreground">
         {label}
       </Text>
       {icon}
       <Text
         numberOfLines={1}
         className={cn(
-          "flex-1 text-xs text-foreground",
+          "flex-1 text-caption text-foreground",
           mono && "font-mono text-micro",
         )}
       >
@@ -531,7 +531,7 @@ function SkillsRow({ names }: { names: string[] }) {
   const overflow = names.length - visible.length;
   return (
     <View className="flex-row items-start gap-1.5">
-      <Text className="w-12 shrink-0 pt-0.5 text-xs text-muted-foreground">
+      <Text className="w-12 shrink-0 pt-0.5 text-caption text-muted-foreground">
         {t("profileCard.skillsLabel")}
       </Text>
       <View className="flex-1 flex-row flex-wrap gap-1">
@@ -599,7 +599,7 @@ function SquadCard({ squadId }: { squadId: string }) {
           <View className="flex-row items-center gap-1.5">
             <Text
               numberOfLines={1}
-              className="shrink text-sm font-semibold text-foreground"
+              className="shrink text-body font-semibold text-foreground"
             >
               {squad.name}
             </Text>
@@ -609,14 +609,14 @@ function SquadCard({ squadId }: { squadId: string }) {
       </Pressable>
 
       {squad.description ? (
-        <Text numberOfLines={2} className="text-xs text-muted-foreground">
+        <Text numberOfLines={2} className="text-caption text-muted-foreground">
           {squad.description}
         </Text>
       ) : null}
 
       {memberCount > 0 ? (
         <View className="gap-1.5">
-          <Text className="text-xs text-muted-foreground">
+          <Text className="text-caption text-muted-foreground">
             {t("profileCard.membersSection")}
             <Text className="tabular-nums"> · {memberCount}</Text>
           </Text>
@@ -637,7 +637,7 @@ function SquadCard({ squadId }: { squadId: string }) {
                 />
                 <Text
                   numberOfLines={1}
-                  className="flex-1 text-xs font-medium text-foreground"
+                  className="flex-1 text-caption font-medium text-foreground"
                 >
                   {row.name}
                 </Text>
@@ -651,7 +651,7 @@ function SquadCard({ squadId }: { squadId: string }) {
                 {row.memberType === "member" && row.role ? (
                   <Text
                     numberOfLines={1}
-                    className="shrink-0 text-xs text-muted-foreground"
+                    className="shrink-0 text-caption text-muted-foreground"
                   >
                     {row.role}
                   </Text>
@@ -659,7 +659,7 @@ function SquadCard({ squadId }: { squadId: string }) {
               </NavigableRow>
             ))}
             {rows.overflow > 0 ? (
-              <Text className="px-1 text-xs text-muted-foreground">
+              <Text className="px-1 text-caption text-muted-foreground">
                 {t(countLabelKey("profileCard.moreMembers", rows.overflow), {
                   count: rows.overflow,
                 })}

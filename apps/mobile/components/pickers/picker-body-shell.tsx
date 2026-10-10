@@ -37,7 +37,7 @@ export function PickerBodyShell({
     <View className="flex-1">
       {bodyChrome && title ? (
         <View className="px-4 pt-3 pb-1">
-          <Text className="text-base font-semibold text-foreground">
+          <Text className="text-title-sm font-semibold text-foreground">
             {title}
           </Text>
         </View>
@@ -86,7 +86,7 @@ function SearchField({
           autoCorrect={false}
           returnKeyType="search"
           accessibilityLabel={placeholder}
-          className="flex-1 text-sm text-foreground py-0"
+          className="flex-1 text-body text-foreground py-0"
         />
         {value ? (
           <Pressable

@@ -135,7 +135,7 @@ export default function InboxItemDetail() {
   if (!activeItem) {
     return (
       <View className="flex-1 items-center justify-center bg-background px-8 gap-2">
-        <Text className="text-sm text-muted-foreground text-center">
+        <Text className="text-body text-muted-foreground text-center">
           {t("inbox.detail.notificationMissing")}
         </Text>
       </View>
@@ -158,27 +158,27 @@ export default function InboxItemDetail() {
         contentContainerClassName="px-5 pt-5 pb-8"
         keyboardShouldPersistTaps="handled"
       >
-        <Text className="text-xl font-semibold text-foreground leading-snug">
+        <Text className="text-title-lg font-semibold text-foreground leading-snug">
           {getInboxDisplayTitle(activeItem)}
         </Text>
-        <Text className="mt-1 text-sm text-muted-foreground">
+        <Text className="mt-1 text-body text-muted-foreground">
           {typeLabel(t, activeItem.type)}
           {" · "}
           {timeAgo(activeItem.created_at)}
         </Text>
 
         {activeItem.body ? (
-          <Text className="mt-4 text-sm leading-relaxed text-foreground">
+          <Text className="mt-4 text-body leading-relaxed text-foreground">
             {activeItem.body}
           </Text>
         ) : null}
 
         {editSeed ? (
           <View className="mt-4 rounded-md border border-border bg-muted/40 p-3">
-            <Text className="text-xs font-medium text-muted-foreground">
+            <Text className="text-caption font-medium text-muted-foreground">
               {t("inbox.detail.originalInput")}
             </Text>
-            <Text className="mt-1 text-sm leading-relaxed text-foreground">
+            <Text className="mt-1 text-body leading-relaxed text-foreground">
               {editSeed.description}
             </Text>
           </View>

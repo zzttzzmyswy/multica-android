@@ -54,7 +54,7 @@ export function EventFilterEditor({ filters, onChange, editable }: Props) {
     <View className="gap-2">
       <View className="flex-row items-center gap-1.5">
         <Ionicons name="funnel-outline" size={13} color={theme.mutedForeground} />
-        <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+        <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
           {t("autopilots.eventFilter.label")}
         </Text>
       </View>
@@ -66,11 +66,11 @@ export function EventFilterEditor({ filters, onChange, editable }: Props) {
               key={idx}
               className="flex-row items-center gap-2 rounded-md border border-border bg-secondary/60 px-2.5 py-1.5"
             >
-              <Text className="text-xs font-medium text-foreground font-mono">
+              <Text className="text-caption font-medium text-foreground font-mono">
                 {f.event}
               </Text>
               {f.actions && f.actions.length > 0 ? (
-                <Text className="text-xs text-muted-foreground">
+                <Text className="text-caption text-muted-foreground">
                   : {f.actions.join(", ")}
                 </Text>
               ) : null}
@@ -100,7 +100,7 @@ export function EventFilterEditor({ filters, onChange, editable }: Props) {
             editable={editable}
             autoCapitalize="none"
             autoCorrect={false}
-            className="flex-1 rounded-md border border-border bg-background px-2.5 py-2 text-xs text-foreground"
+            className="flex-1 rounded-md border border-border bg-background px-2.5 py-2 text-caption text-foreground"
           />
           <TextInput
             value={actions}
@@ -111,7 +111,7 @@ export function EventFilterEditor({ filters, onChange, editable }: Props) {
             editable={editable}
             autoCapitalize="none"
             autoCorrect={false}
-            className="w-32 rounded-md border border-border bg-background px-2.5 py-2 text-xs text-foreground"
+            className="w-32 rounded-md border border-border bg-background px-2.5 py-2 text-caption text-foreground"
           />
           <Pressable
             onPress={add}

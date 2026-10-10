@@ -143,7 +143,7 @@ export function ProjectLeadPickerBody({ value, query, onChange }: Props) {
             />
           )}
           <Text
-            className="flex-1 text-base text-foreground"
+            className="flex-1 text-title-sm text-foreground"
             numberOfLines={1}
           >
             {item.kind === "unassigned"
@@ -154,7 +154,7 @@ export function ProjectLeadPickerBody({ value, query, onChange }: Props) {
           </Text>
           {/* Inline type tag — Apple UITableViewCellStyleValue1. */}
           {item.kind === "agent" ? (
-            <Text className="text-sm text-muted-foreground">{t("picker.agent")}</Text>
+            <Text className="text-body text-muted-foreground">{t("picker.agent")}</Text>
           ) : null}
           {isRowSelected(value, item) ? (
             <Ionicons name="checkmark" size={20} color={checkColor} />

@@ -159,7 +159,7 @@ export function AttributeRow({ issue }: { issue: Issue }) {
       ))}
       {labels.length === 0 ? (
         <AttributeChip
-          icon={<Text className="text-xs text-muted-foreground/70">◯</Text>}
+          icon={<Text className="text-caption text-muted-foreground/70">◯</Text>}
           label={t("attr.label")}
           variant="dimmed"
           onPress={() => openPicker("label")}
@@ -188,7 +188,7 @@ export function AttributeRow({ issue }: { issue: Issue }) {
       {/* Start date — MYS-493: existing-issue start_date edit, same
           calendar-day convention as due_date. */}
       <AttributeChip
-        icon={<Text className="text-xs text-muted-foreground/80">📅</Text>}
+        icon={<Text className="text-caption text-muted-foreground/80">📅</Text>}
         label={startLabel ?? t("attr.startDate")}
         variant={startLabel ? "filled" : "dimmed"}
         onPress={() => openPicker("start-date")}
@@ -196,7 +196,7 @@ export function AttributeRow({ issue }: { issue: Issue }) {
 
       {/* Due date */}
       <AttributeChip
-        icon={<Text className="text-xs text-muted-foreground/80">📅</Text>}
+        icon={<Text className="text-caption text-muted-foreground/80">📅</Text>}
         label={dueLabel ?? t("attr.dueDate")}
         variant={dueLabel ? "filled" : "dimmed"}
         onPress={() => openPicker("due-date")}
@@ -208,7 +208,7 @@ export function AttributeRow({ issue }: { issue: Issue }) {
           `issue.parent_issue_id` at issue-detail.tsx:2110). */}
       {issue.parent_issue_id ? (
         <AttributeChip
-          icon={<Text className="text-xs text-muted-foreground/80">🚩</Text>}
+          icon={<Text className="text-caption text-muted-foreground/80">🚩</Text>}
           label={
             issue.stage == null
               ? t("attr.stage")

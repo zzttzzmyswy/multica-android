@@ -29,7 +29,7 @@ export function ArchivedAgentBanner({ agentName }: Props) {
         size={14}
         className="text-muted-foreground"
       />
-      <Text className="flex-1 text-xs text-muted-foreground" numberOfLines={1}>
+      <Text className="flex-1 text-caption text-muted-foreground" numberOfLines={1}>
         {t("chat.archivedAgentBanner", { name })}
       </Text>
     </View>

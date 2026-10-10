@@ -69,7 +69,7 @@ export function QuickActionsSection({ issueId }: { issueId: string }) {
               size={13}
               color="currentColor"
             />
-            <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+            <Text className="text-caption uppercase tracking-wider text-muted-foreground font-medium">
               {t("issue.qa.sectionTitle")}
             </Text>
           </Pressable>
@@ -155,7 +155,7 @@ function QuickActionRow({
       ) : (
         <Ionicons name="flash" size={13} color="currentColor" />
       )}
-      <Text numberOfLines={1} className="min-w-0 flex-1 text-sm">
+      <Text numberOfLines={1} className="min-w-0 flex-1 text-body">
         {action.name}
       </Text>
       <Text className="shrink-0 text-micro text-muted-foreground">

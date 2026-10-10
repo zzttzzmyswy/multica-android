@@ -136,10 +136,10 @@ export function UsageBreakdownDialog({
           </View>
           <View className="flex-row items-center gap-2 px-4 pb-3">
             <View className="flex-1 min-w-0">
-              <Text className="text-base font-semibold text-foreground">
+              <Text className="text-title-sm font-semibold text-foreground">
                 {t(`${tKey}.title`)}
               </Text>
-              <Text className="mt-0.5 text-xs text-muted-foreground">
+              <Text className="mt-0.5 text-caption text-muted-foreground">
                 {subtitle}
               </Text>
             </View>
@@ -155,7 +155,7 @@ export function UsageBreakdownDialog({
 
           {total == null ? (
             <View className="px-4 pb-8 pt-6">
-              <Text className="text-center text-sm text-muted-foreground">
+              <Text className="text-center text-body text-muted-foreground">
                 {t(`${tKey}.empty`)}
               </Text>
             </View>
@@ -252,11 +252,11 @@ function KpiCard({
 }) {
   return (
     <View className="min-w-0 flex-1 items-center gap-0.5 rounded-lg border border-border bg-card px-1 py-2">
-      <Text className="text-[10px] text-muted-foreground" numberOfLines={1}>
+      <Text className="text-micro text-muted-foreground" numberOfLines={1}>
         {label}
       </Text>
       <Text
-        className={`text-sm font-bold tabular-nums ${
+        className={`text-body font-bold tabular-nums ${
           accent ? "text-success" : "text-foreground"
         }`}
         numberOfLines={1}
@@ -264,7 +264,7 @@ function KpiCard({
         {value}
       </Text>
       <View className="min-h-[14px] items-center px-0.5">
-        <Text className="text-center text-[9px] leading-[14px] text-muted-foreground">
+        <Text className="text-center text-micro leading-[14px] text-muted-foreground">
           {hint ?? ""}
         </Text>
       </View>
@@ -332,12 +332,12 @@ function CostByAgent({
 
   return (
     <View className="gap-1.5">
-      <Text className="text-xs font-medium text-foreground">
+      <Text className="text-caption font-medium text-foreground">
         {t(`${tKey}.byAgent`)}
       </Text>
       {rows.map((row) => (
         <View key={row.agentId} className="flex-row items-center gap-2">
-          <Text numberOfLines={1} className="w-24 text-xs text-foreground">
+          <Text numberOfLines={1} className="w-24 text-caption text-foreground">
             {getName("agent", row.agentId)}
           </Text>
           <View className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
@@ -346,10 +346,10 @@ function CostByAgent({
               style={{ width: `${maxCost > 0 ? (row.cost / maxCost) * 100 : 0}%` }}
             />
           </View>
-          <Text className="w-16 text-right text-xs tabular-nums text-muted-foreground">
+          <Text className="w-16 text-right text-caption tabular-nums text-muted-foreground">
             {formatTokens(row.tokens)}
           </Text>
-          <Text className="w-14 text-right text-xs font-medium tabular-nums text-foreground">
+          <Text className="w-14 text-right text-caption font-medium tabular-nums text-foreground">
             {formatUsd(row.cost)}
           </Text>
         </View>
@@ -427,7 +427,7 @@ function RunUsageCard({ task, maxTokens }: { task: AgentTask; maxTokens: number 
 
       <View className="flex-row items-center gap-2">
         <View className="flex-1 flex-row items-center gap-2 min-w-0">
-          <Text className="text-xs tabular-nums text-foreground">
+          <Text className="text-caption tabular-nums text-foreground">
             {formatTokens(summary.tokens)}
           </Text>
           <View className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
@@ -452,8 +452,8 @@ function RunUsageCard({ task, maxTokens }: { task: AgentTask; maxTokens: number 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <View className="min-w-0 items-start">
-      <Text className="text-[9px] uppercase text-muted-foreground">{label}</Text>
-      <Text className="text-xs tabular-nums text-foreground">{value}</Text>
+      <Text className="text-micro uppercase text-muted-foreground">{label}</Text>
+      <Text className="text-caption tabular-nums text-foreground">{value}</Text>
     </View>
   );
 }
@@ -464,16 +464,16 @@ function TotalRow({ total }: { total: TaskUsageSummary }) {
   const { t } = useTranslation();
   return (
     <View className="flex-row items-center justify-between rounded-lg bg-secondary px-3 py-2">
-      <Text className="text-xs font-medium text-foreground">
+      <Text className="text-caption font-medium text-foreground">
         {t(`${tKey}.total`)}
       </Text>
       <View className="min-w-0 flex-1 items-end gap-0.5">
-        <Text className="text-xs font-medium tabular-nums text-foreground">
+        <Text className="text-caption font-medium tabular-nums text-foreground">
           {formatTokens(total.tokens)} · {formatUsd(total.cost)}
         </Text>
         <Text
           numberOfLines={1}
-          className="text-[10px] tabular-nums text-muted-foreground"
+          className="text-micro tabular-nums text-muted-foreground"
         >
           {t(`${tKey}.colInput`)} {formatTokens(total.input)} ·{" "}
           {t(`${tKey}.colOutput`)} {formatTokens(total.output)} ·{" "}
@@ -500,7 +500,7 @@ function StatusGlyph({ task }: { task: AgentTask }) {
       return <Ionicons name="ban" size={14} color="#71717a" />;
     case "running":
       return (
-        <Text className="text-[10px] text-brand">
+        <Text className="text-micro text-brand">
           {t("enum.taskStatus.running")}
         </Text>
       );

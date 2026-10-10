@@ -209,7 +209,7 @@ function BareAvatar({
     >
       <Text
         className={cn(
-          "text-xs font-medium",
+          "text-caption font-medium",
           isAgent ? "text-brand" : "text-muted-foreground",
         )}
       >

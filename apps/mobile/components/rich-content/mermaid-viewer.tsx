@@ -174,7 +174,7 @@ export function MermaidViewer({ visible, onClose, source }: Props) {
     >
       <View className="flex-1 bg-background" style={{ paddingTop: insets.top }}>
         <View className="h-12 flex-row items-center gap-1 border-b border-border px-2">
-          <Text className="flex-1 pl-1 text-sm font-medium">
+          <Text className="flex-1 pl-1 text-body font-medium">
             {t("richContent.mermaid.title")}
           </Text>
           <IconButton
@@ -224,7 +224,7 @@ export function MermaidViewer({ visible, onClose, source }: Props) {
 
         {exported ? (
           <View className="items-center py-2">
-            <Text className="text-xs text-success">{t("richContent.mermaid.exported")}</Text>
+            <Text className="text-caption text-success">{t("richContent.mermaid.exported")}</Text>
           </View>
         ) : null}
         {exportBusy ? (
@@ -241,7 +241,7 @@ export function MermaidViewer({ visible, onClose, source }: Props) {
           <View className="flex-1">
             {error ? (
               <View className="px-4 py-3">
-                <Text className="text-sm text-warning">{error}</Text>
+                <Text className="text-body text-warning">{error}</Text>
               </View>
             ) : null}
             <WebView

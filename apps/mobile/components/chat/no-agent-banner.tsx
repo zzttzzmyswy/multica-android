@@ -28,10 +28,10 @@ export function NoAgentBanner() {
       accessibilityRole="button"
       accessibilityLabel={t("a11y.noAgents")}
     >
-      <Text className="text-sm font-medium text-foreground">
+      <Text className="text-body font-medium text-foreground">
         {t("chat.noAgentsTitle")}
       </Text>
-      <Text className="text-xs text-muted-foreground mt-0.5">
+      <Text className="text-caption text-muted-foreground mt-0.5">
         {t("chat.noAgentsBody")}
       </Text>
     </Pressable>

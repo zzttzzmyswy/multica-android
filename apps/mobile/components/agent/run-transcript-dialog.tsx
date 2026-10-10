@@ -212,7 +212,7 @@ export function RunTranscriptDialog({
                 color={theme.mutedForeground}
               />
             </View>
-            <Text className="flex-1 text-base font-semibold text-foreground">
+            <Text className="flex-1 text-title-sm font-semibold text-foreground">
               {t("agents.activity.transcriptTitle")}
             </Text>
             {/* What this run cost, in the header of the run being read, so
@@ -275,7 +275,7 @@ export function RunTranscriptDialog({
               <ActorAvatar type="agent" id={task.agent_id} size={16} />
               <Text
                 numberOfLines={1}
-                className="shrink text-xs font-medium text-foreground"
+                className="shrink text-caption font-medium text-foreground"
               >
                 {getName("agent", task.agent_id)}
               </Text>
@@ -300,7 +300,7 @@ export function RunTranscriptDialog({
                   ) : null}
                   <Text
                     numberOfLines={1}
-                    className="shrink text-xs text-muted-foreground"
+                    className="shrink text-caption text-muted-foreground"
                   >
                     {triggerLabel}
                   </Text>
@@ -369,22 +369,22 @@ export function RunTranscriptDialog({
           </View>
         ) : isError && entries.length === 0 ? (
           <View className="px-4 py-3 items-start gap-2">
-            <Text className="text-xs text-destructive">{t("runs.logLoadError")}</Text>
+            <Text className="text-caption text-destructive">{t("runs.logLoadError")}</Text>
             <Pressable
               onPress={() => refetch()}
               accessibilityRole="button"
               className="px-2 py-1 rounded-md bg-secondary active:opacity-70"
             >
-              <Text className="text-xs font-medium text-foreground">{t("issue.retry")}</Text>
+              <Text className="text-caption font-medium text-foreground">{t("issue.retry")}</Text>
             </Pressable>
           </View>
         ) : entries.length === 0 ? (
           <View className="px-4 py-3">
-            <Text className="text-xs text-muted-foreground">{t("runs.noLogsYet")}</Text>
+            <Text className="text-caption text-muted-foreground">{t("runs.noLogsYet")}</Text>
           </View>
         ) : displayEntries.length === 0 ? (
           <View className="px-4 py-6 items-center">
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-caption text-muted-foreground">
               {t("runs.transcript.filterEmpty")}
             </Text>
           </View>

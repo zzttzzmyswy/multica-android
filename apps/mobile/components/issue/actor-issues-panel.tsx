@@ -83,7 +83,7 @@ export function ActorIssuesPanel({
 
   return (
     <View className="border-t border-border">
-      <Text className="px-4 pt-5 pb-2 text-xs uppercase tracking-wider text-muted-foreground font-medium">
+      <Text className="px-4 pt-5 pb-2 text-caption uppercase tracking-wider text-muted-foreground font-medium">
         {t(sectionTitleKey)}
       </Text>
 
@@ -136,11 +136,11 @@ export function ActorIssuesPanel({
       ) : isError ? (
         <View className="py-10 items-center gap-2 px-4">
           <Ionicons name="alert-circle-outline" size={28} color={theme.mutedForeground} />
-          <Text className="text-sm text-muted-foreground text-center">
+          <Text className="text-body text-muted-foreground text-center">
             {t("issues.loadError")}
           </Text>
           <Pressable onPress={() => refetch()} accessibilityRole="button">
-            <Text className="text-sm font-medium text-brand">
+            <Text className="text-body font-medium text-brand">
               {t("common.retry")}
             </Text>
           </Pressable>
@@ -149,17 +149,17 @@ export function ActorIssuesPanel({
         searching ? (
           <View className="py-10 items-center gap-2 px-4">
             <Ionicons name="search-outline" size={28} color={theme.mutedForeground} />
-            <Text className="text-sm text-muted-foreground text-center">
+            <Text className="text-body text-muted-foreground text-center">
               {t("actorIssues.searchEmpty")}
             </Text>
           </View>
         ) : (
           <View className="py-10 items-center gap-2 px-4">
             <Ionicons name="list-outline" size={28} color={theme.mutedForeground} />
-            <Text className="text-sm font-medium text-foreground text-center">
+            <Text className="text-body font-medium text-foreground text-center">
               {t(`actorIssues.empty.${relation}.title`)}
             </Text>
-            <Text className="text-xs text-muted-foreground text-center">
+            <Text className="text-caption text-muted-foreground text-center">
               {t(`actorIssues.empty.${relation}.description`)}
             </Text>
           </View>

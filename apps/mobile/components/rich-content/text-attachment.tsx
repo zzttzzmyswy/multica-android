@@ -105,7 +105,7 @@ export function TextAttachmentPreview({
         className="bg-card border border-border rounded-lg justify-center px-3"
         style={{ minHeight: PLACEHOLDER_HEIGHT_PX }}
       >
-        <Text className="text-xs text-muted-foreground">
+        <Text className="text-caption text-muted-foreground">
           {t("richContent.attachment.previewLoading")}
         </Text>
       </View>
@@ -122,11 +122,11 @@ export function TextAttachmentPreview({
             size={18}
             color={theme.mutedForeground}
           />
-          <Text className="flex-1 text-sm text-muted-foreground" numberOfLines={1}>
+          <Text className="flex-1 text-body text-muted-foreground" numberOfLines={1}>
             {filename}
           </Text>
         </View>
-        <Text className="text-xs text-muted-foreground mt-1">
+        <Text className="text-caption text-muted-foreground mt-1">
           {t(textFailureKey(state.reason))}
         </Text>
         <View className="flex-row gap-2 mt-2">
@@ -172,7 +172,7 @@ export function TextAttachmentPreview({
     <>
       <View className="bg-card border border-border rounded-lg overflow-hidden">
         <View className="flex-row items-center justify-between px-3 py-2">
-          <Text className="flex-1 text-xs text-muted-foreground" numberOfLines={1}>
+          <Text className="flex-1 text-caption text-muted-foreground" numberOfLines={1}>
             {filename}
           </Text>
           <Pressable
@@ -202,7 +202,7 @@ export function TextAttachmentPreview({
           accessibilityRole="button"
           accessibilityLabel={t("richContent.html.viewFullscreen")}
         >
-          <Text className="text-xs text-foreground">
+          <Text className="text-caption text-foreground">
             {t("richContent.html.viewFullscreen")}
           </Text>
         </Pressable>
@@ -251,7 +251,7 @@ function ActionButton({
       className="flex-row items-center gap-1 rounded-md border border-border px-2 py-1 active:opacity-80"
     >
       <Ionicons name={icon} size={14} color={theme.foreground} />
-      <Text className="text-xs text-foreground">{label}</Text>
+      <Text className="text-caption text-foreground">{label}</Text>
     </Pressable>
   );
 }

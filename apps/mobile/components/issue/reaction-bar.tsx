@@ -109,10 +109,10 @@ export function ReactionBar({
                 : "border-border bg-background",
             )}
           >
-            <Text className="text-xs">{g.emoji}</Text>
+            <Text className="text-caption">{g.emoji}</Text>
             <Text
               className={cn(
-                "text-xs tabular-nums",
+                "text-caption tabular-nums",
                 g.reacted ? "text-brand" : "text-muted-foreground",
               )}
             >
@@ -153,7 +153,7 @@ export function ReactionBar({
                 accessibilityLabel={emoji}
                 className="h-8 w-8 items-center justify-center rounded active:bg-secondary"
               >
-                <Text className="text-base">{emoji}</Text>
+                <Text className="text-title-sm">{emoji}</Text>
               </Pressable>
             ))}
           </View>
@@ -166,7 +166,7 @@ export function ReactionBar({
               accessibilityRole="button"
               className="rounded py-1.5 active:bg-secondary"
             >
-              <Text className="text-center text-xs text-muted-foreground">
+              <Text className="text-center text-caption text-muted-foreground">
                 {t("issue.reaction.moreEmojis")}
               </Text>
             </Pressable>

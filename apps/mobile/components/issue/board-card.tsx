@@ -217,7 +217,7 @@ export function BoardCard({
             <PriorityIcon priority={issue.priority} size={13} />
           </View>
         ) : null}
-        <Text numberOfLines={2} className="flex-1 text-sm font-medium leading-snug">
+        <Text numberOfLines={2} className="flex-1 text-body font-medium leading-snug">
           {issue.title}
         </Text>
         {issue.status ? (
@@ -238,13 +238,13 @@ export function BoardCard({
                 style={{ backgroundColor: label.color ?? "#8b8b8b" }}
                 className="size-2 rounded-full"
               />
-              <Text className="text-[10px] text-muted-foreground">
+              <Text className="text-micro text-muted-foreground">
                 {label.name}
               </Text>
             </View>
           ))}
           {labels.length > 3 ? (
-            <Text className="text-[10px] text-muted-foreground/70">
+            <Text className="text-micro text-muted-foreground/70">
               +{labels.length - 3}
             </Text>
           ) : null}
@@ -280,12 +280,12 @@ export function BoardCard({
                 )}
                 <Text
                   numberOfLines={1}
-                  className="flex-shrink text-[10px] text-muted-foreground"
+                  className="flex-shrink text-micro text-muted-foreground"
                 >
                   {chip.text}
                 </Text>
                 {chip.rest ? (
-                  <Text className="text-[10px] text-muted-foreground/70">
+                  <Text className="text-micro text-muted-foreground/70">
                     +{chip.rest}
                   </Text>
                 ) : null}
@@ -293,7 +293,7 @@ export function BoardCard({
             );
           })}
           {customEntries.rest > 0 ? (
-            <Text className="text-[10px] text-muted-foreground/70">
+            <Text className="text-micro text-muted-foreground/70">
               +{customEntries.rest}
             </Text>
           ) : null}

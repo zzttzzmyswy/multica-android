@@ -106,7 +106,7 @@ function Segmented<T extends string | number>({
         >
           <Text
             className={cn(
-              "text-xs font-medium",
+              "text-caption font-medium",
               o.value === value ? "text-foreground" : "text-muted-foreground",
             )}
           >
@@ -214,7 +214,7 @@ function SectionBody({
       {/* Page-wide period selector. */}
       <View className="flex-row flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2">
         <View className="flex-row items-center gap-2">
-          <Text className="text-[10px] uppercase tracking-wider text-muted-foreground">
+          <Text className="text-micro uppercase tracking-wider text-muted-foreground">
             {t("runtimes.usage.dimension_label")}
           </Text>
           <Segmented<Dim>
@@ -227,7 +227,7 @@ function SectionBody({
           />
         </View>
         <View className="flex-row items-center gap-2">
-          <Text className="text-[10px] uppercase tracking-wider text-muted-foreground">
+          <Text className="text-micro uppercase tracking-wider text-muted-foreground">
             {t("runtimes.usage.period_label")}
           </Text>
           <Segmented<PeriodDays>
@@ -309,7 +309,7 @@ function KpiCard({
       <View className="flex-row items-center gap-1.5">
         <Ionicons name={icon} size={13} color={theme.mutedForeground} />
         <Text
-          className="text-[10px] text-muted-foreground"
+          className="text-micro text-muted-foreground"
           numberOfLines={1}
           adjustsFontSizeToFit
           minimumFontScale={0.8}
@@ -318,7 +318,7 @@ function KpiCard({
         </Text>
       </View>
       <Text
-        className="mt-1 text-base font-semibold text-foreground"
+        className="mt-1 text-title-sm font-semibold text-foreground"
         numberOfLines={1}
         adjustsFontSizeToFit
         minimumFontScale={0.7}
@@ -327,7 +327,7 @@ function KpiCard({
       </Text>
       {hint ? (
         <Text
-          className="mt-0.5 text-[10px] text-muted-foreground/70"
+          className="mt-0.5 text-micro text-muted-foreground/70"
           numberOfLines={1}
           adjustsFontSizeToFit
           minimumFontScale={0.7}
@@ -337,14 +337,14 @@ function KpiCard({
       ) : delta != null ? (
         <Text
           className={cn(
-            "mt-0.5 text-[10px] font-medium",
+            "mt-0.5 text-micro font-medium",
             delta > 0 ? "text-warning" : delta < 0 ? "text-success" : "text-muted-foreground",
           )}
         >
           {t("runtimes.usage.kpi_cost_delta", { sign: delta > 0 ? "+" : "", pct: delta })}
         </Text>
       ) : accent ? (
-        <Text className="mt-0.5 text-[10px] text-success">✓</Text>
+        <Text className="mt-0.5 text-micro text-success">✓</Text>
       ) : null}
     </View>
   );
@@ -382,7 +382,7 @@ function CustomPricingBar({ usage }: { usage: RuntimeUsage[] }) {
                 count: unmapped.length,
               })}
             </Text>
-            <Text className="mt-0.5 text-[10px] text-muted-foreground" numberOfLines={1}>
+            <Text className="mt-0.5 text-micro text-muted-foreground" numberOfLines={1}>
               {unmapped.join(", ")}
             </Text>
           </View>
@@ -512,7 +512,7 @@ function CustomPricingDialog({
             <Ionicons name="pricetag-outline" size={15} color={theme.mutedForeground} />
           </View>
           <View className="flex-1">
-            <Text className="text-base font-semibold text-foreground">
+            <Text className="text-title-sm font-semibold text-foreground">
               {t("runtimes.usage.custom_pricing.title")}
             </Text>
           </View>
@@ -522,12 +522,12 @@ function CustomPricingDialog({
         </View>
 
         <ScrollView className="flex-1" contentContainerClassName="px-4 py-4 gap-4">
-          <Text className="text-xs text-muted-foreground leading-5">
+          <Text className="text-caption text-muted-foreground leading-5">
             {t("runtimes.usage.custom_pricing.description")}
           </Text>
 
           {rows.length === 0 ? (
-            <Text className="py-6 text-center text-xs text-muted-foreground">
+            <Text className="py-6 text-center text-caption text-muted-foreground">
               {t("runtimes.usage.custom_pricing.empty")}
             </Text>
           ) : (
@@ -537,7 +537,7 @@ function CustomPricingDialog({
               return (
                 <View key={key} className="gap-2 rounded-md border border-border p-3">
                   <View className="flex-row items-center justify-between gap-2">
-                    <Text className="flex-1 shrink font-mono text-xs text-foreground" numberOfLines={1}>
+                    <Text className="flex-1 shrink font-mono text-caption text-foreground" numberOfLines={1}>
                       {key}
                     </Text>
                     {hasOverride && (
@@ -560,7 +560,7 @@ function CustomPricingDialog({
                       ] as const
                     ).map(([field, labelKey]) => (
                       <View key={field} className="min-w-[92px] flex-1">
-                        <Text className="mb-1 text-[10px] text-muted-foreground">
+                        <Text className="mb-1 text-micro text-muted-foreground">
                           {t(labelKey)}
                         </Text>
                         <TextField
@@ -568,7 +568,7 @@ function CustomPricingDialog({
                           onChangeText={(v) => updateField(key, field, v)}
                           keyboardType="numeric"
                           placeholder="0.00"
-                          className="h-9 px-2.5 text-xs"
+                          className="h-9 px-2.5 text-caption"
                         />
                       </View>
                     ))}
@@ -577,7 +577,7 @@ function CustomPricingDialog({
               );
             })
           )}
-          <Text className="text-[10px] text-muted-foreground leading-4">
+          <Text className="text-micro text-muted-foreground leading-4">
             {t("runtimes.usage.custom_pricing.unit_hint")}
           </Text>
         </ScrollView>
@@ -634,7 +634,7 @@ function WhenChartCard({
   return (
     <View className="rounded-lg border border-border bg-card p-3">
       <View className="mb-3 flex-row flex-wrap items-center gap-2">
-        <Text className="text-sm font-semibold text-foreground">
+        <Text className="text-body font-semibold text-foreground">
           {t("runtimes.usage.when_title")}
         </Text>
         {!showHeatmap && (
@@ -674,7 +674,7 @@ function WhenChartCard({
 
       {showHeatmap ? (
         <>
-          <Text className="mb-2 text-center text-[10px] text-muted-foreground">
+          <Text className="mb-2 text-center text-micro text-muted-foreground">
             {t("runtimes.usage.heatmap_caption")}
           </Text>
           <HeatmapView heatmap={heatmap} />
@@ -770,7 +770,7 @@ function ChartLegendDot({ kind }: { kind: keyof typeof SEGMENT_COLORS }) {
           backgroundColor: theme[SEGMENT_COLORS[kind]],
         }}
       />
-      <Text className="text-[10px] text-muted-foreground">{t(labelKey[kind])}</Text>
+      <Text className="text-micro text-muted-foreground">{t(labelKey[kind])}</Text>
     </View>
   );
 }
@@ -837,7 +837,7 @@ function StackedBars({ rows }: { rows: ChartRow[] }) {
               ))}
             </View>
             <Text
-              className={cn("text-[9px]", i % labelEvery === 0 ? "text-muted-foreground" : "text-transparent")}
+              className={cn("text-micro", i % labelEvery === 0 ? "text-muted-foreground" : "text-transparent")}
               numberOfLines={1}
             >
               {i % labelEvery === 0 ? r.label : "·"}
@@ -866,23 +866,23 @@ function EmptyChartState({ usage }: { usage: RuntimeUsage[] }) {
     <View className="items-center gap-1.5 rounded-md border border-dashed border-border bg-secondary/30 px-4 py-6">
       <Ionicons name="bar-chart-outline" size={18} color={theme.mutedForeground} />
       {!hasTokens ? (
-        <Text className="text-center text-xs text-muted-foreground">
+        <Text className="text-center text-caption text-muted-foreground">
           {t("runtimes.usage.empty_no_usage")}
         </Text>
       ) : unmapped.length > 0 ? (
         <>
-          <Text className="text-center text-xs text-muted-foreground">
+          <Text className="text-center text-caption text-muted-foreground">
             {t("runtimes.usage.empty_pricing_missing")}
           </Text>
-          <Text className="font-mono text-[10px] text-foreground" numberOfLines={2}>
+          <Text className="font-mono text-micro text-foreground" numberOfLines={2}>
             {unmapped.join(", ")}
           </Text>
-          <Text className="text-center text-[10px] text-muted-foreground">
+          <Text className="text-center text-micro text-muted-foreground">
             {t("runtimes.usage.empty_pricing_hint")}
           </Text>
         </>
       ) : (
-        <Text className="text-center text-xs text-muted-foreground">
+        <Text className="text-center text-caption text-muted-foreground">
           {t("runtimes.usage.empty_zero_cost")}
         </Text>
       )}
@@ -946,7 +946,7 @@ function HeatmapView({ heatmap }: { heatmap: HeatmapData }) {
             {months.map((m) => (
               <Text
                 key={`${m.label}-${m.week}`}
-                className="text-[9px] text-muted-foreground"
+                className="text-micro text-muted-foreground"
                 style={{ marginLeft: m.week * (CELL + CELL_GAP), position: "absolute" }}
               >
                 {m.label}
@@ -957,7 +957,7 @@ function HeatmapView({ heatmap }: { heatmap: HeatmapData }) {
             {/* Row labels (Mon / Wed / Fri) */}
             <View className="mr-1 w-5">
               {[0, 2, 4].map((i) => (
-                <Text key={i} className="text-[8px] text-muted-foreground" style={{ height: CELL + CELL_GAP }}>
+                <Text key={i} className="text-micro text-muted-foreground" style={{ height: CELL + CELL_GAP }}>
                   {weekdayLabels[i] ?? ""}
                 </Text>
               ))}
@@ -983,11 +983,11 @@ function HeatmapView({ heatmap }: { heatmap: HeatmapData }) {
 
       {/* Legend: less → more */}
       <View className="flex-row items-center justify-center gap-1.5">
-        <Text className="text-[9px] text-muted-foreground">{t("runtimes.charts.heatmap_less")}</Text>
+        <Text className="text-micro text-muted-foreground">{t("runtimes.charts.heatmap_less")}</Text>
         {[0, 1, 2, 3, 4].map((lvl) => (
           <View key={lvl} style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: cellColor(theme, lvl) }} />
         ))}
-        <Text className="text-[9px] text-muted-foreground">{t("runtimes.charts.heatmap_more")}</Text>
+        <Text className="text-micro text-muted-foreground">{t("runtimes.charts.heatmap_more")}</Text>
       </View>
 
       <HeatmapInsights insights={heatmap.insights} weekdayLabels={weekdayLabels} />
@@ -1054,13 +1054,13 @@ function Insight({
 }) {
   return (
     <View className="min-w-0 w-1/2 pr-2 mb-2">
-      <Text className="text-[9px] uppercase tracking-wider text-muted-foreground" numberOfLines={1}>
+      <Text className="text-micro uppercase tracking-wider text-muted-foreground" numberOfLines={1}>
         {label}
       </Text>
-      <Text className="mt-0.5 text-xs font-medium text-foreground" numberOfLines={1}>
+      <Text className="mt-0.5 text-caption font-medium text-foreground" numberOfLines={1}>
         {value}
         {sub != null ? (
-          <Text className="text-[10px] font-normal text-muted-foreground"> {sub}</Text>
+          <Text className="text-micro font-normal text-muted-foreground"> {sub}</Text>
         ) : null}
       </Text>
     </View>
@@ -1112,7 +1112,7 @@ function CostByBlock({
     <View className="rounded-lg border border-border bg-card p-3">
       <View className="mb-3 flex-row flex-wrap items-center justify-between gap-2 border-b border-border pb-2.5">
         <View className="flex-row items-center gap-2">
-          <Text className="text-sm font-semibold text-foreground">
+          <Text className="text-body font-semibold text-foreground">
             {tab === "agent"
               ? t("runtimes.usage.cost_by_title_agent")
               : t("runtimes.usage.cost_by_title_model")}
@@ -1126,7 +1126,7 @@ function CostByBlock({
             ]}
           />
         </View>
-        <Text className="text-[10px] text-muted-foreground">{caption}</Text>
+        <Text className="text-micro text-muted-foreground">{caption}</Text>
       </View>
 
       {tab === "agent" && byAgentRead.state !== "ready" ? (
@@ -1156,7 +1156,7 @@ function AgentKey({ agentId, agents }: { agentId: string; agents: { id: string; 
   return (
     <View className="min-w-0 flex-row items-center gap-1.5">
       <ActorAvatar type="agent" id={agentId} size={18} />
-      <Text className="shrink text-xs font-medium text-foreground" numberOfLines={1}>
+      <Text className="shrink text-caption font-medium text-foreground" numberOfLines={1}>
         {agent?.name ?? agentId}
       </Text>
     </View>
@@ -1175,7 +1175,7 @@ function CostByList({
   const theme = THEME[colorScheme];
   if (rows.length === 0) {
     return (
-      <Text className="py-5 text-center text-xs text-muted-foreground">
+      <Text className="py-5 text-center text-caption text-muted-foreground">
         {t("runtimes.usage.empty_no_usage")}
       </Text>
     );
@@ -1191,10 +1191,10 @@ function CostByList({
             <View className="h-2 flex-[1.4] overflow-hidden rounded-full bg-secondary">
               <View style={{ width: `${pct}%`, height: "100%", borderRadius: 999, backgroundColor: theme.chart1 }} />
             </View>
-            <Text className="w-14 text-right text-[10px] tabular-nums text-muted-foreground">
+            <Text className="w-14 text-right text-micro tabular-nums text-muted-foreground">
               {formatTokens(row.tokens)}
             </Text>
-            <Text className="w-16 text-right text-xs font-medium tabular-nums text-foreground">
+            <Text className="w-16 text-right text-caption font-medium tabular-nums text-foreground">
               {formatUsd(row.cost)}
             </Text>
           </View>
@@ -1226,7 +1226,7 @@ function FoldedRow({ usage }: { usage: RuntimeUsage[] }) {
           color={theme.mutedForeground}
           style={{ transform: [{ rotate: open ? "90deg" : "0deg" }] }}
         />
-        <Text className="text-xs text-muted-foreground">
+        <Text className="text-caption text-muted-foreground">
           {t("runtimes.usage.daily_breakdown_toggle")}
         </Text>
       </Pressable>
@@ -1250,12 +1250,12 @@ function DailyBreakdownTable({ usage }: { usage: RuntimeUsage[] }) {
   return (
     <View className="overflow-hidden rounded-lg">
       <View className="flex-row border-b border-border bg-secondary/40 px-2.5 py-1.5">
-        <Text className="w-16 text-[10px] font-medium text-muted-foreground">{t("runtimes.usage.table_date")}</Text>
-        <Text className="flex-1 text-[10px] font-medium text-muted-foreground">{t("runtimes.usage.table_model")}</Text>
-        <Text className="w-14 text-right text-[10px] font-medium text-muted-foreground">{t("runtimes.usage.table_input")}</Text>
-        <Text className="w-14 text-right text-[10px] font-medium text-muted-foreground">{t("runtimes.usage.table_output")}</Text>
-        <Text className="w-12 text-right text-[10px] font-medium text-muted-foreground">{t("runtimes.usage.table_cache_r")}</Text>
-        <Text className="w-12 text-right text-[10px] font-medium text-muted-foreground">{t("runtimes.usage.table_cache_w")}</Text>
+        <Text className="w-16 text-micro font-medium text-muted-foreground">{t("runtimes.usage.table_date")}</Text>
+        <Text className="flex-1 text-micro font-medium text-muted-foreground">{t("runtimes.usage.table_model")}</Text>
+        <Text className="w-14 text-right text-micro font-medium text-muted-foreground">{t("runtimes.usage.table_input")}</Text>
+        <Text className="w-14 text-right text-micro font-medium text-muted-foreground">{t("runtimes.usage.table_output")}</Text>
+        <Text className="w-12 text-right text-micro font-medium text-muted-foreground">{t("runtimes.usage.table_cache_r")}</Text>
+        <Text className="w-12 text-right text-micro font-medium text-muted-foreground">{t("runtimes.usage.table_cache_w")}</Text>
       </View>
       <ScrollView className="max-h-56">
         {Array.from(byDate.entries()).map(([date, rows]) =>
@@ -1265,14 +1265,14 @@ function DailyBreakdownTable({ usage }: { usage: RuntimeUsage[] }) {
               className="flex-row items-center border-b border-border/50 px-2.5 py-1.5"
               style={{ backgroundColor: i === 0 ? "transparent" : undefined }}
             >
-              <Text className="w-16 text-[10px] text-muted-foreground">{date}</Text>
-              <Text className="shrink flex-1 font-mono text-[10px] text-foreground" numberOfLines={1}>
+              <Text className="w-16 text-micro text-muted-foreground">{date}</Text>
+              <Text className="shrink flex-1 font-mono text-micro text-foreground" numberOfLines={1}>
                 {row.model}
               </Text>
-              <Text className="w-14 text-right text-[10px] tabular-nums text-foreground">{formatTokens(row.input_tokens)}</Text>
-              <Text className="w-14 text-right text-[10px] tabular-nums text-foreground">{formatTokens(row.output_tokens)}</Text>
-              <Text className="w-12 text-right text-[10px] tabular-nums text-muted-foreground">{formatTokens(row.cache_read_tokens)}</Text>
-              <Text className="w-12 text-right text-[10px] tabular-nums text-muted-foreground">{formatTokens(row.cache_write_tokens)}</Text>
+              <Text className="w-14 text-right text-micro tabular-nums text-foreground">{formatTokens(row.input_tokens)}</Text>
+              <Text className="w-14 text-right text-micro tabular-nums text-foreground">{formatTokens(row.output_tokens)}</Text>
+              <Text className="w-12 text-right text-micro tabular-nums text-muted-foreground">{formatTokens(row.cache_read_tokens)}</Text>
+              <Text className="w-12 text-right text-micro tabular-nums text-muted-foreground">{formatTokens(row.cache_write_tokens)}</Text>
             </View>
           )),
         )}
@@ -1302,7 +1302,7 @@ function UsageEmpty() {
   return (
     <View className="mt-4 items-center gap-1.5 rounded-lg border border-dashed border-border px-4 py-8">
       <Ionicons name="bar-chart-outline" size={20} color={theme.mutedForeground} />
-      <Text className="text-xs text-muted-foreground">{t("runtimes.usage.no_data")}</Text>
+      <Text className="text-caption text-muted-foreground">{t("runtimes.usage.no_data")}</Text>
     </View>
   );
 }

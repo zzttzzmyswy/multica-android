@@ -173,7 +173,7 @@ export default function ProjectDetail() {
         </View>
       ) : detail.error || projectMissing ? (
         <View className="flex-1 items-center justify-center px-6 gap-3">
-          <Text className="text-sm text-destructive text-center">
+          <Text className="text-body text-destructive text-center">
             {t("project.loadError")}
             {detail.error instanceof Error
               ? detail.error.message

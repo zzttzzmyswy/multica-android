@@ -189,12 +189,12 @@ export default function AgentDetailPage() {
               <ActorAvatar type="agent" id={agent.id} size={56} />
             </View>
             <View className={cn("flex-1 min-w-0 gap-0.5", archived && "opacity-60")}>
-              <Text className="text-base font-semibold text-foreground">
+              <Text className="text-title-sm font-semibold text-foreground">
                 {agent.name}
               </Text>
               <View className="flex-row items-center gap-1.5">
                 <PresenceDot availability={availability} size={8} />
-                <Text className={cn("text-xs", visual.className)}>
+                <Text className={cn("text-caption", visual.className)}>
                   {t(visual.label)}
                 </Text>
               </View>
@@ -210,13 +210,13 @@ export default function AgentDetailPage() {
             <AgentDetailActions agent={agent} presence={detail} />
           </View>
           {agent.description ? (
-            <Text className="px-4 pt-2 text-sm text-muted-foreground">
+            <Text className="px-4 pt-2 text-body text-muted-foreground">
               {agent.description}
             </Text>
           ) : null}
           {archived ? (
             <View className="mx-4 mt-3 flex-row items-center justify-between gap-3 rounded-md border border-border bg-secondary/50 px-3 py-2.5">
-              <Text className="flex-1 text-xs text-muted-foreground leading-5">
+              <Text className="flex-1 text-caption text-muted-foreground leading-5">
                 {t("agents.detail.archivedBanner")}
               </Text>
               <Pressable
@@ -226,7 +226,7 @@ export default function AgentDetailPage() {
                 accessibilityLabel={t("agents.detail.menu.restore")}
                 className="active:opacity-70"
               >
-                <Text className="text-xs font-semibold text-brand">
+                <Text className="text-caption font-semibold text-brand">
                   {restoreAgent.isPending
                     ? t("agents.detail.restoring")
                     : t("agents.detail.menu.restore")}
@@ -240,7 +240,7 @@ export default function AgentDetailPage() {
           <View className="px-4 gap-3">
             {agent.model ? (
               <PropertyRow label={t("agents.detail.fieldModel")} icon="cog-outline">
-                <Text className="flex-1 text-sm text-foreground">
+                <Text className="flex-1 text-body text-foreground">
                   {agent.model}
                 </Text>
               </PropertyRow>
@@ -265,14 +265,14 @@ export default function AgentDetailPage() {
               />
             </PropertyRow>
             <PropertyRow label={t("agents.detail.fieldVisibility")} icon="eye-outline">
-              <Text className="flex-1 text-sm text-foreground">
+              <Text className="flex-1 text-body text-foreground">
                 {VISIBILITY_KEY[agent.visibility]
                   ? t(VISIBILITY_KEY[agent.visibility])
                   : agent.visibility}
               </Text>
             </PropertyRow>
             <PropertyRow label={t("agents.detail.fieldRuntimeMode")} icon="git-branch-outline">
-              <Text className="flex-1 text-sm text-foreground">
+              <Text className="flex-1 text-body text-foreground">
                 {RUNTIME_MODE_KEY[agent.runtime_mode]
                   ? t(RUNTIME_MODE_KEY[agent.runtime_mode])
                   : agent.runtime_mode}
@@ -282,26 +282,26 @@ export default function AgentDetailPage() {
               {runtimeBound ? (
                 <View className="flex-1 flex-row items-center gap-1.5">
                   <PresenceDot availability={availability} size={7} />
-                  <Text className="shrink text-sm text-foreground" numberOfLines={1}>
+                  <Text className="shrink text-body text-foreground" numberOfLines={1}>
                     {runtime.name}
                   </Text>
                 </View>
               ) : (
-                <Text className="flex-1 text-sm text-muted-foreground">
+                <Text className="flex-1 text-body text-muted-foreground">
                   {t("agents.runtime.unbound")}
                 </Text>
               )}
             </PropertyRow>
             {agent.owner_id ? (
               <PropertyRow label={t("agents.detail.fieldOwner")} icon="person-outline">
-                <Text className="flex-1 text-sm text-foreground">
+                <Text className="flex-1 text-body text-foreground">
                   {getName("member", agent.owner_id)}
                 </Text>
               </PropertyRow>
             ) : null}
             {agent.created_at ? (
               <PropertyRow label={t("agents.detail.fieldCreated")} icon="time-outline">
-                <Text className="flex-1 text-sm text-foreground tabular-nums">
+                <Text className="flex-1 text-body text-foreground tabular-nums">
                   {formatDateTime(agent.created_at)}
                 </Text>
               </PropertyRow>
@@ -360,7 +360,7 @@ export default function AgentDetailPage() {
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <Text className="px-4 pt-5 pb-2 text-xs uppercase tracking-wider text-muted-foreground font-medium">
+    <Text className="px-4 pt-5 pb-2 text-caption uppercase tracking-wider text-muted-foreground font-medium">
       {children}
     </Text>
   );
@@ -383,7 +383,7 @@ function PropertyRow({
         size={15}
         color={THEME[colorScheme].mutedForeground}
       />
-      <Text className="w-20 text-xs text-muted-foreground">{label}</Text>
+      <Text className="w-20 text-caption text-muted-foreground">{label}</Text>
       <View className="flex-1 flex-row items-center">{children}</View>
     </View>
   );

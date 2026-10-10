@@ -676,7 +676,7 @@ export function MessageComposer({
           size={18}
           color={theme.mutedForeground}
         />
-        <Text className="text-base text-muted-foreground">
+        <Text className="text-title-sm text-muted-foreground">
           {disabled && disabledReason ? disabledReason : pillLabel}
         </Text>
       </Pressable>
@@ -697,7 +697,7 @@ export function MessageComposer({
               color={theme.mutedForeground}
             />
             <Text
-              className="flex-1 text-xs font-medium text-muted-foreground"
+              className="flex-1 text-caption font-medium text-muted-foreground"
               numberOfLines={1}
             >
               {t("chat.replyingTo", { name: replyTarget.actorName })}
@@ -717,7 +717,7 @@ export function MessageComposer({
           </View>
           {replyTarget.preview ? (
             <Text
-              className="text-xs text-muted-foreground pl-5"
+              className="text-caption text-muted-foreground pl-5"
               numberOfLines={2}
             >
               {stripMarkdown(replyTarget.preview)}
@@ -785,12 +785,12 @@ export function MessageComposer({
                         />
                       )}
                       <View className="flex-1">
-                        <Text className="text-sm font-medium text-foreground">
+                        <Text className="text-body font-medium text-foreground">
                           /{item.label}
                         </Text>
                         {description ? (
                           <Text
-                            className="text-xs text-muted-foreground"
+                            className="text-caption text-muted-foreground"
                             numberOfLines={1}
                           >
                             {description}
@@ -812,7 +812,7 @@ export function MessageComposer({
             placeholderTextColor={theme.mutedForeground}
             multiline
             editable={!disabled}
-            className="px-4 pt-3 pb-1 text-base text-foreground"
+            className="px-4 pt-3 pb-1 text-title-sm text-foreground"
             style={{ minHeight: 28, maxHeight: 140, textAlignVertical: "top" }}
           />
         </View>

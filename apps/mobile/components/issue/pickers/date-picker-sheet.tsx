@@ -54,7 +54,7 @@ export function DatePickerSheet({ title, value, onCommit, onClear }: Props) {
   return (
     <View className="flex-1">
       <View className="flex-row items-center justify-between px-4 pt-4 pb-2">
-        <Text className="text-base font-semibold text-foreground">{title}</Text>
+        <Text className="text-title-sm font-semibold text-foreground">{title}</Text>
         <View className="flex-row items-center gap-1">
           {value ? (
             <Pressable
@@ -63,7 +63,7 @@ export function DatePickerSheet({ title, value, onCommit, onClear }: Props) {
               accessibilityRole="button"
               className="px-2 py-1 rounded-md active:bg-secondary"
             >
-              <Text className="text-sm text-destructive">{t("common.clear")}</Text>
+              <Text className="text-body text-destructive">{t("common.clear")}</Text>
             </Pressable>
           ) : null}
           <Pressable
@@ -75,7 +75,7 @@ export function DatePickerSheet({ title, value, onCommit, onClear }: Props) {
             accessibilityRole="button"
             className="px-2 py-1 rounded-md active:bg-secondary"
           >
-            <Text className="text-sm font-medium text-primary">{t("common.done")}</Text>
+            <Text className="text-body font-medium text-primary">{t("common.done")}</Text>
           </Pressable>
         </View>
       </View>
@@ -100,7 +100,7 @@ export function DatePickerSheet({ title, value, onCommit, onClear }: Props) {
                 active ? "bg-secondary" : ""
               }`}
             >
-              <Text className={`text-sm text-foreground ${active ? "font-medium" : ""}`}>
+              <Text className={`text-body text-foreground ${active ? "font-medium" : ""}`}>
                 {pick.label}
               </Text>
             </Pressable>

@@ -206,7 +206,7 @@ function ControlButton({
         disabled ? "opacity-50" : ""
       }`}
     >
-      <Text className="text-xs font-medium text-foreground">{label}</Text>
+      <Text className="text-caption font-medium text-foreground">{label}</Text>
     </Pressable>
   );
 }
@@ -365,7 +365,7 @@ function SheetAction({
         color={destructive ? theme.destructive : theme.foreground}
       />
       <Text
-        className={`text-sm ${destructive ? "text-destructive" : "text-foreground"}`}
+        className={`text-body ${destructive ? "text-destructive" : "text-foreground"}`}
       >
         {label}
       </Text>
@@ -407,7 +407,7 @@ function WakeupInstructionLoader({
   if (query.isPending) {
     return (
       <View className="px-4 py-6">
-        <Text className="text-xs text-muted-foreground">
+        <Text className="text-caption text-muted-foreground">
           {t("wakeups.instructionLoading")}
         </Text>
       </View>
@@ -419,7 +419,7 @@ function WakeupInstructionLoader({
     // there.
     return (
       <View className="gap-3 px-4 py-6">
-        <Text className="text-xs text-muted-foreground">
+        <Text className="text-caption text-muted-foreground">
           {t("wakeups.instructionLoadError")}
         </Text>
         <Button variant="outline" onPress={() => void query.refetch()}>
@@ -485,7 +485,7 @@ export function WakeupInstructionEditor({
 
   return (
     <View className="px-4 pb-4">
-      <Text className="text-xs text-muted-foreground">
+      <Text className="text-caption text-muted-foreground">
         {t("wakeups.instructionEffect")}
       </Text>
       <AutosizeTextArea
@@ -498,10 +498,10 @@ export function WakeupInstructionEditor({
           setValue(next);
           setErrorKey(null);
         }}
-        className="mt-2 rounded-md border border-border bg-background p-2 text-sm text-foreground"
+        className="mt-2 rounded-md border border-border bg-background p-2 text-body text-foreground"
       />
       {errorKey ? (
-        <Text className="mt-1 text-xs text-destructive">{t(errorKey)}</Text>
+        <Text className="mt-1 text-caption text-destructive">{t(errorKey)}</Text>
       ) : null}
       <View className="mt-3 flex-row justify-end gap-2">
         <Pressable
@@ -510,7 +510,7 @@ export function WakeupInstructionEditor({
           accessibilityRole="button"
           className="rounded-md border border-border px-3 py-2 active:bg-secondary"
         >
-          <Text className="text-sm text-foreground">
+          <Text className="text-body text-foreground">
             {t("wakeups.instructionCancel")}
           </Text>
         </Pressable>
@@ -524,7 +524,7 @@ export function WakeupInstructionEditor({
             edit.isPending || unchanged ? "opacity-50" : ""
           }`}
         >
-          <Text className="text-sm font-medium text-primary-foreground">
+          <Text className="text-body font-medium text-primary-foreground">
             {edit.isPending
               ? t("wakeups.instructionSaving")
               : t("wakeups.instructionSave")}
@@ -593,7 +593,7 @@ export function WakeupRescheduleSheet({
       }}
     >
       <View className="px-4 pb-4">
-        <Text className="text-xs text-muted-foreground">
+        <Text className="text-caption text-muted-foreground">
           {t("wakeups.localTime", { timezone: deviceTimeZone() })}
         </Text>
         <View className="mt-2 flex-row gap-2">
@@ -620,7 +620,7 @@ export function WakeupRescheduleSheet({
           />
         </View>
         {error ? (
-          <Text role="alert" className="mt-1 text-xs text-destructive">
+          <Text role="alert" className="mt-1 text-caption text-destructive">
             {error}
           </Text>
         ) : null}
@@ -631,7 +631,7 @@ export function WakeupRescheduleSheet({
             accessibilityRole="button"
             className="rounded-md border border-border px-3 py-2 active:bg-secondary"
           >
-            <Text className="text-sm text-foreground">
+            <Text className="text-body text-foreground">
               {t("wakeups.instructionCancel")}
             </Text>
           </Pressable>
@@ -641,7 +641,7 @@ export function WakeupRescheduleSheet({
             accessibilityRole="button"
             className={`rounded-md bg-primary px-3 py-2 ${pending ? "opacity-50" : ""}`}
           >
-            <Text className="text-sm font-medium text-primary-foreground">
+            <Text className="text-body font-medium text-primary-foreground">
               {t("wakeups.reschedule")}
             </Text>
           </Pressable>
@@ -737,7 +737,7 @@ function TimeField({
           size={15}
           color={theme.mutedForeground}
         />
-        <Text className="text-sm tabular-nums text-foreground">{label}</Text>
+        <Text className="text-body tabular-nums text-foreground">{label}</Text>
       </Pressable>
       {Platform.OS !== "android" && open ? (
         <DateTimePicker
@@ -757,7 +757,7 @@ function TimeField({
           accessibilityRole="button"
           className="mt-2 items-center rounded-md bg-primary px-4 py-2"
         >
-          <Text className="text-sm font-medium text-primary-foreground">
+          <Text className="text-body font-medium text-primary-foreground">
             {t("common.done")}
           </Text>
         </Pressable>

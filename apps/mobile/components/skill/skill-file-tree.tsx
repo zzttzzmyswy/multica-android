@@ -112,12 +112,12 @@ export function SkillFileTree({
             />
             <Ionicons name={Icon} size={15} color={theme.mutedForeground} />
             <Text
-              className="text-sm text-muted-foreground flex-1"
+              className="text-body text-muted-foreground flex-1"
               numberOfLines={1}
             >
               {node.name}
             </Text>
-            <Text className="text-xs text-muted-foreground/70">
+            <Text className="text-caption text-muted-foreground/70">
               {countFiles(node)}
             </Text>
           </Pressable>
@@ -149,7 +149,7 @@ export function SkillFileTree({
             color={isPrimary ? theme.foreground : theme.mutedForeground}
           />
           <Text
-            className={`text-sm flex-1 ${
+            className={`text-body flex-1 ${
               isPrimary
                 ? "font-semibold text-foreground"
                 : isSelected
@@ -162,7 +162,7 @@ export function SkillFileTree({
           </Text>
           {isPrimary && (
             <View className="px-1.5 py-px rounded-full bg-primary/10">
-              <Text className="text-[10px] text-primary font-medium">Primary</Text>
+              <Text className="text-micro text-primary font-medium">Primary</Text>
             </View>
           )}
         </Pressable>

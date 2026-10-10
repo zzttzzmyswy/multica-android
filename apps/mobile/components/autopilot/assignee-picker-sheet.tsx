@@ -59,7 +59,7 @@ export function AssigneePickerSheet({
           <Pressable onPress={() => {}} className="w-full max-w-sm">
             <View className="bg-popover rounded-2xl overflow-hidden">
               <View className="px-4 py-3 border-b border-border">
-                <Text className="text-base font-semibold text-foreground">
+                <Text className="text-title-sm font-semibold text-foreground">
                   {t("autopilots.assigneePicker.title")}
                 </Text>
               </View>
@@ -67,7 +67,7 @@ export function AssigneePickerSheet({
               <ScrollView className="max-h-[420px]">
                 {agents.length === 0 && squads.length === 0 ? (
                   <View className="px-4 py-8">
-                    <Text className="text-sm text-muted-foreground text-center">
+                    <Text className="text-body text-muted-foreground text-center">
                       {t("autopilots.assigneePicker.empty")}
                     </Text>
                   </View>
@@ -157,7 +157,7 @@ export function AssigneePickerSheet({
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <View className="px-4 pt-3 pb-1">
-      <Text className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      <Text className="text-caption font-medium uppercase tracking-wide text-muted-foreground">
         {children}
       </Text>
     </View>
@@ -194,22 +194,22 @@ function AssigneeRow({
       {leading}
       <View className="flex-1">
         <Text
-          className="text-sm font-medium text-foreground"
+          className="text-body font-medium text-foreground"
           numberOfLines={1}
         >
           {title}
         </Text>
         {subtitle ? (
-          <Text className="text-xs text-muted-foreground mt-0.5" numberOfLines={1}>
+          <Text className="text-caption text-muted-foreground mt-0.5" numberOfLines={1}>
             {subtitle}
           </Text>
         ) : null}
       </View>
       {disabled && disabledHint ? (
-        <Text className="text-xs font-medium text-warning">{disabledHint}</Text>
+        <Text className="text-caption font-medium text-warning">{disabledHint}</Text>
       ) : null}
       {selected ? (
-        <Text className="text-sm text-primary font-semibold">✓</Text>
+        <Text className="text-body text-primary font-semibold">✓</Text>
       ) : null}
     </Pressable>
   );

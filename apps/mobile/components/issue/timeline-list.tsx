@@ -545,7 +545,7 @@ export function TimelineList({
       <IssueMetadataSection metadata={issue.metadata} />
       <View className="px-4 pt-4 pb-2 border-t border-border">
         <View className="flex-row items-center justify-between gap-2">
-          <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+          <Text className="text-caption uppercase tracking-wider text-muted-foreground font-medium">
             {t("timeline.activity")}
           </Text>
           {/* Subscribe / unsubscribe — mirrors web's Activity-header
@@ -723,7 +723,7 @@ function UnreadDivider() {
   return (
     <View className="flex-row items-center gap-2 px-4">
       <View className="flex-1 h-px bg-destructive/40" />
-      <Text className="text-[10px] uppercase tracking-wider font-medium text-destructive">
+      <Text className="text-micro uppercase tracking-wider font-medium text-destructive">
         {t("timeline.new")}
       </Text>
       <View className="flex-1 h-px bg-destructive/40" />
@@ -770,7 +770,7 @@ function NewCommentChip({
       }}
     >
       <Ionicons name="arrow-down" size={14} color={fg} />
-      <Text className="text-xs font-semibold text-primary-foreground">
+      <Text className="text-caption font-semibold text-primary-foreground">
         {t("timeline.newCount", { count })}
       </Text>
     </Pressable>

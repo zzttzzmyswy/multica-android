@@ -56,7 +56,7 @@ export function FullscreenPreview({ visible, onClose, title, children }: Props) 
     >
       <View className="flex-1 bg-background" style={{ paddingTop: insets.top }}>
         <View className="h-12 flex-row items-center border-b border-border bg-card px-2">
-          <Text className="flex-1 pl-2 text-sm font-medium" numberOfLines={1}>
+          <Text className="flex-1 pl-2 text-body font-medium" numberOfLines={1}>
             {title}
           </Text>
           <Pressable
@@ -66,7 +66,7 @@ export function FullscreenPreview({ visible, onClose, title, children }: Props) 
             accessibilityLabel={t("a11y.close")}
             className="rounded-md border border-border px-2 py-1 active:opacity-80"
           >
-            <Text className="text-xs text-foreground">
+            <Text className="text-caption text-foreground">
               {t("richContent.mermaid.close")}
             </Text>
           </Pressable>

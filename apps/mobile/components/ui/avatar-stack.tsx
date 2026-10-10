@@ -60,7 +60,7 @@ export function AvatarStack({
             style={{ width: size, height: size, borderRadius: size / 2 }}
             className="items-center justify-center bg-muted"
           >
-            <Text className="text-[10px] font-medium text-muted-foreground">
+            <Text className="text-micro font-medium text-muted-foreground">
               +{overflow}
             </Text>
           </View>

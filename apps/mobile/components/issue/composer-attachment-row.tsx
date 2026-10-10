@@ -153,7 +153,7 @@ function MentionChipView({
   return (
     <View className="flex-row items-center gap-1 h-7 px-2 rounded-full bg-primary/10">
       <Ionicons name={iconName} size={12} color={theme.primary} />
-      <Text className="text-xs font-medium text-foreground">{label}</Text>
+      <Text className="text-caption font-medium text-foreground">{label}</Text>
       <Pressable
         onPress={() => onRemove(mention.type, mention.id)}
         hitSlop={8}
@@ -252,7 +252,7 @@ function AttachmentChipView({ item, onRemove, onRetry }: AttachmentChipProps) {
         />
       )}
       <Text
-        className="text-xs text-foreground max-w-[120px]"
+        className="text-caption text-foreground max-w-[120px]"
         numberOfLines={1}
       >
         {item.filename}

@@ -37,11 +37,11 @@ export function AgentsUnavailableBanner({ onRetry }: { onRetry: () => void }) {
           size={14}
           color={theme.mutedForeground}
         />
-        <Text className="flex-1 text-sm font-medium text-foreground">
+        <Text className="flex-1 text-body font-medium text-foreground">
           {t("chat.agentsUnavailableTitle")}
         </Text>
       </View>
-      <Text className="text-xs text-muted-foreground mt-0.5">
+      <Text className="text-caption text-muted-foreground mt-0.5">
         {t("chat.agentsUnavailableBody")}
       </Text>
       <Pressable
@@ -49,7 +49,7 @@ export function AgentsUnavailableBanner({ onRetry }: { onRetry: () => void }) {
         accessibilityRole="button"
         className="self-start mt-1.5 rounded-md bg-secondary px-2.5 py-1 active:opacity-70"
       >
-        <Text className="text-xs font-medium text-foreground">
+        <Text className="text-caption font-medium text-foreground">
           {t("common.retry")}
         </Text>
       </Pressable>

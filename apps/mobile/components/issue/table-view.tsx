@@ -749,7 +749,7 @@ export function IssueTableView({
           autoCorrect={false}
           autoCapitalize="none"
           accessibilityLabel={t("table.searchPlaceholder")}
-          className="flex-1 text-sm text-foreground py-0"
+          className="flex-1 text-body text-foreground py-0"
         />
         {search ? (
           <Pressable
@@ -775,7 +775,7 @@ export function IssueTableView({
       <View className="flex-1">
         {searchBar}
         <View className="flex-1 items-center justify-center px-6">
-          <Text className="text-sm text-muted-foreground text-center">
+          <Text className="text-body text-muted-foreground text-center">
             {/* A search that matched nothing gets web's search-specific copy
                 (`table.no_results`) instead of the surface's generic empty
                 state — "no issues in this filter" is the wrong thing to say
@@ -843,7 +843,7 @@ export function IssueTableView({
               className="flex-1 flex-row items-center gap-1"
               accessibilityLabel={t("a11y.tableSortTitle")}
             >
-              <Text className="text-xs font-semibold text-foreground" numberOfLines={1}>
+              <Text className="text-caption font-semibold text-foreground" numberOfLines={1}>
                 {t("table.column.title")}
               </Text>
               {arrowForField("title")}
@@ -1059,7 +1059,7 @@ function HeaderCell({
         className="flex-1 flex-row items-center gap-1 pl-2"
         accessibilityLabel={sortable ? t("a11y.tableSortColumn") : undefined}
       >
-        <Text className="text-xs font-semibold text-foreground" numberOfLines={1}>
+        <Text className="text-caption font-semibold text-foreground" numberOfLines={1}>
           {label}
         </Text>
         {sortArrow}
@@ -1127,7 +1127,7 @@ function ToolbarButton({
         size={14}
         color={THEME[colorScheme].mutedForeground}
       />
-      <Text className="text-xs font-medium text-muted-foreground" numberOfLines={1}>
+      <Text className="text-caption font-medium text-muted-foreground" numberOfLines={1}>
         {label}
       </Text>
     </Pressable>
@@ -1473,7 +1473,7 @@ function DataCell({
   switch (column) {
     case "identifier":
       return (
-        <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+        <Text className="text-caption text-muted-foreground" numberOfLines={1}>
           {issue.identifier}
         </Text>
       );
@@ -1486,7 +1486,7 @@ function DataCell({
             color={statusEntry?.is_system ? undefined : (statusEntry?.color ?? undefined)}
             size={13}
           />
-          <Text className="text-xs text-foreground" numberOfLines={1}>
+          <Text className="text-caption text-foreground" numberOfLines={1}>
             {statusLabel(issue.status)}
           </Text>
         </View>
@@ -1495,7 +1495,7 @@ function DataCell({
       return (
         <View className="flex-row items-center gap-1">
           <PriorityIcon priority={issue.priority} size={13} />
-          <Text className="text-xs text-foreground" numberOfLines={1}>
+          <Text className="text-caption text-foreground" numberOfLines={1}>
             {t(`enum.priority.${issue.priority}`)}
           </Text>
         </View>
@@ -1505,25 +1505,25 @@ function DataCell({
         <View className="flex-row items-center gap-1.5">
           <ActorAvatar size={18} type={issue.assignee_type} id={issue.assignee_id} />
           <Text
-            className="flex-shrink text-xs text-muted-foreground"
+            className="flex-shrink text-caption text-muted-foreground"
             numberOfLines={1}
           >
             {getName(issue.assignee_type, issue.assignee_id)}
           </Text>
         </View>
       ) : (
-        <Text className="text-xs text-muted-foreground/60">—</Text>
+        <Text className="text-caption text-muted-foreground/60">—</Text>
       );
     case "creator":
       return (
-        <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+        <Text className="text-caption text-muted-foreground" numberOfLines={1}>
           {getName(issue.creator_type, issue.creator_id)}
         </Text>
       );
     case "labels": {
       const labels = issue.labels ?? [];
       if (labels.length === 0) {
-        return <Text className="text-xs text-muted-foreground/60">—</Text>;
+        return <Text className="text-caption text-muted-foreground/60">—</Text>;
       }
       return (
         <View className="flex-row items-center gap-1.5">
@@ -1534,14 +1534,14 @@ function DataCell({
                 style={{ backgroundColor: label.color }}
               />
               {i === 0 ? (
-                <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+                <Text className="text-caption text-muted-foreground" numberOfLines={1}>
                   {label.name}
                 </Text>
               ) : null}
             </View>
           ))}
           {labels.length > 2 ? (
-            <Text className="text-[10px] text-muted-foreground/70">
+            <Text className="text-micro text-muted-foreground/70">
               +{labels.length - 2}
             </Text>
           ) : null}
@@ -1554,7 +1554,7 @@ function DataCell({
       <View className="flex-row items-center gap-1.5">
           <ProjectIcon icon={project?.icon} size="sm" />
           <Text
-            className="flex-shrink text-xs text-muted-foreground"
+            className="flex-shrink text-caption text-muted-foreground"
             numberOfLines={1}
           >
             {project?.title ?? "—"}
@@ -1590,7 +1590,7 @@ function DataCell({
 function DateCell({ value }: { value: string | null }) {
   const { colorScheme } = useColorScheme();
   const intlLocale = useIntlLocale();
-  if (!value) return <Text className="text-xs text-muted-foreground/60">—</Text>;
+  if (!value) return <Text className="text-caption text-muted-foreground/60">—</Text>;
   const text = formatIssueDate(value, ISSUE_DATE_SHORT, intlLocale) || value;
   return (
     <View className="flex-row items-center gap-1">
@@ -1599,7 +1599,7 @@ function DateCell({ value }: { value: string | null }) {
         size={12}
         color={THEME[colorScheme].mutedForeground}
       />
-      <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+      <Text className="text-caption text-muted-foreground" numberOfLines={1}>
         {text}
       </Text>
     </View>
@@ -1612,7 +1612,7 @@ function InstantCell({ value }: { value: string }) {
   const day = value.slice(0, 10);
   const text = formatIssueDate(day, ISSUE_DATE_SHORT, intlLocale) || day;
   return (
-    <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+    <Text className="text-caption text-muted-foreground" numberOfLines={1}>
       {text}
     </Text>
   );
@@ -1634,11 +1634,11 @@ function PropertyCell({
   t: Translate;
 }) {
   const { colorScheme } = useColorScheme();
-  if (!property) return <Text className="text-xs text-muted-foreground/60">—</Text>;
+  if (!property) return <Text className="text-caption text-muted-foreground/60">—</Text>;
   const raw = (issue.properties ?? {})[property.id];
   const display = formatPropertyValue(property, raw);
   if (display === null) {
-    return <Text className="text-xs text-muted-foreground/60">—</Text>;
+    return <Text className="text-caption text-muted-foreground/60">—</Text>;
   }
   switch (display.kind) {
     case "option":
@@ -1648,7 +1648,7 @@ function PropertyCell({
             className="size-2 rounded-full shrink-0"
             style={{ backgroundColor: display.option.color }}
           />
-          <Text className="flex-shrink text-xs text-foreground" numberOfLines={1}>
+          <Text className="flex-shrink text-caption text-foreground" numberOfLines={1}>
             {display.option.name}
           </Text>
         </View>
@@ -1663,14 +1663,14 @@ function PropertyCell({
                 style={{ backgroundColor: option.color }}
               />
               {i === 0 ? (
-                <Text className="text-xs text-foreground" numberOfLines={1}>
+                <Text className="text-caption text-foreground" numberOfLines={1}>
                   {option.name}
                 </Text>
               ) : null}
             </View>
           ))}
           {display.options.length > 2 ? (
-            <Text className="text-[10px] text-muted-foreground/70">
+            <Text className="text-micro text-muted-foreground/70">
               +{display.options.length - 2}
             </Text>
           ) : null}
@@ -1684,20 +1684,20 @@ function PropertyCell({
             max={2}
             size={16}
           />
-          <Text className="text-xs text-foreground" numberOfLines={1}>
+          <Text className="text-caption text-foreground" numberOfLines={1}>
             {display.refs.map((ref) => getName(ref.kind, ref.id)).join(", ")}
           </Text>
         </View>
       );
     case "unknownActors":
       return (
-        <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+        <Text className="text-caption text-muted-foreground" numberOfLines={1}>
           {t("properties.value.unknown")}
         </Text>
       );
     case "checkbox":
       return (
-        <Text className="text-xs text-foreground" numberOfLines={1}>
+        <Text className="text-caption text-foreground" numberOfLines={1}>
           {display.value ? "☑" : "☐"}{" "}
           {t(
             display.value
@@ -1714,14 +1714,14 @@ function PropertyCell({
             size={12}
             color={THEME[colorScheme].mutedForeground}
           />
-          <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+          <Text className="text-caption text-muted-foreground" numberOfLines={1}>
             {display.text}
           </Text>
         </View>
       );
     default:
       return (
-        <Text className="text-xs text-foreground" numberOfLines={1}>
+        <Text className="text-caption text-foreground" numberOfLines={1}>
           {display.text}
         </Text>
       );
@@ -1774,7 +1774,7 @@ function RenameIssueDialog({
       <Pressable className="flex-1 bg-black/40" onPress={commit}>
         <View className="flex-1 justify-center px-6">
           <Pressable onPress={() => {}} className="bg-popover rounded-2xl p-4 gap-3">
-            <Text className="text-base font-semibold text-foreground">
+            <Text className="text-title-sm font-semibold text-foreground">
               {t("table.renameTitle")}
             </Text>
             <TextInput
@@ -1786,7 +1786,7 @@ function RenameIssueDialog({
               onSubmitEditing={commit}
               placeholder={t("table.renamePlaceholder")}
               placeholderTextColor={THEME[colorScheme].mutedForeground}
-              className="border border-border rounded-lg px-3 py-2.5 text-sm text-foreground"
+              className="border border-border rounded-lg px-3 py-2.5 text-body text-foreground"
               style={{ includeFontPadding: false }}
             />
             <View className="flex-row justify-end gap-2">
@@ -1879,7 +1879,7 @@ function ColumnMenu({
             className="bg-popover rounded-t-2xl max-h-[75%]"
           >
             <View className="px-4 py-3 border-b border-border flex-row items-center justify-between">
-              <Text className="text-base font-semibold text-foreground">
+              <Text className="text-title-sm font-semibold text-foreground">
                 {t("table.columnsTitle")}
               </Text>
               <View className="flex-row items-center gap-3">
@@ -1888,7 +1888,7 @@ function ColumnMenu({
                   hitSlop={8}
                   accessibilityRole="button"
                 >
-                  <Text className="text-xs text-muted-foreground">
+                  <Text className="text-caption text-muted-foreground">
                     {t("table.resetColumns")}
                   </Text>
                 </Pressable>
@@ -1907,7 +1907,7 @@ function ColumnMenu({
               >
                 {columns.map((c) => columnLabel(c)).join(" › ")}
               </Text>
-              <Text className="px-4 pt-3 pb-1 text-xs uppercase tracking-wider text-muted-foreground font-medium">
+              <Text className="px-4 pt-3 pb-1 text-caption uppercase tracking-wider text-muted-foreground font-medium">
                 {t("table.columnsSystem")}
               </Text>
               {TABLE_SYSTEM_COLUMNS.map((def) => (
@@ -1922,7 +1922,7 @@ function ColumnMenu({
               ))}
               {properties.length > 0 ? (
                 <>
-                  <Text className="px-4 pt-3 pb-1 text-xs uppercase tracking-wider text-muted-foreground font-medium">
+                  <Text className="px-4 pt-3 pb-1 text-caption uppercase tracking-wider text-muted-foreground font-medium">
                     {t("table.columnsProperties")}
                   </Text>
                   {properties.map((property) => {
@@ -2060,7 +2060,7 @@ function MenuRow({
         }`}
       >
         <Text
-          className={`text-sm ${
+          className={`text-body ${
             disabled ? "text-muted-foreground" : "text-foreground"
           }`}
           numberOfLines={1}
@@ -2133,7 +2133,7 @@ function GroupMenu({
             className="bg-popover rounded-t-2xl max-h-[75%]"
           >
             <View className="px-4 py-3 border-b border-border flex-row items-center justify-between">
-              <Text className="text-base font-semibold text-foreground">
+              <Text className="text-title-sm font-semibold text-foreground">
                 {t("table.groupBy")}
               </Text>
               <Pressable onPress={onClose} hitSlop={8}>
@@ -2161,7 +2161,7 @@ function GroupMenu({
               />
               {groupable.length > 0 ? (
                 <>
-                  <Text className="px-4 pt-3 pb-1 text-xs uppercase tracking-wider text-muted-foreground font-medium">
+                  <Text className="px-4 pt-3 pb-1 text-caption uppercase tracking-wider text-muted-foreground font-medium">
                     {t("table.columnsProperties")}
                   </Text>
                   {groupable.map((property) => {

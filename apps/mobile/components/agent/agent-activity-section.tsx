@@ -202,7 +202,7 @@ export function AgentActivitySection({
       {nowUnsettled ? (
         statusFor(snapshotRead.state, snapshotRead.retry)
       ) : activeTasks.length === 0 ? (
-        <Text className="px-4 text-sm text-muted-foreground">
+        <Text className="px-4 text-body text-muted-foreground">
           {t("agents.activity.emptyNow")}
         </Text>
       ) : (
@@ -228,21 +228,21 @@ export function AgentActivitySection({
       {last30dUnsettled ? (
         statusFor(activityMapState, retryActivityMap)
       ) : summary.totalRuns === 0 ? (
-        <Text className="px-4 text-sm text-muted-foreground">
+        <Text className="px-4 text-body text-muted-foreground">
           {t("agents.activity.empty30d")}
         </Text>
       ) : (
         <View className="px-4 flex-row items-end justify-between gap-5">
           <View className="flex-1 min-w-0 gap-1">
             <View className="flex-row items-baseline gap-1.5">
-              <Text className="text-2xl font-semibold text-foreground tabular-nums">
+              <Text className="text-display-sm font-semibold text-foreground tabular-nums">
                 {summary.totalRuns}
               </Text>
-              <Text className="text-xs text-muted-foreground">
+              <Text className="text-caption text-muted-foreground">
                 {t("agents.activity.runs")}
               </Text>
             </View>
-            <Text className="text-xs text-muted-foreground leading-5">
+            <Text className="text-caption text-muted-foreground leading-5">
               {t("agents.activity.successPct", { percent: successPct })}
               {avgDurationMs > 0 ? (
                 <>
@@ -281,7 +281,7 @@ export function AgentActivitySection({
           <ActivityIndicator size="small" color={theme.mutedForeground} />
         </View>
       ) : recentTasks.length === 0 ? (
-        <Text className="px-4 text-sm text-muted-foreground">
+        <Text className="px-4 text-body text-muted-foreground">
           {t("agents.activity.emptyRecent")}
         </Text>
       ) : (
@@ -306,7 +306,7 @@ export function AgentActivitySection({
               onPress={() => setRecentLimit((n) => n + RECENT_PAGE)}
               className="px-4 py-3 active:opacity-70"
             >
-              <Text className="text-sm font-medium text-brand">
+              <Text className="text-body font-medium text-brand">
                 {t("agents.activity.showMore")}
               </Text>
             </Pressable>
@@ -326,11 +326,11 @@ function SectionHeader({
 }) {
   return (
     <View className="px-4 pt-5 pb-2">
-      <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+      <Text className="text-caption uppercase tracking-wider text-muted-foreground font-medium">
         {title}
       </Text>
       {subtitle ? (
-        <Text className="mt-0.5 text-xs text-muted-foreground/80">{subtitle}</Text>
+        <Text className="mt-0.5 text-caption text-muted-foreground/80">{subtitle}</Text>
       ) : null}
     </View>
   );
@@ -415,7 +415,7 @@ function ActivityTaskRow({
       />
       <View className="flex-1 min-w-0 gap-0.5">
         <View className="flex-row items-center gap-1.5">
-          <Text className={cn("text-xs font-medium", statusClass)}>
+          <Text className={cn("text-caption font-medium", statusClass)}>
             {statusLabel}
           </Text>
           {durationText ? (
@@ -435,11 +435,11 @@ function ActivityTaskRow({
             </>
           ) : null}
         </View>
-        <Text className="text-sm text-foreground" numberOfLines={2}>
+        <Text className="text-body text-foreground" numberOfLines={2}>
           {title}
         </Text>
         {failureReason ? (
-          <Text className="text-xs text-destructive" numberOfLines={1}>
+          <Text className="text-caption text-destructive" numberOfLines={1}>
             {failureReason}
           </Text>
         ) : null}

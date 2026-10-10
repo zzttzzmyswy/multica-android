@@ -338,10 +338,10 @@ export default function WorkspaceSettingsScreen() {
                 own write, exactly as web auto-saves it. */}
             <View className="flex-row items-center justify-between gap-3">
               <View className="flex-1">
-                <Text className="text-xs text-muted-foreground mb-1">
+                <Text className="text-caption text-muted-foreground mb-1">
                   {t("workspaceSettings.logo")}
                 </Text>
-                <Text className="text-xs text-muted-foreground/70">
+                <Text className="text-caption text-muted-foreground/70">
                   {t("workspaceSettings.logoHint")}
                 </Text>
               </View>
@@ -356,7 +356,7 @@ export default function WorkspaceSettingsScreen() {
               />
             </View>
             <View>
-              <Text className="text-xs text-muted-foreground mb-1.5">
+              <Text className="text-caption text-muted-foreground mb-1.5">
                 {t("workspaceSettings.name")}
               </Text>
               <TextField
@@ -375,13 +375,13 @@ export default function WorkspaceSettingsScreen() {
                 invalid={!!nameError}
               />
               {nameError ? (
-                <Text className="text-xs text-destructive mt-1.5">
+                <Text className="text-caption text-destructive mt-1.5">
                   {t("workspaceSettings.nameRequired")}
                 </Text>
               ) : null}
             </View>
             <View>
-              <Text className="text-xs text-muted-foreground mb-1.5">
+              <Text className="text-caption text-muted-foreground mb-1.5">
                 {t("workspaceSettings.description")}
               </Text>
               <View className="rounded-md border border-border bg-background px-3 py-2">
@@ -401,7 +401,7 @@ export default function WorkspaceSettingsScreen() {
               </View>
             </View>
             <View>
-              <Text className="text-xs text-muted-foreground mb-1.5">
+              <Text className="text-caption text-muted-foreground mb-1.5">
                 {t("workspaceSettings.context")}
               </Text>
               <View className="rounded-md border border-border bg-background px-3 py-2">
@@ -423,7 +423,7 @@ export default function WorkspaceSettingsScreen() {
             <View className="flex-row items-center justify-between gap-3">
               <Text
                 className={cn(
-                  "text-xs",
+                  "text-caption",
                   saveStatus === "saved" && "text-emerald-600 dark:text-emerald-400",
                   saveStatus === "error" && "text-destructive",
                 )}
@@ -498,10 +498,10 @@ export default function WorkspaceSettingsScreen() {
             <>
               <Separator />
               <View className="px-4 py-3 gap-1">
-                <Text className="text-sm text-muted-foreground">
+                <Text className="text-body text-muted-foreground">
                   {t("workspaceSettings.context")}
                 </Text>
-                <Text className="text-sm text-foreground">
+                <Text className="text-body text-foreground">
                   {workspace.context}
                 </Text>
               </View>
@@ -510,7 +510,7 @@ export default function WorkspaceSettingsScreen() {
           <Separator />
           {canManage ? (
             <View className="px-4 py-3 gap-1.5">
-              <Text className="text-sm text-muted-foreground">
+              <Text className="text-body text-muted-foreground">
                 {t("workspaceSettings.issuePrefix")}
               </Text>
               <TextField
@@ -531,7 +531,7 @@ export default function WorkspaceSettingsScreen() {
               />
               <Text
                 className={cn(
-                  "text-xs",
+                  "text-caption",
                   prefixStatus === "error"
                     ? "text-destructive"
                     : "text-muted-foreground",
@@ -565,7 +565,7 @@ export default function WorkspaceSettingsScreen() {
         </View>
         {!canManage ? (
           <View className="border-t border-border px-4 py-3">
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-caption text-muted-foreground">
               {t("workspaceSettings.manageHint")}
             </Text>
           </View>
@@ -577,11 +577,11 @@ export default function WorkspaceSettingsScreen() {
           <View className="px-4 py-3 gap-1">
             <View className="flex-row items-center gap-2">
               <Ionicons name="log-out-outline" size={15} color={theme.mutedForeground} />
-              <Text className="text-sm font-medium text-foreground">
+              <Text className="text-body font-medium text-foreground">
                 {t("workspaceSettings.leaveTitle")}
               </Text>
             </View>
-            <Text className="text-xs text-muted-foreground mt-1">
+            <Text className="text-caption text-muted-foreground mt-1">
               {isSoleOwner
                 ? t("workspaceSettings.leaveSoleOwner")
                 : t("workspaceSettings.leaveDescription")}
@@ -607,11 +607,11 @@ export default function WorkspaceSettingsScreen() {
               <View className="px-4 py-3 gap-1">
                 <View className="flex-row items-center gap-2">
                   <Ionicons name="trash-outline" size={15} color={theme.destructive} />
-                  <Text className="text-sm font-medium text-destructive">
+                  <Text className="text-body font-medium text-destructive">
                     {t("workspaceSettings.deleteTitle")}
                   </Text>
                 </View>
-                <Text className="text-xs text-muted-foreground mt-1">
+                <Text className="text-caption text-muted-foreground mt-1">
                   {t("workspaceSettings.deleteDescription")}
                 </Text>
                 <View className="mt-2.5 self-start">
@@ -654,7 +654,7 @@ function SectionGroup({
 }) {
   return (
     <View className="gap-2">
-      <Text className="text-xs uppercase tracking-wider text-muted-foreground px-1">
+      <Text className="text-caption uppercase tracking-wider text-muted-foreground px-1">
         {title}
       </Text>
       <View className="rounded-md border border-border bg-card overflow-hidden">
@@ -675,10 +675,10 @@ function InfoRow({
 }) {
   return (
     <View className="flex-row items-center justify-between px-4 py-3 gap-3">
-      <Text className="text-sm text-muted-foreground">{label}</Text>
+      <Text className="text-body text-muted-foreground">{label}</Text>
       <Text
         className={cn(
-          "flex-1 text-right text-sm text-foreground",
+          "flex-1 text-right text-body text-foreground",
           mono && "font-mono",
         )}
         numberOfLines={1}
@@ -706,7 +706,7 @@ function ManageNavRow({
       className="flex-row items-center px-4 py-3.5 gap-3 active:bg-secondary"
     >
       <Ionicons name={icon} size={16} color={theme.mutedForeground} />
-      <Text className="flex-1 text-sm font-medium text-foreground">{title}</Text>
+      <Text className="flex-1 text-body font-medium text-foreground">{title}</Text>
       <Ionicons name="chevron-forward" size={16} color={theme.mutedForeground} />
     </Pressable>
   );
@@ -755,16 +755,16 @@ function DeleteWorkspaceModal({
         <View className="flex-1 items-center justify-center px-6">
           <Pressable onPress={() => {}} className="w-full max-w-sm">
             <View className="bg-popover rounded-2xl p-4 gap-3">
-              <Text className="text-base font-semibold text-destructive">
+              <Text className="text-title-sm font-semibold text-destructive">
                 {t("workspaceSettings.deleteModalTitle")}
               </Text>
-              <Text className="text-sm text-muted-foreground">
+              <Text className="text-body text-muted-foreground">
                 {t("workspaceSettings.deleteModalDescription", {
                   name: workspaceName,
                 })}
               </Text>
               <View>
-                <Text className="text-xs text-muted-foreground mb-1.5">
+                <Text className="text-caption text-muted-foreground mb-1.5">
                   {t("workspaceSettings.typeToConfirmPrefix")}{" "}
                   <Text className="font-mono text-foreground">
                     {workspaceName}

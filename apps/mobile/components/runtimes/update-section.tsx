@@ -176,10 +176,10 @@ export function UpdateSection({
   return (
     <View className="gap-1.5">
       <View className="flex-row items-center gap-2 flex-wrap">
-        <Text className="text-xs text-muted-foreground">
+        <Text className="text-caption text-muted-foreground">
           {t("runtimes.update.cli_version_label")}
         </Text>
-        <Text className="text-xs font-mono text-foreground">
+        <Text className="text-caption font-mono text-foreground">
           {currentVersion ?? t("runtimes.update.version_unknown")}
         </Text>
 
@@ -214,11 +214,11 @@ export function UpdateSection({
 
             {hasUpdate && !status && (
               <>
-                <Text className="text-xs text-muted-foreground">→</Text>
-                <Text className="text-xs font-mono text-info">
+                <Text className="text-caption text-muted-foreground">→</Text>
+                <Text className="text-caption font-mono text-info">
                   {latestVersion ?? ""}
                 </Text>
-                <Text className="text-xs text-muted-foreground">
+                <Text className="text-caption text-muted-foreground">
                   {t("runtimes.update.available")}
                 </Text>
               </>
@@ -267,7 +267,7 @@ export function UpdateSection({
                 color="currentColor"
               />
             )}
-            <Text className={cn("text-xs", STATUS_TONE[status])}>
+            <Text className={cn("text-caption", STATUS_TONE[status])}>
               {t(`runtimes.update.status.${status}`)}
             </Text>
           </View>
@@ -276,13 +276,13 @@ export function UpdateSection({
 
       {status === "completed" && output ? (
         <View className="rounded-lg border border-success/30 bg-success/10 px-3 py-2">
-          <Text className="text-xs text-success">{output}</Text>
+          <Text className="text-caption text-success">{output}</Text>
         </View>
       ) : null}
 
       {(status === "failed" || status === "timeout") && error ? (
         <View className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 gap-1">
-          <Text className="text-xs text-destructive">{error}</Text>
+          <Text className="text-caption text-destructive">{error}</Text>
           {status === "failed" ? (
             <Button
               variant="ghost"
@@ -290,7 +290,7 @@ export function UpdateSection({
               className="self-start"
               onPress={() => void handleUpdate()}
             >
-              <Text className="text-xs">{t("runtimes.update.retry")}</Text>
+              <Text className="text-caption">{t("runtimes.update.retry")}</Text>
             </Button>
           ) : null}
         </View>
@@ -313,7 +313,7 @@ function Badge({
       className="px-1.5 py-px rounded-full bg-secondary flex-row items-center gap-1"
       accessibilityLabel={accessibilityLabel}
     >
-      <Text className={cn("text-[10px] font-medium", tone)}>{children}</Text>
+      <Text className={cn("text-micro font-medium", tone)}>{children}</Text>
     </View>
   );
 }

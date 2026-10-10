@@ -62,7 +62,7 @@ export function ChatTimeline({ items, isStreaming = false }: Props) {
             className="text-muted-foreground"
           />
           {isStreaming ? <StreamingDot /> : null}
-          <Text className="text-xs text-muted-foreground">
+          <Text className="text-caption text-muted-foreground">
             {stepLabel}
           </Text>
         </View>
@@ -115,7 +115,7 @@ function ThinkingRow({ item }: { item: TaskMessagePayload }) {
             style={{ marginTop: 2 }}
           />
           <Text
-            className="flex-1 text-xs italic text-muted-foreground"
+            className="flex-1 text-caption italic text-muted-foreground"
             numberOfLines={1}
           >
             {preview}
@@ -123,7 +123,7 @@ function ThinkingRow({ item }: { item: TaskMessagePayload }) {
         </View>
       </CollapsibleTrigger>
       <CollapsibleContent>
-        <Text className="ml-4 mt-0.5 text-xs italic text-muted-foreground">
+        <Text className="ml-4 mt-0.5 text-caption italic text-muted-foreground">
           {text}
         </Text>
       </CollapsibleContent>
@@ -140,12 +140,12 @@ function ToolCallRow({ item }: { item: TaskMessagePayload }) {
     return (
       <View className="py-0.5 flex-row items-center gap-1.5">
         <View style={{ width: 12 }} />
-        <Text className="text-xs font-medium text-foreground">
+        <Text className="text-caption font-medium text-foreground">
           {item.tool ?? "tool"}
         </Text>
         {summary ? (
           <Text
-            className="flex-1 text-xs text-muted-foreground"
+            className="flex-1 text-caption text-muted-foreground"
             numberOfLines={1}
           >
             {summary}
@@ -163,12 +163,12 @@ function ToolCallRow({ item }: { item: TaskMessagePayload }) {
             size={12}
             className="text-muted-foreground"
           />
-          <Text className="text-xs font-medium text-foreground">
+          <Text className="text-caption font-medium text-foreground">
             {item.tool ?? "tool"}
           </Text>
           {summary ? (
             <Text
-              className="flex-1 text-xs text-muted-foreground"
+              className="flex-1 text-caption text-muted-foreground"
               numberOfLines={1}
             >
               {summary}
@@ -178,7 +178,7 @@ function ToolCallRow({ item }: { item: TaskMessagePayload }) {
       </CollapsibleTrigger>
       <CollapsibleContent>
         <View className="ml-4 mt-1 rounded bg-muted/40 px-2 py-1.5">
-          <Text className="text-xs text-muted-foreground">
+          <Text className="text-caption text-muted-foreground">
             {JSON.stringify(item.input, null, 2)}
           </Text>
         </View>
@@ -206,17 +206,17 @@ function ToolResultRow({ item }: { item: TaskMessagePayload }) {
             style={{ marginTop: 2 }}
           />
           <Text
-            className="flex-1 text-xs text-muted-foreground/80"
+            className="flex-1 text-caption text-muted-foreground/80"
             numberOfLines={1}
           >
-            <Text className="text-xs text-muted-foreground">{prefix}</Text>
+            <Text className="text-caption text-muted-foreground">{prefix}</Text>
             {preview}
           </Text>
         </View>
       </CollapsibleTrigger>
       <CollapsibleContent>
         <View className="ml-4 mt-1 rounded bg-muted/40 px-2 py-1.5">
-          <Text className="text-xs text-muted-foreground">
+          <Text className="text-caption text-muted-foreground">
             {output.length > 4000
               ? `${output.slice(0, 4000)}\n${t("chat.truncated")}`
               : output}
@@ -236,7 +236,7 @@ function ErrorRow({ item }: { item: TaskMessagePayload }) {
         className="text-destructive"
         style={{ marginTop: 2 }}
       />
-      <Text className="flex-1 text-xs text-destructive" numberOfLines={3}>
+      <Text className="flex-1 text-caption text-destructive" numberOfLines={3}>
         {item.content}
       </Text>
     </View>

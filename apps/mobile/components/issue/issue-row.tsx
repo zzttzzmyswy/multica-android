@@ -150,13 +150,13 @@ export function IssueRow({
         ) : null}
         <PriorityIcon priority={issue.priority} size={14} />
         <Text
-          className="text-xs text-muted-foreground shrink-0 w-16"
+          className="text-caption text-muted-foreground shrink-0 w-16"
           numberOfLines={1}
         >
           {issue.identifier}
         </Text>
         <IssueAgentActivityIndicator issueId={issue.id} />
-        <Text className="flex-1 text-sm text-foreground" numberOfLines={1}>
+        <Text className="flex-1 text-body text-foreground" numberOfLines={1}>
           {issue.title}
         </Text>
         {showChildProgress ? (

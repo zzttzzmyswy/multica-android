@@ -60,7 +60,7 @@ export function RenameChatDialog({
         <View className="flex-1 items-center justify-center px-6">
           <Pressable onPress={() => {}} className="w-full max-w-sm">
             <View className="bg-popover rounded-2xl overflow-hidden p-4 gap-3">
-              <Text className="text-base font-semibold text-foreground">
+              <Text className="text-title-sm font-semibold text-foreground">
                 {t("chat.renameTitle")}
               </Text>
               <TextField

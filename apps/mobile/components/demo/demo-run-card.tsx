@@ -39,8 +39,8 @@ export function DemoRunCard({
       {/* Card header — same live-run chrome as the real issue Runs sheet. */}
       <View className="flex-row items-center gap-2 border-b border-border px-4 py-2.5">
         <PulseDot />
-        <Text className="text-xs font-medium text-foreground">{headerLabel}</Text>
-        <Text className="ml-auto text-xs tabular-nums text-muted-foreground/60">
+        <Text className="text-caption font-medium text-foreground">{headerLabel}</Text>
+        <Text className="ml-auto text-caption tabular-nums text-muted-foreground/60">
           {`${toolRows.length} ${toolCallsLabel}`}
         </Text>
       </View>
@@ -50,8 +50,8 @@ export function DemoRunCard({
         {toolRows.map((row, index) => (
           <View key={index} className="flex-row items-center gap-2 rounded px-2 py-1">
             <View className="size-1 rounded-full bg-brand/60" />
-            <Text className="shrink-0 text-xs font-semibold text-foreground">{row.tool}</Text>
-            <Text className="flex-1 text-xs text-muted-foreground" numberOfLines={1}>
+            <Text className="shrink-0 text-caption font-semibold text-foreground">{row.tool}</Text>
+            <Text className="flex-1 text-caption text-muted-foreground" numberOfLines={1}>
               {row.summary}
             </Text>
           </View>
@@ -60,7 +60,7 @@ export function DemoRunCard({
 
       {/* Task run history. */}
       <View className="border-t border-border px-4 py-3 gap-1.5">
-        <Text className="text-xs font-medium text-muted-foreground">{taskHeader}</Text>
+        <Text className="text-caption font-medium text-muted-foreground">{taskHeader}</Text>
         {tasks.map((task) => (
           <View key={task.id} className="flex-row items-center gap-2">
             <View
@@ -71,14 +71,14 @@ export function DemoRunCard({
             />
             <Text
               className={cn(
-                "flex-1 text-xs",
+                "flex-1 text-caption",
                 task.running ? "font-medium text-foreground" : "text-muted-foreground",
               )}
               numberOfLines={1}
             >
               {task.title}
             </Text>
-            <Text className="text-xs tabular-nums text-muted-foreground/60">
+            <Text className="text-caption tabular-nums text-muted-foreground/60">
               {task.duration}
             </Text>
           </View>

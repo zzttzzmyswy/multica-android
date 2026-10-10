@@ -86,22 +86,22 @@ export function OnboardingStarterCards({
         >
           <View className="flex-row items-center gap-2">
             <Ionicons name={CARD_ICONS[key]} size={16} color={accent} />
-            <Text className="flex-1 text-sm font-medium text-foreground">
+            <Text className="flex-1 text-body font-medium text-foreground">
               {t(`chat.onboardingCards.${key}.title`)}
             </Text>
           </View>
-          <Text className="mt-1 text-xs leading-4 text-muted-foreground">
+          <Text className="mt-1 text-caption leading-4 text-muted-foreground">
             {t(`chat.onboardingCards.${key}.desc`)}
           </Text>
           <View className="mt-2 flex-row items-center gap-1">
-            <Text className="text-xs font-medium" style={{ color: accent }}>
+            <Text className="text-caption font-medium" style={{ color: accent }}>
               {t("chat.onboardingCards.cta")}
             </Text>
             <Ionicons name="arrow-up-outline" size={12} color={accent} />
             {/* The digest card is the only one with a fixed schedule; web
                 shows it as a badge on that card's vignette. */}
             {key === "digest" ? (
-              <Text className="ml-auto text-[10px] text-muted-foreground">
+              <Text className="ml-auto text-micro text-muted-foreground">
                 {t("chat.onboardingCards.digestBadge")}
               </Text>
             ) : null}

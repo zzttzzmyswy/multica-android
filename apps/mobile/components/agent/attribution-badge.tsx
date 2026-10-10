@@ -103,7 +103,7 @@ export function AttributionBadge({
         hitSlop={6}
         className={cn("min-w-0 shrink active:opacity-70", className)}
       >
-        <Text numberOfLines={1} className="text-xs">
+        <Text numberOfLines={1} className="text-caption">
           <Text className={uncertain ? "text-warning" : "text-foreground"}>
             {name}
           </Text>

@@ -164,7 +164,7 @@ export function StatusPill({
       accessibilityLiveRegion="polite"
     >
       {stage.static ? null : <BreathingDots />}
-      <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+      <Text className="text-caption text-muted-foreground" numberOfLines={1}>
         {stage.label}
         <ElapsedCounter anchorMs={anchorMs} />
       </Text>
@@ -185,7 +185,7 @@ function ElapsedCounter({ anchorMs }: { anchorMs: number }) {
     Math.floor((Date.now() - anchorMs) / 1000),
   );
   return (
-    <Text className="text-xs text-muted-foreground/70" style={TABULAR_NUMS}>
+    <Text className="text-caption text-muted-foreground/70" style={TABULAR_NUMS}>
       {" · "}
       {formatElapsedSecs(elapsedSec)}
     </Text>

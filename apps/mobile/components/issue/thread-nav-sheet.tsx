@@ -219,7 +219,7 @@ function GroupHeader({ group }: { group: ThreadDayGroup }) {
   }[group];
   return (
     <View className="px-4 pt-4 pb-1">
-      <Text className="text-xs font-medium text-muted-foreground">
+      <Text className="text-caption font-medium text-muted-foreground">
         {label}
       </Text>
     </View>
@@ -254,7 +254,7 @@ function ThreadRow({
         <View className="flex-row items-baseline gap-2">
           <Text
             className={cn(
-              "flex-1 text-sm",
+              "flex-1 text-body",
               thread.resolved
                 ? "text-muted-foreground"
                 : "font-medium text-foreground",
@@ -263,18 +263,18 @@ function ThreadRow({
           >
             {title}
           </Text>
-          <Text className="text-xs text-muted-foreground">
+          <Text className="text-caption text-muted-foreground">
             {formatStamp(thread.entry.created_at, group)}
           </Text>
         </View>
         <View className="mt-0.5 flex-row items-center gap-2">
-          <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+          <Text className="text-caption text-muted-foreground" numberOfLines={1}>
             {authorName}
           </Text>
           {thread.replyCount > 0 ? (
             <View className="flex-row items-center gap-0.5">
               <Ionicons name="chatbubble-outline" size={11} color={muted} />
-              <Text className="text-xs text-muted-foreground">
+              <Text className="text-caption text-muted-foreground">
                 {thread.replyCount}
               </Text>
             </View>
@@ -282,7 +282,7 @@ function ThreadRow({
           {thread.resolved ? (
             <View className="flex-row items-center gap-0.5">
               <Ionicons name="checkmark-circle" size={11} color={muted} />
-              <Text className="text-xs text-muted-foreground">
+              <Text className="text-caption text-muted-foreground">
                 {t("threadNav.resolvedBadge")}
               </Text>
             </View>
@@ -290,7 +290,7 @@ function ThreadRow({
         </View>
         {excerpt ? (
           <Text
-            className="mt-0.5 text-xs text-muted-foreground"
+            className="mt-0.5 text-caption text-muted-foreground"
             numberOfLines={1}
           >
             {excerpt}
@@ -331,7 +331,7 @@ function FilterChips({
           >
             <Text
               className={cn(
-                "text-xs",
+                "text-caption",
                 selected ? "text-foreground" : "text-muted-foreground",
               )}
             >
@@ -370,7 +370,7 @@ function SearchField({
           autoCorrect={false}
           returnKeyType="search"
           accessibilityLabel={placeholder}
-          className="flex-1 py-0 text-sm text-foreground"
+          className="flex-1 py-0 text-body text-foreground"
         />
         {value ? (
           <Pressable

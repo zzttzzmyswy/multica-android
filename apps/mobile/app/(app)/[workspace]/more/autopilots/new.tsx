@@ -262,7 +262,7 @@ export default function NewAutopilotPage() {
               >
                 <Text
                   className={cn(
-                    "text-sm",
+                    "text-body",
                     triggerKind === value
                       ? "text-foreground font-medium"
                       : "text-muted-foreground",
@@ -316,7 +316,7 @@ function FieldLabel({
         size={13}
         color={THEME[colorScheme].mutedForeground}
       />
-      <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+      <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
         {text}
       </Text>
     </View>

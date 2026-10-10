@@ -125,8 +125,8 @@ function MetaRow({
   return (
     <View className="flex-row items-start gap-2 py-1.5">
       <Ionicons name={icon} size={14} color={muted} style={{ marginTop: 1 }} />
-      <Text className="text-xs text-muted-foreground w-16">{label}</Text>
-      <Text className="text-xs text-foreground flex-1" numberOfLines={2}>
+      <Text className="text-caption text-muted-foreground w-16">{label}</Text>
+      <Text className="text-caption text-foreground flex-1" numberOfLines={2}>
         {value}
       </Text>
     </View>
@@ -167,10 +167,10 @@ function ServingAgentsCard({
   return (
     <View className="mt-4 rounded-lg border border-border">
       <View className="flex-row items-center justify-between border-b border-border px-3 py-2">
-        <Text className="text-xs font-semibold text-foreground">
+        <Text className="text-caption font-semibold text-foreground">
           {t("runtimes.detail.servingTitle")}
         </Text>
-        <Text className="text-xs text-muted-foreground">
+        <Text className="text-caption text-muted-foreground">
           {t("runtimes.detail.servingCount", { count: agents.length })}
         </Text>
       </View>
@@ -184,7 +184,7 @@ function ServingAgentsCard({
       ) : agents.length === 0 ? (
         <View className="items-center px-4 py-6 gap-2">
           <Ionicons name="hardware-chip-outline" size={20} color={muted} />
-          <Text className="text-xs text-muted-foreground text-center">
+          <Text className="text-caption text-muted-foreground text-center">
             {t("runtimes.detail.noAgents")}
           </Text>
         </View>
@@ -203,21 +203,21 @@ function ServingAgentsCard({
               <ActorAvatar type="agent" id={agent.id} size={28} />
               <View className="flex-1 min-w-0 gap-0.5">
                 <Text
-                  className="text-xs font-medium text-foreground"
+                  className="text-caption font-medium text-foreground"
                   numberOfLines={1}
                 >
                   {agent.name}
                 </Text>
                 <View className="flex-row items-center gap-1.5 flex-wrap">
                   <PresenceDot availability={agent.availability} size={7} />
-                  <Text className="text-xs text-muted-foreground">
+                  <Text className="text-caption text-muted-foreground">
                     {AVAILABILITY_KEY[agent.availability]
                       ? t(AVAILABILITY_KEY[agent.availability])
                       : agent.availability}
                   </Text>
                   {agent.showWorkload ? (
                     <View className="flex-row items-center gap-1">
-                      <Text className="text-xs text-muted-foreground">·</Text>
+                      <Text className="text-caption text-muted-foreground">·</Text>
                       <Ionicons
                         name={WORKLOAD_ICON[agent.workload] ?? "ellipse-outline"}
                         size={11}
@@ -225,7 +225,7 @@ function ServingAgentsCard({
                       />
                       <Text
                         className={cn(
-                          "text-xs",
+                          "text-caption",
                           WORKLOAD_TONE[agent.workload] ??
                             "text-muted-foreground",
                         )}
@@ -235,14 +235,14 @@ function ServingAgentsCard({
                           : agent.workload}
                       </Text>
                       {agent.runningCount > 0 ? (
-                        <Text className="text-xs text-muted-foreground">
+                        <Text className="text-caption text-muted-foreground">
                           {t("runtimes.detail.runningChip", {
                             count: agent.runningCount,
                           })}
                         </Text>
                       ) : null}
                       {agent.queuedCount > 0 ? (
-                        <Text className="text-xs text-muted-foreground">
+                        <Text className="text-caption text-muted-foreground">
                           {t("runtimes.detail.queuedChip", {
                             count: agent.queuedCount,
                           })}
@@ -387,7 +387,7 @@ export default function RuntimeDetailPage() {
     return (
       <View className="flex-1 items-center justify-center bg-background px-6 gap-3">
         <Ionicons name="cloud-offline-outline" size={32} color={theme.mutedForeground} />
-        <Text className="text-sm text-destructive text-center mt-2">
+        <Text className="text-body text-destructive text-center mt-2">
           {t("catalog.loadError")}
         </Text>
         <Button variant="outline" onPress={() => refetch()}>
@@ -401,7 +401,7 @@ export default function RuntimeDetailPage() {
     return (
       <View className="flex-1 items-center justify-center bg-background px-6 gap-3">
         <Ionicons name="server-outline" size={32} color={theme.mutedForeground} />
-        <Text className="text-sm text-muted-foreground text-center mt-2">
+        <Text className="text-body text-muted-foreground text-center mt-2">
           {t("runtimes.notFound")}
         </Text>
         <Button variant="outline" onPress={() => refetch()}>
@@ -486,17 +486,17 @@ export default function RuntimeDetailPage() {
           </View>
           <View className="flex-1 min-w-0 gap-1">
             <View className="flex-row items-center gap-1.5 flex-wrap">
-              <Text className="text-base font-semibold text-foreground">
+              <Text className="text-title-sm font-semibold text-foreground">
                 {displayName}
               </Text>
               <View className="px-1.5 py-px rounded-full bg-secondary">
-                <Text className="text-[10px] text-muted-foreground font-medium">
+                <Text className="text-micro text-muted-foreground font-medium">
                   {isCustom ? t("runtimes.kind.custom") : t("runtimes.kind.builtin")}
                 </Text>
               </View>
               {!access.canEditRuntime ? (
                 <View className="px-1.5 py-px rounded-full bg-secondary">
-                  <Text className="text-[10px] text-muted-foreground font-medium">
+                  <Text className="text-micro text-muted-foreground font-medium">
                     {t("runtimes.detail.readOnly")}
                   </Text>
                 </View>
@@ -504,7 +504,7 @@ export default function RuntimeDetailPage() {
             </View>
             <View className="flex-row items-center gap-1.5">
               <View className={cn("size-2 rounded-full", HEALTH_DOT[health])} />
-              <Text className={cn("text-xs font-medium", HEALTH_TONE[health])}>
+              <Text className={cn("text-caption font-medium", HEALTH_TONE[health])}>
                 {t(`runtimes.health.${health}`)}
               </Text>
             </View>
@@ -632,7 +632,7 @@ export default function RuntimeDetailPage() {
         {showVersionSection && machine ? (
           <View className="mt-4 rounded-lg border border-border">
             <View className="border-b border-border px-3 py-2">
-              <Text className="text-xs font-semibold text-foreground">
+              <Text className="text-caption font-semibold text-foreground">
                 {t("runtimes.update.section_title")}
               </Text>
             </View>
@@ -644,10 +644,10 @@ export default function RuntimeDetailPage() {
                     size={14}
                     color={theme.mutedForeground}
                   />
-                  <Text className="text-xs text-muted-foreground">
+                  <Text className="text-caption text-muted-foreground">
                     {t("runtimes.update.cli_version_label")}
                   </Text>
-                  <Text className="text-xs font-mono text-foreground">
+                  <Text className="text-caption font-mono text-foreground">
                     {cliVersion ?? t("runtimes.update.version_unknown")}
                   </Text>
                 </View>
@@ -666,7 +666,7 @@ export default function RuntimeDetailPage() {
         {/* Diagnostics card — visibility / rename / delete */}
         <View className="mt-4 rounded-lg border border-border">
           <View className="border-b border-border px-3 py-2">
-            <Text className="text-xs font-semibold text-foreground">
+            <Text className="text-caption font-semibold text-foreground">
               {t("runtimes.detail.diagnostics")}
             </Text>
           </View>
@@ -686,7 +686,7 @@ export default function RuntimeDetailPage() {
                     size={14}
                     color={theme.mutedForeground}
                   />
-                  <Text className="text-xs text-foreground">
+                  <Text className="text-caption text-foreground">
                     {t("runtimes.profiles.addCustom")}
                   </Text>
                 </Button>
@@ -695,7 +695,7 @@ export default function RuntimeDetailPage() {
 
             {/* Visibility */}
             <View className="gap-1.5">
-              <Text className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              <Text className="text-micro uppercase tracking-wide text-muted-foreground">
                 {t("runtimes.detail.visibility")}
               </Text>
               {access.canEditVisibility ? (
@@ -728,7 +728,7 @@ export default function RuntimeDetailPage() {
                       <Text>{t("runtimes.visibility.public")}</Text>
                     </Button>
                   </View>
-                  <Text className="text-xs text-muted-foreground">
+                  <Text className="text-caption text-muted-foreground">
                     {t(
                       isPublic
                         ? "runtimes.detail.visibilityHint.public"
@@ -744,13 +744,13 @@ export default function RuntimeDetailPage() {
                       size={14}
                       color={theme.mutedForeground}
                     />
-                    <Text className="text-xs font-medium text-foreground">
+                    <Text className="text-caption font-medium text-foreground">
                       {isPublic
                         ? t("runtimes.visibility.public")
                         : t("runtimes.visibility.private")}
                     </Text>
                   </View>
-                  <Text className="text-xs text-muted-foreground">
+                  <Text className="text-caption text-muted-foreground">
                     {t(
                       isPublic
                         ? "runtimes.detail.visibilityReadonly.public"
@@ -774,7 +774,7 @@ export default function RuntimeDetailPage() {
                       maxLength={80}
                     />
                     <View className="flex-row items-center justify-between gap-3">
-                      <Text className="text-xs text-muted-foreground flex-1">
+                      <Text className="text-caption text-muted-foreground flex-1">
                         {t("runtimes.detail.renameApplyMachine")}
                       </Text>
                       <Switch
@@ -813,7 +813,7 @@ export default function RuntimeDetailPage() {
                       size={14}
                       color={theme.mutedForeground}
                     />
-                    <Text className="text-xs text-foreground">
+                    <Text className="text-caption text-foreground">
                       {t("runtimes.detail.renameButton")}
                     </Text>
                   </Button>
@@ -832,7 +832,7 @@ export default function RuntimeDetailPage() {
                   disabled={deletePending}
                 >
                   <Ionicons name="trash-outline" size={14} color={theme.destructive} />
-                  <Text className="text-xs text-destructive">
+                  <Text className="text-caption text-destructive">
                     {t("runtimes.detail.deleteButton")}
                   </Text>
                 </Button>

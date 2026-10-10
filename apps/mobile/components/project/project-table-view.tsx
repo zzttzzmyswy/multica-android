@@ -283,11 +283,11 @@ export function ProjectTableView({
         // em dash so the column does not appear broken on projects that
         // legitimately have no priority.
         return project.priority === "none" ? (
-          <Text className="text-xs text-muted-foreground/60">—</Text>
+          <Text className="text-caption text-muted-foreground/60">—</Text>
         ) : (
           <View className="flex-row items-center gap-1.5">
             <ProjectPriorityIcon priority={project.priority} size={12} />
-            <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+            <Text className="text-caption text-muted-foreground" numberOfLines={1}>
               {projectPriorityLabel(project.priority)}
             </Text>
           </View>
@@ -296,7 +296,7 @@ export function ProjectTableView({
         // Web's ProgressRing rule: a project with no tasks has no progress to
         // report, so it renders the em dash rather than "0/0".
         return project.issue_count === 0 ? (
-          <Text className="text-xs text-muted-foreground/60">—</Text>
+          <Text className="text-caption text-muted-foreground/60">—</Text>
         ) : (
           <View className="flex-row items-center gap-1.5">
             <ProgressRing
@@ -304,7 +304,7 @@ export function ProjectTableView({
               total={project.issue_count}
               size={12}
             />
-            <Text className="text-xs text-muted-foreground tabular-nums">
+            <Text className="text-caption text-muted-foreground tabular-nums">
               {project.done_count}/{project.issue_count}
             </Text>
           </View>
@@ -315,22 +315,22 @@ export function ProjectTableView({
             ? getName(project.lead_type, project.lead_id)
             : null;
         return name ? (
-          <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+          <Text className="text-caption text-muted-foreground" numberOfLines={1}>
             {name}
           </Text>
         ) : (
-          <Text className="text-xs text-muted-foreground/60">—</Text>
+          <Text className="text-caption text-muted-foreground/60">—</Text>
         );
       }
       case "issues":
         return (
-          <Text className="text-xs text-muted-foreground tabular-nums">
+          <Text className="text-caption text-muted-foreground tabular-nums">
             {project.issue_count}
           </Text>
         );
       case "created":
         return (
-          <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+          <Text className="text-caption text-muted-foreground" numberOfLines={1}>
             {timeAgo(project.created_at)}
           </Text>
         );
@@ -426,7 +426,7 @@ export function ProjectTableView({
             accessibilityLabel={t("a11y.projectsSortByName")}
           >
             <Text
-              className="text-xs font-semibold text-foreground"
+              className="text-caption font-semibold text-foreground"
               numberOfLines={1}
             >
               {t("projects.sortName")}
@@ -464,7 +464,7 @@ export function ProjectTableView({
                     }
                   >
                     <Text
-                      className="text-xs font-semibold text-foreground"
+                      className="text-caption font-semibold text-foreground"
                       numberOfLines={1}
                     >
                       {label}
@@ -494,7 +494,7 @@ export function ProjectTableView({
 
       {projects.length === 0 ? (
         <View className="flex-1 items-center justify-center px-6 py-10">
-          <Text className="text-sm text-muted-foreground text-center">
+          <Text className="text-body text-muted-foreground text-center">
             {t("projects.noMatches")}
           </Text>
         </View>
@@ -614,7 +614,7 @@ function ProjectColumnMenu({
             className="bg-popover rounded-t-2xl max-h-[75%]"
           >
             <View className="px-4 py-3 border-b border-border flex-row items-center justify-between">
-              <Text className="text-base font-semibold text-foreground">
+              <Text className="text-title-sm font-semibold text-foreground">
                 {t("table.columnsTitle")}
               </Text>
               <View className="flex-row items-center gap-3">
@@ -623,7 +623,7 @@ function ProjectColumnMenu({
                   hitSlop={8}
                   accessibilityRole="button"
                 >
-                  <Text className="text-xs text-muted-foreground">
+                  <Text className="text-caption text-muted-foreground">
                     {t("table.resetColumns")}
                   </Text>
                 </Pressable>
@@ -641,7 +641,7 @@ function ProjectColumnMenu({
                   {columns.map((c) => columnLabel(c)).join(" › ")}
                 </Text>
               ) : null}
-              <Text className="px-4 pt-3 pb-1 text-xs uppercase tracking-wider text-muted-foreground font-medium">
+              <Text className="px-4 pt-3 pb-1 text-caption uppercase tracking-wider text-muted-foreground font-medium">
                 {t("table.columnsSystem")}
               </Text>
               {PROJECT_TABLE_COLUMNS.map((def) => {
@@ -664,7 +664,7 @@ function ProjectColumnMenu({
                         size={17}
                         color={position >= 0 ? THEME[colorScheme].primary : muted}
                       />
-                      <Text className="flex-1 text-sm text-foreground">
+                      <Text className="flex-1 text-body text-foreground">
                         {t(def.labelKey)}
                       </Text>
                     </Pressable>

@@ -142,7 +142,7 @@ function RowAction({
             size={20}
             color="white"
           />
-          <Text className="text-xs text-white">
+          <Text className="text-caption text-white">
             {isRestore ? t("inbox.menu.unarchive") : t("common.archive")}
           </Text>
         </View>

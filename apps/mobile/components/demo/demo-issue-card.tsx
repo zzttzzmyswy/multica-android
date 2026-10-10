@@ -60,7 +60,7 @@ export function DemoIssueCard({
   return (
     <Card className="gap-0 p-0 overflow-hidden">
       <View className="p-4 gap-1.5">
-        <Text className="text-base font-semibold text-foreground leading-snug">
+        <Text className="text-title-sm font-semibold text-foreground leading-snug">
           {issueTitle}
         </Text>
         <Text className="text-label leading-relaxed text-muted-foreground">
@@ -99,25 +99,25 @@ export function DemoIssueCard({
             label={assignee.kind === "unassigned" ? unassignedLabel : assignee.name}
             onPress={() => setAssignee(nextAssignee(assignee))}
           />
-          <Text className="ml-auto text-xs text-muted-foreground/60">{tapHint}</Text>
+          <Text className="ml-auto text-caption text-muted-foreground/60">{tapHint}</Text>
         </View>
 
         {/* Mini activity feed — same shape as the real issue timeline. */}
         <View className="gap-2">
           <View className="flex-row items-center gap-2">
             <MockAvatar kind={activityActorKind} initials={activityActorInitials} size={20} />
-            <Text className="flex-1 text-xs text-muted-foreground" numberOfLines={1}>
+            <Text className="flex-1 text-caption text-muted-foreground" numberOfLines={1}>
               {activityText}
             </Text>
-            <Text className="text-xs text-muted-foreground/60">{activityTime}</Text>
+            <Text className="text-caption text-muted-foreground/60">{activityTime}</Text>
           </View>
           <View className="ml-8 rounded-lg border border-border bg-muted/40 px-3 py-2 gap-0.5">
             <View className="flex-row items-center gap-2">
               <MockAvatar kind="agent" initials="C" size={18} />
-              <Text className="text-xs font-medium text-foreground">{commentActor}</Text>
-              <Text className="ml-auto text-xs text-muted-foreground/60">{commentTime}</Text>
+              <Text className="text-caption font-medium text-foreground">{commentActor}</Text>
+              <Text className="ml-auto text-caption text-muted-foreground/60">{commentTime}</Text>
             </View>
-            <Text className="text-xs leading-relaxed text-muted-foreground" numberOfLines={2}>
+            <Text className="text-caption leading-relaxed text-muted-foreground" numberOfLines={2}>
               {commentText}
             </Text>
           </View>

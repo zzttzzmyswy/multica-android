@@ -245,7 +245,7 @@ export default function RuntimesPage() {
           </View>
         ) : error ? (
           <View className="px-4 gap-3 pt-4">
-            <Text className="text-sm text-destructive">
+            <Text className="text-body text-destructive">
               {t("runtimes.loadError")}
               {error instanceof Error ? error.message : t("common.unknownError")}
             </Text>
@@ -258,10 +258,10 @@ export default function RuntimesPage() {
             <CollectionHeader count={machineCount} />
             <View className="flex-1 items-center justify-center px-6 gap-1">
               <Ionicons name="server-outline" size={32} color={muted} />
-              <Text className="text-sm text-muted-foreground text-center mt-2">
+              <Text className="text-body text-muted-foreground text-center mt-2">
                 {t("runtimes.emptyTitle")}
               </Text>
-              <Text className="text-xs text-muted-foreground/70 text-center">
+              <Text className="text-caption text-muted-foreground/70 text-center">
                 {t("runtimes.emptyDescription")}
               </Text>
               <Button
@@ -360,14 +360,14 @@ function CollectionHeader({ count }: { count: number }) {
   return (
     <View className="px-4 pt-3 pb-1 gap-1">
       <View className="flex-row items-baseline gap-1.5">
-        <Text className="text-sm font-semibold text-foreground">
+        <Text className="text-body font-semibold text-foreground">
           {t("runtimes.page.title")}
         </Text>
-        <Text className="text-xs tabular-nums text-muted-foreground">
+        <Text className="text-caption tabular-nums text-muted-foreground">
           {count}
         </Text>
       </View>
-      <Text className="text-xs text-muted-foreground/80">
+      <Text className="text-caption text-muted-foreground/80">
         {t("runtimes.page.tagline")}
       </Text>
       <Pressable
@@ -377,7 +377,7 @@ function CollectionHeader({ count }: { count: number }) {
         accessibilityLabel={t("runtimes.page.learn_more")}
         className="self-start active:opacity-70"
       >
-        <Text className="text-xs font-medium text-info">
+        <Text className="text-caption font-medium text-info">
           {t("runtimes.page.learn_more")}
         </Text>
       </Pressable>
@@ -395,10 +395,10 @@ function UnassignedHeader() {
   const { t } = useTranslation();
   return (
     <View className="px-4 pt-6 pb-1.5 gap-1">
-      <Text className="text-sm font-semibold text-foreground">
+      <Text className="text-body font-semibold text-foreground">
         {t("runtimes.profiles.unassigned_title")}
       </Text>
-      <Text className="text-xs text-muted-foreground/80">
+      <Text className="text-caption text-muted-foreground/80">
         {t("runtimes.profiles.unassigned_description")}
       </Text>
     </View>
@@ -464,18 +464,18 @@ function MachineHeader({
           </View>
           <View className="flex-1 min-w-0 gap-1">
             <View className="flex-row items-center gap-1.5 flex-wrap">
-              <Text className="text-sm font-semibold text-foreground" numberOfLines={1}>
+              <Text className="text-body font-semibold text-foreground" numberOfLines={1}>
                 {machine.title}
               </Text>
               <View className="px-1.5 py-px rounded-full bg-secondary">
-                <Text className="text-[10px] text-muted-foreground font-medium">
+                <Text className="text-micro text-muted-foreground font-medium">
                   {t(`runtimes.machine.section_${machine.section}`)}
                 </Text>
               </View>
               {machine.runtimes.length === 1 &&
               machine.runtimes[0]!.visibility === "public" ? (
                 <View className="px-1.5 py-px rounded-full bg-info/10">
-                  <Text className="text-[10px] text-info font-medium">
+                  <Text className="text-micro text-info font-medium">
                     {t("runtimes.visibility.public")}
                   </Text>
                 </View>
@@ -483,7 +483,7 @@ function MachineHeader({
             </View>
             <View className="flex-row items-center gap-1.5">
               <View className={cn("size-1.5 rounded-full", HEALTH_DOT[machine.health])} />
-              <Text className={cn("text-xs", HEALTH_TONE[machine.health])} numberOfLines={1}>
+              <Text className={cn("text-caption", HEALTH_TONE[machine.health])} numberOfLines={1}>
                 {t(`runtimes.health.${machine.health}`)}
                 {stats ? ` · ${stats}` : ""}
               </Text>
@@ -491,7 +491,7 @@ function MachineHeader({
           </View>
           {machine.cliVersion ? (
             <View className="px-1.5 py-px rounded bg-secondary shrink-0">
-              <Text className="text-[10px] text-muted-foreground font-mono">
+              <Text className="text-micro text-muted-foreground font-mono">
                 CLI {machine.cliVersion}
               </Text>
             </View>
@@ -537,7 +537,7 @@ function RuntimeRow({
         </View>
         <View className="flex-1 min-w-0 gap-0.5">
           <View className="flex-row items-center gap-1.5 flex-wrap">
-            <Text className="text-sm font-medium text-foreground" numberOfLines={1}>
+            <Text className="text-body font-medium text-foreground" numberOfLines={1}>
               {displayName}
             </Text>
             {pending ? (
@@ -551,7 +551,7 @@ function RuntimeRow({
               >
                 <Text
                   className={cn(
-                    "text-[10px] font-medium",
+                    "text-micro font-medium",
                     disabled ? "text-muted-foreground" : "text-warning",
                   )}
                 >
@@ -563,7 +563,7 @@ function RuntimeRow({
             ) : (
               /* Built-in vs Custom profile — profile_id is the discriminator. */
               <View className="px-1.5 py-px rounded-full bg-secondary">
-                <Text className="text-[10px] text-muted-foreground font-medium">
+                <Text className="text-micro text-muted-foreground font-medium">
                   {isCustom ? t("runtimes.kind.custom") : t("runtimes.kind.builtin")}
                 </Text>
               </View>
@@ -571,7 +571,7 @@ function RuntimeRow({
             {/* Only public earns a badge — private is the default. */}
             {runtime.visibility === "public" ? (
               <View className="px-1.5 py-px rounded-full bg-info/10">
-                <Text className="text-[10px] text-info font-medium">
+                <Text className="text-micro text-info font-medium">
                   {t("runtimes.visibility.public")}
                 </Text>
               </View>
@@ -586,7 +586,7 @@ function RuntimeRow({
             )}
             <Text
               className={cn(
-                "text-xs",
+                "text-caption",
                 pending && !disabled ? "text-warning" : "text-muted-foreground",
               )}
               numberOfLines={1}

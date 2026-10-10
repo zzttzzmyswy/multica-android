@@ -57,7 +57,7 @@ function VisibilityBadge({ action }: { action: QuickAction }) {
     return (
       <View className="flex-row items-center gap-1 rounded-full bg-secondary px-2 py-0.5">
         <Ionicons name="globe-outline" size={10} color={theme.mutedForeground} />
-        <Text className="text-[10px] font-medium text-muted-foreground">
+        <Text className="text-micro font-medium text-muted-foreground">
           {t("quickActions.visibilityPublic")}
         </Text>
       </View>
@@ -67,7 +67,7 @@ function VisibilityBadge({ action }: { action: QuickAction }) {
     return (
       <View className="flex-row items-center gap-1 rounded-full border border-border px-2 py-0.5">
         <Ionicons name="lock-closed-outline" size={10} color={theme.mutedForeground} />
-        <Text className="text-[10px] font-medium text-muted-foreground">
+        <Text className="text-micro font-medium text-muted-foreground">
           {t("quickActions.visibilityPrivate")}
         </Text>
       </View>
@@ -75,7 +75,7 @@ function VisibilityBadge({ action }: { action: QuickAction }) {
   }
   return (
     <View className="rounded-full border border-border px-2 py-0.5">
-      <Text className="text-[10px] text-muted-foreground">{action.visibility}</Text>
+      <Text className="text-micro text-muted-foreground">{action.visibility}</Text>
     </View>
   );
 }
@@ -87,7 +87,7 @@ function TargetLine({ action }: { action: QuickAction }) {
 
   if (action.target_missing === true) {
     return (
-      <Text className="text-xs text-destructive">
+      <Text className="text-caption text-destructive">
         {t("quickActions.targetMissing")}
       </Text>
     );
@@ -96,7 +96,7 @@ function TargetLine({ action }: { action: QuickAction }) {
   return (
     <Text
       className={cn(
-        "text-xs",
+        "text-caption",
         mismatched ? "text-warning" : "text-muted-foreground/80",
       )}
       numberOfLines={1}
@@ -201,7 +201,7 @@ export default function QuickActionsPage() {
               trackColor={{ false: theme.border, true: theme.primary }}
               thumbColor={theme.background}
             />
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-caption text-muted-foreground">
               {t("quickActions.archived")}
             </Text>
           </View>
@@ -246,7 +246,7 @@ export default function QuickActionsPage() {
 
         {!canManage ? (
           <View className="border-b border-border px-4 py-2">
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-caption text-muted-foreground">
               {t("quickActions.manageHint")}
             </Text>
           </View>
@@ -258,7 +258,7 @@ export default function QuickActionsPage() {
           </View>
         ) : error ? (
           <View className="px-4 gap-3 pt-4">
-            <Text className="text-sm text-destructive">
+            <Text className="text-body text-destructive">
               {t("quickActions.loading")}
               {error instanceof Error ? error.message : t("common.unknownError")}
             </Text>
@@ -269,13 +269,13 @@ export default function QuickActionsPage() {
         ) : showEmpty ? (
           <View className="flex-1 items-center justify-center px-6 gap-1">
             <Ionicons name="flash-outline" size={32} color={theme.mutedForeground} />
-            <Text className="text-sm text-muted-foreground text-center mt-2">
+            <Text className="text-body text-muted-foreground text-center mt-2">
               {showArchived
                 ? t("quickActions.noResults")
                 : t("quickActions.emptyTitle")}
             </Text>
             {!showArchived ? (
-              <Text className="text-xs text-muted-foreground/70 text-center">
+              <Text className="text-caption text-muted-foreground/70 text-center">
                 {t("quickActions.emptyHint")}
               </Text>
             ) : null}
@@ -294,7 +294,7 @@ export default function QuickActionsPage() {
           </View>
         ) : showSearchEmpty ? (
           <View className="flex-1 items-center justify-center px-6">
-            <Text className="text-sm text-muted-foreground text-center">
+            <Text className="text-body text-muted-foreground text-center">
               {t("quickActions.noResults")}
             </Text>
           </View>
@@ -355,7 +355,7 @@ function QuickActionRow({
           <View className="flex-row items-center gap-2">
             <Text
               className={cn(
-                "text-sm font-medium text-foreground",
+                "text-body font-medium text-foreground",
                 archived && "text-muted-foreground",
               )}
               numberOfLines={1}
@@ -364,7 +364,7 @@ function QuickActionRow({
             </Text>
             {archived ? (
               <View className="rounded-full bg-secondary px-1.5 py-0.5">
-                <Text className="text-[10px] text-muted-foreground font-medium">
+                <Text className="text-micro text-muted-foreground font-medium">
                   {t("quickActions.archived")}
                 </Text>
               </View>
@@ -376,7 +376,7 @@ function QuickActionRow({
           <VisibilityBadge action={action} />
           <Text
             className={cn(
-              "text-[10px] tabular-nums",
+              "text-micro tabular-nums",
               stale ? "text-warning" : "text-muted-foreground/70",
             )}
           >
@@ -384,7 +384,7 @@ function QuickActionRow({
               ? t("quickActions.neverUsed")
               : t("quickActions.usedCount", { count: action.use_count })}
           </Text>
-          <Text className="text-[10px] text-muted-foreground/50">
+          <Text className="text-micro text-muted-foreground/50">
             {formatDateTime(action.updated_at)}
           </Text>
         </View>

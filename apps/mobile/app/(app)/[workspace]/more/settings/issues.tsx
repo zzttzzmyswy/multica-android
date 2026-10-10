@@ -63,7 +63,7 @@ export default function IssueSettingsScreen() {
     >
       <Stack.Screen options={{ title: t("settings.issueTitle") }} />
 
-      <Text className="text-sm text-muted-foreground px-1">
+      <Text className="text-body text-muted-foreground px-1">
         {t("settings.issue.description")}
       </Text>
 
@@ -124,11 +124,11 @@ function Section({
   return (
     <View className="gap-2">
       <View className="px-1">
-        <Text className="text-xs uppercase tracking-wider text-muted-foreground">
+        <Text className="text-caption uppercase tracking-wider text-muted-foreground">
           {title}
         </Text>
         {description ? (
-          <Text className="text-xs text-muted-foreground mt-1">
+          <Text className="text-caption text-muted-foreground mt-1">
             {description}
           </Text>
         ) : null}
@@ -151,7 +151,7 @@ function Row({
 }) {
   return (
     <View className="flex-row items-center px-4 py-3 gap-3">
-      <Text className="flex-1 text-base font-medium text-foreground">
+      <Text className="flex-1 text-title-sm font-medium text-foreground">
         {label}
       </Text>
       <Switch checked={checked} onCheckedChange={onToggle} />

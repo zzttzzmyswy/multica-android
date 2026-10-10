@@ -137,7 +137,7 @@ function CommandBlock({
 
   return (
     <View className="gap-1.5">
-      <Text className="text-xs font-medium text-foreground">
+      <Text className="text-caption font-medium text-foreground">
         {n ? `${n}. ` : ""}
         {label}
       </Text>
@@ -150,7 +150,7 @@ function CommandBlock({
         />
         <Text
           selectable
-          className="flex-1 font-mono text-xs text-foreground"
+          className="flex-1 font-mono text-caption text-foreground"
           style={{ lineHeight: 18 }}
         >
           {cmd}
@@ -235,7 +235,7 @@ export function ConnectRemoteDialog({ onClose }: { onClose: () => void }) {
               color={theme.mutedForeground}
             />
           </View>
-          <Text className="flex-1 text-base font-semibold text-foreground">
+          <Text className="flex-1 text-title-sm font-semibold text-foreground">
             {step === "instructions"
               ? t("runtimes.connect.title")
               : t("runtimes.connect.successTitle")}
@@ -251,7 +251,7 @@ export function ConnectRemoteDialog({ onClose }: { onClose: () => void }) {
               className="flex-1"
               contentContainerClassName="px-4 py-4 gap-4"
             >
-              <Text className="text-xs text-muted-foreground leading-5">
+              <Text className="text-caption text-muted-foreground leading-5">
                 {t("runtimes.connect.description")}
               </Text>
 
@@ -277,7 +277,7 @@ export function ConnectRemoteDialog({ onClose }: { onClose: () => void }) {
               {/* Live-listening indicator */}
               <View className="flex-row items-center gap-2 rounded-lg border border-border bg-secondary/40 px-3 py-2.5">
                 <View className="size-2 rounded-full bg-success" />
-                <Text className="text-xs font-medium text-foreground">
+                <Text className="text-caption font-medium text-foreground">
                   {t("runtimes.connect.liveListening")}
                 </Text>
                 <Text className="flex-1 text-micro text-muted-foreground">
@@ -323,7 +323,7 @@ function Troubleshooting({ tokenCmd }: { tokenCmd: string }) {
           size={14}
           color={theme.mutedForeground}
         />
-        <Text className="text-xs font-medium text-muted-foreground">
+        <Text className="text-caption font-medium text-muted-foreground">
           {t("runtimes.connect.troubleshooting")}
         </Text>
       </Pressable>
@@ -385,10 +385,10 @@ function SuccessStep({
         <View className="size-14 rounded-full bg-success/10 items-center justify-center">
           <Ionicons name="checkmark" size={28} color={theme.success} />
         </View>
-        <Text className="text-base font-semibold text-foreground">
+        <Text className="text-title-sm font-semibold text-foreground">
           {t("runtimes.connect.successTitle")}
         </Text>
-        <Text className="text-xs text-muted-foreground text-center leading-5">
+        <Text className="text-caption text-muted-foreground text-center leading-5">
           {t("runtimes.connect.successDescription")}
         </Text>
       </ScrollView>

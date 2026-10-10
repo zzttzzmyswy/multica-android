@@ -145,20 +145,20 @@ export default function ChatSessionsRoute() {
       preview = (
         <View className="flex-row items-center gap-1.5">
           <Ionicons name="time-outline" size={12} color={muted} />
-          <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+          <Text className="text-caption text-muted-foreground" numberOfLines={1}>
             {t("chat.list.waiting")}
           </Text>
         </View>
       );
     } else if (queueState === "typing") {
       preview = (
-        <Text className="text-xs text-emerald-500" numberOfLines={1}>
+        <Text className="text-caption text-emerald-500" numberOfLines={1}>
           {t("chat.typing")}
         </Text>
       );
     } else if (last?.failure_reason) {
       preview = (
-        <Text className="text-xs text-destructive" numberOfLines={1}>
+        <Text className="text-caption text-destructive" numberOfLines={1}>
           {t("chat.failedToSend")}
         </Text>
       );
@@ -166,7 +166,7 @@ export default function ChatSessionsRoute() {
       // A no_response turn stores a non-empty fallback as content; show a
       // localized hint instead (web MUL-4351 parity).
       preview = (
-        <Text className="text-xs italic text-muted-foreground" numberOfLines={1}>
+        <Text className="text-caption italic text-muted-foreground" numberOfLines={1}>
           {t("chat.noTextReply")}
         </Text>
       );
@@ -174,7 +174,7 @@ export default function ChatSessionsRoute() {
       preview = (
         <Text
           className={cn(
-            "text-xs",
+            "text-caption",
             unread > 0 ? "text-foreground" : "text-muted-foreground",
           )}
           numberOfLines={1}
@@ -185,7 +185,7 @@ export default function ChatSessionsRoute() {
       );
     } else {
       preview = (
-        <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+        <Text className="text-caption text-muted-foreground" numberOfLines={1}>
           {t("chat.noMessagesYet")}
         </Text>
       );
@@ -215,7 +215,7 @@ export default function ChatSessionsRoute() {
           <View className="flex-row items-center gap-1">
             <Text
               className={cn(
-                "text-sm shrink",
+                "text-body shrink",
                 unread > 0 ? "font-semibold text-foreground" : "text-foreground",
               )}
               numberOfLines={1}
@@ -223,7 +223,7 @@ export default function ChatSessionsRoute() {
               {titleText}
             </Text>
             {session.pinned ? (
-              <Text className="text-[10px] text-muted-foreground">
+              <Text className="text-micro text-muted-foreground">
                 {t("chat.pinned")}
               </Text>
             ) : null}
@@ -238,13 +238,13 @@ export default function ChatSessionsRoute() {
               {agentName ? (
                 <>
                   <Text
-                    className="max-w-[40%] shrink-0 text-xs font-medium text-muted-foreground"
+                    className="max-w-[40%] shrink-0 text-caption font-medium text-muted-foreground"
                     numberOfLines={1}
                   >
                     {agentName}
                   </Text>
                   <Text
-                    className="shrink-0 text-xs text-muted-foreground/60"
+                    className="shrink-0 text-caption text-muted-foreground/60"
                     numberOfLines={1}
                   >
                     ·
@@ -255,7 +255,7 @@ export default function ChatSessionsRoute() {
             </View>
             {unread > 0 ? (
               <View className="min-w-[18px] h-[18px] rounded-full bg-destructive items-center justify-center px-1 shrink-0">
-                <Text className="text-[10px] font-semibold text-white">
+                <Text className="text-micro font-semibold text-white">
                   {unreadBadgeText(unread)}
                 </Text>
               </View>
@@ -263,7 +263,7 @@ export default function ChatSessionsRoute() {
           </View>
         </View>
         {selected ? (
-          <Text className="text-sm text-primary font-semibold shrink-0">✓</Text>
+          <Text className="text-body text-primary font-semibold shrink-0">✓</Text>
         ) : null}
       </Pressable>
     );
@@ -283,10 +283,10 @@ export default function ChatSessionsRoute() {
           >
             <Ionicons name="chevron-back" size={22} className="text-foreground" />
           </Pressable>
-          <Text className="flex-1 text-base font-semibold text-foreground">
+          <Text className="flex-1 text-title-sm font-semibold text-foreground">
             {t("chat.archivedTitle")}
           </Text>
-          <Text className="text-sm text-muted-foreground tabular-nums">
+          <Text className="text-body text-muted-foreground tabular-nums">
             {archivedSessions.length}
           </Text>
         </View>
@@ -308,10 +308,10 @@ export default function ChatSessionsRoute() {
         <View className="h-9 w-9 items-center justify-center rounded-full bg-muted">
           <Ionicons name="archive-outline" size={16} className="text-muted-foreground" />
         </View>
-        <Text className="flex-1 text-sm font-medium text-muted-foreground">
+        <Text className="flex-1 text-body font-medium text-muted-foreground">
           {t("chat.archivedTitle")}
         </Text>
-        <Text className="text-sm text-muted-foreground tabular-nums">
+        <Text className="text-body text-muted-foreground tabular-nums">
           {archivedSessions.length}
         </Text>
         <Ionicons name="chevron-forward" size={14} className="text-muted-foreground" />
@@ -321,7 +321,7 @@ export default function ChatSessionsRoute() {
   return (
     <View className="flex-1">
       <View className="px-4 pt-4 pb-3">
-        <Text className="text-base font-semibold text-foreground">{t("chat.chats")}</Text>
+        <Text className="text-title-sm font-semibold text-foreground">{t("chat.chats")}</Text>
       </View>
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         {sessionsRead.state !== "ready" ? (
@@ -332,7 +332,7 @@ export default function ChatSessionsRoute() {
           />
         ) : historySessions.length === 0 ? (
           <View className="px-4 py-8">
-            <Text className="text-sm text-muted-foreground text-center">
+            <Text className="text-body text-muted-foreground text-center">
               {t("chat.noChatsYet")}
             </Text>
           </View>

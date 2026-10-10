@@ -65,14 +65,14 @@ export function InboxDetailLabel({
     const statusEntry = statusCatalog.entryOf(status);
     return (
       <View className={cn("flex-row items-center gap-1", className)}>
-        <Text className="text-xs text-muted-foreground">{t("inbox.setStatusTo")}</Text>
+        <Text className="text-caption text-muted-foreground">{t("inbox.setStatusTo")}</Text>
         <StatusIcon
           status={status}
           category={statusEntry?.category}
           color={statusEntry?.is_system ? undefined : (statusEntry?.color ?? undefined)}
           size={12}
         />
-        <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+        <Text className="text-caption text-muted-foreground" numberOfLines={1}>
           {statusLabel(status)}
         </Text>
       </View>
@@ -83,9 +83,9 @@ export function InboxDetailLabel({
     const priority = details.to as IssuePriority;
     return (
       <View className={cn("flex-row items-center gap-1", className)}>
-        <Text className="text-xs text-muted-foreground">{t("inbox.setPriorityTo")}</Text>
+        <Text className="text-caption text-muted-foreground">{t("inbox.setPriorityTo")}</Text>
         <PriorityIcon priority={priority} size={12} />
-        <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+        <Text className="text-caption text-muted-foreground" numberOfLines={1}>
           {issuePriorityLabel(priority)}
         </Text>
       </View>
@@ -143,7 +143,7 @@ export function InboxDetailLabel({
 
   return (
     <Text
-      className={cn("text-xs text-muted-foreground", className)}
+      className={cn("text-caption text-muted-foreground", className)}
       numberOfLines={1}
     >
       {text}

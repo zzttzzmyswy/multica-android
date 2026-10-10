@@ -333,7 +333,7 @@ export function ProjectsScreen({
   if (error) {
     return (
       <View className="px-4 gap-3 pt-4">
-        <Text className="text-sm text-destructive">
+        <Text className="text-body text-destructive">
           {t("projects.loadFailed")}
           {error instanceof Error ? error.message : t("common.unknownError")}
         </Text>
@@ -412,7 +412,7 @@ export function ProjectsScreen({
                 accessibilityRole="button"
                 className="self-start active:opacity-70"
               >
-                <Text className="text-xs text-brand">
+                <Text className="text-caption text-brand">
                   {t("projects.clearFilters")}
                 </Text>
               </Pressable>
@@ -457,7 +457,7 @@ export function ProjectsScreen({
               className="flex-row items-center gap-1 rounded-md border border-border bg-secondary/50 px-2.5 py-1.5 active:opacity-70"
             >
               <Ionicons name="options-outline" size={14} color={theme.mutedForeground} />
-              <Text className="text-xs text-muted-foreground">
+              <Text className="text-caption text-muted-foreground">
                 {t("table.columns")}
               </Text>
             </Pressable>
@@ -508,7 +508,7 @@ export function ProjectsScreen({
           maxToRenderPerBatch={10}
           updateCellsBatchingPeriod={40}
           ListEmptyComponent={
-            <Text className="px-4 py-8 text-center text-sm text-muted-foreground">
+            <Text className="px-4 py-8 text-center text-body text-muted-foreground">
               {t("projects.noMatches")}
             </Text>
           }
@@ -545,13 +545,13 @@ export function ProjectsScreen({
             accessibilityRole="button"
             className="active:opacity-70"
           >
-            <Text className="text-xs text-brand">
+            <Text className="text-caption text-brand">
               {allSelected
                 ? t("projects.clearSelection")
                 : t("projects.selectAll")}
             </Text>
           </Pressable>
-          <Text className="text-xs text-muted-foreground">
+          <Text className="text-caption text-muted-foreground">
             {t("projects.selectedCount", { count: selectedIds.size })}
           </Text>
           <View className="flex-1" />
@@ -626,7 +626,7 @@ function FilterChip({
       />
       <Text
         className={cn(
-          "text-xs",
+          "text-caption",
           active ? "text-brand font-medium" : "text-muted-foreground",
         )}
       >
@@ -706,7 +706,7 @@ function SortPicker({
       className="flex-row items-center gap-1 rounded-md border border-border bg-secondary/50 px-2 py-1.5 active:opacity-70"
     >
       <Ionicons name="swap-vertical" size={14} color={muted} />
-      <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+      <Text className="text-caption text-muted-foreground" numberOfLines={1}>
         {activeLabel}
       </Text>
     </Pressable>
@@ -772,10 +772,10 @@ function EmptyState({
 }) {
   return (
     <View className="flex-1 items-center justify-center px-6 gap-4">
-      <Text className="text-base font-medium text-foreground">
+      <Text className="text-title-sm font-medium text-foreground">
         {t("projects.emptyTitle")}
       </Text>
-      <Text className="text-sm text-muted-foreground text-center">
+      <Text className="text-body text-muted-foreground text-center">
         {t("projects.emptyMessage")}
       </Text>
       <Button variant="default" onPress={onCreate}>

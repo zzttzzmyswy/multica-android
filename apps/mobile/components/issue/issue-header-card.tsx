@@ -21,8 +21,8 @@ import { CustomPropertyRow } from "./custom-property-row";
 export function IssueHeaderCard({ issue }: { issue: Issue }) {
   return (
     <View className="px-4 pt-4 pb-3 gap-3">
-      <Text className="text-xs text-muted-foreground">{issue.identifier}</Text>
-      <Text className="text-2xl font-bold text-foreground">
+      <Text className="text-caption text-muted-foreground">{issue.identifier}</Text>
+      <Text className="text-display-sm font-bold text-foreground">
         {issue.title}
       </Text>
       {/* Activity row sits between title and attributes — it represents

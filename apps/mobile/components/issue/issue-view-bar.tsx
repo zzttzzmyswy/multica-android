@@ -416,7 +416,7 @@ export function IssueViewBar({
             />
           ) : viewsRead.state === "empty" ? (
             <Text
-              className="text-xs text-muted-foreground py-1 max-w-72"
+              className="text-caption text-muted-foreground py-1 max-w-72"
               numberOfLines={1}
             >
               {t("issueViews.noViews")}
@@ -426,7 +426,7 @@ export function IssueViewBar({
             // views yet" here would be a different false claim: the views are
             // there, the bar layout is what is keeping them out of sight.
             <Text
-              className="text-xs text-muted-foreground py-1 max-w-72"
+              className="text-caption text-muted-foreground py-1 max-w-72"
               numberOfLines={1}
             >
               {t("issueViews.allHidden")}
@@ -457,7 +457,7 @@ export function IssueViewBar({
                     <Text
                       numberOfLines={1}
                       className={[
-                        "text-xs font-medium max-w-36",
+                        "text-caption font-medium max-w-36",
                         active ? "text-primary" : "text-muted-foreground",
                       ].join(" ")}
                     >
@@ -590,10 +590,10 @@ function ViewBarManageModal({
         <View className="flex-1 items-center justify-center px-6">
           <Pressable onPress={() => {}} className="w-full max-w-sm">
             <View className="bg-popover rounded-2xl overflow-hidden p-4 gap-3">
-              <Text className="text-base font-semibold text-foreground">
+              <Text className="text-title-sm font-semibold text-foreground">
                 {t("issueViews.manageViews")}
               </Text>
-              <Text className="text-xs text-muted-foreground leading-4">
+              <Text className="text-caption text-muted-foreground leading-4">
                 {t("issueViews.reorderHint")}
               </Text>
               <View className="max-h-80 gap-1">
@@ -622,14 +622,14 @@ function ViewBarManageModal({
                       <Text
                         numberOfLines={1}
                         className={[
-                          "flex-1 text-sm font-medium",
+                          "flex-1 text-body font-medium",
                           hidden ? "text-muted-foreground line-through" : "text-foreground",
                         ].join(" ")}
                       >
                         {view.name}
                       </Text>
                       {hidden ? (
-                        <Text className="text-[10px] text-muted-foreground">
+                        <Text className="text-micro text-muted-foreground">
                           {t("issueViews.hidden")}
                         </Text>
                       ) : null}

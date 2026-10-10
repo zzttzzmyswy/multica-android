@@ -42,15 +42,15 @@ export function ChatTitleButton({
       <View>
         <View className="flex-row items-center gap-1">
           <Text
-            className="text-base font-semibold text-foreground"
+            className="text-title-sm font-semibold text-foreground"
             numberOfLines={1}
           >
             {agentName}
           </Text>
-          <Text className="text-xs text-muted-foreground">▼</Text>
+          <Text className="text-caption text-muted-foreground">▼</Text>
         </View>
         <Text
-          className="text-xs text-muted-foreground"
+          className="text-caption text-muted-foreground"
           numberOfLines={1}
         >
           {subtitle}

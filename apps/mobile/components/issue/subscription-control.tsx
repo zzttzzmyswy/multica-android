@@ -218,7 +218,7 @@ export function SubscriptionControl({ issueId, childCount }: Props) {
         {busy ? (
           <Text className="text-muted-foreground">…</Text>
         ) : (
-          <Text className="text-xs font-medium">
+          <Text className="text-caption font-medium">
             {isSubscribed
               ? t("subscription.unsubscribe")
               : t("subscription.subscribe")}

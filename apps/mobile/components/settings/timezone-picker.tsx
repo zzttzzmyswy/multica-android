@@ -113,21 +113,21 @@ export function SettingsTimezonePicker({
         <View className="flex-1 justify-end">
           <Pressable onPress={() => {}} className="bg-popover rounded-t-2xl max-h-[80%]">
             <View className="flex-row items-center justify-between border-b border-border px-4 py-3">
-              <Text className="text-base font-semibold text-foreground">
+              <Text className="text-title-sm font-semibold text-foreground">
                 {t("settings.timezoneTitle")}
               </Text>
               <Pressable onPress={onClose} hitSlop={8}>
                 <Ionicons name="close" size={20} color={theme.mutedForeground} />
               </Pressable>
             </View>
-            <Text className="px-4 pt-2 text-xs text-muted-foreground">
+            <Text className="px-4 pt-2 text-caption text-muted-foreground">
               {t("settings.timezoneHint")}
             </Text>
             <View className="border-b border-border px-4 py-2">
               <View className="flex-row items-center gap-2 rounded-md border border-border bg-background px-3">
                 <Ionicons name="search" size={14} color={theme.mutedForeground} />
                 <TextInput
-                  className="flex-1 py-2 text-sm text-foreground"
+                  className="flex-1 py-2 text-body text-foreground"
                   placeholder={t("settings.timezoneSearchPlaceholder")}
                   placeholderTextColor={theme.mutedForeground}
                   value={query}
@@ -159,13 +159,13 @@ export function SettingsTimezonePicker({
                       <View className="flex-1">
                         <Text
                           className={cn(
-                            "text-base text-foreground",
+                            "text-title-sm text-foreground",
                             selected && "font-medium",
                           )}
                         >
                           {t("settings.languageSystem")}
                         </Text>
-                        <Text className="text-xs text-muted-foreground mt-0.5">
+                        <Text className="text-caption text-muted-foreground mt-0.5">
                           {labelOf(deviceTz)}
                         </Text>
                       </View>
@@ -179,7 +179,7 @@ export function SettingsTimezonePicker({
                 return (
                   <View>
                     {item.pinned ? (
-                      <Text className="px-4 pt-3 pb-1 text-xs uppercase tracking-wider text-muted-foreground">
+                      <Text className="px-4 pt-3 pb-1 text-caption uppercase tracking-wider text-muted-foreground">
                         {t(
                           item.pinned === "current"
                             ? "settings.timezoneCurrent"
@@ -201,7 +201,7 @@ export function SettingsTimezonePicker({
                       />
                       <Text
                         className={cn(
-                          "flex-1 text-base text-foreground",
+                          "flex-1 text-title-sm text-foreground",
                           selected && "font-medium",
                         )}
                         numberOfLines={1}
@@ -218,7 +218,7 @@ export function SettingsTimezonePicker({
               ListEmptyComponent={
                 query ? (
                   <View className="px-3 py-8 items-center">
-                    <Text className="text-sm text-muted-foreground text-center">
+                    <Text className="text-body text-muted-foreground text-center">
                       {t("settings.timezoneEmpty")}
                     </Text>
                   </View>

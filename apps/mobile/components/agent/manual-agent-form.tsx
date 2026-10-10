@@ -428,7 +428,7 @@ export function ManualAgentForm({
       {isDuplicate && duplicateSource ? (
         <View className="flex-row items-start gap-2 rounded-md bg-warning/15 px-3 py-2.5">
           <Ionicons name="copy-outline" size={15} color="#a16207" />
-          <Text className="flex-1 text-xs text-warning">
+          <Text className="flex-1 text-caption text-warning">
             {t("agents.duplicate.envNotice")}
           </Text>
         </View>
@@ -436,7 +436,7 @@ export function ManualAgentForm({
       {isDuplicate && duplicateRuntimeReset ? (
         <View className="flex-row items-start gap-2 rounded-md bg-warning/15 px-3 py-2.5">
           <Ionicons name="alert-circle-outline" size={15} color="#a16207" />
-          <Text className="flex-1 text-xs text-warning">
+          <Text className="flex-1 text-caption text-warning">
             {t("agents.duplicate.runtimeResetNotice")}
           </Text>
         </View>
@@ -521,7 +521,7 @@ export function ManualAgentForm({
           onChangeText={(text) => set("instructions", text)}
           placeholder={t("agents.new.instructionsPlaceholder")}
           editable={!isSubmitting}
-          className="border border-border rounded-md px-3 py-2 min-h-[120px] font-mono text-sm leading-6"
+          className="border border-border rounded-md px-3 py-2 min-h-[120px] font-mono text-body leading-6"
         />
       </View>
 
@@ -536,7 +536,7 @@ export function ManualAgentForm({
           <Ionicons name="extension-puzzle-outline" size={16} color={theme.mutedForeground} />
           <Text
             className={cn(
-              "flex-1 text-sm",
+              "flex-1 text-body",
               selectedSkills.length > 0 ? "text-foreground" : "text-muted-foreground",
             )}
             numberOfLines={1}
@@ -545,7 +545,7 @@ export function ManualAgentForm({
               ? selectedSkills.map((s) => s.name).join(", ")
               : t("agents.new.skillsPlaceholder")}
           </Text>
-          <Text className="text-xs text-muted-foreground tabular-nums">
+          <Text className="text-caption text-muted-foreground tabular-nums">
             {selectedSkills.length > 0 ? `${selectedSkills.length}` : ""}
           </Text>
           <Ionicons name="chevron-down" size={16} color={theme.mutedForeground} />
@@ -595,11 +595,11 @@ export function ManualAgentForm({
                 size={16}
                 color={theme.mutedForeground}
               />
-              <Text className="flex-1 text-sm text-foreground" numberOfLines={1}>
+              <Text className="flex-1 text-body text-foreground" numberOfLines={1}>
                 {runtimeDisplayLabel(selectedRuntime)}
               </Text>
               {selectedRuntime.visibility !== "public" ? (
-                <Text className="text-[10px] text-info">
+                <Text className="text-micro text-info">
                   {t("runtimes.visibility.private")}
                 </Text>
               ) : null}
@@ -607,7 +607,7 @@ export function ManualAgentForm({
           ) : (
             <Text
               className={cn(
-                "flex-1 text-sm",
+                "flex-1 text-body",
                 showErrors && gate.runtimeMissing
                   ? "text-destructive"
                   : "text-muted-foreground",
@@ -656,7 +656,7 @@ export function ManualAgentForm({
               <View className="flex-1 min-w-0">
                 <Text
                   className={cn(
-                    "text-sm",
+                    "text-body",
                     draft.model.trim() ? "text-foreground" : "text-muted-foreground",
                   )}
                   numberOfLines={1}
@@ -666,7 +666,7 @@ export function ManualAgentForm({
                     : t("agents.new.modelPlaceholder")}
                 </Text>
                 {catalogEntryLabel ? (
-                  <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+                  <Text className="text-caption text-muted-foreground" numberOfLines={1}>
                     {catalogEntryLabel}
                   </Text>
                 ) : null}
@@ -678,11 +678,11 @@ export function ManualAgentForm({
               )}
             </Pressable>
             {modelsQuery.isError ? (
-              <Text className="text-xs text-muted-foreground/70">
+              <Text className="text-caption text-muted-foreground/70">
                 {t("agents.modelPicker.discoveryFailed")}
               </Text>
             ) : (
-              <Text className="text-xs text-muted-foreground/70">
+              <Text className="text-caption text-muted-foreground/70">
                 {t("agents.new.modelHint")}
               </Text>
             )}
@@ -697,7 +697,7 @@ export function ManualAgentForm({
               autoCorrect={false}
               editable={!isSubmitting}
             />
-            <Text className="text-xs text-muted-foreground/70">
+            <Text className="text-caption text-muted-foreground/70">
               {catalogSupported && !runtimeOnline
                 ? t("agents.modelPicker.runtimeOfflineManual")
                 : t("agents.new.modelHint")}
@@ -731,7 +731,7 @@ export function ManualAgentForm({
                     >
                       <Text
                         className={cn(
-                          "text-xs",
+                          "text-caption",
                           active ? "text-foreground font-medium" : "text-muted-foreground",
                         )}
                       >
@@ -773,7 +773,7 @@ export function ManualAgentForm({
                     >
                       <Text
                         className={cn(
-                          "text-xs",
+                          "text-caption",
                           active ? "text-foreground font-medium" : "text-muted-foreground",
                         )}
                       >
@@ -843,10 +843,10 @@ export function ManualAgentForm({
                   disabled={!canEditAccess || isSubmitting}
                 />
                 <View className="flex-1">
-                  <Text className="text-sm font-medium text-foreground">
+                  <Text className="text-body font-medium text-foreground">
                     {t(scope.titleKey)}
                   </Text>
-                  <Text className="text-xs text-muted-foreground">
+                  <Text className="text-caption text-muted-foreground">
                     {t(scope.descKey)}
                   </Text>
                 </View>
@@ -872,7 +872,7 @@ export function ManualAgentForm({
             <Ionicons name="people-outline" size={16} color={theme.mutedForeground} />
             <Text
               className={cn(
-                "flex-1 text-sm",
+                "flex-1 text-body",
                 selectedMembers.length > 0 ? "text-foreground" : "text-muted-foreground",
               )}
               numberOfLines={1}
@@ -881,7 +881,7 @@ export function ManualAgentForm({
                 ? selectedMembers.map((m) => m.name).join(", ")
                 : t("agents.new.membersPlaceholder")}
             </Text>
-            <Text className="text-xs text-muted-foreground tabular-nums">
+            <Text className="text-caption text-muted-foreground tabular-nums">
               {selectedMembers.length > 0 ? `${selectedMembers.length}` : ""}
             </Text>
             <Ionicons name="chevron-down" size={16} color={theme.mutedForeground} />
@@ -917,7 +917,7 @@ export function ManualAgentForm({
       {/* Submit */}
       {formError ? (
         <View className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2.5">
-          <Text className="text-sm text-destructive">{formError}</Text>
+          <Text className="text-body text-destructive">{formError}</Text>
         </View>
       ) : null}
 
@@ -950,9 +950,9 @@ function SectionLabel({
     <View className="gap-1">
       <View className="flex-row items-center gap-1.5">
         <Ionicons name={icon} size={15} color={THEME[colorScheme].mutedForeground} />
-        <Text className="text-sm font-semibold text-foreground">{title}</Text>
+        <Text className="text-body font-semibold text-foreground">{title}</Text>
       </View>
-      <Text className="text-xs text-muted-foreground/80">{hint}</Text>
+      <Text className="text-caption text-muted-foreground/80">{hint}</Text>
     </View>
   );
 }
@@ -960,7 +960,7 @@ function SectionLabel({
 function FieldLabel({ text, required = false }: { text: string; required?: boolean }) {
   return (
     <View className="flex-row items-center gap-1">
-      <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+      <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
         {text}
       </Text>
       {required ? <Text className="text-destructive">*</Text> : null}
@@ -969,5 +969,5 @@ function FieldLabel({ text, required = false }: { text: string; required?: boole
 }
 
 function FieldError({ text }: { text: string }) {
-  return <Text className="text-xs text-destructive">{text}</Text>;
+  return <Text className="text-caption text-destructive">{text}</Text>;
 }

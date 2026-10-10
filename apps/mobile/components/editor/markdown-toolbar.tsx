@@ -60,7 +60,7 @@ export function MarkdownToolbar({
         onPress={onAt}
         disabled={disabled}
       >
-        <Text className="text-base text-muted-foreground leading-none">@</Text>
+        <Text className="text-title-sm text-muted-foreground leading-none">@</Text>
       </ToolbarButton>
       <ToolbarButton
         accessibilityLabel={t("a11y.bulletList")}
@@ -90,7 +90,7 @@ export function MarkdownToolbar({
       >
         {/* Ionicons has no good quote glyph — use the literal " character at
          *   a slightly larger size for visual parity with adjacent icons. */}
-        <Text className="text-xl text-muted-foreground leading-none -mt-1">
+        <Text className="text-title-lg text-muted-foreground leading-none -mt-1">
           &quot;
         </Text>
       </ToolbarButton>

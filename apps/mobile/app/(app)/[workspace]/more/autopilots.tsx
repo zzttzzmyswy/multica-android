@@ -302,7 +302,7 @@ export default function AutopilotsPage() {
         </View>
       ) : error ? (
         <View className="px-4 gap-3 pt-4">
-          <Text className="text-sm text-destructive">
+          <Text className="text-body text-destructive">
             {t("autopilots.loadError")}
             {error instanceof Error ? error.message : t("common.unknownError")}
           </Text>
@@ -316,10 +316,10 @@ export default function AutopilotsPage() {
           contentContainerClassName="px-5 py-12 items-center"
         >
           <Ionicons name="flash-off-outline" size={32} color={muted} />
-          <Text className="text-sm text-muted-foreground text-center mt-2">
+          <Text className="text-body text-muted-foreground text-center mt-2">
             {t("autopilots.empty")}
           </Text>
-          <Text className="text-xs text-muted-foreground/70 text-center mt-1 max-w-[320px]">
+          <Text className="text-caption text-muted-foreground/70 text-center mt-1 max-w-[320px]">
             {t("autopilots.emptyHint")}
           </Text>
           <View className="flex-row flex-wrap justify-center gap-3 mt-6 w-full max-w-[420px]">
@@ -370,7 +370,7 @@ export default function AutopilotsPage() {
                   >
                     <Text
                       className={cn(
-                        "text-xs font-medium",
+                        "text-caption font-medium",
                         active ? "text-brand" : "text-muted-foreground",
                       )}
                     >
@@ -378,7 +378,7 @@ export default function AutopilotsPage() {
                         ? t("autopilots.list.scopeAll")
                         : t(`autopilots.status.${option}`)}
                     </Text>
-                    <Text className="text-xs tabular-nums text-muted-foreground">
+                    <Text className="text-caption tabular-nums text-muted-foreground">
                       {scopeCounts[option]}
                     </Text>
                   </Pressable>
@@ -389,7 +389,7 @@ export default function AutopilotsPage() {
             <View className="flex-row items-center gap-2">
               {narrowed ? (
                 <Text
-                  className="flex-1 text-xs tabular-nums text-muted-foreground"
+                  className="flex-1 text-caption tabular-nums text-muted-foreground"
                   accessibilityLabel={t("autopilots.list.resultCount", {
                     visible: rows.length,
                     total: scopeRows.length,
@@ -433,7 +433,7 @@ export default function AutopilotsPage() {
             onRefresh={refetch}
             ListEmptyComponent={
               <View className="flex-1 items-center justify-center px-6 py-10">
-                <Text className="text-sm text-muted-foreground text-center">
+                <Text className="text-body text-muted-foreground text-center">
                   {narrowed
                     ? t("autopilots.list.noMatches")
                     : t("autopilots.empty")}
@@ -498,7 +498,7 @@ function AutopilotFilterChip({
       />
       {active ? (
         <Text
-          className="text-xs font-medium tabular-nums"
+          className="text-caption font-medium tabular-nums"
           style={{ color: THEME[colorScheme].primaryForeground }}
         >
           {activeCount}
@@ -578,7 +578,7 @@ function AutopilotSortChip({
       className="flex-row items-center gap-1 rounded-md border border-border bg-secondary/50 px-2 py-1.5 active:opacity-70"
     >
       <Ionicons name="swap-vertical" size={14} color={muted} />
-      <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+      <Text className="text-caption text-muted-foreground" numberOfLines={1}>
         {activeLabel}
       </Text>
     </Pressable>
@@ -738,7 +738,7 @@ function AutopilotFilterSheet({
             onPress={onClear}
             className="px-4 py-3 active:bg-secondary"
           >
-            <Text className="text-sm text-brand">
+            <Text className="text-body text-brand">
               {t("autopilots.list.filterClear")}
             </Text>
           </Pressable>
@@ -766,7 +766,7 @@ function AutopilotRow({
       <View className="flex-row items-center gap-2">
         <Ionicons name="flash" size={16} color={muted} />
         <Text
-          className="flex-1 text-sm font-medium text-foreground"
+          className="flex-1 text-body font-medium text-foreground"
           numberOfLines={1}
         >
           {autopilot.title}
@@ -784,7 +784,7 @@ function AutopilotRow({
       </View>
       <View className="flex-row items-center gap-2 mt-1.5 ml-6">
         {kinds.length === 0 ? (
-          <Text className="text-xs text-muted-foreground/60">—</Text>
+          <Text className="text-caption text-muted-foreground/60">—</Text>
         ) : (
           kinds.map((kind) => {
             const label = triggerLabel(kind, t);
@@ -795,7 +795,7 @@ function AutopilotRow({
                   size={12}
                   color={muted}
                 />
-                <Text className="text-xs text-muted-foreground">
+                <Text className="text-caption text-muted-foreground">
                   {label ?? kind}
                 </Text>
               </View>
@@ -805,7 +805,7 @@ function AutopilotRow({
         {autopilot.next_run_at ? (
           <View className="flex-row items-center gap-1">
             <Ionicons name="time-outline" size={12} color={muted} />
-            <Text className="text-xs text-muted-foreground tabular-nums">
+            <Text className="text-caption text-muted-foreground tabular-nums">
               {formatDateTime(autopilot.next_run_at)}
             </Text>
           </View>
@@ -840,13 +840,13 @@ function TemplateCard({
       <Ionicons name={icon} size={18} color={muted} className="mt-0.5" />
       <View className="min-w-0 flex-1">
         <Text
-          className="text-sm font-medium text-foreground"
+          className="text-body font-medium text-foreground"
           numberOfLines={1}
         >
           {t(`autopilots.templates.${tpl.id}.title`)}
         </Text>
         <Text
-          className="mt-0.5 text-xs text-muted-foreground leading-snug"
+          className="mt-0.5 text-caption text-muted-foreground leading-snug"
           numberOfLines={2}
         >
           {t(`autopilots.templates.${tpl.id}.summary`)}

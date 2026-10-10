@@ -144,7 +144,7 @@ export default function EditIssue() {
   const headerLeft = useCallback(
     () => (
       <Pressable onPress={onCancel} className="px-1 py-1">
-        <Text className="text-base text-brand">{t("editIssue.cancel")}</Text>
+        <Text className="text-title-sm text-brand">{t("editIssue.cancel")}</Text>
       </Pressable>
     ),
     [onCancel, t],
@@ -157,7 +157,7 @@ export default function EditIssue() {
         disabled={!canSave}
         className={canSave ? "px-1 py-1" : "px-1 py-1 opacity-40"}
       >
-        <Text className="text-base text-brand font-semibold">
+        <Text className="text-title-sm text-brand font-semibold">
           {update.isPending ? t("editIssue.saving") : t("editIssue.save")}
         </Text>
       </Pressable>
@@ -178,7 +178,7 @@ export default function EditIssue() {
           keyboardShouldPersistTaps="handled"
         >
           {!detail.data ? (
-            <Text className="text-sm text-muted-foreground">{t("issue.loading")}</Text>
+            <Text className="text-body text-muted-foreground">{t("issue.loading")}</Text>
           ) : (
             <>
               <Field label={t("editIssue.title")}>
@@ -187,7 +187,7 @@ export default function EditIssue() {
                   onChangeText={setTitle}
                   placeholder={t("newIssue.titlePlaceholder")}
                   placeholderTextColor={MOBILE_PLACEHOLDER_COLOR}
-                  className="text-base text-foreground bg-secondary/50 rounded-md px-3 py-2"
+                  className="text-title-sm text-foreground bg-secondary/50 rounded-md px-3 py-2"
                   returnKeyType="next"
                   editable={!update.isPending}
                 />
@@ -227,7 +227,7 @@ function Field({
 }) {
   return (
     <View className="gap-1.5">
-      <Text className="text-xs uppercase tracking-wider text-muted-foreground">
+      <Text className="text-caption uppercase tracking-wider text-muted-foreground">
         {label}
       </Text>
       {children}

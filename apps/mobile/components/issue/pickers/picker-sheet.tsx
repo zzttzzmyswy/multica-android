@@ -61,7 +61,7 @@ export function PickerSheet({
             style={fill ? { height: Math.round(height * FILL_SCREEN_RATIO) } : undefined}
           >
             <View className="px-4 py-3 border-b border-border flex-row items-center justify-between">
-              <Text className="text-base font-semibold text-foreground">
+              <Text className="text-title-sm font-semibold text-foreground">
                 {title}
               </Text>
               <Pressable onPress={onClose} hitSlop={8} accessibilityLabel="close">

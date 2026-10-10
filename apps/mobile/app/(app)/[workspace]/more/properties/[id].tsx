@@ -47,7 +47,7 @@ export default function EditPropertyPage() {
     return (
       <View className="flex-1 items-center justify-center px-6 gap-2 bg-background">
         <Ionicons name="warning-outline" size={32} color={muted} />
-        <Text className="text-sm text-muted-foreground text-center">
+        <Text className="text-body text-muted-foreground text-center">
           {t("properties.notFound")}
         </Text>
       </View>

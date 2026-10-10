@@ -70,7 +70,7 @@ export default function Demo() {
     <SafeAreaView className="flex-1 bg-background">
       {/* Page header — self-drawn (the auth stack hides headers). */}
       <View className="h-12 flex-row items-center justify-between px-4">
-        <Text className="text-base font-semibold text-foreground">{t("demo.title")}</Text>
+        <Text className="text-title-sm font-semibold text-foreground">{t("demo.title")}</Text>
         <IconButton
           name="close"
           iconSize={22}
@@ -84,10 +84,10 @@ export default function Demo() {
           {/* Hero */}
           <View className="items-center gap-3 px-2 pt-4">
             <MulticaLogo size={56} />
-            <Text className="text-center text-2xl font-semibold leading-snug text-foreground">
+            <Text className="text-center text-display-sm font-semibold leading-snug text-foreground">
               {t("demo.hero.heading")}
             </Text>
-            <Text className="max-w-[300px] text-center text-sm leading-relaxed text-muted-foreground">
+            <Text className="max-w-[300px] text-center text-body leading-relaxed text-muted-foreground">
               {t("demo.hero.lede")}
             </Text>
           </View>
@@ -95,10 +95,10 @@ export default function Demo() {
           {/* Agents */}
           <View className="gap-2">
             <View className="gap-0.5 px-1">
-              <Text className="text-base font-semibold text-foreground">
+              <Text className="text-title-sm font-semibold text-foreground">
                 {t("demo.section.agents.title")}
               </Text>
-              <Text className="text-xs leading-relaxed text-muted-foreground">
+              <Text className="text-caption leading-relaxed text-muted-foreground">
                 {t("demo.section.agents.lede")}
               </Text>
             </View>
@@ -120,10 +120,10 @@ export default function Demo() {
           {/* Inbox */}
           <View className="gap-2">
             <View className="gap-0.5 px-1">
-              <Text className="text-base font-semibold text-foreground">
+              <Text className="text-title-sm font-semibold text-foreground">
                 {t("demo.section.inbox.title")}
               </Text>
-              <Text className="text-xs leading-relaxed text-muted-foreground">
+              <Text className="text-caption leading-relaxed text-muted-foreground">
                 {t("demo.section.inbox.lede")}
               </Text>
             </View>
@@ -133,10 +133,10 @@ export default function Demo() {
           {/* Chat */}
           <View className="gap-2">
             <View className="gap-0.5 px-1">
-              <Text className="text-base font-semibold text-foreground">
+              <Text className="text-title-sm font-semibold text-foreground">
                 {t("demo.section.chat.title")}
               </Text>
-              <Text className="text-xs leading-relaxed text-muted-foreground">
+              <Text className="text-caption leading-relaxed text-muted-foreground">
                 {t("demo.section.chat.lede")}
               </Text>
             </View>
@@ -153,10 +153,10 @@ export default function Demo() {
           {/* Runs */}
           <View className="gap-2">
             <View className="gap-0.5 px-1">
-              <Text className="text-base font-semibold text-foreground">
+              <Text className="text-title-sm font-semibold text-foreground">
                 {t("demo.section.run.title")}
               </Text>
-              <Text className="text-xs leading-relaxed text-muted-foreground">
+              <Text className="text-caption leading-relaxed text-muted-foreground">
                 {t("demo.section.run.lede")}
               </Text>
             </View>
@@ -198,13 +198,13 @@ export default function Demo() {
 
           {/* Footer CTA */}
           <View className="gap-2.5 border-t border-border pt-5">
-            <Text className="px-1 text-center text-base font-semibold text-foreground">
+            <Text className="px-1 text-center text-title-sm font-semibold text-foreground">
               {t("demo.footer.title")}
             </Text>
             <Button size="lg" onPress={closeDemo}>
               <Text>{t("demo.footer.cta")}</Text>
             </Button>
-            <Text className="px-4 text-center text-xs leading-relaxed text-muted-foreground">
+            <Text className="px-4 text-center text-caption leading-relaxed text-muted-foreground">
               {t("demo.footer.hint")}
             </Text>
           </View>

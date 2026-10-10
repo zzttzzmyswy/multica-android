@@ -25,4 +25,4 @@ export const CODE_BLOCK_CONTAINER_CLASS =
 // a label-strip / advertising banner and competes with the code itself for
 // attention. Lowercase muted text is the GitHub Mobile / Notion iOS pattern.
 export const CODE_BLOCK_LANG_LABEL_CLASS =
-  "text-xs text-muted-foreground mb-1";
+  "text-caption text-muted-foreground mb-1";

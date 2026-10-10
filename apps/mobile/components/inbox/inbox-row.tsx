@@ -66,7 +66,7 @@ export function InboxRow({ item, onPress, onLongPress, archived }: Props) {
               ) : null}
               <Text
                 className={cn(
-                  "flex-1 text-sm",
+                  "flex-1 text-body",
                   isUnread
                     ? "font-medium text-foreground"
                     : "text-muted-foreground",
@@ -113,7 +113,7 @@ export function InboxRow({ item, onPress, onLongPress, archived }: Props) {
               ) : null}
               <Text
                 className={cn(
-                  "text-xs shrink-0",
+                  "text-caption shrink-0",
                   isUnread
                     ? "text-muted-foreground"
                     : "text-muted-foreground/60",

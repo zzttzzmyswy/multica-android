@@ -200,7 +200,7 @@ export default function SquadsPage() {
           </View>
         ) : error ? (
           <View className="px-4 gap-3 pt-4">
-            <Text className="text-sm text-destructive">
+            <Text className="text-body text-destructive">
               {t("squads.loadError")}
               {error instanceof Error ? error.message : t("common.unknownError")}
             </Text>
@@ -211,10 +211,10 @@ export default function SquadsPage() {
         ) : showEmpty ? (
           <View className="flex-1 items-center justify-center px-6 gap-1">
             <Ionicons name="people-circle-outline" size={32} color={muted} />
-            <Text className="text-sm text-muted-foreground text-center mt-2">
+            <Text className="text-body text-muted-foreground text-center mt-2">
               {t("squads.emptyTitle")}
             </Text>
-            <Text className="text-xs text-muted-foreground/70 text-center">
+            <Text className="text-caption text-muted-foreground/70 text-center">
               {t("squads.emptyDescription")}
             </Text>
             {isAdmin && wsSlug ? (
@@ -241,7 +241,7 @@ export default function SquadsPage() {
             <View className="flex-row items-center gap-2 px-4 pb-2">
               {activeFilterCount > 0 ? (
                 <Text
-                  className="text-xs tabular-nums text-muted-foreground"
+                  className="text-caption tabular-nums text-muted-foreground"
                   accessibilityLabel={t("squads.list.resultCount", {
                     visible: sorted.length,
                     total: scopeRows.length,
@@ -268,7 +268,7 @@ export default function SquadsPage() {
             {showScopeEmpty ? (
               <View className="flex-1 items-center justify-center px-6 gap-1">
                 <Ionicons name="people-circle-outline" size={32} color={muted} />
-                <Text className="text-sm text-muted-foreground text-center mt-2">
+                <Text className="text-body text-muted-foreground text-center mt-2">
                   {activeFilterCount > 0
                     ? t("squads.list.noMatches")
                     : t("squads.scopeEmptyMine")}
@@ -283,7 +283,7 @@ export default function SquadsPage() {
                   </Button>
                 ) : (
                   <>
-                    <Text className="text-xs text-muted-foreground/70 text-center">
+                    <Text className="text-caption text-muted-foreground/70 text-center">
                       {scope === "mine"
                         ? t("squads.scopeEmptyMineHint")
                         : t("squads.emptyDescription")}
@@ -379,7 +379,7 @@ function SquadScopeBar({
               </Text>
               <Text
                 className={cn(
-                  "text-xs tabular-nums",
+                  "text-caption tabular-nums",
                   active ? "text-accent-foreground" : "text-muted-foreground",
                 )}
               >
@@ -436,7 +436,7 @@ function SquadFilterChip({
         />
         {active ? (
           <Text
-            className="text-xs font-medium tabular-nums"
+            className="text-caption font-medium tabular-nums"
             style={{ color: theme.primaryForeground }}
           >
             {activeCount}
@@ -528,7 +528,7 @@ function SquadSortChip({
       className="flex-row items-center gap-1 rounded-md border border-border bg-secondary/50 px-2 py-1.5 active:opacity-70"
     >
       <Ionicons name="swap-vertical" size={14} color={muted} />
-      <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+      <Text className="text-caption text-muted-foreground" numberOfLines={1}>
         {activeLabel}
       </Text>
     </Pressable>
@@ -632,7 +632,7 @@ function SquadFilterSheet({
             accessibilityRole="button"
             className="py-3 active:opacity-70"
           >
-            <Text className="text-center text-sm text-destructive">
+            <Text className="text-center text-body text-destructive">
               {t("squads.list.filterClear")}
             </Text>
           </Pressable>
@@ -676,7 +676,7 @@ function SquadRow({
         <View className="flex-1 min-w-0 gap-0.5">
           <View className="flex-row items-center gap-2">
             <Text
-              className="flex-1 text-sm font-medium text-foreground"
+              className="flex-1 text-body font-medium text-foreground"
               numberOfLines={1}
             >
               {squad.name}
@@ -691,11 +691,11 @@ function SquadRow({
           </View>
           <View className="flex-row items-center gap-1.5">
             <Ionicons name="medal-outline" size={12} color={muted} />
-            <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+            <Text className="text-caption text-muted-foreground" numberOfLines={1}>
               {leaderName}
             </Text>
           </View>
-          <Text className="text-xs text-muted-foreground/70">
+          <Text className="text-caption text-muted-foreground/70">
             {t("squads.memberCount", { count })}
           </Text>
         </View>

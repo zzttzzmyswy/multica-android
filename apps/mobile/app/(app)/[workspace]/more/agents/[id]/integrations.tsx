@@ -285,7 +285,7 @@ export default function AgentIntegrationsPage() {
   return (
     <ScrollView className="flex-1 bg-background" contentContainerClassName="pb-10">
       <View className="border-b border-border px-4 py-2.5">
-        <Text className="text-xs text-muted-foreground leading-4">
+        <Text className="text-caption text-muted-foreground leading-4">
           {t("agents.integrations.intro")}
         </Text>
       </View>
@@ -293,7 +293,7 @@ export default function AgentIntegrationsPage() {
       <View className="gap-4 px-4 py-4">
         {!canManageAny ? (
           <View className="rounded-md border border-border bg-card px-4 py-3">
-            <Text className="text-xs text-muted-foreground leading-4">
+            <Text className="text-caption text-muted-foreground leading-4">
               {t("agents.integrations.readonlyHint")}
             </Text>
           </View>
@@ -317,7 +317,7 @@ export default function AgentIntegrationsPage() {
         )}
 
         {openError ? (
-          <Text className="text-xs text-destructive text-center">
+          <Text className="text-caption text-destructive text-center">
             {t("agents.integrations.openError")}
           </Text>
         ) : null}
@@ -406,7 +406,7 @@ function ChannelSection({
             a half-configured deployment, or a BYO attempt the server refuses.
             Web's agent page can always run the flow. */}
         <Pressable onPress={onBindInBrowser} hitSlop={6} className="self-start">
-          <Text className="text-xs text-muted-foreground underline">
+          <Text className="text-caption text-muted-foreground underline">
             {t("agents.integrations.bindInBrowser")}
           </Text>
         </Pressable>
@@ -421,8 +421,8 @@ function ChannelSection({
           <Ionicons name={channel.icon} size={18} color={theme.mutedForeground} />
         </View>
         <View className="flex-1 min-w-0 gap-0.5">
-          <Text className="text-sm font-medium text-foreground">{name}</Text>
-          <Text className="text-xs text-muted-foreground leading-4">
+          <Text className="text-body font-medium text-foreground">{name}</Text>
+          <Text className="text-caption text-muted-foreground leading-4">
             {t(channel.descriptionKey)}
           </Text>
         </View>
@@ -458,7 +458,7 @@ function ConnectedCard({
     <View className="gap-2">
       <View className="flex-row items-center gap-2">
         <View className={cn("size-2 rounded-full", active ? "bg-success" : "bg-muted")} />
-        <Text className={cn("text-xs font-medium", active ? "text-success" : "text-muted-foreground")}>
+        <Text className={cn("text-caption font-medium", active ? "text-success" : "text-muted-foreground")}>
           {active ? t("agents.integrations.statusActive") : t("agents.integrations.statusRevoked")}
         </Text>
         {larkRegion ? (
@@ -518,10 +518,10 @@ function InfoRow({
   const { colorScheme } = useColorScheme();
   return (
     <View className="flex-row items-center">
-      <Text className="w-20 text-xs text-muted-foreground">{label}</Text>
+      <Text className="w-20 text-caption text-muted-foreground">{label}</Text>
       <Text
         className={cn(
-          "flex-1 text-xs text-foreground",
+          "flex-1 text-caption text-foreground",
           mono && "font-mono",
         )}
         numberOfLines={1}
@@ -535,6 +535,6 @@ function InfoRow({
 
 function Note({ children }: { children: React.ReactNode }) {
   return (
-    <Text className="text-xs text-muted-foreground leading-4">{children}</Text>
+    <Text className="text-caption text-muted-foreground leading-4">{children}</Text>
   );
 }

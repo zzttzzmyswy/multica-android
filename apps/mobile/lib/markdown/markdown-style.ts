@@ -99,7 +99,7 @@ export function useMarkdownStyle() {
 
   return useMemo(
     () => ({
-      // Body / paragraph — text-sm + leading-6 ≈ 1.71. Generous for CJK.
+      // Body / paragraph — text-body + leading-6 ≈ 1.71. Generous for CJK.
       paragraph: {
         fontSize: MD_FONT.body,
         lineHeight: MD_LINE.body,

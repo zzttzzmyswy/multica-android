@@ -73,9 +73,9 @@ export function TriggerPayloadPreview({
           size={14}
           color={theme.mutedForeground}
         />
-        <Text className="text-xs font-medium">{t("autopilots.webhookPayload.label")}</Text>
+        <Text className="text-caption font-medium">{t("autopilots.webhookPayload.label")}</Text>
         <Text
-          className="flex-1 text-xs text-muted-foreground"
+          className="flex-1 text-caption text-muted-foreground"
           numberOfLines={1}
         >
           {view.event ?? t("autopilots.webhookPayload.unknownEvent")}

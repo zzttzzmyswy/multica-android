@@ -160,7 +160,7 @@ function AddFileInline({
         onSubmitEditing={submit}
       />
       {error ? (
-        <Text className="text-xs text-destructive">{t(PATH_ERROR_KEY[error])}</Text>
+        <Text className="text-caption text-destructive">{t(PATH_ERROR_KEY[error])}</Text>
       ) : null}
       <View className="flex-row items-center gap-2">
         <Button size="sm" onPress={submit} className="flex-1">
@@ -186,7 +186,7 @@ function SectionTitle({
   return (
     <View className="flex-row items-center gap-1.5">
       <Ionicons name={icon} size={14} color={muted} />
-      <Text className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+      <Text className="text-caption font-semibold text-muted-foreground uppercase tracking-wide">
         {title}
       </Text>
     </View>
@@ -207,8 +207,8 @@ function MetaRow({
   return (
     <View className="flex-row items-start gap-2 py-1.5">
       <Ionicons name={icon} size={14} color={muted} style={{ marginTop: 1 }} />
-      <Text className="text-xs text-muted-foreground w-16">{label}</Text>
-      <Text className="text-xs text-foreground flex-1" numberOfLines={2}>
+      <Text className="text-caption text-muted-foreground w-16">{label}</Text>
+      <Text className="text-caption text-foreground flex-1" numberOfLines={2}>
         {value}
       </Text>
     </View>
@@ -548,7 +548,7 @@ export default function SkillDetailPage() {
           size={32}
           color={theme.mutedForeground}
         />
-        <Text className="text-sm text-muted-foreground text-center mt-2">
+        <Text className="text-body text-muted-foreground text-center mt-2">
           {t("skills.notFound")}
         </Text>
         <Button variant="outline" onPress={() => refetch()}>
@@ -584,17 +584,17 @@ export default function SkillDetailPage() {
             </View>
             <View className="flex-1 min-w-0 gap-1">
               <View className="flex-row items-center gap-1.5 flex-wrap">
-                <Text className="text-base font-semibold text-foreground">
+                <Text className="text-title-sm font-semibold text-foreground">
                   {skill.name}
                 </Text>
                 <View className="px-1.5 py-px rounded-full bg-secondary">
-                  <Text className="text-[10px] text-muted-foreground font-medium">
+                  <Text className="text-micro text-muted-foreground font-medium">
                     {t(ORIGIN_LABEL_KEY[originInfo.type])}
                   </Text>
                 </View>
               </View>
               {skill.description ? (
-                <Text className="text-sm text-muted-foreground/80">
+                <Text className="text-body text-muted-foreground/80">
                   {skill.description}
                 </Text>
               ) : null}
@@ -609,7 +609,7 @@ export default function SkillDetailPage() {
                     size={13}
                     color={theme.mutedForeground}
                   />
-                  <Text className="text-xs text-muted-foreground">
+                  <Text className="text-caption text-muted-foreground">
                     {t("skills.detail.fileCount", { count: files.length + 1 })}
                   </Text>
                 </View>
@@ -619,7 +619,7 @@ export default function SkillDetailPage() {
                     size={13}
                     color={theme.mutedForeground}
                   />
-                  <Text className="text-xs text-muted-foreground">
+                  <Text className="text-caption text-muted-foreground">
                     {usedByAgents.length === 1
                       ? t("skills.usedBy.title", { count: 1 })
                       : t("skills.usedBy.titleOther", {
@@ -672,7 +672,7 @@ export default function SkillDetailPage() {
                   color={theme.mutedForeground}
                   style={{ marginTop: 1 }}
                 />
-                <Text className="text-xs text-muted-foreground w-16">
+                <Text className="text-caption text-muted-foreground w-16">
                   {t("skills.detail.labels")}
                 </Text>
                 <View className="flex-1" pointerEvents={canEdit ? "none" : "box-none"}>
@@ -689,7 +689,7 @@ export default function SkillDetailPage() {
                       ))}
                     </View>
                   ) : (
-                    <Text className="text-xs text-muted-foreground/70">
+                    <Text className="text-caption text-muted-foreground/70">
                       {t("skills.detail.noLabels")}
                     </Text>
                   )}
@@ -715,7 +715,7 @@ export default function SkillDetailPage() {
                   accessibilityLabel={t("skills.detail.edit")}
                 >
                   <Ionicons name="create-outline" size={15} color={theme.mutedForeground} />
-                  <Text className="text-sm font-medium text-foreground">
+                  <Text className="text-body font-medium text-foreground">
                     {t("skills.detail.edit")}
                   </Text>
                 </Pressable>
@@ -736,7 +736,7 @@ export default function SkillDetailPage() {
                       color={theme.mutedForeground}
                     />
                   )}
-                  <Text className="text-sm font-medium text-foreground">
+                  <Text className="text-body font-medium text-foreground">
                     {refreshSkill.isPending
                       ? t("skills.detail.refreshing")
                       : t("skills.detail.refresh")}
@@ -770,14 +770,14 @@ export default function SkillDetailPage() {
                 size={13}
                 color={theme.mutedForeground}
               />
-              <Text className="text-xs font-medium text-muted-foreground">
+              <Text className="text-caption font-medium text-muted-foreground">
                 {t("skills.usedBy.add")}
               </Text>
             </Pressable>
           </View>
           {usedByAgents.length === 0 ? (
             <View className="rounded-lg border border-dashed border-border px-3 py-6 items-center">
-              <Text className="text-xs text-muted-foreground/70 italic text-center">
+              <Text className="text-caption text-muted-foreground/70 italic text-center">
                 {t("skills.usedBy.empty")}
               </Text>
             </View>
@@ -787,11 +787,11 @@ export default function SkillDetailPage() {
                 <View key={agent.id} className="flex-row items-center gap-2.5 px-3 py-2.5">
                   <ActorAvatar type="agent" id={agent.id} size={28} />
                   <View className="flex-1 min-w-0">
-                    <Text className="text-sm font-medium text-foreground" numberOfLines={1}>
+                    <Text className="text-body font-medium text-foreground" numberOfLines={1}>
                       {agent.name}
                     </Text>
                     {agent.description ? (
-                      <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+                      <Text className="text-caption text-muted-foreground" numberOfLines={1}>
                         {agent.description}
                       </Text>
                     ) : null}
@@ -813,7 +813,7 @@ export default function SkillDetailPage() {
                 accessibilityLabel={t("skills.editor.editFile")}
               >
                 <Ionicons name="create-outline" size={13} color={theme.mutedForeground} />
-                <Text className="text-xs font-medium text-muted-foreground">
+                <Text className="text-caption font-medium text-muted-foreground">
                   {t("skills.editor.editFile")}
                 </Text>
               </Pressable>
@@ -825,7 +825,7 @@ export default function SkillDetailPage() {
             </View>
           ) : (
             <View className="rounded-lg border border-dashed border-border px-3 py-6 items-center">
-              <Text className="text-xs text-muted-foreground/70 italic">
+              <Text className="text-caption text-muted-foreground/70 italic">
                 {t("skills.detail.noContent")}
               </Text>
             </View>
@@ -843,7 +843,7 @@ export default function SkillDetailPage() {
                 accessibilityLabel={t("skills.detail.add_file.newFile")}
               >
                 <Ionicons name="add" size={13} color={theme.mutedForeground} />
-                <Text className="text-xs font-medium text-muted-foreground">
+                <Text className="text-caption font-medium text-muted-foreground">
                   {t("skills.detail.add_file.newFile")}
                 </Text>
               </Pressable>
@@ -852,7 +852,7 @@ export default function SkillDetailPage() {
 
           {files.length === 0 ? (
             <View className="rounded-lg border border-dashed border-border px-3 py-6 items-center">
-              <Text className="text-xs text-muted-foreground/70 italic">
+              <Text className="text-caption text-muted-foreground/70 italic">
                 {t("skills.detail.noFiles")}
               </Text>
             </View>
@@ -886,7 +886,7 @@ export default function SkillDetailPage() {
               diverges from the server rather than only on a save attempt. */}
           {filesDirty ? (
             <View className="rounded-lg border border-border bg-card px-3 py-2.5 gap-2">
-              <Text className="text-xs text-muted-foreground">
+              <Text className="text-caption text-muted-foreground">
                 {t("skills.detail.saveBar.changed")}
               </Text>
               <View className="flex-row items-center gap-2">
@@ -927,7 +927,7 @@ export default function SkillDetailPage() {
         <Pressable className="flex-1 bg-black/40" onPress={() => setEditing(false)} />
         <View className="h-[72%] bg-background rounded-t-2xl overflow-hidden">
           <View className="flex-row items-center justify-between px-4 py-3 border-b border-border">
-            <Text className="text-sm font-semibold text-foreground">
+            <Text className="text-body font-semibold text-foreground">
               {t("skills.detail.edit")}
             </Text>
             <Pressable onPress={() => setEditing(false)} accessibilityLabel={t("a11y.close")}>
@@ -964,7 +964,7 @@ export default function SkillDetailPage() {
         >
           <View className="flex-row items-center gap-2 px-4 py-3 border-b border-border">
             <Ionicons name="document-outline" size={16} color={theme.mutedForeground} />
-            <Text className="text-sm font-medium text-foreground flex-1" numberOfLines={1}>
+            <Text className="text-body font-medium text-foreground flex-1" numberOfLines={1}>
               {previewFile?.path ?? ""}
             </Text>
             {canEdit && previewFile ? (
@@ -978,7 +978,7 @@ export default function SkillDetailPage() {
                 accessibilityLabel={t("skills.editor.editFile")}
               >
                 <Ionicons name="create-outline" size={13} color={theme.mutedForeground} />
-                <Text className="text-xs font-medium text-muted-foreground">
+                <Text className="text-caption font-medium text-muted-foreground">
                   {t("skills.editor.editFile")}
                 </Text>
               </Pressable>
@@ -991,7 +991,7 @@ export default function SkillDetailPage() {
             {isMarkdownPath(previewFile?.path ?? "") ? (
               <Markdown content={previewFile?.content ?? ""} />
             ) : (
-              <Text className="text-xs text-foreground leading-5">
+              <Text className="text-caption text-foreground leading-5">
                 {previewFile?.content ?? ""}
               </Text>
             )}
@@ -1012,7 +1012,7 @@ export default function SkillDetailPage() {
         <Pressable className="flex-1 bg-black/40" onPress={() => setRenameTarget(null)} />
         <View className="bg-background rounded-t-2xl overflow-hidden">
           <View className="flex-row items-center justify-between px-4 py-3 border-b border-border">
-            <Text className="text-sm font-semibold text-foreground">
+            <Text className="text-body font-semibold text-foreground">
               {t("skills.detail.fileActions.rename")}
             </Text>
             <Pressable
@@ -1040,7 +1040,7 @@ export default function SkillDetailPage() {
               onSubmitEditing={submitRename}
             />
             {renameError ? (
-              <Text className="text-xs text-destructive">
+              <Text className="text-caption text-destructive">
                 {t(PATH_ERROR_KEY[renameError])}
               </Text>
             ) : null}
@@ -1094,7 +1094,7 @@ export default function SkillDetailPage() {
         <View className="h-[75%] bg-background rounded-t-2xl overflow-hidden">
           <View className="flex-row items-center gap-2 px-4 py-3 border-b border-border">
             <Ionicons name="pricetags-outline" size={16} color={theme.mutedForeground} />
-            <Text className="text-sm font-medium text-foreground flex-1">
+            <Text className="text-body font-medium text-foreground flex-1">
               {t("skills.detail.labels")}
             </Text>
             <Pressable
@@ -1113,7 +1113,7 @@ export default function SkillDetailPage() {
               onChangeText={setLabelsQuery}
               placeholder={t("picker.searchLabels")}
               placeholderTextColor={theme.mutedForeground}
-              className="border border-border rounded-md px-3 py-2 text-sm text-foreground"
+              className="border border-border rounded-md px-3 py-2 text-body text-foreground"
               autoFocus
             />
           </View>

@@ -204,14 +204,14 @@ export default function MemberDetailPage() {
               <View className="flex-1 min-w-0 gap-0.5">
                 <View className="flex-row items-center gap-2">
                   <Text
-                    className="flex-1 text-base font-semibold text-foreground"
+                    className="flex-1 text-title-sm font-semibold text-foreground"
                     numberOfLines={1}
                   >
                     {member.name}
                   </Text>
                   <RoleBadge role={member.role} />
                 </View>
-                <Text className="text-sm text-muted-foreground" numberOfLines={1}>
+                <Text className="text-body text-muted-foreground" numberOfLines={1}>
                   {member.email}
                 </Text>
               </View>
@@ -221,12 +221,12 @@ export default function MemberDetailPage() {
             <SectionTitle>{t("members.detail.profile")}</SectionTitle>
             <View className="px-4 gap-3">
               <PropertyRow label={t("members.detail.role")} icon="shield-outline">
-                <Text className="flex-1 text-sm text-foreground">
+                <Text className="flex-1 text-body text-foreground">
                   {t(`members.role.${member.role}`)}
                 </Text>
               </PropertyRow>
               <PropertyRow label={t("members.detail.joined")} icon="time-outline">
-                <Text className="flex-1 text-sm text-foreground">
+                <Text className="flex-1 text-body text-foreground">
                   {formatDateTime(member.created_at)}
                 </Text>
               </PropertyRow>
@@ -289,7 +289,7 @@ function RoleBadge({ role }: { role: MemberRole }) {
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <Text className="px-4 pt-5 pb-2 text-xs uppercase tracking-wider text-muted-foreground font-medium">
+    <Text className="px-4 pt-5 pb-2 text-caption uppercase tracking-wider text-muted-foreground font-medium">
       {children}
     </Text>
   );
@@ -312,7 +312,7 @@ function PropertyRow({
         size={15}
         color={THEME[colorScheme].mutedForeground}
       />
-      <Text className="w-20 text-xs text-muted-foreground">{label}</Text>
+      <Text className="w-20 text-caption text-muted-foreground">{label}</Text>
       <View className="flex-1 flex-row items-center">{children}</View>
     </View>
   );
@@ -336,7 +336,7 @@ function ManageRow({
       className="flex-row items-center gap-2 rounded-lg border border-border bg-background px-3 py-3 active:bg-secondary"
     >
       <Ionicons name={icon} size={17} color={tint} />
-      <Text className="flex-1 text-sm" style={{ color: tint }}>
+      <Text className="flex-1 text-body" style={{ color: tint }}>
         {label}
       </Text>
       <Ionicons

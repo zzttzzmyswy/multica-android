@@ -101,10 +101,10 @@ export default function Verify() {
           <View className="items-center gap-3">
             <MulticaLogo size={32} />
             <View className="gap-1 items-center">
-              <Text className="text-2xl font-semibold text-foreground">
+              <Text className="text-display-sm font-semibold text-foreground">
                 {t("verify.title")}
               </Text>
-              <Text className="text-sm text-muted-foreground text-center">
+              <Text className="text-body text-muted-foreground text-center">
                 {t("verify.subtitle", { email })}
               </Text>
             </View>
@@ -121,7 +121,7 @@ export default function Verify() {
               editable={!submitting}
             />
             {error ? (
-              <Text className="text-sm text-destructive">{error}</Text>
+              <Text className="text-body text-destructive">{error}</Text>
             ) : null}
             {error && failedServer && hasCustomApiBaseUrl() ? (
               <ServerUnreachableNotice
@@ -151,8 +151,8 @@ export default function Verify() {
               <Text
                 className={
                   cooldown > 0 || resending
-                    ? "text-sm text-muted-foreground"
-                    : "text-sm text-primary"
+                    ? "text-body text-muted-foreground"
+                    : "text-body text-primary"
                 }
               >
                 {resending

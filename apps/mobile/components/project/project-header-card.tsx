@@ -33,20 +33,20 @@ export function ProjectHeaderCard({ project, onEdit }: Props) {
       <View className="items-start gap-2">
         <ProjectIcon icon={project.icon} size="lg" />
         <Text
-          className="text-2xl font-bold text-foreground"
+          className="text-display-sm font-bold text-foreground"
           selectable
         >
           {project.title}
         </Text>
         {project.description ? (
           <Text
-            className="text-sm text-muted-foreground"
+            className="text-body text-muted-foreground"
             selectable
           >
             {project.description}
           </Text>
         ) : onEdit ? (
-          <Text className="text-sm text-muted-foreground/60 italic">
+          <Text className="text-body text-muted-foreground/60 italic">
             {t("project.addDescription")}
           </Text>
         ) : null}
@@ -67,10 +67,10 @@ function ProgressSection({ done, total }: { done: number; total: number }) {
   return (
     <View className="w-full pt-2 gap-1.5">
       <View className="flex-row items-center justify-between">
-        <Text className="text-xs uppercase tracking-wider text-muted-foreground">
+        <Text className="text-caption uppercase tracking-wider text-muted-foreground">
           {t("project.progress")}
         </Text>
-        <Text className="text-xs text-muted-foreground">
+        <Text className="text-caption text-muted-foreground">
           {done} / {total} · {pct}%
         </Text>
       </View>

@@ -65,7 +65,7 @@ export function CustomStatusChip({
         color={entry.color}
         size={12}
       />
-      <Text className="text-[10px] leading-tight text-muted-foreground" numberOfLines={1}>
+      <Text className="text-micro leading-tight text-muted-foreground" numberOfLines={1}>
         {entry.name}
       </Text>
     </View>

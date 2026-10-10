@@ -76,7 +76,7 @@ function FieldLabel({
         size={13}
         color={THEME[colorScheme].mutedForeground}
       />
-      <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+      <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
         {text}
       </Text>
     </View>
@@ -84,7 +84,7 @@ function FieldLabel({
 }
 
 function FieldError({ text }: { text: string }) {
-  return <Text className="text-xs text-destructive">{text}</Text>;
+  return <Text className="text-caption text-destructive">{text}</Text>;
 }
 
 function propertyHasOptions(type: string): boolean {
@@ -295,7 +295,7 @@ export function PropertyForm({ property }: PropertyFormProps) {
                   size={16}
                   color={THEME[colorScheme].mutedForeground}
                 />
-                <Text className="text-sm text-muted-foreground">
+                <Text className="text-body text-muted-foreground">
                   {t(propertyTypeLabelKey(property?.type))}
                 </Text>
               </View>
@@ -327,7 +327,7 @@ export function PropertyForm({ property }: PropertyFormProps) {
                       />
                       <Text
                         className={cn(
-                          "text-xs font-medium",
+                          "text-caption font-medium",
                           selected ? "text-foreground" : "text-muted-foreground",
                         )}
                       >
@@ -362,7 +362,7 @@ export function PropertyForm({ property }: PropertyFormProps) {
                 />
                 <Text
                   className={cn(
-                    "text-sm",
+                    "text-body",
                     iconDraft ? "text-foreground" : "text-muted-foreground",
                   )}
                 >
@@ -495,7 +495,7 @@ export function PropertyForm({ property }: PropertyFormProps) {
                 accessibilityLabel={t("properties.form.addOption")}
               >
                 <Ionicons name="add" size={15} color={THEME[colorScheme].primary} />
-                <Text className="text-sm text-primary">{t("properties.form.addOption")}</Text>
+                <Text className="text-body text-primary">{t("properties.form.addOption")}</Text>
               </Pressable>
               {showErrors && optionsMissing ? (
                 <FieldError text={t("properties.form.optionsRequired")} />
@@ -527,7 +527,7 @@ export function PropertyForm({ property }: PropertyFormProps) {
               />
               <Text
                 className={cn(
-                  "text-sm font-medium",
+                  "text-body font-medium",
                   property.archived ? "text-foreground" : "text-destructive",
                 )}
               >

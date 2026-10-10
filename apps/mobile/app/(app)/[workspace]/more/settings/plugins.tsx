@@ -129,14 +129,14 @@ export default function PluginsPage() {
         className="flex-1 bg-background"
         contentContainerClassName="px-4 py-4 gap-3"
       >
-        <Text className="text-sm text-muted-foreground">
+        <Text className="text-body text-muted-foreground">
           {t("plugins.description")}
         </Text>
 
         {catalogQuery.isLoading || installationsQuery.isLoading ? (
           <View className="py-12 items-center gap-2">
             <ActivityIndicator />
-            <Text className="text-sm text-muted-foreground">
+            <Text className="text-body text-muted-foreground">
               {t("plugins.loading")}
             </Text>
           </View>
@@ -172,7 +172,7 @@ export default function PluginsPage() {
 
             {showEmpty ? (
               <View className="py-10 items-center">
-                <Text className="text-sm text-muted-foreground">
+                <Text className="text-body text-muted-foreground">
                   {t("plugins.empty")}
                 </Text>
               </View>
@@ -399,8 +399,8 @@ function Notice({
         }
       />
       <View className="flex-1 gap-0.5">
-        <Text className="text-sm font-medium text-foreground">{title}</Text>
-        <Text className="text-xs text-muted-foreground">{description}</Text>
+        <Text className="text-body font-medium text-foreground">{title}</Text>
+        <Text className="text-caption text-muted-foreground">{description}</Text>
       </View>
     </View>
   );
@@ -431,7 +431,7 @@ function StateBadge({ state }: { state: PluginInstallationState }) {
       className="px-1.5 py-0.5 rounded border"
       style={{ borderColor: color }}
     >
-      <Text className="text-[10px] font-medium" style={{ color }}>
+      <Text className="text-micro font-medium" style={{ color }}>
         {t(key)}
       </Text>
     </View>
@@ -441,7 +441,7 @@ function StateBadge({ state }: { state: PluginInstallationState }) {
 function Tag({ children }: { children: string }) {
   return (
     <View className="px-1.5 py-0.5 rounded border border-border">
-      <Text className="text-[10px] text-muted-foreground">{children}</Text>
+      <Text className="text-micro text-muted-foreground">{children}</Text>
     </View>
   );
 }
@@ -535,7 +535,7 @@ function OfficialPluginCard({
             <View className="flex-1 min-w-0 gap-1.5">
               <View className="flex-row items-center gap-1.5 flex-wrap">
                 <Ionicons name="cube-outline" size={16} color={theme.primary} />
-                <Text className="text-base font-semibold text-foreground">
+                <Text className="text-title-sm font-semibold text-foreground">
                   {latest.name}
                 </Text>
                 <Tag>{t("plugins.official")}</Tag>
@@ -547,7 +547,7 @@ function OfficialPluginCard({
                 {state ? <StateBadge state={state} /> : null}
               </View>
               {latest.description ? (
-                <Text className="text-xs text-muted-foreground">
+                <Text className="text-caption text-muted-foreground">
                   {latest.description}
                 </Text>
               ) : null}
@@ -604,7 +604,7 @@ function OfficialPluginCard({
 
         {!installation ? (
           <View className="gap-3">
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-caption text-muted-foreground">
               {t("plugins.installDisabledHint")}
             </Text>
             {releases.length > 1 ? (
@@ -639,7 +639,7 @@ function OfficialPluginCard({
         ) : (
           <View className="gap-3">
             {/* Active version / health */}
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-caption text-muted-foreground">
               {t("plugins.activeVersion")}{" "}
               {installation.active_version || "—"}
               {" · "}
@@ -661,7 +661,7 @@ function OfficialPluginCard({
                       key={`${binding.scope_type}:${binding.scope_id}`}
                       className="flex-row items-center justify-between rounded-md bg-muted px-3 py-2 gap-2"
                     >
-                      <Text className="flex-1 text-xs text-foreground">
+                      <Text className="flex-1 text-caption text-foreground">
                         {binding.scope_type === "agent"
                           ? `${t("plugins.agentScope")} · ${
                               agentName ?? t("plugins.unknownAgent")
@@ -686,7 +686,7 @@ function OfficialPluginCard({
                           })
                         }
                       >
-                        <Text className="text-xs">
+                        <Text className="text-caption">
                           {t("plugins.disableBinding")}
                         </Text>
                       </Button>
@@ -694,7 +694,7 @@ function OfficialPluginCard({
                   );
                 })
               ) : (
-                <Text className="text-xs text-muted-foreground">
+                <Text className="text-caption text-muted-foreground">
                   {t("plugins.noBindings")}
                 </Text>
               )}
@@ -849,7 +849,7 @@ function PrivatePluginCard({
           <View className="flex-1 min-w-0 gap-1.5">
             <View className="flex-row items-center gap-1.5 flex-wrap">
               <Ionicons name="cube-outline" size={16} color={theme.primary} />
-              <Text className="text-base font-semibold text-foreground">
+              <Text className="text-title-sm font-semibold text-foreground">
                 {installation.display_name}
               </Text>
               <Tag>{t("plugins.private")}</Tag>
@@ -857,7 +857,7 @@ function PrivatePluginCard({
               <StateBadge state={state} />
             </View>
             {installation.description ? (
-              <Text className="text-xs text-muted-foreground">
+              <Text className="text-caption text-muted-foreground">
                 {installation.description}
               </Text>
             ) : null}
@@ -905,7 +905,7 @@ function PrivatePluginCard({
 
         <Separator />
 
-        <Text className="text-xs text-muted-foreground">
+        <Text className="text-caption text-muted-foreground">
           {t("plugins.activeVersion")} {installation.active_version || "—"}
           {" · "}
           {t("plugins.health")} {installation.health_state || installation.lifecycle_status}
@@ -925,7 +925,7 @@ function PrivatePluginCard({
                   key={`${binding.scope_type}:${binding.scope_id}`}
                   className="flex-row items-center justify-between rounded-md bg-muted px-3 py-2 gap-2"
                 >
-                  <Text className="flex-1 text-xs text-foreground">
+                  <Text className="flex-1 text-caption text-foreground">
                     {binding.scope_type === "agent"
                       ? t("plugins.agentScope")
                       : t("plugins.workspaceScope")}{" "}
@@ -952,7 +952,7 @@ function PrivatePluginCard({
                       })
                     }
                   >
-                    <Text className="text-xs">
+                    <Text className="text-caption">
                       {t("plugins.disableBinding")}
                     </Text>
                   </Button>
@@ -960,7 +960,7 @@ function PrivatePluginCard({
               );
             })
           ) : (
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-caption text-muted-foreground">
               {t("plugins.noBindings")}
             </Text>
           )}
@@ -1032,7 +1032,7 @@ function ReviewRow({ label, value }: { label: string; value: string }) {
       <Text className="text-micro font-medium text-muted-foreground">
         {label}
       </Text>
-      <Text className="text-xs text-foreground" numberOfLines={4}>
+      <Text className="text-caption text-foreground" numberOfLines={4}>
         {value}
       </Text>
     </View>
@@ -1119,7 +1119,7 @@ function ScopePicker({
             >
               <Text
                 className={cn(
-                  "text-xs font-medium",
+                  "text-caption font-medium",
                   active ? "text-foreground" : "text-muted-foreground",
                 )}
               >

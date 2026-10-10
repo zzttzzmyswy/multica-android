@@ -52,7 +52,7 @@ export function ServerUnreachableNotice({
 
   return (
     <View className="gap-1.5 rounded-md border border-border bg-muted/40 p-2.5">
-      <Text className="text-xs text-muted-foreground">
+      <Text className="text-caption text-muted-foreground">
         {t("login.offlineCustomServer", { url: failedBaseUrl })}
       </Text>
       <View className="flex-row items-center gap-2">
@@ -71,7 +71,7 @@ export function ServerUnreachableNotice({
         </Button>
         {defaultUrl ? (
           <Text
-            className="flex-1 text-xs text-muted-foreground"
+            className="flex-1 text-caption text-muted-foreground"
             numberOfLines={1}
           >
             {defaultUrl}

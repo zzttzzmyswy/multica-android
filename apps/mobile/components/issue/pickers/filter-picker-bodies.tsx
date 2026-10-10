@@ -86,7 +86,7 @@ function OptionCountBadge({
   const { t } = useTranslation();
   if (count === undefined || count <= 0) return null;
   return (
-    <Text className="text-xs text-muted-foreground">
+    <Text className="text-caption text-muted-foreground">
       {t(count === 1 ? "filter.issueCount_one" : "filter.issueCount_other", {
         count,
       })}
@@ -127,7 +127,7 @@ function SearchBox({
           placeholderTextColor={THEME[colorScheme].mutedForeground}
           autoCapitalize="none"
           autoCorrect={false}
-          className="flex-1 text-sm text-foreground py-0"
+          className="flex-1 text-body text-foreground py-0"
           clearButtonMode="while-editing"
         />
         {value ? (
@@ -234,7 +234,7 @@ export function FilterActorPickerBody({
               )}
             >
               <ActorAvatar type={value.type} id={value.id} size={AVATAR_SIZE} />
-              <Text className="flex-1 text-base text-foreground">
+              <Text className="flex-1 text-title-sm text-foreground">
                 {item.kind === "member"
                   ? item.member.name
                   : item.kind === "agent"
@@ -242,11 +242,11 @@ export function FilterActorPickerBody({
                     : item.squad.name}
               </Text>
               {item.kind === "agent" ? (
-                <Text className="text-sm text-muted-foreground">
+                <Text className="text-body text-muted-foreground">
                   {t("picker.agent")}
                 </Text>
               ) : item.kind === "squad" ? (
-                <Text className="text-sm text-muted-foreground">
+                <Text className="text-body text-muted-foreground">
                   {t("picker.squad")}
                 </Text>
               ) : null}
@@ -332,7 +332,7 @@ export function FilterProjectPickerBody({
               size={28}
               color={MOBILE_PLACEHOLDER_COLOR}
             />
-            <Text className="flex-1 text-base text-foreground">
+            <Text className="flex-1 text-title-sm text-foreground">
               {t("filter.noProject")}
             </Text>
             <OptionCountBadge count={counts?.get(NO_VALUE_KEY)} />
@@ -354,7 +354,7 @@ export function FilterProjectPickerBody({
             >
               <ProjectIcon icon={item.project.icon} size="md" />
               <Text
-                className="flex-1 text-base text-foreground"
+                className="flex-1 text-title-sm text-foreground"
                 numberOfLines={1}
               >
                 {item.project.title}
@@ -430,7 +430,7 @@ export function FilterLabelPickerBody({
                 style={{ backgroundColor: item.color }}
               />
               <Text
-                className="flex-1 text-base text-foreground"
+                className="flex-1 text-title-sm text-foreground"
                 numberOfLines={1}
               >
                 {item.name}
@@ -557,7 +557,7 @@ export function FilterPropertyPickerBody({
                 />
               )}
               <Text
-                className="flex-1 text-base text-foreground"
+                className="flex-1 text-title-sm text-foreground"
                 numberOfLines={1}
               >
                 {item.name}
@@ -579,7 +579,7 @@ export function FilterPropertyPickerBody({
             />
           ) : (
             <View className="px-3 py-8 items-center">
-              <Text className="text-sm text-muted-foreground text-center">
+              <Text className="text-body text-muted-foreground text-center">
                 {/* No search box here, so "no matches" would be a lie about a
                     search the user never made — the options come from a
                     definition the parent already resolved. */}

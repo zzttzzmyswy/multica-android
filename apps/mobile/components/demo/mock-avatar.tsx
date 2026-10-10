@@ -30,7 +30,7 @@ export function MockAvatar({ kind, initials, size = 32 }: Props) {
     >
       <Text
         className={cn(
-          "text-xs font-medium",
+          "text-caption font-medium",
           kind === "agent" ? "text-brand" : "text-muted-foreground",
         )}
       >

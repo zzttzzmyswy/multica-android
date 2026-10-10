@@ -54,7 +54,7 @@ export function TimezonePickerSheet({
           <Pressable onPress={() => {}} className="w-full max-w-sm">
             <View className="bg-popover rounded-2xl overflow-hidden">
               <View className="px-4 py-3 border-b border-border">
-                <Text className="text-base font-semibold text-foreground">
+                <Text className="text-title-sm font-semibold text-foreground">
                   {t("autopilots.trigger.timezone")}
                 </Text>
               </View>
@@ -80,13 +80,13 @@ export function TimezonePickerSheet({
                       />
                       <Text
                         className={cn(
-                          "flex-1 text-sm text-foreground",
+                          "flex-1 text-body text-foreground",
                           selected && "font-medium",
                         )}
                       >
                         {cityLabel(tz)}
                       </Text>
-                      <Text className="text-xs text-muted-foreground font-mono">
+                      <Text className="text-caption text-muted-foreground font-mono">
                         {tz}
                       </Text>
                       {selected ? (

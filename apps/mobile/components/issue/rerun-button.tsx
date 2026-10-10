@@ -76,7 +76,7 @@ export function RerunButton({ issueId, taskId, variant = "chip" }: Props) {
             size={variant === "chip" ? 12 : 13}
             className="text-muted-foreground"
           />
-          <Text className="text-xs font-medium text-foreground">
+          <Text className="text-caption font-medium text-foreground">
             {t("runs.retry")}
           </Text>
         </View>

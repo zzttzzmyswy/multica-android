@@ -155,18 +155,18 @@ function WakeupTableRow({
               size={13}
               color={theme.mutedForeground}
             />
-            <Text className="text-xs tabular-nums text-muted-foreground">
+            <Text className="text-caption tabular-nums text-muted-foreground">
               {row.issue_identifier}
             </Text>
             <Text
-              className="flex-1 text-sm font-medium text-foreground"
+              className="flex-1 text-body font-medium text-foreground"
               numberOfLines={1}
             >
               {row.issue_title}
             </Text>
           </View>
 
-          <Text className="mt-1 text-xs text-foreground" numberOfLines={2}>
+          <Text className="mt-1 text-caption text-foreground" numberOfLines={2}>
             {text.trigger(row)}
           </Text>
           {detail ? (
@@ -289,14 +289,14 @@ function ScopeChips({
             } ${disabled ? "opacity-50" : ""}`}
           >
             <Text
-              className={`text-xs font-medium ${
+              className={`text-caption font-medium ${
                 active ? "text-brand" : "text-muted-foreground"
               }`}
             >
               {t(`autopilots.wakeups.scopes.${scope}`)}
             </Text>
             <Text
-              className="text-xs tabular-nums"
+              className="text-caption tabular-nums"
               style={{ color: theme.mutedForeground }}
             >
               {counts[scope] ?? 0}
@@ -344,7 +344,7 @@ function ChoiceSheet<T extends string>({
               option.value === value ? "bg-secondary/50" : ""
             }`}
           >
-            <Text className="text-sm text-foreground" numberOfLines={1}>
+            <Text className="text-body text-foreground" numberOfLines={1}>
               {option.label}
             </Text>
             {option.value === value ? (
@@ -437,7 +437,7 @@ export function WorkspaceWakeupsTable({
           className="flex-row items-center gap-1 rounded-md border border-border bg-secondary/50 px-2 h-10 active:opacity-70"
         >
           <Ionicons name="funnel-outline" size={13} color={theme.mutedForeground} />
-          <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+          <Text className="text-caption text-muted-foreground" numberOfLines={1}>
             {t(
               c.filters.source
                 ? `autopilots.wakeups.sources.${c.filters.source}`
@@ -456,7 +456,7 @@ export function WorkspaceWakeupsTable({
           className="flex-row items-center gap-1 rounded-md border border-border bg-secondary/50 px-2 py-1.5 active:opacity-70"
         >
           <Ionicons name="flash-outline" size={13} color={theme.mutedForeground} />
-          <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+          <Text className="text-caption text-muted-foreground" numberOfLines={1}>
             {c.kindOptions.find((o) => o.value === c.filters.kind)
               ? t(
                   c.kindOptions.find((o) => o.value === c.filters.kind)!
@@ -473,7 +473,7 @@ export function WorkspaceWakeupsTable({
           className="flex-1 flex-row items-center gap-1 rounded-md border border-border bg-secondary/50 px-2 py-1.5 active:opacity-70"
         >
           <Ionicons name="person-outline" size={13} color={theme.mutedForeground} />
-          <Text className="flex-1 text-xs text-muted-foreground" numberOfLines={1}>
+          <Text className="flex-1 text-caption text-muted-foreground" numberOfLines={1}>
             {c.agentLabel || t("autopilots.wakeups.all_agents")}
           </Text>
         </Pressable>
@@ -506,7 +506,7 @@ export function WorkspaceWakeupsTable({
       {batchMessage ? (
         <Text
           accessibilityRole="alert"
-          className={`px-4 pb-2 text-xs ${
+          className={`px-4 pb-2 text-caption ${
             c.batchResult?.failed.length
               ? "text-destructive"
               : "text-muted-foreground"
@@ -519,13 +519,13 @@ export function WorkspaceWakeupsTable({
       {c.isLoading ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator />
-          <Text className="mt-2 text-xs text-muted-foreground">
+          <Text className="mt-2 text-caption text-muted-foreground">
             {t("autopilots.wakeups.loading")}
           </Text>
         </View>
       ) : c.isError ? (
         <View className="px-4 gap-3 pt-4">
-          <Text className="text-sm text-destructive">
+          <Text className="text-body text-destructive">
             {t("autopilots.wakeups.load_error")}
           </Text>
           <Button variant="outline" onPress={c.refetch}>
@@ -551,7 +551,7 @@ export function WorkspaceWakeupsTable({
                   size={16}
                   color={theme.destructive}
                 />
-                <Text className="flex-1 text-xs text-foreground">
+                <Text className="flex-1 text-caption text-foreground">
                   {t("autopilots.wakeups.banner", {
                     count: c.banner.count,
                     issue: c.banner.issue,
@@ -588,7 +588,7 @@ export function WorkspaceWakeupsTable({
                 size={28}
                 color={theme.mutedForeground}
               />
-              <Text className="mt-2 text-sm text-muted-foreground text-center">
+              <Text className="mt-2 text-body text-muted-foreground text-center">
                 {c.filtered && c.counts.all > 0
                   ? t("autopilots.wakeups.empty_filtered")
                   : t("autopilots.wakeups.empty")}
@@ -617,7 +617,7 @@ export function WorkspaceWakeupsTable({
       <View className="border-t border-border px-3 py-2 flex-row items-center gap-1">
         {c.selection.picked.length > 0 ? (
           <>
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-caption text-muted-foreground">
               {t("autopilots.wakeups.selected", {
                 count: c.selection.picked.length,
               })}
@@ -640,7 +640,7 @@ export function WorkspaceWakeupsTable({
             </Button>
           </>
         ) : (
-          <Text className="text-xs tabular-nums text-muted-foreground">
+          <Text className="text-caption tabular-nums text-muted-foreground">
             {t("autopilots.wakeups.results", {
               page: c.pageNumber,
               count: c.page?.total ?? 0,
@@ -751,7 +751,7 @@ export function WorkspaceWakeupsTable({
         }}
       >
         <View className="px-4 pb-4">
-          <Text className="text-xs text-muted-foreground">
+          <Text className="text-caption text-muted-foreground">
             {t("autopilots.wakeups.confirm_body")}
           </Text>
           <View className="mt-3 flex-row justify-end gap-2">

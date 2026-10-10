@@ -155,7 +155,7 @@ export function RuntimeProfilesDialog({
             <Ionicons name="server-outline" size={16} color={muted} />
           </View>
           <View className="flex-1">
-            <Text className="text-base font-semibold text-foreground">
+            <Text className="text-title-sm font-semibold text-foreground">
               {title}
             </Text>
           </View>
@@ -248,10 +248,10 @@ function BrowseView({
             ) : (
               <View className="items-center rounded-md border border-border bg-secondary/30 px-4 py-6 gap-2">
                 <Ionicons name="server-outline" size={22} color={muted} />
-                <Text className="text-sm font-medium text-foreground">
+                <Text className="text-body font-medium text-foreground">
                   {t("runtimes.profiles.emptyTitle")}
                 </Text>
-                <Text className="text-xs text-muted-foreground text-center leading-4">
+                <Text className="text-caption text-muted-foreground text-center leading-4">
                   {t("runtimes.profiles.emptyDescription")}
                 </Text>
                 <Button size="sm" variant="outline" onPress={onAddNew}>
@@ -302,10 +302,10 @@ function BrowseView({
                     className="flex-row items-center gap-2 px-3 py-2"
                   >
                     <FamilyBadge family={entry.protocolFamily} />
-                    <Text className="flex-1 text-xs text-foreground capitalize">
+                    <Text className="flex-1 text-caption text-foreground capitalize">
                       {entry.protocolFamily}
                     </Text>
-                    <Text className="text-[10px] text-muted-foreground">
+                    <Text className="text-micro text-muted-foreground">
                       {t("runtimes.profiles.badgeBuiltin")}
                     </Text>
                   </View>
@@ -374,12 +374,12 @@ function CustomCard({
         <FamilyBadge family={profile.protocol_family} />
         <View className="flex-1 min-w-0">
           <View className="flex-row items-center gap-1.5 flex-wrap">
-            <Text className="text-sm font-medium text-foreground" numberOfLines={1}>
+            <Text className="text-body font-medium text-foreground" numberOfLines={1}>
               {profile.display_name}
             </Text>
             {!profile.enabled ? (
               <View className="px-1.5 py-px rounded-full bg-warning/10">
-                <Text className="text-[10px] text-warning font-medium">
+                <Text className="text-micro text-warning font-medium">
                   {t("runtimes.profiles.badgeDisabled")}
                 </Text>
               </View>
@@ -442,10 +442,10 @@ function ProfileFormView({
           <Text className="text-micro font-medium uppercase tracking-wide text-muted-foreground">
             {t("runtimes.profiles.form.stepProgress", { current: "1", total: "2" })}
           </Text>
-          <Text className="text-base font-semibold text-foreground">
+          <Text className="text-title-sm font-semibold text-foreground">
             {t("runtimes.profiles.form.stepFamilyLabel")}
           </Text>
-          <Text className="text-xs text-muted-foreground">
+          <Text className="text-caption text-muted-foreground">
             {t("runtimes.profiles.form.stepFamilyHint")}
           </Text>
           <View className="flex-row flex-wrap gap-2 pt-1">
@@ -458,7 +458,7 @@ function ProfileFormView({
                 )}
               >
                 <FamilyBadge family={option} />
-                <Text className="text-xs text-foreground capitalize">{option}</Text>
+                <Text className="text-caption text-foreground capitalize">{option}</Text>
               </Pressable>
             ))}
           </View>
@@ -623,12 +623,12 @@ function ProfileDetailsForm({
 
         {/* Family (locked) */}
         <View className="gap-1.5">
-          <Text className="text-xs text-muted-foreground">
+          <Text className="text-caption text-muted-foreground">
             {t("runtimes.profiles.form.familyLabel")}
           </Text>
           <View className="flex-row items-center gap-2 rounded-lg border bg-secondary/40 px-3 py-2">
             <FamilyBadge family={family} />
-            <Text className="text-sm text-foreground capitalize">{family}</Text>
+            <Text className="text-body text-foreground capitalize">{family}</Text>
           </View>
           <Text className="text-micro text-muted-foreground">
             {t("runtimes.profiles.form.familyLockedHint")}
@@ -637,7 +637,7 @@ function ProfileDetailsForm({
 
         {/* Display name */}
         <View className="gap-1.5">
-          <Text className="text-xs text-muted-foreground">
+          <Text className="text-caption text-muted-foreground">
             {t("runtimes.profiles.form.displayNameLabel")}
           </Text>
           <TextField
@@ -653,11 +653,11 @@ function ProfileDetailsForm({
             maxLength={80}
           />
           {duplicateName ? (
-            <Text className="text-xs text-destructive">
+            <Text className="text-caption text-destructive">
               {t("runtimes.profiles.duplicateName")}
             </Text>
           ) : errors.includes("displayName") ? (
-            <Text className="text-xs text-destructive">
+            <Text className="text-caption text-destructive">
               {t("runtimes.profiles.form.errorDisplayNameRequired")}
             </Text>
           ) : null}
@@ -665,7 +665,7 @@ function ProfileDetailsForm({
 
         {/* Command line */}
         <View className="gap-1.5">
-          <Text className="text-xs text-muted-foreground">
+          <Text className="text-caption text-muted-foreground">
             {t("runtimes.profiles.form.commandLabel")}
           </Text>
           <TextField
@@ -680,7 +680,7 @@ function ProfileDetailsForm({
             multiline
           />
           {commandError ? (
-            <Text className="text-xs text-destructive">{commandError}</Text>
+            <Text className="text-caption text-destructive">{commandError}</Text>
           ) : parsedCommand.ok ? (
             <Text className="font-mono text-micro text-muted-foreground">
               {t("runtimes.profiles.form.commandPreviewExecutable")} {parsedCommand.commandName}
@@ -693,7 +693,7 @@ function ProfileDetailsForm({
 
         {/* Description */}
         <View className="gap-1.5">
-          <Text className="text-xs text-muted-foreground">
+          <Text className="text-caption text-muted-foreground">
             {t("runtimes.profiles.form.descriptionLabel")}
           </Text>
           <TextField
@@ -708,7 +708,7 @@ function ProfileDetailsForm({
         </View>
 
         {formError ? (
-          <Text className="text-xs text-destructive">{formError}</Text>
+          <Text className="text-caption text-destructive">{formError}</Text>
         ) : null}
       </ScrollView>
 
@@ -766,7 +766,7 @@ function parseErrorMessage(
 function FamilyBadge({ family }: { family: string }) {
   return (
     <View className="size-6 rounded-md bg-secondary items-center justify-center shrink-0">
-      <Text className="text-[10px] font-semibold text-muted-foreground capitalize">
+      <Text className="text-micro font-semibold text-muted-foreground capitalize">
         {family.slice(0, 3)}
       </Text>
     </View>

@@ -62,7 +62,7 @@ export function IssueParentSection({ issue, wsSlug }: Props) {
 
   return (
     <View className="border-t border-border px-4 py-2 gap-1">
-      <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+      <Text className="text-caption uppercase tracking-wider text-muted-foreground font-medium">
         {t("issueRelation.parent")}
       </Text>
       <View className="flex-row items-center gap-1">
@@ -84,10 +84,10 @@ export function IssueParentSection({ issue, wsSlug }: Props) {
             }
             size={14}
           />
-          <Text className="text-xs text-muted-foreground shrink-0">
+          <Text className="text-caption text-muted-foreground shrink-0">
             {parent.identifier}
           </Text>
-          <Text className="flex-1 text-sm text-foreground" numberOfLines={1}>
+          <Text className="flex-1 text-body text-foreground" numberOfLines={1}>
             {parent.title}
           </Text>
         </Pressable>

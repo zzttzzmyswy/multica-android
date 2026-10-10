@@ -188,7 +188,7 @@ export function PinnedScreen() {
   if (error) {
     return (
       <View className="flex-1 bg-background px-4 gap-3 pt-4">
-        <Text className="text-sm text-destructive">
+        <Text className="text-body text-destructive">
           {t("pins.loadFailed")}
           {error instanceof Error ? error.message : t("common.unknownError")}
         </Text>
@@ -202,7 +202,7 @@ export function PinnedScreen() {
   if (pins.length === 0) {
     return (
       <View className="flex-1 items-center justify-center bg-background px-6">
-        <Text className="text-sm text-muted-foreground text-center">
+        <Text className="text-body text-muted-foreground text-center">
           {t("pins.empty")}
         </Text>
       </View>
@@ -524,7 +524,7 @@ function ViewPinRow({
         size={18}
         color={THEME[colorScheme].mutedForeground}
       />
-      <Text className="flex-1 text-sm text-foreground" numberOfLines={1}>
+      <Text className="flex-1 text-body text-foreground" numberOfLines={1}>
         {view.name || t("screen.view")}
       </Text>
       {view.visibility === "workspace" ? (
@@ -611,7 +611,7 @@ function MissingPinRow({
         size={18}
         color={THEME[colorScheme].mutedForeground}
       />
-      <Text className="flex-1 text-sm text-muted-foreground" numberOfLines={1}>
+      <Text className="flex-1 text-body text-muted-foreground" numberOfLines={1}>
         {t("pins.unavailable", { itemType: typeLabel })}
       </Text>
     </Pressable>

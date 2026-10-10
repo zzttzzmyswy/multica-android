@@ -140,7 +140,7 @@ export default function DownloadsPage() {
             accessibilityLabel={t("downloads.clearFinished")}
           >
             <Ionicons name="trash-outline" size={13} color={theme.mutedForeground} />
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-caption text-muted-foreground">
               {t("downloads.clearFinished")}
             </Text>
           </Pressable>
@@ -198,7 +198,7 @@ function TabPill({
     >
       <Text
         className={cn(
-          "text-xs font-medium",
+          "text-caption font-medium",
           active ? "text-background" : "text-muted-foreground",
         )}
       >
@@ -213,7 +213,7 @@ function TabPill({
         >
           <Text
             className={cn(
-              "text-[10px] font-semibold",
+              "text-micro font-semibold",
               active ? "text-background" : "text-white",
             )}
           >
@@ -238,11 +238,11 @@ function ActiveRow({
     <View className="rounded-xl border border-border bg-card px-3 py-2.5">
       <View className="flex-row items-center gap-2">
         <Ionicons name="download-outline" size={16} color={theme.mutedForeground} />
-        <Text className="flex-1 text-sm text-foreground" numberOfLines={1}>
+        <Text className="flex-1 text-body text-foreground" numberOfLines={1}>
           {task.filename}
         </Text>
         {pct != null ? (
-          <Text className="text-xs text-muted-foreground tabular-nums">
+          <Text className="text-caption text-muted-foreground tabular-nums">
             {pct}%
           </Text>
         ) : null}
@@ -251,7 +251,7 @@ function ActiveRow({
           className="rounded-full bg-muted px-2.5 py-1 active:opacity-80"
           accessibilityLabel={t("downloads.cancel")}
         >
-          <Text className="text-xs text-muted-foreground">{t("downloads.cancel")}</Text>
+          <Text className="text-caption text-muted-foreground">{t("downloads.cancel")}</Text>
         </Pressable>
       </View>
       <View className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
@@ -296,7 +296,7 @@ function FinishedRow({
       <View className="flex-row items-center gap-2">
         <Ionicons name={icon} size={16} color={iconColor} />
         <View className="flex-1 min-w-0">
-          <Text className="text-sm text-foreground" numberOfLines={1}>
+          <Text className="text-body text-foreground" numberOfLines={1}>
             {task.filename}
           </Text>
         </View>
@@ -309,7 +309,7 @@ function FinishedRow({
             accessibilityLabel={t("downloads.open")}
           >
             <Ionicons name="open-outline" size={12} color={theme.mutedForeground} />
-            <Text className="text-xs text-muted-foreground">{t("downloads.open")}</Text>
+            <Text className="text-caption text-muted-foreground">{t("downloads.open")}</Text>
           </Pressable>
         ) : task.status === "failed" ? (
           <Pressable
@@ -318,7 +318,7 @@ function FinishedRow({
             accessibilityLabel={t("downloads.retry")}
           >
             <Ionicons name="refresh" size={12} color={theme.mutedForeground} />
-            <Text className="text-xs text-muted-foreground">{t("downloads.retry")}</Text>
+            <Text className="text-caption text-muted-foreground">{t("downloads.retry")}</Text>
           </Pressable>
         ) : null}
         <Pressable
@@ -326,12 +326,12 @@ function FinishedRow({
           className="rounded-full bg-muted px-2.5 py-1 active:opacity-80"
           accessibilityLabel={t("downloads.delete")}
         >
-          <Text className="text-xs text-muted-foreground">{t("downloads.delete")}</Text>
+          <Text className="text-caption text-muted-foreground">{t("downloads.delete")}</Text>
         </Pressable>
       </View>
       <View className="mt-1 flex-row items-center gap-2">
         <StatusLabel task={task} />
-        <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+        <Text className="text-caption text-muted-foreground" numberOfLines={1}>
           {formatDownloadTime(task.completedAt ?? task.createdAt)}
         </Text>
         <SourceLine task={task} />
@@ -348,7 +348,7 @@ function StatusLabel({ task }: { task: DownloadTask }) {
       : task.status === "failed"
         ? "downloads.failed"
         : "downloads.cancelled";
-  return <Text className="text-xs text-muted-foreground">{t(key)}</Text>;
+  return <Text className="text-caption text-muted-foreground">{t(key)}</Text>;
 }
 
 /** Source label: localized kind + optional context name, e.g. "聊天 ·
@@ -358,7 +358,7 @@ function SourceLine({ task }: { task: DownloadTask }) {
   const name = downloadSourceName(task.source);
   const label = t(downloadSourceLabelKey(task.source));
   return (
-    <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+    <Text className="text-caption text-muted-foreground" numberOfLines={1}>
       {name ? `${label} · ${name}` : label}
     </Text>
   );
@@ -370,7 +370,7 @@ function EmptyState({ icon, text }: { icon: React.ComponentProps<typeof Ionicons
   return (
     <View className="items-center px-4 py-10">
       <Ionicons name={icon} size={36} color={theme.mutedForeground} />
-      <Text className="mt-2 text-sm text-muted-foreground text-center">{text}</Text>
+      <Text className="mt-2 text-body text-muted-foreground text-center">{text}</Text>
     </View>
   );
 }

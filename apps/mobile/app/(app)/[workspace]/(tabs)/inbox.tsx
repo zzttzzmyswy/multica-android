@@ -252,10 +252,10 @@ export default function Inbox() {
             className="text-muted-foreground"
           />
         </View>
-        <Text className="flex-1 text-sm font-medium text-muted-foreground">
+        <Text className="flex-1 text-body font-medium text-muted-foreground">
           {t("inbox.archivedTitle")}
         </Text>
-        <Text className="text-sm text-muted-foreground tabular-nums">
+        <Text className="text-body text-muted-foreground tabular-nums">
           {archivedData.length}
         </Text>
         <Ionicons
@@ -286,10 +286,10 @@ export default function Inbox() {
               className="text-foreground"
             />
           </Pressable>
-          <Text className="flex-1 text-base font-semibold text-foreground">
+          <Text className="flex-1 text-title-sm font-semibold text-foreground">
             {t("inbox.archivedTitle")}
           </Text>
-          <Text className="text-sm text-muted-foreground tabular-nums">
+          <Text className="text-body text-muted-foreground tabular-nums">
             {archivedData.length}
           </Text>
         </View>
@@ -297,7 +297,7 @@ export default function Inbox() {
           <InboxLoading />
         ) : archivedError ? (
           <View className="px-4 gap-3 pt-4">
-            <Text className="text-sm text-destructive">
+            <Text className="text-body text-destructive">
               {t("inbox.archivedLoadError")}
               {archivedErrorObj instanceof Error
                 ? archivedErrorObj.message
@@ -361,7 +361,7 @@ export default function Inbox() {
         <InboxLoading />
       ) : error ? (
         <View className="px-4 gap-3 pt-4">
-          <Text className="text-sm text-destructive">
+          <Text className="text-body text-destructive">
             {t("inbox.loadError")}
             {error instanceof Error ? error.message : t("common.unknownError")}
           </Text>
@@ -437,11 +437,11 @@ function InboxEmpty({
   return (
     <View className="flex-1 items-center justify-center px-8 gap-3">
       <Ionicons name="mail-open-outline" size={42} color={iconColor} />
-      <Text className="text-base font-medium text-foreground text-center">
+      <Text className="text-title-sm font-medium text-foreground text-center">
         {titleText}
       </Text>
       {subtitleText ? (
-        <Text className="text-sm text-muted-foreground text-center">
+        <Text className="text-body text-muted-foreground text-center">
           {subtitleText}
         </Text>
       ) : null}

@@ -473,7 +473,7 @@ export default function AgentsPage() {
           }}
           accessibilityLabel={t("agents.batch.done")}
         >
-          <Text className="text-sm font-medium text-brand">
+          <Text className="text-body font-medium text-brand">
             {t("agents.batch.done")}
           </Text>
         </Pressable>
@@ -505,7 +505,7 @@ export default function AgentsPage() {
           </View>
         ) : error ? (
           <View className="px-4 gap-3 pt-4">
-            <Text className="text-sm text-destructive">
+            <Text className="text-body text-destructive">
               {t("agents.loadError")}
               {error instanceof Error ? error.message : t("common.unknownError")}
             </Text>
@@ -516,10 +516,10 @@ export default function AgentsPage() {
         ) : showEmpty ? (
           <View className="flex-1 items-center justify-center px-6 gap-1">
             <Ionicons name="hardware-chip-outline" size={32} color={muted} />
-            <Text className="text-sm text-muted-foreground text-center mt-2">
+            <Text className="text-body text-muted-foreground text-center mt-2">
               {t("agents.emptyTitle")}
             </Text>
-            <Text className="text-xs text-muted-foreground/70 text-center">
+            <Text className="text-caption text-muted-foreground/70 text-center">
               {t("agents.emptyDescription")}
             </Text>
             {wsSlug ? (
@@ -591,7 +591,7 @@ export default function AgentsPage() {
               ItemSeparatorComponent={() => <View className="h-px bg-border ml-4" />}
               contentContainerClassName="pb-24"
               ListEmptyComponent={
-                <Text className="px-4 py-8 text-center text-sm text-muted-foreground">
+                <Text className="px-4 py-8 text-center text-body text-muted-foreground">
                   {noMatchText}
                 </Text>
               }
@@ -745,7 +745,7 @@ function AgentSortPicker({
       className="flex-row items-center gap-1 rounded-md border border-border bg-secondary/50 px-2 py-1.5 active:opacity-70"
     >
       <Ionicons name="swap-vertical" size={14} color={muted} />
-      <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+      <Text className="text-caption text-muted-foreground" numberOfLines={1}>
         {activeLabel}
       </Text>
     </Pressable>
@@ -794,13 +794,13 @@ function AgentFilterButton({
       />
       {active ? (
         <Text
-          className="text-xs font-medium tabular-nums"
+          className="text-caption font-medium tabular-nums"
           style={{ color: theme.primary }}
         >
           {activeCount}
         </Text>
       ) : (
-        <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+        <Text className="text-caption text-muted-foreground" numberOfLines={1}>
           {t("agents.filter.open")}
         </Text>
       )}
@@ -852,7 +852,7 @@ function AgentsScopeTabs({
           >
             <Text
               className={cn(
-                "text-xs tabular-nums",
+                "text-caption tabular-nums",
                 active ? "text-foreground font-medium" : "text-muted-foreground",
               )}
             >
@@ -901,7 +901,7 @@ function ScopeFilterChips({
           >
             <Text
               className={cn(
-                "text-xs",
+                "text-caption",
                 active ? "text-foreground font-medium" : "text-muted-foreground",
               )}
             >
@@ -943,12 +943,12 @@ function BatchBar({
   return (
     <View className="absolute bottom-4 left-0 right-0 px-4">
       <View className="flex-row items-center gap-2 rounded-xl border border-border bg-background px-3 py-2.5 shadow-lg">
-        <Text className="text-sm font-medium text-foreground tabular-nums">
+        <Text className="text-body font-medium text-foreground tabular-nums">
           {t("agents.batch.selectedCount", { count })}
         </Text>
         {!allSelected ? (
           <Pressable onPress={onSelectAll} disabled={busy} className="px-1.5">
-            <Text className="text-xs font-medium text-brand">
+            <Text className="text-caption font-medium text-brand">
               {t("agents.batch.selectAll")}
             </Text>
           </Pressable>
@@ -1016,7 +1016,7 @@ function AgentRow({
         <View className="flex-1 min-w-0 gap-0.5">
           <View className="flex-row items-center gap-2">
             <Text
-              className="flex-1 text-sm font-medium text-foreground"
+              className="flex-1 text-body font-medium text-foreground"
               numberOfLines={1}
             >
               {agent.name}
@@ -1033,33 +1033,33 @@ function AgentRow({
             </View>
           </View>
           {agent.description ? (
-            <Text className="text-xs text-muted-foreground" numberOfLines={2}>
+            <Text className="text-caption text-muted-foreground" numberOfLines={2}>
               {agent.description}
             </Text>
           ) : null}
           <View className="flex-row items-center gap-1.5">
             <PresenceDot availability={availability} size={7} />
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-caption text-muted-foreground">
               {availabilityLabel}
             </Text>
             {!archived && !needsRuntime && activeCount > 0 ? (
-              <Text className="text-xs text-muted-foreground">
+              <Text className="text-caption text-muted-foreground">
                 · {t("agents.taskCount", { count: activeCount })}
               </Text>
             ) : null}
             {!archived && needsRuntime ? (
-              <Text className="text-xs text-amber-600 dark:text-amber-400">
+              <Text className="text-caption text-amber-600 dark:text-amber-400">
                 · {t("agents.needsRuntime")}
               </Text>
             ) : null}
             {!archived && agent.model ? (
-              <Text className="text-xs text-muted-foreground/70">
+              <Text className="text-caption text-muted-foreground/70">
                 · {agent.model}
               </Text>
             ) : null}
             {!archived ? (
               <View className="px-1.5 py-px rounded-full border border-border bg-secondary/60">
-                <Text className="text-[10px] text-muted-foreground">
+                <Text className="text-micro text-muted-foreground">
                   {t(SCOPE_BADGE_KEY[scopeBadge(agent)])}
                 </Text>
               </View>
@@ -1121,26 +1121,26 @@ function SelectableAgentRow({
         <ActorAvatar type="agent" id={agent.id} size={40} />
         <View className="flex-1 min-w-0 gap-0.5">
           <Text
-            className="text-sm font-medium text-foreground"
+            className="text-body font-medium text-foreground"
             numberOfLines={1}
           >
             {agent.name}
           </Text>
           {agent.description ? (
-            <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+            <Text className="text-caption text-muted-foreground" numberOfLines={1}>
               {agent.description}
             </Text>
           ) : null}
           <View className="flex-row items-center gap-1.5">
             <PresenceDot availability={availability} size={7} />
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-caption text-muted-foreground">
               {availabilityLabel}
             </Text>
           </View>
         </View>
         {!archived ? (
           <View className="px-1.5 py-px rounded-full border border-border bg-secondary/60">
-            <Text className="text-[10px] text-muted-foreground">
+            <Text className="text-micro text-muted-foreground">
               {t(SCOPE_BADGE_KEY[scopeBadge(agent)])}
             </Text>
           </View>

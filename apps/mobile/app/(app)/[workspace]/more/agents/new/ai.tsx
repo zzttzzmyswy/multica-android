@@ -166,7 +166,7 @@ export default function AiBuilderSetupPage() {
             </View>
           ) : sessions.length === 0 ? (
             <View className="rounded-xl border border-border bg-secondary/30 px-4 py-4">
-              <Text className="text-sm text-muted-foreground">
+              <Text className="text-body text-muted-foreground">
                 {t("agents.new.ai.unfinishedEmpty")}
               </Text>
             </View>
@@ -190,7 +190,7 @@ export default function AiBuilderSetupPage() {
                     >
                       <View className="flex-row items-baseline gap-2">
                         <Text
-                          className="text-sm font-medium text-foreground"
+                          className="text-body font-medium text-foreground"
                           numberOfLines={1}
                         >
                           {title || t("agents.new.ai.untitled")}
@@ -203,7 +203,7 @@ export default function AiBuilderSetupPage() {
                       </View>
                       {preview ? (
                         <Text
-                          className="text-xs text-muted-foreground"
+                          className="text-caption text-muted-foreground"
                           numberOfLines={2}
                         >
                           {preview}
@@ -233,7 +233,7 @@ export default function AiBuilderSetupPage() {
           <Text className="text-micro font-medium uppercase tracking-wider text-muted-foreground">
             {t("agents.new.ai.newConversation")}
           </Text>
-          <Text className="text-sm text-muted-foreground">
+          <Text className="text-body text-muted-foreground">
             {t("agents.new.ai.chooseRuntimeHint")}
           </Text>
           <Pressable
@@ -249,17 +249,17 @@ export default function AiBuilderSetupPage() {
                   size={16}
                   color={theme.mutedForeground}
                 />
-                <Text className="flex-1 text-sm text-foreground" numberOfLines={1}>
+                <Text className="flex-1 text-body text-foreground" numberOfLines={1}>
                   {runtimeDisplayLabel(selectedRuntime)}
                 </Text>
                 {selectedRuntime.visibility !== "public" ? (
-                  <Text className="text-[10px] text-info">
+                  <Text className="text-micro text-info">
                     {t("runtimes.visibility.private")}
                   </Text>
                 ) : null}
               </>
             ) : (
-              <Text className="flex-1 text-sm text-muted-foreground">
+              <Text className="flex-1 text-body text-muted-foreground">
                 {runtimesLoading
                   ? t("agents.new.runtimesLoading")
                   : t("agents.new.runtimePlaceholder")}
@@ -268,14 +268,14 @@ export default function AiBuilderSetupPage() {
             <Ionicons name="chevron-down" size={16} color={theme.mutedForeground} />
           </Pressable>
           {usable.length === 0 && !runtimesLoading ? (
-            <Text className="text-xs text-destructive">
+            <Text className="text-caption text-destructive">
               {t("agents.new.ai.noRuntimes")}
             </Text>
           ) : null}
 
           {error ? (
             <View className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2.5">
-              <Text className="text-sm text-destructive">{error}</Text>
+              <Text className="text-body text-destructive">{error}</Text>
             </View>
           ) : null}
 

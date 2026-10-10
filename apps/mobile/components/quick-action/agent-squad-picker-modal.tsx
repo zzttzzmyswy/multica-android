@@ -100,7 +100,7 @@ export function AgentSquadPickerModal({
         <View className="flex-1 justify-end">
           <Pressable onPress={() => {}} className="bg-popover rounded-t-2xl max-h-[75%]">
             <View className="flex-row items-center justify-between border-b border-border px-4 py-3">
-              <Text className="text-base font-semibold text-foreground">
+              <Text className="text-title-sm font-semibold text-foreground">
                 {t("quickActions.fieldTarget")}
               </Text>
               <Pressable onPress={onClose} hitSlop={8}>
@@ -111,7 +111,7 @@ export function AgentSquadPickerModal({
               <View className="flex-row items-center gap-2 rounded-md border border-border bg-background px-3">
                 <Ionicons name="search" size={14} color={theme.mutedForeground} />
                 <TextInput
-                  className="flex-1 py-2 text-sm text-foreground"
+                  className="flex-1 py-2 text-body text-foreground"
                   placeholder={t("picker.searchPeople")}
                   placeholderTextColor={theme.mutedForeground}
                   value={query}
@@ -151,11 +151,11 @@ export function AgentSquadPickerModal({
                       showPresence={item.kind === "agent" && runtimeBound}
                     />
                     <View className="flex-1 min-w-0">
-                      <Text className="text-sm font-medium text-foreground" numberOfLines={1}>
+                      <Text className="text-body font-medium text-foreground" numberOfLines={1}>
                         {item.name}
                       </Text>
                       {item.kind === "agent" && !runtimeBound ? (
-                        <Text className="text-xs text-muted-foreground">
+                        <Text className="text-caption text-muted-foreground">
                           {t("agents.notBound")}
                         </Text>
                       ) : null}

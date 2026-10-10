@@ -113,10 +113,10 @@ export function AgentAccessEditor({
               />
               <Ionicons name={s.icon} size={15} color={theme.mutedForeground} />
               <View className="flex-1">
-                <Text className="text-sm font-medium text-foreground">
+                <Text className="text-body font-medium text-foreground">
                   {t(s.titleKey)}
                 </Text>
-                <Text className="text-xs text-muted-foreground">
+                <Text className="text-caption text-muted-foreground">
                   {t(s.descKey)}
                 </Text>
               </View>
@@ -136,7 +136,7 @@ export function AgentAccessEditor({
             <Ionicons name="people-outline" size={16} color={theme.mutedForeground} />
             <Text
               className={cn(
-                "flex-1 text-sm",
+                "flex-1 text-body",
                 selected.length > 0 ? "text-foreground" : "text-muted-foreground",
               )}
               numberOfLines={1}
@@ -146,14 +146,14 @@ export function AgentAccessEditor({
                 : t("agents.access.memberSelectTitle")}
             </Text>
             {selected.length > 0 ? (
-              <Text className="text-xs text-muted-foreground tabular-nums">
+              <Text className="text-caption text-muted-foreground tabular-nums">
                 {t("agents.access.membersSummary", { count: selected.length })}
               </Text>
             ) : null}
             <Ionicons name="chevron-down" size={16} color={theme.mutedForeground} />
           </Pressable>
           {draft.memberIds.size === 0 ? (
-            <Text className="text-xs text-destructive" role="alert">
+            <Text className="text-caption text-destructive" role="alert">
               {t("agents.access.shared_target_required")}
             </Text>
           ) : null}
@@ -217,13 +217,13 @@ export function AgentAccessReadonlySummary({
         />
       </View>
       <View className="flex-1 min-w-0 gap-0.5">
-        <Text className="text-sm font-medium text-foreground">{label}</Text>
+        <Text className="text-body font-medium text-foreground">{label}</Text>
         {seeded.permissionScope === "members" && memberNames ? (
-          <Text className="text-xs text-muted-foreground" numberOfLines={2}>
+          <Text className="text-caption text-muted-foreground" numberOfLines={2}>
             {memberNames}
           </Text>
         ) : null}
-        <Text className="text-xs text-muted-foreground leading-4">
+        <Text className="text-caption text-muted-foreground leading-4">
           {t("agents.access.owner_only_readonly")}
         </Text>
       </View>
@@ -328,7 +328,7 @@ function EditableAgentAccessPicker({
               size={14}
               color={THEME[colorScheme].brand}
             />
-            <Text className="text-xs font-medium text-brand">
+            <Text className="text-caption font-medium text-brand">
               {t("agents.access.saved")}
             </Text>
           </View>
@@ -362,7 +362,7 @@ export function AgentAccessPicker({
   if (!canEdit) {
     return (
       <View className="gap-1">
-        <Text className="px-4 pb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+        <Text className="px-4 pb-2 text-caption font-medium uppercase tracking-wider text-muted-foreground">
           {t("agents.access.section_title")}
         </Text>
         <AgentAccessReadonlySummary agent={agent} members={members} />
@@ -371,7 +371,7 @@ export function AgentAccessPicker({
   }
   return (
     <View className="gap-1">
-      <Text className="px-4 pb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+      <Text className="px-4 pb-2 text-caption font-medium uppercase tracking-wider text-muted-foreground">
         {t("agents.access.section_title")}
       </Text>
       <EditableAgentAccessPicker

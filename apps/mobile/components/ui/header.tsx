@@ -45,14 +45,14 @@ export function Header({ title, subtitle, center, left, right }: Props) {
             title ? (
               <>
                 <Text
-                  className="text-lg font-semibold text-foreground"
+                  className="text-title font-semibold text-foreground"
                   numberOfLines={1}
                 >
                   {title}
                 </Text>
                 {subtitle ? (
                   <Text
-                    className="text-xs text-muted-foreground"
+                    className="text-caption text-muted-foreground"
                     numberOfLines={1}
                   >
                     {subtitle}

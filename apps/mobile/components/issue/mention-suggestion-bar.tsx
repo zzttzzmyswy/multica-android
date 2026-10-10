@@ -267,7 +267,7 @@ export function MentionSuggestionBar({
                   index > 0 && "border-t border-border/60 mt-1",
                 )}
               >
-                <Text className="text-[10px] uppercase tracking-wider text-muted-foreground/80 font-medium">
+                <Text className="text-micro uppercase tracking-wider text-muted-foreground/80 font-medium">
                   {item.label}
                 </Text>
               </View>
@@ -281,7 +281,7 @@ export function MentionSuggestionBar({
             // caches, not a directory, so it keeps the plain no-match line.
             return isChat ? (
               <View className="px-3 py-3">
-                <Text className="text-xs text-muted-foreground">
+                <Text className="text-caption text-muted-foreground">
                   {t("mention.noMatches")}
                 </Text>
               </View>
@@ -305,9 +305,9 @@ export function MentionSuggestionBar({
                 className="flex-row items-center gap-3 px-3 py-2 active:bg-secondary"
               >
                 <View className="size-7 rounded-full bg-brand/15 items-center justify-center">
-                  <Text className="text-xs font-medium text-brand">@</Text>
+                  <Text className="text-caption font-medium text-brand">@</Text>
                 </View>
-                <Text className="flex-1 text-sm text-foreground">
+                <Text className="flex-1 text-body text-foreground">
                   {t("mention.everyone")}
                 </Text>
                 <Badge label={t("mention.all")} />
@@ -331,7 +331,7 @@ export function MentionSuggestionBar({
                   id={item.member.user_id}
                   size={28}
                 />
-                <Text className="flex-1 text-sm text-foreground">
+                <Text className="flex-1 text-body text-foreground">
                   {item.member.name}
                 </Text>
                 <Badge label={t("mention.member")} />
@@ -356,7 +356,7 @@ export function MentionSuggestionBar({
                 )}
               >
                 <ActorAvatar type="agent" id={item.agent.id} size={28} showPresence />
-                <Text className="flex-1 text-sm text-foreground">
+                <Text className="flex-1 text-body text-foreground">
                   {item.agent.name}
                 </Text>
                 <Badge
@@ -381,7 +381,7 @@ export function MentionSuggestionBar({
                 className="flex-row items-center gap-3 px-3 py-2 active:bg-secondary"
               >
                 <ActorAvatar type="squad" id={item.squad.id} size={28} />
-                <Text className="flex-1 text-sm text-foreground">
+                <Text className="flex-1 text-body text-foreground">
                   {item.squad.name}
                 </Text>
                 <Badge label={t("mention.squad")} tone="outline" />
@@ -415,11 +415,11 @@ export function MentionSuggestionBar({
                   size={16}
                 />
               </View>
-              <Text className="text-sm font-medium text-foreground">
+              <Text className="text-body font-medium text-foreground">
                 {item.issue.identifier}
               </Text>
               <Text
-                className="flex-1 text-sm text-muted-foreground"
+                className="flex-1 text-body text-muted-foreground"
                 numberOfLines={1}
               >
                 {item.issue.title}
@@ -452,7 +452,7 @@ function Badge({
     >
       <Text
         className={cn(
-          "text-[10px] uppercase tracking-wide",
+          "text-micro uppercase tracking-wide",
           tone === "brand" ? "text-brand" : "text-muted-foreground",
         )}
       >

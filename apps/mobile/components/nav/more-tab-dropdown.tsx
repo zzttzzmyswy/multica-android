@@ -227,7 +227,7 @@ export function MoreTabDropdownAnchor({
                 color={t2.foreground}
                 size={18}
               />
-              <Text className="text-sm text-foreground">{t(item.labelKey)}</Text>
+              <Text className="text-body text-foreground">{t(item.labelKey)}</Text>
               {hasUpdate && item.path === "/more/about" ? (
                 <View
                   className="ml-auto size-2 rounded-full bg-destructive"
@@ -239,7 +239,7 @@ export function MoreTabDropdownAnchor({
                   className="ml-auto min-w-[18px] h-[18px] rounded-full bg-primary items-center justify-center px-1"
                   accessibilityLabel={t("downloads.tab.active")}
                 >
-                  <Text className="text-[10px] font-semibold text-white">
+                  <Text className="text-micro font-semibold text-white">
                     {activeDownloads}
                   </Text>
                 </View>
@@ -282,21 +282,21 @@ function UserCard({
         />
       ) : (
         <View className="size-8 rounded-full bg-muted items-center justify-center">
-          <Text className="text-xs font-medium text-muted-foreground">
+          <Text className="text-caption font-medium text-muted-foreground">
             {initial}
           </Text>
         </View>
       )}
       <View className="flex-1 min-w-0">
         <Text
-          className="text-sm font-medium text-foreground"
+          className="text-body font-medium text-foreground"
           numberOfLines={1}
         >
           {user?.name ?? "—"}
         </Text>
         {user?.email ? (
           <Text
-            className="text-xs text-muted-foreground"
+            className="text-caption text-muted-foreground"
             numberOfLines={1}
           >
             {user.email}
@@ -374,7 +374,7 @@ function WorkspaceCard({
       </View>
       <View className="flex-1 min-w-0">
         <Text
-          className="text-sm font-medium text-foreground"
+          className="text-body font-medium text-foreground"
           numberOfLines={1}
         >
           {currentWorkspaceName ?? "Workspace"}

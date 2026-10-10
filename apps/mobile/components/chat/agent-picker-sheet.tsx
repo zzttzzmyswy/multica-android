@@ -49,7 +49,7 @@ export function AgentPickerSheet({
           <Pressable onPress={() => {}} className="w-full max-w-sm">
             <View className="bg-popover rounded-2xl overflow-hidden">
               <View className="px-4 py-3 border-b border-border">
-                <Text className="text-base font-semibold text-foreground">
+                <Text className="text-title-sm font-semibold text-foreground">
                   {t("chat.chooseAgent")}
                 </Text>
               </View>
@@ -57,7 +57,7 @@ export function AgentPickerSheet({
               <ScrollView className="max-h-96">
                 {agents.length === 0 ? (
                   <View className="px-4 py-8">
-                    <Text className="text-sm text-muted-foreground text-center">
+                    <Text className="text-body text-muted-foreground text-center">
                       {t("chat.noAgentsEmpty")}
                     </Text>
                   </View>
@@ -82,14 +82,14 @@ export function AgentPickerSheet({
                         <ActorAvatar type="agent" id={agent.id} size={32} showPresence />
                         <View className="flex-1">
                           <Text
-                            className="text-sm font-medium text-foreground"
+                            className="text-body font-medium text-foreground"
                             numberOfLines={1}
                           >
                             {agent.name}
                           </Text>
                           {agent.description ? (
                             <Text
-                              className="text-xs text-muted-foreground mt-0.5"
+                              className="text-caption text-muted-foreground mt-0.5"
                               numberOfLines={1}
                             >
                               {agent.description}
@@ -97,12 +97,12 @@ export function AgentPickerSheet({
                           ) : null}
                         </View>
                         {!runtimeBound ? (
-                          <Text className="text-xs font-medium text-warning">
+                          <Text className="text-caption font-medium text-warning">
                             {t("picker.needsRuntime")}
                           </Text>
                         ) : null}
                         {selected ? (
-                          <Text className="text-sm text-primary font-semibold">
+                          <Text className="text-body text-primary font-semibold">
                             ✓
                           </Text>
                         ) : null}

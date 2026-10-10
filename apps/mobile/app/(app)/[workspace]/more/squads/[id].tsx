@@ -478,7 +478,7 @@ export default function SquadDetailPage() {
               <View className="flex-1 min-w-0 gap-0.5">
                 <View className="flex-row items-center gap-2">
                   <Text
-                    className="flex-1 text-base font-semibold text-foreground"
+                    className="flex-1 text-title-sm font-semibold text-foreground"
                     numberOfLines={1}
                   >
                     {squad.name}
@@ -493,14 +493,14 @@ export default function SquadDetailPage() {
                 </View>
                 <View className="flex-row items-center gap-1.5">
                   <Ionicons name="medal-outline" size={13} color={theme.mutedForeground} />
-                  <Text className="text-sm text-muted-foreground" numberOfLines={1}>
+                  <Text className="text-body text-muted-foreground" numberOfLines={1}>
                     {leaderName}
                   </Text>
                 </View>
               </View>
             </View>
             {squad.description ? (
-              <Text className="px-4 pt-2 text-xs text-muted-foreground/80">
+              <Text className="px-4 pt-2 text-caption text-muted-foreground/80">
                 {squad.description}
               </Text>
             ) : null}
@@ -519,11 +519,11 @@ export default function SquadDetailPage() {
               ) : members.length === 0 ? (
                 <View className="rounded-lg border border-border px-4 py-6 items-center gap-1">
                   <Ionicons name="people-outline" size={24} color={theme.mutedForeground} />
-                  <Text className="text-sm text-muted-foreground text-center mt-1">
+                  <Text className="text-body text-muted-foreground text-center mt-1">
                     {t("squads.detail.noMembers")}
                   </Text>
                   {canManage ? (
-                    <Text className="text-xs text-muted-foreground/70 text-center">
+                    <Text className="text-caption text-muted-foreground/70 text-center">
                       {t("squads.detail.noMembersHint")}
                     </Text>
                   ) : null}
@@ -571,7 +571,7 @@ export default function SquadDetailPage() {
             {/* Instructions */}
             <SectionTitle>{t("squads.instructions.title")}</SectionTitle>
             <View className="px-4 gap-2">
-              <Text className="text-xs text-muted-foreground/80 leading-4">
+              <Text className="text-caption text-muted-foreground/80 leading-4">
                 {t("squads.instructions.description")}
               </Text>
               {squad.instructions?.trim() ? (
@@ -581,7 +581,7 @@ export default function SquadDetailPage() {
               ) : (
                 <View className="rounded-lg border border-dashed border-border px-3 py-6 items-center">
                   <Ionicons name="document-text-outline" size={22} color={theme.mutedForeground} />
-                  <Text className="text-xs text-muted-foreground/70 italic mt-1">
+                  <Text className="text-caption text-muted-foreground/70 italic mt-1">
                     {t("squads.instructions.empty")}
                   </Text>
                 </View>
@@ -683,7 +683,7 @@ function MemberRow({
         </Pressable>
         <View className="flex-1 min-w-0 gap-0.5">
           <View className="flex-row items-center gap-2">
-            <Text className="flex-1 text-sm font-medium text-foreground" numberOfLines={1}>
+            <Text className="flex-1 text-body font-medium text-foreground" numberOfLines={1}>
               {name}
             </Text>
             {member.member_type === "agent" ? (
@@ -708,12 +708,12 @@ function MemberRow({
             ) : null}
           </View>
           {member.role ? (
-            <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+            <Text className="text-caption text-muted-foreground" numberOfLines={1}>
               {member.role}
             </Text>
           ) : null}
           {statusValue === "working" && member.member_type === "agent" && status?.active ? (
-            <Text className="text-xs text-muted-foreground/70">
+            <Text className="text-caption text-muted-foreground/70">
               {t("squads.detail.activeTask")}
             </Text>
           ) : null}
@@ -726,7 +726,7 @@ function MemberRow({
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <Text className="px-4 pt-5 pb-2 text-xs uppercase tracking-wider text-muted-foreground font-medium">
+    <Text className="px-4 pt-5 pb-2 text-caption uppercase tracking-wider text-muted-foreground font-medium">
       {children}
     </Text>
   );
@@ -758,7 +758,7 @@ function EditSquadModal({
         <View className="flex-1 items-center justify-center px-6">
           <Pressable onPress={() => {}} className="w-full max-w-sm">
             <View className="bg-popover rounded-2xl p-4 gap-3">
-              <Text className="text-base font-semibold text-foreground">
+              <Text className="text-title-sm font-semibold text-foreground">
                 {t("squads.detail.edit")}
               </Text>
               <TextField
@@ -816,10 +816,10 @@ function InstructionsEditModal({
         <View className="flex-1 items-center justify-center px-6">
           <Pressable onPress={() => {}} className="w-full max-w-sm">
             <View className="bg-popover rounded-2xl p-4 gap-3">
-              <Text className="text-base font-semibold text-foreground">
+              <Text className="text-title-sm font-semibold text-foreground">
                 {t("squads.instructions.title")}
               </Text>
-              <Text className="text-xs text-muted-foreground/80 leading-4">
+              <Text className="text-caption text-muted-foreground/80 leading-4">
                 {t("squads.instructions.description")}
               </Text>
               <AutosizeTextArea
@@ -832,7 +832,7 @@ function InstructionsEditModal({
                 className="border border-border rounded-md px-3 py-2"
               />
               {dirty ? (
-                <Text className="text-xs text-muted-foreground">
+                <Text className="text-caption text-muted-foreground">
                   {t("squads.instructions.unsaved")}
                 </Text>
               ) : null}
@@ -874,7 +874,7 @@ function RoleEditModal({
         <View className="flex-1 items-center justify-center px-6">
           <Pressable onPress={() => {}} className="w-full max-w-sm">
             <View className="bg-popover rounded-2xl p-4 gap-3">
-              <Text className="text-base font-semibold text-foreground">
+              <Text className="text-title-sm font-semibold text-foreground">
                 {t("squads.detail.editRole")}
               </Text>
               <TextField

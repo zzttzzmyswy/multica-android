@@ -171,13 +171,13 @@ export function RuntimePickerSheet({
         <View className="flex-1 min-w-0 gap-0.5">
           <View className="flex-row items-center gap-1.5">
             <Text
-              className="text-sm font-medium text-foreground shrink"
+              className="text-body font-medium text-foreground shrink"
               numberOfLines={1}
             >
               {label}
             </Text>
             {isCloud ? (
-              <Text className="text-[10px] text-info">
+              <Text className="text-micro text-info">
                 {t("agents.runtime.cloud")}
               </Text>
             ) : null}
@@ -187,7 +187,7 @@ export function RuntimePickerSheet({
             {locked ? (
               <View className="flex-row items-center gap-0.5 rounded bg-secondary px-1 py-0.5">
                 <Ionicons name="lock-closed" size={9} color={muted} />
-                <Text className="text-[10px] text-muted-foreground">
+                <Text className="text-micro text-muted-foreground">
                   {t("agents.runtimePicker.lockedBadge")}
                 </Text>
               </View>
@@ -209,12 +209,12 @@ export function RuntimePickerSheet({
                     : "bg-muted-foreground/40",
                 )}
               />
-              <Text className="text-xs text-muted-foreground">
+              <Text className="text-caption text-muted-foreground">
                 {t(`runtimes.health.${runtime.status}`)}
                 {runtime.provider ? ` · ${runtime.provider}` : ""}
               </Text>
               {!isPublic ? (
-                <Text className="text-[10px] text-muted-foreground">
+                <Text className="text-micro text-muted-foreground">
                   ·{" "}
                   <Text className="text-info">
                     {t("runtimes.visibility.private")}
@@ -243,7 +243,7 @@ export function RuntimePickerSheet({
           <Pressable onPress={() => {}} className="w-full max-w-sm">
             <View className="bg-popover rounded-2xl overflow-hidden">
               <View className="flex-row items-center justify-between gap-2 px-4 py-3 border-b border-border">
-                <Text className="text-base font-semibold text-foreground">
+                <Text className="text-title-sm font-semibold text-foreground">
                   {t("agents.new.runtimeLabel")}
                 </Text>
                 {showFilter ? (
@@ -263,7 +263,7 @@ export function RuntimePickerSheet({
                         >
                           <Text
                             className={cn(
-                              "text-xs font-medium",
+                              "text-caption font-medium",
                               active
                                 ? "text-foreground"
                                 : "text-muted-foreground",
@@ -291,7 +291,7 @@ export function RuntimePickerSheet({
                     placeholderTextColor={muted}
                     autoCapitalize="none"
                     autoCorrect={false}
-                    className="h-9 rounded-md bg-secondary px-3 text-sm text-foreground"
+                    className="h-9 rounded-md bg-secondary px-3 text-body text-foreground"
                   />
                 </View>
               ) : null}
@@ -311,7 +311,7 @@ export function RuntimePickerSheet({
                      matched nothing needs the query loosened (search). Web
                      splits the last two but conflates away the first. */
                   <View className="px-4 py-8">
-                    <Text className="text-sm text-muted-foreground text-center">
+                    <Text className="text-body text-muted-foreground text-center">
                       {t(
                         emptyState === "none"
                           ? "agents.new.runtimesNone"

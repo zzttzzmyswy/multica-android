@@ -51,7 +51,7 @@ import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
 function FieldError({ text }: { text: string }) {
-  return <Text className="text-xs text-destructive">{text}</Text>;
+  return <Text className="text-caption text-destructive">{text}</Text>;
 }
 
 export function AgentManagedMcpForm({
@@ -158,7 +158,7 @@ export function AgentManagedMcpForm({
           <Pressable onPress={() => {}} className="w-full max-w-md">
             <View className="bg-popover rounded-2xl overflow-hidden">
               <View className="px-4 pt-4 pb-2">
-                <Text className="text-base font-semibold text-foreground">
+                <Text className="text-title-sm font-semibold text-foreground">
                   {server
                     ? t("mcp.form.editTitle")
                     : t("mcp.form.createTitle")}
@@ -172,7 +172,7 @@ export function AgentManagedMcpForm({
               >
                 {/* Name */}
                 <View className="gap-1.5">
-                  <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
                     {t("mcp.form.name")}
                   </Text>
                   <TextField
@@ -219,7 +219,7 @@ export function AgentManagedMcpForm({
                   <>
                     {/* Transport */}
                     <View className="gap-2">
-                      <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
                         {t("mcp.form.transport")}
                       </Text>
                       <View className="flex-row gap-2">
@@ -244,7 +244,7 @@ export function AgentManagedMcpForm({
                             >
                               <Text
                                 className={cn(
-                                  "text-sm font-medium",
+                                  "text-body font-medium",
                                   form.transport === option
                                     ? "text-brand"
                                     : "text-foreground",
@@ -263,7 +263,7 @@ export function AgentManagedMcpForm({
                     {form.transport === "stdio" ? (
                       <>
                         <View className="gap-1.5">
-                          <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                          <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
                             {t("mcp.form.command")}
                           </Text>
                           <TextField
@@ -283,7 +283,7 @@ export function AgentManagedMcpForm({
                         </View>
 
                         <View className="gap-1.5">
-                          <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                          <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
                             {t("mcp.form.args")}
                           </Text>
                           <TextField
@@ -325,7 +325,7 @@ export function AgentManagedMcpForm({
                     ) : (
                       <>
                         <View className="gap-1.5">
-                          <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                          <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
                             {t("mcp.form.url")}
                           </Text>
                           <TextField
@@ -371,7 +371,7 @@ export function AgentManagedMcpForm({
                 )}
 
                 {showErrors && errorText ? (
-                  <Text className="text-xs text-destructive">{errorText}</Text>
+                  <Text className="text-caption text-destructive">{errorText}</Text>
                 ) : null}
               </ScrollView>
 
@@ -423,7 +423,7 @@ function KeyValueRows({
 }) {
   return (
     <View className="gap-1.5">
-      <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+      <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
         {label}
       </Text>
       {rows.map((row, index) => (
@@ -463,7 +463,7 @@ function KeyValueRows({
         onPress={onAdd}
         className="self-start py-1"
       >
-        <Text className="text-xs text-brand">{t("mcp.form.addRow")}</Text>
+        <Text className="text-caption text-brand">{t("mcp.form.addRow")}</Text>
       </Pressable>
     </View>
   );

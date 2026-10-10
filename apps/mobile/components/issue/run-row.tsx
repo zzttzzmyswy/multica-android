@@ -71,7 +71,7 @@ export function RunRow({ task, issueId }: Props) {
       <ActorAvatar type="agent" id={task.agent_id} size={28} showPresence />
       <View className="flex-1 gap-1">
         <Text
-          className="text-sm text-foreground"
+          className="text-body text-foreground"
           numberOfLines={2}
         >
           <Text className="font-medium">{getName("agent", task.agent_id)}</Text>
@@ -80,7 +80,7 @@ export function RunRow({ task, issueId }: Props) {
         <View className="flex-row items-center gap-2">
           <StatusBadge task={task} />
           <UsageTokens task={task} />
-          <Text className="text-xs text-muted-foreground">
+          <Text className="text-caption text-muted-foreground">
             {timestamp ? timeAgo(timestamp) : ""}
           </Text>
         </View>
@@ -178,7 +178,7 @@ export function RunRow({ task, issueId }: Props) {
 function UsageTokens({ task }: { task: AgentTask }) {
   const summary = useMemo(() => summarizeTaskUsage(task.usage), [task.usage]);
   return (
-    <Text className="text-xs text-muted-foreground tabular-nums">
+    <Text className="text-caption text-muted-foreground tabular-nums">
       {summary ? formatTokens(summary.tokens) : "—"}
     </Text>
   );
@@ -195,13 +195,13 @@ function StatusBadge({ task }: { task: AgentTask }) {
     const reasonLabel = t(key);
     if (reasonLabel !== key) {
       return (
-        <Text className={`text-xs ${cls}`}>
+        <Text className={`text-caption ${cls}`}>
           {label} · {reasonLabel}
         </Text>
       );
     }
   }
-  return <Text className={`text-xs ${cls}`}>{label}</Text>;
+  return <Text className={`text-caption ${cls}`}>{label}</Text>;
 }
 
 /**
@@ -264,7 +264,7 @@ function CancelButton({
       disabled={mutation.isPending}
       className="px-3 py-1.5 rounded-md bg-secondary active:opacity-70"
     >
-      <Text className="text-xs font-medium text-foreground">{t("runs.cancel")}</Text>
+      <Text className="text-caption font-medium text-foreground">{t("runs.cancel")}</Text>
     </Pressable>
   );
 }

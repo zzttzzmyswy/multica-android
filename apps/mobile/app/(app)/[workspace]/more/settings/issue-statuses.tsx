@@ -196,13 +196,13 @@ export default function IssueStatusesSettingsScreen() {
     >
       <Stack.Screen options={{ title: t("settings.issueStatusesTitle") }} />
 
-      <Text className="text-sm text-muted-foreground px-1">
+      <Text className="text-body text-muted-foreground px-1">
         {t("settings.statuses.description")}
       </Text>
 
       {flagBlocked ? (
         <View className="rounded-md border border-border bg-muted/50 px-3 py-2.5">
-          <Text className="text-xs text-muted-foreground">
+          <Text className="text-caption text-muted-foreground">
             {t("settings.statuses.flagOff")}
           </Text>
         </View>
@@ -214,7 +214,7 @@ export default function IssueStatusesSettingsScreen() {
         </View>
       ) : isError ? (
         <View className="py-8 items-center gap-3">
-          <Text className="text-sm text-destructive">
+          <Text className="text-body text-destructive">
             {t("settings.workspacesLoadError")}
           </Text>
           <Button variant="outline" onPress={retry}>
@@ -229,7 +229,7 @@ export default function IssueStatusesSettingsScreen() {
               className="flex-row items-center justify-center gap-2 rounded-md border border-dashed border-border py-3 active:bg-secondary"
             >
               <Ionicons name="add" size={18} color="#64748b" />
-              <Text className="text-sm text-muted-foreground">
+              <Text className="text-body text-muted-foreground">
                 {t("settings.statuses.add")}
               </Text>
             </Pressable>
@@ -252,7 +252,7 @@ export default function IssueStatusesSettingsScreen() {
             return (
               <View key={category} className="gap-2">
                 <View className="px-1">
-                  <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+                  <Text className="text-caption uppercase tracking-wider text-muted-foreground font-medium">
                     {statusLabel(category)}
                   </Text>
                 </View>
@@ -318,9 +318,9 @@ function BuiltInRow({
   return (
     <View className="flex-row items-center gap-3 px-3 py-3">
       <StatusIcon status={statusKey} category={category} size={16} />
-      <Text className="flex-1 text-sm text-foreground">{label}</Text>
+      <Text className="flex-1 text-body text-foreground">{label}</Text>
       <View className="rounded-full bg-secondary/70 px-2 py-0.5">
-        <Text className="text-[10px] text-muted-foreground">
+        <Text className="text-micro text-muted-foreground">
           {t("settings.statuses.builtInLocked")}
         </Text>
       </View>
@@ -359,19 +359,19 @@ function StatusRow({
           color={entry.color}
           size={16}
         />
-        <Text className="flex-1 text-sm text-foreground" numberOfLines={1}>
+        <Text className="flex-1 text-body text-foreground" numberOfLines={1}>
           {entry.name}
         </Text>
         {archived ? (
           <View className="rounded-full bg-muted px-2 py-0.5">
-            <Text className="text-[10px] text-muted-foreground">
+            <Text className="text-micro text-muted-foreground">
               {t("settings.statuses.archivedBadge")}
             </Text>
           </View>
         ) : null}
       </View>
       {entry.description ? (
-        <Text className="text-xs text-muted-foreground" numberOfLines={2}>
+        <Text className="text-caption text-muted-foreground" numberOfLines={2}>
           {entry.description}
         </Text>
       ) : null}
@@ -436,7 +436,7 @@ function RowAction({
         color={disabled ? "#a1a1aa" : color}
       />
       <Text
-        className={`text-xs ${
+        className={`text-caption ${
           disabled ? "text-muted-foreground/50" : "text-muted-foreground"
         }`}
       >
@@ -472,7 +472,7 @@ function EditorPanel({
 
   return (
     <View className="rounded-md border border-border bg-card p-4 gap-4">
-      <Text className="text-base font-semibold text-foreground">
+      <Text className="text-title-sm font-semibold text-foreground">
         {t(
           editing
             ? "settings.statuses.editor.titleEdit"
@@ -481,7 +481,7 @@ function EditorPanel({
       </Text>
 
       <View className="gap-1.5">
-        <Text className="text-sm text-muted-foreground">
+        <Text className="text-body text-muted-foreground">
           {t("settings.statuses.editor.name")}
         </Text>
         <TextField
@@ -492,22 +492,22 @@ function EditorPanel({
           editable={!saving}
         />
         {showErrors && nameMissing ? (
-          <Text className="text-xs text-destructive">
+          <Text className="text-caption text-destructive">
             {t("settings.statuses.editor.nameRequired")}
           </Text>
         ) : null}
         {!editing ? (
-          <Text className="text-xs text-muted-foreground/60">
+          <Text className="text-caption text-muted-foreground/60">
             {t("settings.statuses.editor.keyHint")}
           </Text>
         ) : null}
       </View>
 
       <View className="gap-1.5">
-        <Text className="text-sm text-muted-foreground">
+        <Text className="text-body text-muted-foreground">
           {t("settings.statuses.editor.category")}
         </Text>
-        <Text className="text-xs text-muted-foreground/60">
+        <Text className="text-caption text-muted-foreground/60">
           {t("settings.statuses.editor.categoryHint")}
         </Text>
         <View className="flex-row flex-wrap gap-1.5 pt-1">
@@ -526,7 +526,7 @@ function EditorPanel({
                 <StatusIcon status={c} size={12} />
                 <Text
                   className={cn(
-                    "text-xs",
+                    "text-caption",
                     selected ? "text-foreground" : "text-muted-foreground",
                   )}
                 >
@@ -539,7 +539,7 @@ function EditorPanel({
       </View>
 
       <View className="gap-1.5">
-        <Text className="text-sm text-muted-foreground">
+        <Text className="text-body text-muted-foreground">
           {t("settings.statuses.editor.color")}
         </Text>
         <View className="flex-row flex-wrap gap-3 pt-1">
@@ -564,11 +564,11 @@ function EditorPanel({
             );
           })}
         </View>
-        <Text className="text-xs text-muted-foreground/70">{editor.color}</Text>
+        <Text className="text-caption text-muted-foreground/70">{editor.color}</Text>
       </View>
 
       <View className="gap-1.5">
-        <Text className="text-sm text-muted-foreground">
+        <Text className="text-body text-muted-foreground">
           {t("settings.statuses.editor.description")}
         </Text>
         <TextField

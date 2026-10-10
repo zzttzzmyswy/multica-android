@@ -133,7 +133,7 @@ function BlockedTriggerChip({
       }
     >
       <Ionicons name="alert-circle" size={13} color={theme.destructive} />
-      <Text className="shrink text-xs font-medium text-destructive" numberOfLines={1}>
+      <Text className="shrink text-caption font-medium text-destructive" numberOfLines={1}>
         {label ? `${label} · ${shortReason}` : shortReason}
       </Text>
     </View>
@@ -172,7 +172,7 @@ function SingleTriggerChip({
       )}
     >
       <TriggerAgentAvatar agent={agent} presence={presence} showDot={!suppressed} />
-      <Text className="text-xs font-medium text-muted-foreground" numberOfLines={1}>
+      <Text className="text-caption font-medium text-muted-foreground" numberOfLines={1}>
         {sentence}
       </Text>
     </Pressable>
@@ -254,14 +254,14 @@ function MultiTriggerChip({
             </View>
           )}
         </View>
-        <Text className="shrink text-xs font-medium text-muted-foreground" numberOfLines={1}>
+        <Text className="shrink text-caption font-medium text-muted-foreground" numberOfLines={1}>
           {sentence}
         </Text>
       </Pressable>
 
       {open && (
         <View className="mt-1 rounded-lg border border-border bg-card p-1">
-          <Text className="px-2 pb-1 pt-0.5 text-xs font-medium text-muted-foreground">
+          <Text className="px-2 pb-1 pt-0.5 text-caption font-medium text-muted-foreground">
             {t("comment.trigger_preview_title")}
           </Text>
           {agents.map((agent) => {
@@ -292,7 +292,7 @@ function MultiTriggerChip({
                   <View className="flex-row items-center gap-1.5">
                     <Text
                       className={cn(
-                        "shrink text-xs font-medium text-foreground",
+                        "shrink text-caption font-medium text-foreground",
                         suppressed && "text-muted-foreground",
                       )}
                       numberOfLines={1}

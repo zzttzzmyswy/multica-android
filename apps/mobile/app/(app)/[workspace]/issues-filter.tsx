@@ -322,14 +322,14 @@ export default function IssuesFilterRoute() {
   return (
     <View className="flex-1">
       <View className="flex-row items-center justify-between px-4 pt-4 pb-3">
-        <Text className="text-base font-semibold text-foreground">{t("filter.title")}</Text>
+        <Text className="text-title-sm font-semibold text-foreground">{t("filter.title")}</Text>
         {hasActive ? (
           <Pressable
             onPress={() => act().clearFilters()}
             hitSlop={8}
             className="px-2 py-1 active:opacity-60"
           >
-            <Text className="text-sm text-primary font-medium">{t("filter.reset")}</Text>
+            <Text className="text-body text-primary font-medium">{t("filter.reset")}</Text>
           </Pressable>
         ) : null}
       </View>
@@ -379,7 +379,7 @@ export default function IssuesFilterRoute() {
                     color={option.color ?? undefined}
                     size={16}
                   />
-                  <Text className="flex-1 text-sm text-foreground">
+                  <Text className="flex-1 text-body text-foreground">
                     {option.label}
                   </Text>
                   <OptionCount count={count} t={t} />
@@ -405,7 +405,7 @@ export default function IssuesFilterRoute() {
               )}
             >
               <PriorityIcon priority={priority} />
-              <Text className="flex-1 text-sm text-foreground">
+              <Text className="flex-1 text-body text-foreground">
                 {t(`enum.priority.${priority}`)}
               </Text>
               <OptionCount count={count} t={t} />
@@ -531,7 +531,7 @@ export default function IssuesFilterRoute() {
                 size={18}
                 color={selected ? tint : THEME[colorScheme].mutedForeground}
               />
-              <Text className="flex-1 text-sm text-foreground">
+              <Text className="flex-1 text-body text-foreground">
                 {t(option === "created_at" ? "filter.dateCreated" : "filter.dateUpdated")}
               </Text>
             </Pressable>
@@ -555,7 +555,7 @@ export default function IssuesFilterRoute() {
               size={18}
               color={THEME[colorScheme].mutedForeground}
             />
-            <Text className="flex-1 text-sm text-foreground">
+            <Text className="flex-1 text-body text-foreground">
               {t(preset.labelKey)}
             </Text>
             {dateFilter &&
@@ -575,18 +575,18 @@ export default function IssuesFilterRoute() {
             size={18}
             color={THEME[colorScheme].mutedForeground}
           />
-          <Text className="flex-1 text-sm text-foreground">
+          <Text className="flex-1 text-body text-foreground">
             {t("filter.dateCustomRange")}
           </Text>
           {dateFilter ? (
-            <Text className="text-sm text-muted-foreground">
+            <Text className="text-body text-muted-foreground">
               {shortDate(dateFilter.from)}
               {dateFilter.from === dateFilter.to
                 ? ""
                 : ` - ${shortDate(dateFilter.to)}`}
             </Text>
           ) : (
-            <Text className="text-xs text-muted-foreground/70">
+            <Text className="text-caption text-muted-foreground/70">
               {t("filter.choose")}
             </Text>
           )}
@@ -606,7 +606,7 @@ export default function IssuesFilterRoute() {
               size={18}
               color={THEME[colorScheme].mutedForeground}
             />
-            <Text className="flex-1 text-sm text-destructive">
+            <Text className="flex-1 text-body text-destructive">
               {t("filter.dateClear")}
             </Text>
           </Pressable>
@@ -630,7 +630,7 @@ export default function IssuesFilterRoute() {
                 size={18}
                 color={selected ? tint : THEME[colorScheme].mutedForeground}
               />
-              <Text numberOfLines={1} className="flex-1 text-sm text-foreground">
+              <Text numberOfLines={1} className="flex-1 text-body text-foreground">
                 {opt.label}
               </Text>
             </Pressable>
@@ -648,7 +648,7 @@ export default function IssuesFilterRoute() {
           >
             <Text
               className={cn(
-                "text-sm",
+                "text-body",
                 sortDirection === "asc"
                   ? "text-foreground font-medium"
                   : "text-muted-foreground",
@@ -663,7 +663,7 @@ export default function IssuesFilterRoute() {
           >
             <Text
               className={cn(
-                "text-sm",
+                "text-body",
                 sortDirection === "desc"
                   ? "text-foreground font-medium"
                   : "text-muted-foreground",
@@ -692,7 +692,7 @@ export default function IssuesFilterRoute() {
                 size={18}
                 color={selected ? tint : THEME[colorScheme].mutedForeground}
               />
-              <Text numberOfLines={1} className="flex-1 text-sm text-foreground">
+              <Text numberOfLines={1} className="flex-1 text-body text-foreground">
                 {opt.label}
               </Text>
             </Pressable>
@@ -816,7 +816,7 @@ function OptionCount({
 }) {
   if (count === undefined || count <= 0) return null;
   return (
-    <Text className="text-xs text-muted-foreground">
+    <Text className="text-caption text-muted-foreground">
       {t(count === 1 ? "filter.issueCount_one" : "filter.issueCount_other", {
         count,
       })}
@@ -850,11 +850,11 @@ function FilterDimensionRow({
         size={18}
         color={count > 0 ? tint : THEME[colorScheme].mutedForeground}
       />
-      <Text className="flex-1 text-sm text-foreground">{label}</Text>
+      <Text className="flex-1 text-body text-foreground">{label}</Text>
       {summary ? (
-        <Text className="text-sm text-muted-foreground">{summary}</Text>
+        <Text className="text-body text-muted-foreground">{summary}</Text>
       ) : null}
-      <Text className="text-xs text-muted-foreground/70">{t("filter.choose")}</Text>
+      <Text className="text-caption text-muted-foreground/70">{t("filter.choose")}</Text>
       <Ionicons
         name="chevron-forward"
         size={16}
@@ -895,9 +895,9 @@ function BoolRow({
     >
       <View className="w-[18px]" />
       <View className="flex-1 min-w-0">
-        <Text className="text-sm text-foreground">{label}</Text>
+        <Text className="text-body text-foreground">{label}</Text>
         {description ? (
-          <Text className="mt-0.5 text-xs text-muted-foreground">
+          <Text className="mt-0.5 text-caption text-muted-foreground">
             {description}
           </Text>
         ) : null}
@@ -915,7 +915,7 @@ function BoolRow({
 function SectionLabel({ children }: { children: string }) {
   return (
     <View className="px-4 pt-3 pb-1.5">
-      <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+      <Text className="text-caption uppercase tracking-wider text-muted-foreground font-medium">
         {children}
       </Text>
     </View>
@@ -924,5 +924,5 @@ function SectionLabel({ children }: { children: string }) {
 
 function CheckMark({ checked }: { checked: boolean }) {
   if (!checked) return null;
-  return <Text className="text-sm text-primary font-semibold">✓</Text>;
+  return <Text className="text-body text-primary font-semibold">✓</Text>;
 }

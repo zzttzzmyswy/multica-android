@@ -550,7 +550,7 @@ export function ProjectIssueSurface({
         <IssuesLoading />
       ) : listLoadError ? (
         <View className="px-4 gap-3 pt-4">
-          <Text className="text-sm text-destructive">
+          <Text className="text-body text-destructive">
             {t("issues.loadError")}
             {error instanceof Error ? error.message : t("common.unknownError")}
           </Text>

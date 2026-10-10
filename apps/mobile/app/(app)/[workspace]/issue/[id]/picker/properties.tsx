@@ -59,7 +59,7 @@ export default function IssuePropertyAddRoute() {
 
   return (
     <View className="flex-1 bg-background">
-      <Text className="px-4 pt-4 pb-2 text-base font-semibold text-foreground">
+      <Text className="px-4 pt-4 pb-2 text-title-sm font-semibold text-foreground">
         {t("properties.value.addProperty")}
       </Text>
       <FlatList
@@ -70,7 +70,7 @@ export default function IssuePropertyAddRoute() {
         ItemSeparatorComponent={() => <View className="h-px bg-border ml-4" />}
         ListEmptyComponent={
           <View className="px-3 py-8 items-center">
-            <Text className="text-sm text-muted-foreground text-center">
+            <Text className="text-body text-muted-foreground text-center">
               {t("properties.value.noneAvailable")}
             </Text>
           </View>
@@ -98,10 +98,10 @@ export default function IssuePropertyAddRoute() {
               />
             </View>
             <View className="flex-1 min-w-0 gap-0.5">
-              <Text className="text-sm font-medium text-foreground" numberOfLines={1}>
+              <Text className="text-body font-medium text-foreground" numberOfLines={1}>
                 {item.name}
               </Text>
-              <Text className="text-xs text-muted-foreground/70" numberOfLines={1}>
+              <Text className="text-caption text-muted-foreground/70" numberOfLines={1}>
                 {t(propertyTypeLabelKey(item.type))}
                 {propertyOptions(item).length > 0
                   ? ` · ${propertyOptions(item).length} ${t("properties.value.optionCount")}`

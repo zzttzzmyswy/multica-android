@@ -184,7 +184,7 @@ function ScheduleField({
 }) {
   return (
     <View className={cn("gap-1.5", disabled && "opacity-60")}>
-      <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+      <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
         {label}
       </Text>
       <View className="gap-2">{children}</View>
@@ -220,7 +220,7 @@ function SegChips<T extends string>({
           >
             <Text
               className={cn(
-                "text-sm",
+                "text-body",
                 selected ? "text-foreground font-medium" : "text-muted-foreground",
               )}
             >
@@ -312,7 +312,7 @@ function TimeField({
         className="min-w-20 flex-row items-center justify-center gap-1.5 rounded-md border border-border bg-secondary/50 px-3 py-2.5"
       >
         <Ionicons name="time-outline" size={15} color={muted} />
-        <Text className="font-mono text-sm tabular-nums text-foreground">
+        <Text className="font-mono text-body tabular-nums text-foreground">
           {hourOnly ? pad2(hour) : `${pad2(hour)}:${pad2(minute)}`}
         </Text>
       </Pressable>
@@ -340,7 +340,7 @@ function TimeField({
                 onPress={() => setOpen(false)}
                 className="mt-2 items-center rounded-md bg-primary px-4 py-2"
               >
-                <Text className="text-sm font-medium text-primary-foreground">
+                <Text className="text-body font-medium text-primary-foreground">
                   {t("common.done")}
                 </Text>
               </Pressable>
@@ -596,7 +596,7 @@ export function ScheduleEditor({
           </View>
         ) : null}
         {value.days.kind === "monthly" && value.days.dayOfMonth >= 29 ? (
-          <Text className="text-xs text-muted-foreground">
+          <Text className="text-caption text-muted-foreground">
             {t(`${S}.monthly_short_month_hint`, { day: value.days.dayOfMonth })}
           </Text>
         ) : null}
@@ -611,7 +611,7 @@ export function ScheduleEditor({
           className="flex-row items-center gap-2 rounded-md border border-border bg-secondary/50 px-3 py-2.5"
         >
           <Ionicons name="globe-outline" size={16} color={muted} />
-          <Text className="flex-1 text-sm text-foreground">{value.timezone}</Text>
+          <Text className="flex-1 text-body text-foreground">{value.timezone}</Text>
           <Ionicons name="chevron-down" size={16} color={muted} />
         </Pressable>
         <TimezonePickerSheet
@@ -633,7 +633,7 @@ export function ScheduleEditor({
                 color={muted}
                 style={{ marginTop: 2 }}
               />
-              <Text className="flex-1 text-sm text-foreground">{description}</Text>
+              <Text className="flex-1 text-body text-foreground">{description}</Text>
             </View>
           ) : null}
 
@@ -668,7 +668,7 @@ export function ScheduleEditor({
               accessibilityLabel={t(`${S}.cron_click_to_edit`)}
               className="flex-row items-center gap-1.5"
             >
-              <Text className="min-w-0 flex-1 font-mono text-xs text-muted-foreground">
+              <Text className="min-w-0 flex-1 font-mono text-caption text-muted-foreground">
                 {cronText}
               </Text>
               <Ionicons name="create-outline" size={13} color={muted} />
@@ -677,17 +677,17 @@ export function ScheduleEditor({
 
           {cronErrorDetail !== null ? (
             <View className="gap-0.5">
-              <Text className="text-xs text-destructive">
+              <Text className="text-caption text-destructive">
                 {cronErrorCode === "invalid_timezone"
                   ? t(`${S}.timezone_invalid`)
                   : t(`${S}.cron_invalid`)}
               </Text>
-              <Text className="font-mono text-[10px] text-destructive">
+              <Text className="font-mono text-micro text-destructive">
                 {cronErrorDetail}
               </Text>
             </View>
           ) : advanced ? (
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-caption text-muted-foreground">
               {serverAccepted
                 ? t(`${S}.advanced_hint`)
                 : previewUnavailable
@@ -695,25 +695,25 @@ export function ScheduleEditor({
                   : t(`${S}.advanced_checking`)}
             </Text>
           ) : cronOpen ? (
-            <Text className="text-xs text-muted-foreground">{t(`${S}.cron_hint`)}</Text>
+            <Text className="text-caption text-muted-foreground">{t(`${S}.cron_hint`)}</Text>
           ) : null}
         </View>
 
         {cronErrorDetail === null ? (
           <View className="mt-2.5 border-t border-border/60 pt-2.5">
-            <Text className="mb-1.5 text-sm font-medium text-foreground">
+            <Text className="mb-1.5 text-body font-medium text-foreground">
               {t(`${S}.next_runs_label`)}
             </Text>
             {previewUnavailable ? (
-              <Text className="text-xs text-muted-foreground">
+              <Text className="text-caption text-muted-foreground">
                 {t(`${S}.preview_unavailable`)}
               </Text>
             ) : shownPreview !== null && shownPreview.runs.length > 0 ? (
               <View className={cn("gap-1", previewIsPending && "opacity-50")}>
                 {shownRuns.map(({ iso, label, at }) => (
                   <View key={iso} className="flex-row items-center justify-between gap-3">
-                    <Text className="text-sm text-foreground tabular-nums">{label}</Text>
-                    <Text className="text-xs text-muted-foreground tabular-nums">
+                    <Text className="text-body text-foreground tabular-nums">{label}</Text>
+                    <Text className="text-caption text-muted-foreground tabular-nums">
                       {Number.isNaN(at)
                         ? ""
                         : t(`${S}.next_in`, { countdown: countdownText(t, iso, now) })}
@@ -722,7 +722,7 @@ export function ScheduleEditor({
                 ))}
               </View>
             ) : previewIsSettled ? (
-              <Text className="text-xs text-muted-foreground">
+              <Text className="text-caption text-muted-foreground">
                 {t(`${S}.no_upcoming_runs`)}
               </Text>
             ) : null}
@@ -782,7 +782,7 @@ function EveryTimeControls({
     <View className="gap-2">
       {/* Every N [hours|minutes] */}
       <View className="flex-row items-center gap-2">
-        <Text className="text-sm text-muted-foreground">{t(`${S}.every_prefix`)}</Text>
+        <Text className="text-body text-muted-foreground">{t(`${S}.every_prefix`)}</Text>
         <StepField
           value={time.interval}
           min={1}
@@ -816,7 +816,7 @@ function EveryTimeControls({
               >
                 <Text
                   className={cn(
-                    "text-xs",
+                    "text-caption",
                     selected ? "text-foreground font-medium" : "text-muted-foreground",
                   )}
                 >

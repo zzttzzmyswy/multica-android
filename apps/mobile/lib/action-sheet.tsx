@@ -100,7 +100,7 @@ export function ActionSheetProvider({ children }: { children: React.ReactNode })
           />
           <View className="bg-background rounded-t-2xl pb-6 px-2 pt-2">
             {request?.options.title ? (
-              <Text className="text-center text-sm font-semibold text-muted-foreground pt-3 pb-1">
+              <Text className="text-center text-body font-semibold text-muted-foreground pt-3 pb-1">
                 {request.options.title}
               </Text>
             ) : null}
@@ -115,8 +115,8 @@ export function ActionSheetProvider({ children }: { children: React.ReactNode })
                   <Text
                     className={
                       destructive
-                        ? "text-center text-base font-medium text-destructive"
-                        : "text-center text-base text-foreground"
+                        ? "text-center text-title-sm font-medium text-destructive"
+                        : "text-center text-title-sm text-foreground"
                     }
                   >
                     {label}
