@@ -38,6 +38,7 @@ import { useQuery } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { SubmitIssueButton } from "@/components/issue/submit-issue-button";
 import { CreateFormAttributeRow } from "@/components/issue/create-form-attribute-row";
+import { CreateRunHint } from "@/components/issue/create-run-hint";
 import { MentionSuggestionBar } from "@/components/issue/mention-suggestion-bar";
 import { DescriptionField } from "@/components/issue/description-field";
 import { QuickCreatePanel } from "@/components/issue/quick-create-panel";
@@ -412,6 +413,19 @@ export default function NewIssueModal() {
                 onUploadingChange={setUploadsPending}
               />
               <CreateFormAttributeRow mode="manual" />
+              {/* Pre-trigger caption — a passive line saying whether saving
+                  will start a run, asked of the backend's own predicate
+                  (web CreateRunHint). Renders nothing until it has an
+                  answer, so it never flashes the wrong verdict. */}
+              <CreateRunHint
+                assigneeType={
+                  assignee?.type === "agent" || assignee?.type === "squad"
+                    ? assignee.type
+                    : null
+                }
+                assigneeId={assignee?.id ?? null}
+                status={status}
+              />
             </>
           ) : (
             <QuickCreatePanel

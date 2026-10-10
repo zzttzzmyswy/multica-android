@@ -47,13 +47,6 @@ describe("batch action i18n", () => {
     "batch.deleteSuccess": "已删除 {{count}} 个任务",
     "batch.selectAll": "全选",
     "batch.clearSelection": "清空",
-    "batch.confirmAssignTitle": "确认指派？",
-    "batch.confirmAssignOne": "将这个任务指派给 {{name}}；符合运行条件时会立即开始处理。",
-    "batch.confirmAssignBatch": "将 {{count}} 个任务指派给 {{name}}；符合运行条件时会立即开始处理。",
-    "batch.handoffNote": "交接说明（可选）",
-    "batch.handoffPlaceholder": "交代一句——范围、重点、或别碰什么……",
-    "batch.confirmAssign": "确认指派",
-    "batch.dontStart": "暂不开始",
     "batch.assignFailedTitle": "指派失败",
     "batch.assignFailedBody": "无法指派选中的任务，请重试。",
   };

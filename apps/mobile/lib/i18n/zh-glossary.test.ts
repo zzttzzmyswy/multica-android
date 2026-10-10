@@ -73,6 +73,12 @@ const ISSUE_SENSE_NO_TOKEN_KEYS = [
   "newIssue.agentSentTitle",
   "newIssue.parentChipClear",
   "projects.column.issues",
+  // "…start assigning work right after creation" — the `work` a squad leader
+  // hands out IS the filed issue, and the sentence needs the entity noun for
+  // its object. Upstream's own zh-Hans renders the same web string
+  // (`modals.run_confirm.create_will_start_squad`) with 任务, so this is the
+  // established reading of this sentence, not a new one.
+  "runConfirm.createWillStartSquad",
   "timeline.subtasks",
 ];
 

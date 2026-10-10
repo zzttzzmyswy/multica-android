@@ -63,6 +63,8 @@ import type {
   IssueProperty,
   IssuePropertyValue,
   IssueSubscriber,
+  IssueTriggerPreview,
+  IssueTriggerPreviewParams,
   IssueWakeup,
   WorkspaceWakeupFilters,
   WorkspaceWakeupPage,
@@ -259,6 +261,11 @@ import {
   // second copy is exactly the drift the shared-module rule exists to prevent.
   InboxUnreadSummarySchema,
   EMPTY_INBOX_UNREAD_SUMMARY,
+  // The run-enqueue predicate preview (`POST /api/issues/preview-trigger`).
+  // Core already owns this endpoint's schema for web, and it is a pure Zod
+  // export on the sharing whitelist — mobile reuses it instead of mirroring a
+  // second copy. Only the mobile-side fallback value lives in data/schemas.ts.
+  IssueTriggerPreviewSchema,
 } from "@multica/core/api/schemas";
 import type {
   CreateIssueViewRequest,
@@ -457,6 +464,7 @@ import {
   EMPTY_FEEDBACK_RESPONSE,
   CommentTriggerPreviewSchema,
   EMPTY_COMMENT_TRIGGER_PREVIEW,
+  EMPTY_ISSUE_TRIGGER_PREVIEW,
   MikaBootstrapResponseSchema,
   EMPTY_MIKA_BOOTSTRAP,
 } from "./schemas";
@@ -3405,6 +3413,34 @@ class ApiClient {
     return parseWithFallback(raw, CommentTriggerPreviewSchema, EMPTY_COMMENT_TRIGGER_PREVIEW, {
       endpoint: "previewCommentTriggers",
     });
+  }
+
+  // POST /api/issues/preview-trigger — dry-run the unified run-enqueue
+  // predicate for a prospective issue write (create / single assign). Returns
+  // the runs that WOULD start; no side effect. Mobile's create form consults
+  // this for its "will start working" caption instead of re-implementing the
+  // rule (web parity: packages/core/api/client.ts:1083 `previewIssueTrigger`,
+  // MUL-3375). The assign path deliberately does NOT call it — after MUL-5010
+  // the run-confirm dialog does no pre-flight prediction.
+  async previewIssueTrigger(
+    params: IssueTriggerPreviewParams,
+  ): Promise<IssueTriggerPreview> {
+    const raw = await this.fetch<unknown>("/api/issues/preview-trigger", {
+      method: "POST",
+      body: JSON.stringify({
+        ...(params.issueIds?.length ? { issue_ids: params.issueIds } : {}),
+        ...(params.isCreate ? { is_create: true } : {}),
+        ...(params.assigneeType ? { assignee_type: params.assigneeType } : {}),
+        ...(params.assigneeId ? { assignee_id: params.assigneeId } : {}),
+        ...(params.status ? { status: params.status } : {}),
+      }),
+    });
+    return parseWithFallback(
+      raw,
+      IssueTriggerPreviewSchema,
+      EMPTY_ISSUE_TRIGGER_PREVIEW,
+      { endpoint: "previewIssueTrigger" },
+    );
   }
 
   // PUT /api/comments/:id — content edit (+ optional attachment swap).

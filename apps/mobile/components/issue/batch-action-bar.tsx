@@ -27,9 +27,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
-  Modal,
   Pressable,
-  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -44,12 +42,12 @@ import {
 import { StatusPickerBody } from "@/components/issue/pickers/status-picker-body";
 import { PriorityPickerBody } from "@/components/issue/pickers/priority-picker-body";
 import { PickerSheet } from "@/components/issue/pickers/picker-sheet";
+import { AssignConfirmDialog } from "@/components/issue/assign-confirm-dialog";
 import { useBatchUpdateIssues, useBatchDeleteIssues } from "@/data/mutations/issues";
 import { useIssueBatchSelectionStore } from "@/data/stores/issue-batch-selection-store";
 import { commonIssueFields, needRunConfirm } from "@/lib/batch-issues";
+import { assignConfirmPayload } from "@/lib/run-confirm";
 import { useActorLookup } from "@/data/use-actor-name";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
 
 const TOAST_MS = 3000;
@@ -203,13 +201,7 @@ export function BatchActionBar({ issues }: Props) {
   // yet" button (MUL-3375 control fields pass through the same batch write).
   const applyAssign = (suppressRun: boolean) => {
     if (!assignTarget) return;
-    const handoffNote = note.trim();
-    const updates: UpdateIssueRequest = {
-      assignee_type: assignTarget.type,
-      assignee_id: assignTarget.id,
-      ...(suppressRun ? { suppress_run: true } : {}),
-      ...(!suppressRun && handoffNote ? { handoff_note: handoffNote } : {}),
-    };
+    const updates = assignConfirmPayload(assignTarget, suppressRun, note);
     setNote("");
     setAssignTarget(null);
     handleUpdate(updates);
@@ -385,7 +377,6 @@ export function BatchActionBar({ issues }: Props) {
           setNote("");
           setAssignTarget(null);
         }}
-        t={t}
       />
     </View>
   );
@@ -436,95 +427,5 @@ function BarButton({
         {label}
       </Text>
     </Button>
-  );
-}
-
-/**
- * Run-confirm for batch agent/squad assignment (web issue-run-confirm
- * semantics, MUL-5010): the dialog confirms the ASSIGNMENT — completion is
- * silent, whether a run starts stays the server's write-time decision. A
- * handoff note rides along on the "Confirm assignment" path; "Don't start
- * yet" suppresses the run (suppress_run).
- */
-function AssignConfirmDialog({
-  visible,
-  name,
-  count,
-  note,
-  onNoteChange,
-  busy,
-  onConfirm,
-  onDontStart,
-  onClose,
-  t,
-}: {
-  visible: boolean;
-  name: string;
-  count: number;
-  note: string;
-  onNoteChange: (note: string) => void;
-  busy: boolean;
-  onConfirm: () => void;
-  onDontStart: () => void;
-  onClose: () => void;
-  t: (id: string, params?: Record<string, string | number>) => string;
-}) {
-  const { colorScheme } = useColorScheme();
-  const headline =
-    count > 1
-      ? t("batch.confirmAssignBatch", { count, name })
-      : t("batch.confirmAssignOne", { name });
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <Pressable className="flex-1 bg-black/40" onPress={onClose}>
-        <View className="flex-1 justify-center px-6">
-          <Pressable onPress={() => {}} className="bg-popover rounded-2xl p-4">
-            <Text className="text-title-sm font-semibold text-foreground">
-              {t("batch.confirmAssignTitle")}
-            </Text>
-            <Text className="text-body text-muted-foreground leading-5 mt-1.5">
-              {headline}
-            </Text>
-            <View className="mt-3">
-              <Text className="text-caption font-medium text-foreground">
-                {t("batch.handoffNote")}
-              </Text>
-              <TextInput
-                value={note}
-                onChangeText={onNoteChange}
-                placeholder={t("batch.handoffPlaceholder")}
-                placeholderTextColor={THEME[colorScheme].mutedForeground}
-                multiline
-                className="border border-border rounded-lg px-3 py-2 mt-1.5 text-body text-foreground min-h-[72px]"
-              />
-            </View>
-            <View className="flex-row gap-2 mt-4">
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-1"
-                disabled={busy}
-                onPress={onDontStart}
-              >
-                <Text>{t("batch.dontStart")}</Text>
-              </Button>
-              <Button
-                size="sm"
-                className="flex-1"
-                disabled={busy}
-                onPress={onConfirm}
-              >
-                <Text>{t("batch.confirmAssign")}</Text>
-              </Button>
-            </View>
-          </Pressable>
-        </View>
-      </Pressable>
-    </Modal>
   );
 }
