@@ -34,12 +34,17 @@ import { AssigneePickerBody } from "@/components/issue/pickers/assignee-picker-b
 import { AssignConfirmDialog } from "@/components/issue/assign-confirm-dialog";
 import { PickerBodyShell } from "@/components/pickers/picker-body-shell";
 import { issueDetailOptions } from "@/data/queries/issues";
+import { agentListOptions } from "@/data/queries/agents";
+import { runtimeListOptions } from "@/data/queries/runtimes";
+import { squadListOptions } from "@/data/queries/squads";
 import { useUpdateIssue } from "@/data/mutations/issues";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
 import { usePickerSearch } from "@/lib/use-picker-search";
 import {
   assignConfirmPayload,
+  handoffNoteDisabled,
+  handoffVerdict,
   singleAssignNeedsRunConfirm,
   type AssignTarget,
 } from "@/lib/run-confirm";
@@ -58,6 +63,22 @@ export default function IssueAssigneePickerRoute() {
   });
   const [assignTarget, setAssignTarget] = useState<AssignTarget | null>(null);
   const [note, setNote] = useState("");
+
+  // Handoff gate, resolved from the warm caches so the note box settles on the
+  // first frame (no round-trip — the dialog must fire no request on open).
+  // `null` = cannot tell → box stays usable; only `false` grays it.
+  const { data: agents = [] } = useQuery(agentListOptions(wsId));
+  const { data: runtimes = [] } = useQuery(runtimeListOptions(wsId));
+  const { data: squads = [] } = useQuery(squadListOptions(wsId));
+  const noteDisabled = handoffNoteDisabled(
+    handoffVerdict({
+      assigneeType: assignTarget?.type,
+      assigneeId: assignTarget?.id,
+      agents,
+      runtimes,
+      squads,
+    }),
+  );
 
   const value =
     issue?.assignee_type && issue?.assignee_id
@@ -111,13 +132,14 @@ export default function IssueAssigneePickerRoute() {
         note={note}
         onNoteChange={setNote}
         busy={updateIssue.isPending}
+        noteDisabled={noteDisabled}
         onConfirm={() => {
           if (!assignTarget) return;
-          applyAndClose(assignConfirmPayload(assignTarget, false, note));
+          applyAndClose(assignConfirmPayload(assignTarget, false, note, noteDisabled));
         }}
         onDontStart={() => {
           if (!assignTarget) return;
-          applyAndClose(assignConfirmPayload(assignTarget, true, note));
+          applyAndClose(assignConfirmPayload(assignTarget, true, note, noteDisabled));
         }}
         onClose={() => {
           if (updateIssue.isPending) return;

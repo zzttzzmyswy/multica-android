@@ -31,6 +31,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useQuery } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { Issue, UpdateIssueRequest } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
@@ -45,8 +46,16 @@ import { PickerSheet } from "@/components/issue/pickers/picker-sheet";
 import { AssignConfirmDialog } from "@/components/issue/assign-confirm-dialog";
 import { useBatchUpdateIssues, useBatchDeleteIssues } from "@/data/mutations/issues";
 import { useIssueBatchSelectionStore } from "@/data/stores/issue-batch-selection-store";
+import { agentListOptions } from "@/data/queries/agents";
+import { runtimeListOptions } from "@/data/queries/runtimes";
+import { squadListOptions } from "@/data/queries/squads";
+import { useWorkspaceStore } from "@/data/workspace-store";
 import { commonIssueFields, needRunConfirm } from "@/lib/batch-issues";
-import { assignConfirmPayload } from "@/lib/run-confirm";
+import {
+  assignConfirmPayload,
+  handoffNoteDisabled,
+  handoffVerdict,
+} from "@/lib/run-confirm";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useTranslation } from "@/lib/i18n/react";
 
@@ -92,6 +101,24 @@ export function BatchActionBar({ issues }: Props) {
   const [note, setNote] = useState("");
   const [toast, setToast] = useState<ToastState>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Handoff gate (shared with the single-issue picker route): gray the note box
+  // when the target runtime is positively too old to render it. Read from the
+  // warm agent / runtime / squad caches, so no round-trip — the dialog must not
+  // fire a request on open (MUL-5010). `null` = cannot tell → box stays usable.
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const { data: agents = [] } = useQuery(agentListOptions(wsId));
+  const { data: runtimes = [] } = useQuery(runtimeListOptions(wsId));
+  const { data: squads = [] } = useQuery(squadListOptions(wsId));
+  const noteDisabled = handoffNoteDisabled(
+    handoffVerdict({
+      assigneeType: assignTarget?.type,
+      assigneeId: assignTarget?.id,
+      agents,
+      runtimes,
+      squads,
+    }),
+  );
 
   const selectedIssues = useMemo(
     () => issues.filter((i) => selectedIds.has(i.id)),
@@ -201,7 +228,7 @@ export function BatchActionBar({ issues }: Props) {
   // yet" button (MUL-3375 control fields pass through the same batch write).
   const applyAssign = (suppressRun: boolean) => {
     if (!assignTarget) return;
-    const updates = assignConfirmPayload(assignTarget, suppressRun, note);
+    const updates = assignConfirmPayload(assignTarget, suppressRun, note, noteDisabled);
     setNote("");
     setAssignTarget(null);
     handleUpdate(updates);
@@ -370,6 +397,7 @@ export function BatchActionBar({ issues }: Props) {
         note={note}
         onNoteChange={setNote}
         busy={busy}
+        noteDisabled={noteDisabled}
         onConfirm={() => applyAssign(false)}
         onDontStart={() => applyAssign(true)}
         onClose={() => {

@@ -21,6 +21,13 @@
  *     run it starts surface through the issue's normal assignee / run-status
  *     updates. Whether a run starts stays the server's decision at write time.
  *
+ * The note box CAN be grayed out, but never because a request is pending: only
+ * when the handoff gate has positively established that the target runtime is
+ * too old to render the note (`noteDisabled`). That verdict comes from the warm
+ * agent / runtime / squad caches, so it too costs no round-trip — the box is
+ * still settled on the first frame, which is the property the no-request rule
+ * exists to protect.
+ *
  * `count` is what separates the two hosts: the batch toolbar passes its
  * selection size (copy switches to "Assign {{count}} issues…"), the detail page
  * passes 1 and gets the singular sentence.
@@ -40,6 +47,7 @@ export function AssignConfirmDialog({
   note,
   onNoteChange,
   busy,
+  noteDisabled = false,
   onConfirm,
   onDontStart,
   onClose,
@@ -54,6 +62,12 @@ export function AssignConfirmDialog({
   /** A write is in flight — both footers disable so the two paths cannot
    *  disagree about `suppress_run` by being pressed together. */
   busy: boolean;
+  /** The target runtime is too old to render a handoff note, so the box grays
+   *  out and says why. SOFT gate: the assignment itself still proceeds. Only a
+   *  confident "too old" may set this — the caller passes `handoffNoteDisabled`
+   *  output, so "cannot tell" never lands here as `true`. Defaults to usable so
+   *  the "cannot tell" state needs no special case at the call sites. */
+  noteDisabled?: boolean;
   /** "Confirm assignment" — sends the note (if any), may start a run. */
   onConfirm: () => void;
   /** "Don't start yet" — sends `suppress_run`, never the note. */
@@ -93,8 +107,17 @@ export function AssignConfirmDialog({
                 placeholderTextColor={THEME[colorScheme].mutedForeground}
                 maxLength={MAX_HANDOFF_NOTE}
                 multiline
+                editable={!busy && !noteDisabled}
                 className="border border-border rounded-lg px-3 py-2 mt-1.5 text-body text-foreground min-h-[72px]"
               />
+              {/* Only rendered for a confident "too old" — see `noteDisabled`.
+                  Says why the box is gray rather than leaving a dead input with
+                  no explanation (web `run_confirm.note_unsupported`). */}
+              {noteDisabled ? (
+                <Text className="text-caption text-muted-foreground mt-1.5">
+                  {t("runConfirm.noteUnsupported")}
+                </Text>
+              ) : null}
             </View>
             <View className="flex-row gap-2 mt-4">
               <Button
