@@ -66,10 +66,10 @@ export function SkillMethodChooser({
             <Ionicons name={icon} size={16} color={theme.mutedForeground} />
           </View>
           <View className="flex-1 min-w-0 gap-0.5">
-            <Text className="text-sm font-medium text-foreground">
+            <Text className="text-body font-medium text-foreground">
               {t(titleKey)}
             </Text>
-            <Text className="text-xs text-muted-foreground leading-4">
+            <Text className="text-caption text-muted-foreground leading-4">
               {t(descKey)}
             </Text>
           </View>

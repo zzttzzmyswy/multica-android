@@ -102,7 +102,7 @@ export default function McpServersPage() {
           </View>
         ) : error ? (
           <View className="px-4 gap-3 pt-4">
-            <Text className="text-sm text-destructive">
+            <Text className="text-body text-destructive">
               {t("mcp.loadError")}
               {error instanceof Error ? error.message : t("common.unknownError")}
             </Text>
@@ -113,10 +113,10 @@ export default function McpServersPage() {
         ) : showEmpty ? (
           <View className="flex-1 items-center justify-center px-6 gap-1">
             <Ionicons name="server-outline" size={32} color={muted} />
-            <Text className="text-sm text-muted-foreground text-center mt-2">
+            <Text className="text-body text-muted-foreground text-center mt-2">
               {t("mcp.emptyTitle")}
             </Text>
-            <Text className="text-xs text-muted-foreground/70 text-center">
+            <Text className="text-caption text-muted-foreground/70 text-center">
               {t("mcp.emptyDescription")}
             </Text>
             {wsSlug && canManage ? (
@@ -153,7 +153,7 @@ export default function McpServersPage() {
         )}
         {!canManage && !isLoading && !error ? (
           <View className="px-4 pb-4">
-            <Text className="text-xs text-muted-foreground/80">
+            <Text className="text-caption text-muted-foreground/80">
               {t("mcp.adminOnlyNote")}
             </Text>
           </View>
@@ -188,12 +188,12 @@ function McpServerRow({
         <Ionicons name="server" size={16} color={muted} />
       </View>
       <View className="flex-1 min-w-0 gap-0.5">
-        <Text className="text-sm font-medium text-foreground" numberOfLines={1}>
+        <Text className="text-body font-medium text-foreground" numberOfLines={1}>
           {server.name}
         </Text>
         <View className="flex-row items-center gap-1.5">
           <View className="px-1.5 py-px rounded-full bg-secondary">
-            <Text className="text-[10px] font-medium text-muted-foreground uppercase">
+            <Text className="text-micro font-medium text-muted-foreground uppercase">
               {badge}
             </Text>
           </View>

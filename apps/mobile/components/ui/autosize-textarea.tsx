@@ -80,7 +80,7 @@ export const AutosizeTextArea = React.forwardRef<TextInput, AutosizeTextAreaProp
           },
           style,
         ]}
-        className={cn("text-base text-foreground", className)}
+        className={cn("text-title-sm text-foreground", className)}
         {...rest}
       />
     );

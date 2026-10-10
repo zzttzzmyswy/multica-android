@@ -448,7 +448,7 @@ export default function AutopilotDetailPage() {
                 : t("autopilots.detail.activateAria")
             }
           />
-          <Text className="text-sm text-muted-foreground">
+          <Text className="text-body text-muted-foreground">
             {autopilot.status === "active" ||
             autopilot.status === "paused" ||
             autopilot.status === "archived"
@@ -481,12 +481,12 @@ export default function AutopilotDetailPage() {
       <SectionTitle>{t("autopilots.detail.properties")}</SectionTitle>
       <View className="px-4 gap-3">
         <PropertyRow label={t("autopilots.detail.fieldAssignee")} icon="person-outline">
-          <Text className="text-sm text-foreground">
+          <Text className="text-body text-foreground">
             {getName(autopilot.assignee_type, autopilot.assignee_id)}
           </Text>
         </PropertyRow>
         <PropertyRow label={t("autopilots.detail.fieldMode")} icon="git-branch-outline">
-          <Text className="text-sm text-foreground">
+          <Text className="text-body text-foreground">
             {EXECUTION_MODE_KEY[autopilot.execution_mode]
               ? t(`autopilots.executionMode.${EXECUTION_MODE_KEY[autopilot.execution_mode]}`)
               : autopilot.execution_mode}
@@ -494,7 +494,7 @@ export default function AutopilotDetailPage() {
         </PropertyRow>
         {autopilot.execution_mode === "create_issue" ? (
           <PropertyRow label={t("autopilots.detail.fieldProject")} icon="folder-outline">
-            <Text className="text-sm text-foreground" numberOfLines={1}>
+            <Text className="text-body text-foreground" numberOfLines={1}>
               {autopilot.project_id
                 ? findProject(projects, autopilot.project_id)?.title ??
                   // Only an unresolved-name-from-a-*settled* read means the
@@ -509,7 +509,7 @@ export default function AutopilotDetailPage() {
           </PropertyRow>
         ) : null}
         <PropertyRow label={t("autopilots.detail.fieldStatus")} icon="pulse-outline">
-          <Text className="text-sm text-foreground">
+          <Text className="text-body text-foreground">
             {autopilot.status === "active" ||
             autopilot.status === "paused" ||
             autopilot.status === "archived"
@@ -538,7 +538,7 @@ export default function AutopilotDetailPage() {
       <SectionTitle>{t("autopilots.detail.subscribers")}</SectionTitle>
       <View className="px-4">
         {subscriberList.length === 0 ? (
-          <Text className="text-sm text-muted-foreground">
+          <Text className="text-body text-muted-foreground">
             {t("autopilots.detail.noSubscribers")}
           </Text>
         ) : (
@@ -549,7 +549,7 @@ export default function AutopilotDetailPage() {
                 className="flex-row items-center gap-1 rounded-full border border-border bg-secondary/60 px-2 py-1"
               >
                 <ActorAvatar type="member" id={s.user_id} size={18} />
-                <Text className="text-xs text-foreground">
+                <Text className="text-caption text-foreground">
                   {getName("member", s.user_id)}
                 </Text>
               </View>
@@ -569,13 +569,13 @@ export default function AutopilotDetailPage() {
             className="self-start flex-row items-center gap-1 rounded-md border border-dashed border-border px-2.5 py-1.5"
           >
             <Ionicons name="add" size={14} color={theme.mutedForeground} />
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-caption text-muted-foreground">
               {t("autopilots.access.add")}
             </Text>
           </Pressable>
         ) : null}
         {collaborators.length === 0 ? (
-          <Text className="text-sm text-muted-foreground">
+          <Text className="text-body text-muted-foreground">
             {t("autopilots.access.empty")}
           </Text>
         ) : (
@@ -585,7 +585,7 @@ export default function AutopilotDetailPage() {
               className="flex-row items-center gap-2 rounded-md border border-border px-3 py-2"
             >
               <ActorAvatar type="member" id={c.user_id} size={24} />
-              <Text className="flex-1 text-sm text-foreground">
+              <Text className="flex-1 text-body text-foreground">
                 {getName("member", c.user_id)}
               </Text>
               {canManageAccess ? (
@@ -644,7 +644,7 @@ export default function AutopilotDetailPage() {
       <View className="px-4 gap-2">
         {triggers.length === 0 ? (
           <View className="gap-2">
-            <Text className="text-sm text-muted-foreground">
+            <Text className="text-body text-muted-foreground">
               {t("autopilots.detail.noTriggers")}
             </Text>
             {canWrite ? (
@@ -720,7 +720,7 @@ export default function AutopilotDetailPage() {
                 className="items-center py-2 active:opacity-60"
                 accessibilityRole="button"
               >
-                <Text className="text-xs text-primary">
+                <Text className="text-caption text-primary">
                   {t("autopilots.detail.loadMoreRuns")}
                 </Text>
               </Pressable>
@@ -751,7 +751,7 @@ function SectionTitle({
   return (
     <Text
       className={cn(
-        "px-4 pt-5 pb-2 text-xs uppercase tracking-wider text-muted-foreground font-medium",
+        "px-4 pt-5 pb-2 text-caption uppercase tracking-wider text-muted-foreground font-medium",
         className,
       )}
     >
@@ -777,7 +777,7 @@ function PropertyRow({
         size={15}
         color={THEME[colorScheme].mutedForeground}
       />
-      <Text className="w-20 text-xs text-muted-foreground">{label}</Text>
+      <Text className="w-20 text-caption text-muted-foreground">{label}</Text>
       <View className="flex-1">{children}</View>
     </View>
   );
@@ -817,7 +817,7 @@ function TriggerCard({
     <View className="rounded-lg border border-border px-3 py-2.5">
       <View className="flex-row items-center gap-2">
         <Ionicons name={icon} size={15} color={muted} />
-        <Text className="flex-1 text-sm font-medium text-foreground">
+        <Text className="flex-1 text-body font-medium text-foreground">
           {kindLabel}
         </Text>
         {!trigger.enabled ? (
@@ -828,14 +828,14 @@ function TriggerCard({
       </View>
       {trigger.kind === "schedule" && trigger.cron_expression ? (
         <View className="mt-1.5 ml-6 gap-0.5">
-          <Text className="text-xs text-muted-foreground font-mono">
+          <Text className="text-caption text-muted-foreground font-mono">
             {trigger.cron_expression}
             {trigger.timezone ? ` (${trigger.timezone})` : ""}
           </Text>
           {trigger.next_run_at ? (
             <View className="flex-row items-center gap-1">
               <Ionicons name="time-outline" size={12} color={muted} />
-              <Text className="text-xs text-muted-foreground tabular-nums">
+              <Text className="text-caption text-muted-foreground tabular-nums">
                 {t("autopilots.detail.scheduleNext", {
                   date: formatDateTime(trigger.next_run_at),
                 })}
@@ -846,7 +846,7 @@ function TriggerCard({
       ) : null}
       {webhookUrl ? (
         <Text
-          className="mt-1.5 ml-6 text-xs text-muted-foreground"
+          className="mt-1.5 ml-6 text-caption text-muted-foreground"
           numberOfLines={1}
         >
           {maskAutopilotWebhookUrl(webhookUrl)}
@@ -903,7 +903,7 @@ function TriggerAction({
       <Ionicons name={icon} size={13} color={color} />
       <Text
         className={cn(
-          "text-xs",
+          "text-caption",
           destructive ? "text-destructive" : "text-muted-foreground",
         )}
       >
@@ -972,10 +972,10 @@ function RunRow({
       <Ionicons name={visual.icon} size={14} color={visual.color} />
       <View className="flex-1 min-w-0">
         <View className="flex-row items-center gap-2">
-          <Text className={cn("text-xs font-medium", visual.className)}>
+          <Text className={cn("text-caption font-medium", visual.className)}>
             {statusLabel}
           </Text>
-          <Text className="text-xs text-muted-foreground">{sourceLabel}</Text>
+          <Text className="text-caption text-muted-foreground">{sourceLabel}</Text>
           {hasIssue ? (
             <Ionicons
               name="open-outline"
@@ -985,13 +985,13 @@ function RunRow({
           ) : null}
         </View>
         {run.failure_reason ? (
-          <Text className="text-xs text-destructive" numberOfLines={1}>
+          <Text className="text-caption text-destructive" numberOfLines={1}>
             {run.failure_reason}
           </Text>
         ) : null}
       </View>
       <View className="items-end shrink-0">
-        <Text className="text-xs text-muted-foreground tabular-nums">
+        <Text className="text-caption text-muted-foreground tabular-nums">
           {formatDateTime(startedAt)}
         </Text>
         {durationMs !== null ? (
@@ -1036,7 +1036,7 @@ function RunRow({
               size={12}
               color={theme.mutedForeground}
             />
-            <Text className="flex-1 text-xs text-muted-foreground">
+            <Text className="flex-1 text-caption text-muted-foreground">
               {t("autopilots.webhookPayload.view")}
             </Text>
             <Ionicons
@@ -1056,7 +1056,7 @@ function RunRow({
                 // a request that never landed. Name the failure, and offer the
                 // retry — the run really may have had a payload.
                 <View className="px-3 py-2 gap-1 items-start">
-                  <Text className="text-xs text-destructive">
+                  <Text className="text-caption text-destructive">
                     {t("catalog.loadError")}
                   </Text>
                   <Pressable
@@ -1064,7 +1064,7 @@ function RunRow({
                     accessibilityRole="button"
                     className="px-2 py-1 rounded-md bg-secondary active:opacity-70"
                   >
-                    <Text className="text-xs font-medium text-foreground">
+                    <Text className="text-caption font-medium text-foreground">
                       {t("common.retry")}
                     </Text>
                   </Pressable>
@@ -1074,7 +1074,7 @@ function RunRow({
                   payload={payloadQuery.data.trigger_payload}
                 />
               ) : (
-                <Text className="px-3 py-2 text-xs text-muted-foreground">
+                <Text className="px-3 py-2 text-caption text-muted-foreground">
                   {t("autopilots.webhookPayload.none")}
                 </Text>
               )}
@@ -1093,7 +1093,7 @@ function RunRow({
             size={12}
             color={theme.mutedForeground}
           />
-          <Text className="flex-1 text-xs text-muted-foreground">
+          <Text className="flex-1 text-caption text-muted-foreground">
             {t("autopilots.runViewLog")}
           </Text>
           <Ionicons
@@ -1153,17 +1153,17 @@ function SkippedRunsGroup({
           color={theme.mutedForeground}
         />
         <Ionicons name="ban" size={13} color={theme.mutedForeground} />
-        <Text className="text-xs font-medium text-muted-foreground">
+        <Text className="text-caption font-medium text-muted-foreground">
           {t("autopilots.runSkippedGroup.label")}
         </Text>
         <Text
-          className="flex-1 min-w-0 text-xs text-muted-foreground"
+          className="flex-1 min-w-0 text-caption text-muted-foreground"
           numberOfLines={1}
         >
           {t("autopilots.runSkippedGroup.summary", { count: runs.length })}
         </Text>
         {latestAt ? (
-          <Text className="shrink-0 text-xs text-muted-foreground tabular-nums">
+          <Text className="shrink-0 text-caption text-muted-foreground tabular-nums">
             {formatDateTime(latestAt)}
           </Text>
         ) : null}

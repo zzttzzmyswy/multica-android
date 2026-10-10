@@ -157,12 +157,12 @@ export function VCSIntegrationSection() {
 
   return (
     <View className="gap-2">
-      <Text className="text-xs uppercase tracking-wider text-muted-foreground px-1">
+      <Text className="text-caption uppercase tracking-wider text-muted-foreground px-1">
         {t("integrations.vcsTitle")}
       </Text>
       <View className="rounded-md border border-border bg-card overflow-hidden">
         <View className="px-4 py-3 gap-2">
-          <Text className="text-sm text-muted-foreground leading-4">
+          <Text className="text-body text-muted-foreground leading-4">
             {t("integrations.vcsDescription")}
           </Text>
 
@@ -172,7 +172,7 @@ export function VCSIntegrationSection() {
             </View>
           ) : error ? (
             <View className="py-4 items-center gap-3">
-              <Text className="text-sm text-destructive text-center">
+              <Text className="text-body text-destructive text-center">
                 {t("integrations.vcsLoadFailed")}
               </Text>
               <Button variant="outline" size="sm" onPress={() => void refetch()}>
@@ -196,10 +196,10 @@ export function VCSIntegrationSection() {
                             <Ionicons name="git-branch-outline" size={15} color={muted} />
                           </View>
                           <View className="flex-1 min-w-0 gap-0.5">
-                            <Text className="text-sm font-medium text-foreground">
+                            <Text className="text-body font-medium text-foreground">
                               {label}
                             </Text>
-                            <Text className="text-xs text-muted-foreground">
+                            <Text className="text-caption text-muted-foreground">
                               {t("integrations.vcsConnectedAs", {
                                 login: c.account_login,
                               })}
@@ -238,10 +238,10 @@ export function VCSIntegrationSection() {
               {justConnected ? (
                 <View className="rounded-md border border-border p-3 gap-2">
                   <View className="gap-0.5">
-                    <Text className="text-sm font-medium text-foreground">
+                    <Text className="text-body font-medium text-foreground">
                       {t("integrations.vcsWebhookSetupTitle")}
                     </Text>
-                    <Text className="text-xs text-muted-foreground leading-4">
+                    <Text className="text-caption text-muted-foreground leading-4">
                       {t("integrations.vcsWebhookSetupDesc")}
                     </Text>
                   </View>
@@ -254,7 +254,7 @@ export function VCSIntegrationSection() {
                     value={justConnected.webhook_secret}
                     mono
                   />
-                  <Text className="text-xs text-warning leading-4">
+                  <Text className="text-caption text-warning leading-4">
                     {t("integrations.vcsWebhookSecretWarning")}
                   </Text>
                 </View>
@@ -263,11 +263,11 @@ export function VCSIntegrationSection() {
               {/* Connect form for managers */}
               {canManage ? (
                 <View className="gap-3 pt-1">
-                  <Text className="text-sm font-medium text-foreground">
+                  <Text className="text-body font-medium text-foreground">
                     {t("integrations.vcsConnectTitle")}
                   </Text>
                   {!configured ? (
-                    <Text className="text-xs text-muted-foreground leading-4">
+                    <Text className="text-caption text-muted-foreground leading-4">
                       {t("integrations.vcsNotConfigured")}{" "}
                       <Text className="font-mono">MULTICA_VCS_SECRET_KEY</Text>.
                     </Text>
@@ -290,7 +290,7 @@ export function VCSIntegrationSection() {
                             >
                               <Text
                                 className={cn(
-                                  "text-xs font-medium",
+                                  "text-caption font-medium",
                                   active ? "text-primary" : "text-muted-foreground",
                                 )}
                               >
@@ -301,7 +301,7 @@ export function VCSIntegrationSection() {
                         })}
                       </View>
                       <View className="gap-1.5">
-                        <Text className="text-xs font-medium text-foreground">
+                        <Text className="text-caption font-medium text-foreground">
                           {t("integrations.vcsInstanceUrl")}
                         </Text>
                         <TextField
@@ -315,7 +315,7 @@ export function VCSIntegrationSection() {
                         />
                       </View>
                       <View className="gap-1.5">
-                        <Text className="text-xs font-medium text-foreground">
+                        <Text className="text-caption font-medium text-foreground">
                           {t("integrations.vcsToken")}
                         </Text>
                         <TextField
@@ -327,7 +327,7 @@ export function VCSIntegrationSection() {
                           autoCorrect={false}
                           editable={!connect.isPending}
                         />
-                        <Text className="text-xs text-muted-foreground leading-4">
+                        <Text className="text-caption text-muted-foreground leading-4">
                           {t("integrations.vcsTokenHint")}
                         </Text>
                       </View>
@@ -350,7 +350,7 @@ export function VCSIntegrationSection() {
                   )}
                 </View>
               ) : connections.length === 0 ? (
-                <Text className="text-xs text-muted-foreground">
+                <Text className="text-caption text-muted-foreground">
                   {t("integrations.vcsContactAdmin")}
                 </Text>
               ) : null}
@@ -389,7 +389,7 @@ function CopyRow({ label, value, mono }: { label: string; value: string; mono?: 
         <Text
           numberOfLines={2}
           className={cn(
-            "text-xs text-foreground",
+            "text-caption text-foreground",
             mono && "font-mono",
           )}
         >

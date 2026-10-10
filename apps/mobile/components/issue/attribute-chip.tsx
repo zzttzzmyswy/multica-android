@@ -40,7 +40,7 @@ export function AttributeChip({
     className,
   );
   const labelClass = cn(
-    "text-xs",
+    "text-caption",
     variant === "filled"
       ? "text-foreground"
       : "text-muted-foreground/70",

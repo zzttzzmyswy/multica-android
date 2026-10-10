@@ -154,7 +154,7 @@ export function CustomPropertyRow({ issue }: { issue: Issue }) {
               <AttributeChip
                 key={property.id}
                 icon={
-                  <Text className="text-xs">
+                  <Text className="text-caption">
                     {display.value ? "☑" : "☐"}
                   </Text>
                 }

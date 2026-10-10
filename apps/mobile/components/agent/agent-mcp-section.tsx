@@ -247,7 +247,7 @@ export function AgentMcpSection({
   return (
     <View className="mt-1">
       <View className="px-4 pt-5 pb-2">
-        <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+        <Text className="text-caption uppercase tracking-wider text-muted-foreground font-medium">
           {t("mcp.agent.title")}
         </Text>
       </View>
@@ -281,7 +281,7 @@ export function AgentMcpSection({
           <View className="flex-row items-start gap-2 rounded-md border border-border px-3 py-2.5">
             <Ionicons name="lock-closed-outline" size={15} color={muted} />
             <View className="flex-1 gap-0.5">
-              <Text className="text-sm font-medium text-foreground">
+              <Text className="text-body font-medium text-foreground">
                 {t("mcp.agent.redactedTitle")}
               </Text>
               <Text className="text-micro text-muted-foreground leading-4">
@@ -290,7 +290,7 @@ export function AgentMcpSection({
             </View>
           </View>
         ) : managed.length === 0 ? (
-          <Text className="text-xs text-muted-foreground/80 py-1">
+          <Text className="text-caption text-muted-foreground/80 py-1">
             {t("mcp.agent.managedEmpty")}
           </Text>
         ) : (
@@ -307,7 +307,7 @@ export function AgentMcpSection({
                 <Ionicons name="server-outline" size={16} color={muted} />
                 <View className="flex-1 min-w-0 gap-0.5">
                   <Text
-                    className="text-sm font-medium text-foreground"
+                    className="text-body font-medium text-foreground"
                     numberOfLines={1}
                   >
                     {server.name}
@@ -382,7 +382,7 @@ export function AgentMcpSection({
               emptyMessage={t("mcp.agent.libraryEmpty")}
             />
           ) : (
-            <Text className="text-xs text-muted-foreground/80 py-1">
+            <Text className="text-caption text-muted-foreground/80 py-1">
               {t("mcp.agent.noneAssigned")}
             </Text>
           )
@@ -397,13 +397,13 @@ export function AgentMcpSection({
                 <View className="flex-1 min-w-0 gap-0.5">
                   <View className="flex-row items-center gap-2">
                     <Text
-                      className="text-sm font-medium text-foreground"
+                      className="text-body font-medium text-foreground"
                       numberOfLines={1}
                     >
                       {server.name}
                     </Text>
                     {managed.some((m) => m.name === server.name) ? (
-                      <Text className="text-[10px] uppercase text-muted-foreground border border-border rounded px-1">
+                      <Text className="text-micro uppercase text-muted-foreground border border-border rounded px-1">
                         {t("mcp.agent.runtimeOverridden")}
                       </Text>
                     ) : null}
@@ -458,7 +458,7 @@ export function AgentMcpSection({
               className="flex-row items-center gap-1 py-1"
             >
               <Ionicons name="refresh" size={14} color={muted} />
-              <Text className="text-xs text-muted-foreground">
+              <Text className="text-caption text-muted-foreground">
                 {t("mcp.agent.runtimeRefresh")}
               </Text>
             </Pressable>
@@ -473,12 +473,12 @@ export function AgentMcpSection({
         {runtimeNotice ? (
           <View className="flex-row items-center gap-3 py-2">
             {runtimeQuery.isLoading ? <ActivityIndicator /> : null}
-            <Text className="flex-1 text-xs text-muted-foreground">
+            <Text className="flex-1 text-caption text-muted-foreground">
               {runtimeNotice}
             </Text>
           </View>
         ) : (runtimeQuery.data?.mcpServers.length ?? 0) === 0 ? (
-          <Text className="text-xs text-muted-foreground/80 py-1">
+          <Text className="text-caption text-muted-foreground/80 py-1">
             {t("mcp.agent.runtimeEmpty")}
           </Text>
         ) : (
@@ -492,13 +492,13 @@ export function AgentMcpSection({
                 <View className="flex-1 min-w-0 gap-0.5">
                   <View className="flex-row items-center gap-2">
                     <Text
-                      className="text-sm font-medium text-foreground"
+                      className="text-body font-medium text-foreground"
                       numberOfLines={1}
                     >
                       {server.name}
                     </Text>
                     {effectiveNames.has(server.name) ? (
-                      <Text className="text-[10px] uppercase text-muted-foreground border border-border rounded px-1">
+                      <Text className="text-micro uppercase text-muted-foreground border border-border rounded px-1">
                         {t("mcp.agent.runtimeOverridden")}
                       </Text>
                     ) : null}
@@ -508,7 +508,7 @@ export function AgentMcpSection({
                   </Text>
                 </View>
                 {!server.enabled ? (
-                  <Text className="text-[10px] uppercase text-muted-foreground border border-border rounded px-1">
+                  <Text className="text-micro uppercase text-muted-foreground border border-border rounded px-1">
                     {t("mcp.agent.runtimeDisabled")}
                   </Text>
                 ) : null}

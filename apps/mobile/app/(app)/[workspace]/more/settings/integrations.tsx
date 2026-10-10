@@ -210,7 +210,7 @@ export default function IntegrationsPage() {
       <Stack.Screen options={{ title: t("screen.integrations") }} />
       <ScrollView className="flex-1 bg-background">
         <View className="border-b border-border px-4 py-2.5">
-          <Text className="text-xs text-muted-foreground leading-4">
+          <Text className="text-caption text-muted-foreground leading-4">
             {t("integrations.description")}
           </Text>
         </View>
@@ -220,7 +220,7 @@ export default function IntegrationsPage() {
               connected / canManage / configured, and the Connect / Disconnect
               action sits opposite the status line. */}
           <View className="gap-2">
-            <Text className="text-xs uppercase tracking-wider text-muted-foreground px-1">
+            <Text className="text-caption uppercase tracking-wider text-muted-foreground px-1">
               {t("integrations.gh.connectionSection")}
             </Text>
             <View className="rounded-md border border-border bg-card overflow-hidden">
@@ -229,23 +229,23 @@ export default function IntegrationsPage() {
                   <Ionicons name="logo-github" size={18} color={muted} />
                 </View>
                 <View className="flex-1 min-w-0 gap-0.5">
-                  <Text className="text-sm font-medium text-foreground">
+                  <Text className="text-body font-medium text-foreground">
                     {t("integrations.githubTitle")}
                   </Text>
                   {githubPending ? (
-                    <Text className="text-xs text-muted-foreground">
+                    <Text className="text-caption text-muted-foreground">
                       {t("quickActions.loading")}
                     </Text>
                   ) : connected ? (
                     <>
                       <Text
-                        className="text-xs text-emerald-600 dark:text-emerald-400"
+                        className="text-caption text-emerald-600 dark:text-emerald-400"
                         numberOfLines={1}
                       >
                         {connectedLabel}
                       </Text>
                       {primaryInstallation?.connected_by ? (
-                        <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+                        <Text className="text-caption text-muted-foreground" numberOfLines={1}>
                           {t("integrations.gh.connectedBy", {
                             name: primaryInstallation.connected_by,
                           })}
@@ -253,7 +253,7 @@ export default function IntegrationsPage() {
                       ) : null}
                     </>
                   ) : canManage ? (
-                    <Text className="text-xs text-muted-foreground leading-4">
+                    <Text className="text-caption text-muted-foreground leading-4">
                       {t("integrations.gh.connectDescPrefix")}{" "}
                       <Text className="font-mono text-foreground">
                         {t("integrations.gh.connectDescExample")}
@@ -264,7 +264,7 @@ export default function IntegrationsPage() {
                       </Text>
                     </Text>
                   ) : (
-                    <Text className="text-xs text-muted-foreground leading-4">
+                    <Text className="text-caption text-muted-foreground leading-4">
                       {t("integrations.gh.contactAdmin")}
                     </Text>
                   )}
@@ -314,14 +314,14 @@ export default function IntegrationsPage() {
               </View>
               {canManage && !configured ? (
                 <View className="border-t border-border px-4 py-2.5">
-                  <Text className="text-xs text-muted-foreground leading-4">
+                  <Text className="text-caption text-muted-foreground leading-4">
                     {t("integrations.gh.notConfigured")}
                   </Text>
                 </View>
               ) : null}
               {!canManage && connected ? (
                 <View className="border-t border-border px-4 py-2.5">
-                  <Text className="text-xs text-muted-foreground leading-4">
+                  <Text className="text-caption text-muted-foreground leading-4">
                     {t("integrations.gh.readOnlyConnection")}
                   </Text>
                 </View>
@@ -335,7 +335,7 @@ export default function IntegrationsPage() {
               whole section is read-only without can_manage. */}
           {workspace ? (
             <View className="gap-2">
-              <Text className="text-xs uppercase tracking-wider text-muted-foreground px-1">
+              <Text className="text-caption uppercase tracking-wider text-muted-foreground px-1">
                 {t("integrations.gh.sectionFeatures")}
               </Text>
               <View className="rounded-md border border-border bg-card overflow-hidden">
@@ -344,10 +344,10 @@ export default function IntegrationsPage() {
                     <Ionicons name="toggle-outline" size={16} color={muted} />
                   </View>
                   <View className="flex-1 min-w-0 gap-0.5">
-                    <Text className="text-sm font-medium text-foreground">
+                    <Text className="text-body font-medium text-foreground">
                       {t("integrations.gh.masterTitle")}
                     </Text>
-                    <Text className="text-xs text-muted-foreground mt-0.5">
+                    <Text className="text-caption text-muted-foreground mt-0.5">
                       {flags.enabled
                         ? t("integrations.gh.masterOn")
                         : t("integrations.gh.masterOff")}
@@ -397,7 +397,7 @@ export default function IntegrationsPage() {
                 />
               </View>
               {!canManage ? (
-                <Text className="text-xs text-muted-foreground/70 px-1">
+                <Text className="text-caption text-muted-foreground/70 px-1">
                   {t("integrations.gh.readOnlyHint")}
                 </Text>
               ) : null}
@@ -408,7 +408,7 @@ export default function IntegrationsPage() {
               (lib/integration-channel); only the action stays an outbound
               link, because the OAuth handshake has to run in a browser. */}
           <View className="gap-2">
-            <Text className="text-xs uppercase tracking-wider text-muted-foreground px-1">
+            <Text className="text-caption uppercase tracking-wider text-muted-foreground px-1">
               {t("integrations.title")}
             </Text>
             <View className="rounded-md border border-border bg-card overflow-hidden">
@@ -441,11 +441,11 @@ export default function IntegrationsPage() {
           </Button>
 
           {openError ? (
-            <Text className="text-xs text-destructive text-center">
+            <Text className="text-caption text-destructive text-center">
               {openError}
             </Text>
           ) : null}
-          <Text className="text-xs text-muted-foreground/70 text-center">
+          <Text className="text-caption text-muted-foreground/70 text-center">
             {t("integrations.readOnlyHint")}
           </Text>
         </View>
@@ -499,13 +499,13 @@ function ChannelRow({
           <Ionicons name={channel.icon} size={16} color={mutedColor} />
         </View>
         <View className="flex-1 min-w-0 gap-0.5">
-          <Text className="text-sm font-medium text-foreground">
+          <Text className="text-body font-medium text-foreground">
             {t(`integrations.channel.${channel.key}`)}
           </Text>
           <View className="flex-row items-center gap-1.5">
             <Text
               className={cn(
-                "text-xs",
+                "text-caption",
                 connected ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/70",
               )}
               numberOfLines={1}
@@ -516,7 +516,7 @@ function ChannelRow({
                 row would count a revoked bot as a working connection. */}
             {state.revoked > 0 ? (
               <View className="rounded-full border border-border bg-muted px-1.5 py-0.5">
-                <Text className="text-[10px] text-muted-foreground">
+                <Text className="text-micro text-muted-foreground">
                   {t("integrations.channelRevokedBadge", { count: state.revoked })}
                 </Text>
               </View>
@@ -532,7 +532,7 @@ function ChannelRow({
           <Ionicons name="checkmark-circle" size={16} color={successColor} />
         ) : null}
         <Pressable onPress={onOpen} hitSlop={6} className="flex-row items-center gap-1">
-          <Text className="text-xs font-medium text-primary">
+          <Text className="text-caption font-medium text-primary">
             {t("integrations.openInBrowser")}
           </Text>
           <Ionicons name="open-outline" size={13} color={primaryColor} />
@@ -565,8 +565,8 @@ function FeatureRow({
         <Ionicons name={icon} size={16} color={mutedColor} />
       </View>
       <View className="flex-1 min-w-0 gap-0.5">
-        <Text className="text-sm font-medium text-foreground">{label}</Text>
-        <Text className="text-xs text-muted-foreground mt-0.5">
+        <Text className="text-body font-medium text-foreground">{label}</Text>
+        <Text className="text-caption text-muted-foreground mt-0.5">
           {description}
         </Text>
       </View>

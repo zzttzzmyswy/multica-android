@@ -36,11 +36,11 @@ export default function IssueWakeupsRoute() {
   return (
     <View className="flex-1">
       <View className="px-4 pt-4 pb-3">
-        <Text className="text-base font-semibold text-foreground">
+        <Text className="text-title-sm font-semibold text-foreground">
           {t("wakeups.title")}
         </Text>
         {issue ? (
-          <Text className="text-xs text-muted-foreground">
+          <Text className="text-caption text-muted-foreground">
             {issue.identifier}
           </Text>
         ) : null}

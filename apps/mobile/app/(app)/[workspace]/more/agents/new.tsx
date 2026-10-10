@@ -60,10 +60,10 @@ export default function ChooseAgentCreateMethodPage() {
           <Text className="text-micro font-medium uppercase tracking-wider text-muted-foreground">
             {t("agents.new.eyebrow")}
           </Text>
-          <Text className="text-2xl font-semibold tracking-tight text-foreground">
+          <Text className="text-display-sm font-semibold tracking-tight text-foreground">
             {t("agents.new.chooseTitle")}
           </Text>
-          <Text className="text-sm text-muted-foreground">
+          <Text className="text-body text-muted-foreground">
             {t("agents.new.chooseDescription")}
           </Text>
         </View>
@@ -80,14 +80,14 @@ export default function ChooseAgentCreateMethodPage() {
                 <Ionicons name={mode.icon} size={20} color={theme.mutedForeground} />
               </View>
             </View>
-            <Text className="text-base font-semibold text-foreground">
+            <Text className="text-title-sm font-semibold text-foreground">
               {mode.title}
             </Text>
-            <Text className="text-sm leading-5 text-muted-foreground">
+            <Text className="text-body leading-5 text-muted-foreground">
               {mode.description}
             </Text>
             <View className="flex-row items-center gap-1 pt-1">
-              <Text className="text-xs font-medium text-foreground">
+              <Text className="text-caption font-medium text-foreground">
                 {t("agents.new.continue")}
               </Text>
               <Ionicons name="chevron-forward" size={13} color={theme.mutedForeground} />

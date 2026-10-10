@@ -217,7 +217,7 @@ export default function AddResourceRoute() {
   return (
     <View className="flex-1">
       <View className="flex-row items-center justify-between px-4 pt-4 pb-2">
-        <Text className="text-base font-semibold text-foreground">
+        <Text className="text-title-sm font-semibold text-foreground">
           {kind === "github_repo"
             ? t("resource.title")
             : t("resource.attachLocalDirectory")}
@@ -230,7 +230,7 @@ export default function AddResourceRoute() {
             !canSubmit || submitting ? "opacity-50" : "active:bg-secondary"
           }`}
         >
-          <Text className="text-sm font-semibold text-primary">
+          <Text className="text-body font-semibold text-primary">
             {submitting
               ? t("resource.attaching")
               : kind === "github_repo"
@@ -271,7 +271,7 @@ export default function AddResourceRoute() {
           <>
             {repos.length > 0 ? (
               <View className="px-4 pt-2">
-                <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+                <Text className="text-caption uppercase tracking-wider text-muted-foreground font-medium">
                   {t("resource.fromRepositories")}
                 </Text>
                 <View className="mt-2">
@@ -285,7 +285,7 @@ export default function AddResourceRoute() {
                 </View>
                 <View className="mt-1">
                   {filteredRepos.length === 0 ? (
-                    <Text className="py-3 text-xs text-muted-foreground text-center">
+                    <Text className="py-3 text-caption text-muted-foreground text-center">
                       {t("resource.noRepositoryMatch")}
                     </Text>
                   ) : (
@@ -307,7 +307,7 @@ export default function AddResourceRoute() {
             <View className="px-4 pt-5 gap-4">
               <View className="flex-row items-center gap-2">
                 <View className="h-px flex-1 bg-border" />
-                <Text className="text-xs text-muted-foreground">
+                <Text className="text-caption text-muted-foreground">
                   {repos.length > 0
                     ? t("resource.manualEntry")
                     : t("resource.repoUrl")}
@@ -316,7 +316,7 @@ export default function AddResourceRoute() {
               </View>
               <View className="gap-1">
                 {repos.length > 0 ? null : (
-                  <Text className="text-xs text-muted-foreground">
+                  <Text className="text-caption text-muted-foreground">
                     {t("resource.repoUrl")}
                   </Text>
                 )}
@@ -332,7 +332,7 @@ export default function AddResourceRoute() {
                 />
               </View>
               <View className="gap-1">
-                <Text className="text-xs text-muted-foreground">
+                <Text className="text-caption text-muted-foreground">
                   {t("resource.label")}
                 </Text>
                 <TextField
@@ -349,7 +349,7 @@ export default function AddResourceRoute() {
                     size={13}
                     color={theme.destructive}
                   />
-                  <Text className="flex-1 text-xs text-destructive">
+                  <Text className="flex-1 text-caption text-destructive">
                     {t("repositories.urlRequired")}
                   </Text>
                 </View>
@@ -359,11 +359,11 @@ export default function AddResourceRoute() {
         ) : (
           <View className="px-4 pt-2 gap-5">
             <View>
-              <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+              <Text className="text-caption uppercase tracking-wider text-muted-foreground font-medium">
                 {t("resource.localRuntime")}
               </Text>
               {machines.length === 0 ? (
-                <Text className="mt-2 text-xs text-muted-foreground">
+                <Text className="mt-2 text-caption text-muted-foreground">
                   {t("resource.localRuntimeEmpty")}
                 </Text>
               ) : (
@@ -390,7 +390,7 @@ export default function AddResourceRoute() {
             </View>
 
             <View className="gap-1">
-              <Text className="text-xs text-muted-foreground">
+              <Text className="text-caption text-muted-foreground">
                 {t("resource.localPath")}
               </Text>
               <TextField
@@ -408,7 +408,7 @@ export default function AddResourceRoute() {
                     size={13}
                     color={theme.destructive}
                   />
-                  <Text className="flex-1 text-xs text-destructive">
+                  <Text className="flex-1 text-caption text-destructive">
                     {t("resource.localMissingPath")}
                   </Text>
                 </View>
@@ -416,7 +416,7 @@ export default function AddResourceRoute() {
             </View>
 
             <View className="gap-1">
-              <Text className="text-xs text-muted-foreground">
+              <Text className="text-caption text-muted-foreground">
                 {t("resource.label")}
               </Text>
               <TextField
@@ -428,7 +428,7 @@ export default function AddResourceRoute() {
             </View>
 
             <View className="gap-2">
-              <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+              <Text className="text-caption uppercase tracking-wider text-muted-foreground font-medium">
                 {t("resource.modeTitle")}
               </Text>
               <Text className="text-micro text-muted-foreground">
@@ -486,17 +486,17 @@ function RepoOptionRow({
     >
       <Ionicons name="git-branch-outline" size={15} color={theme.mutedForeground} />
       <View className="flex-1 min-w-0">
-        <Text className="font-mono text-sm text-foreground" numberOfLines={1}>
+        <Text className="font-mono text-body text-foreground" numberOfLines={1}>
           {repoShortLabel(repo.url)}
         </Text>
         {repo.description ? (
-          <Text className="text-xs text-muted-foreground/70" numberOfLines={1}>
+          <Text className="text-caption text-muted-foreground/70" numberOfLines={1}>
             {repo.description}
           </Text>
         ) : null}
       </View>
       {attached ? (
-        <Text className="text-[10px] text-muted-foreground font-medium">
+        <Text className="text-micro text-muted-foreground font-medium">
           {t("resource.attachedBadge")}
         </Text>
       ) : selected ? (
@@ -562,17 +562,17 @@ function MachineOptionRow({
     >
       <PresenceDot availability={availabilityForHealth(health)} />
       <View className="flex-1 min-w-0">
-        <Text className="text-sm text-foreground" numberOfLines={1}>
+        <Text className="text-body text-foreground" numberOfLines={1}>
           {title}
         </Text>
         {subtitle ? (
-          <Text className="text-xs text-muted-foreground/70" numberOfLines={1}>
+          <Text className="text-caption text-muted-foreground/70" numberOfLines={1}>
             {subtitle}
           </Text>
         ) : null}
       </View>
       {attached ? (
-        <Text className="text-[10px] text-muted-foreground font-medium">
+        <Text className="text-micro text-muted-foreground font-medium">
           {t("resource.localAlreadyAttached")}
         </Text>
       ) : selected ? (

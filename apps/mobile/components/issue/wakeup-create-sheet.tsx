@@ -250,14 +250,14 @@ export function WakeupCreateSheet({
           </Field>
 
           {joinsAssigneeRun ? (
-            <Text className="mt-2 rounded-md bg-secondary/60 px-2.5 py-2 text-xs leading-5 text-muted-foreground">
+            <Text className="mt-2 rounded-md bg-secondary/60 px-2.5 py-2 text-caption leading-5 text-muted-foreground">
               {t("wakeups.create.assignee_comment_hint", {
                 name: agentName ?? "",
               })}
             </Text>
           ) : null}
 
-          <Text className="mt-4 mb-1.5 text-xs font-medium text-foreground">
+          <Text className="mt-4 mb-1.5 text-caption font-medium text-foreground">
             {t("wakeups.instructionTitle")}
           </Text>
           <AutosizeTextArea
@@ -268,7 +268,7 @@ export function WakeupCreateSheet({
             placeholder={t("wakeups.create.instruction_placeholder")}
             accessibilityLabel={t("wakeups.instructionTitle")}
             onChangeText={(instruction) => update({ instruction })}
-            className="rounded-md border border-border bg-background p-2 text-sm text-foreground"
+            className="rounded-md border border-border bg-background p-2 text-body text-foreground"
           />
 
           {draft.condition === "recurring" ? (
@@ -330,12 +330,12 @@ export function WakeupCreateSheet({
           ) : null}
 
           {errorKey ? (
-            <Text role="alert" className="mt-3 text-xs text-destructive">
+            <Text role="alert" className="mt-3 text-caption text-destructive">
               {t(errorKey)}
             </Text>
           ) : null}
 
-          <Text className="mt-4 border-t border-border pt-3 text-xs text-muted-foreground">
+          <Text className="mt-4 border-t border-border pt-3 text-caption text-muted-foreground">
             {t("wakeups.create.on_behalf")}
           </Text>
           <View className="mt-3 flex-row justify-end gap-2">
@@ -345,7 +345,7 @@ export function WakeupCreateSheet({
               accessibilityRole="button"
               className="rounded-md border border-border px-3 py-2 active:bg-secondary"
             >
-              <Text className="text-sm text-foreground">
+              <Text className="text-body text-foreground">
                 {t("wakeups.create.cancel")}
               </Text>
             </Pressable>
@@ -358,7 +358,7 @@ export function WakeupCreateSheet({
                 create.isPending ? "opacity-50" : ""
               }`}
             >
-              <Text className="text-sm font-medium text-primary-foreground">
+              <Text className="text-body font-medium text-primary-foreground">
                 {create.isPending
                   ? t("wakeups.create.submitting")
                   : t("wakeups.create.submit")}
@@ -396,7 +396,7 @@ function Field({
 }) {
   return (
     <View className="mt-3.5 flex-row items-start gap-2">
-      <Text className="w-16 pt-2 text-xs text-muted-foreground">{label}</Text>
+      <Text className="w-16 pt-2 text-caption text-muted-foreground">{label}</Text>
       <View className="flex-1 min-w-0 flex-row flex-wrap items-center gap-1.5">
         {children}
       </View>
@@ -429,7 +429,7 @@ function Pill({
     >
       {leading}
       <Text
-        className={`shrink text-xs ${
+        className={`shrink text-caption ${
           placeholder ? "text-muted-foreground" : "text-foreground"
         }`}
         numberOfLines={1}
@@ -1229,9 +1229,9 @@ function Row({
     >
       {leading}
       <View className="flex-1 min-w-0">
-        <Text className="text-sm text-foreground">{label}</Text>
+        <Text className="text-body text-foreground">{label}</Text>
         {hint ? (
-          <Text className="text-xs text-muted-foreground">{hint}</Text>
+          <Text className="text-caption text-muted-foreground">{hint}</Text>
         ) : null}
       </View>
       {selected ? (
@@ -1243,7 +1243,7 @@ function Row({
 
 function SectionLabel({ label }: { label: string }) {
   return (
-    <Text className="px-4 pt-3 pb-1 text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
+    <Text className="px-4 pt-3 pb-1 text-caption font-medium uppercase tracking-wider text-muted-foreground/70">
       {label}
     </Text>
   );
@@ -1385,7 +1385,7 @@ function WakeupInstantSheet({
   return (
     <PickerSheet title={title} visible onClose={onClose}>
       <View className="px-4 pb-4">
-        <Text className="text-xs text-muted-foreground">
+        <Text className="text-caption text-muted-foreground">
           {t("wakeups.localTime", { timezone: browserTimezone() ?? "UTC" })}
         </Text>
         <View className="mt-2 flex-row gap-2">
@@ -1413,7 +1413,7 @@ function WakeupInstantSheet({
             accessibilityRole="button"
             className="rounded-md border border-border px-3 py-2 active:bg-secondary"
           >
-            <Text className="text-sm text-foreground">
+            <Text className="text-body text-foreground">
               {t("wakeups.instructionCancel")}
             </Text>
           </Pressable>
@@ -1422,7 +1422,7 @@ function WakeupInstantSheet({
             accessibilityRole="button"
             className="rounded-md bg-primary px-3 py-2"
           >
-            <Text className="text-sm font-medium text-primary-foreground">
+            <Text className="text-body font-medium text-primary-foreground">
               {t("common.done")}
             </Text>
           </Pressable>
@@ -1497,7 +1497,7 @@ function TimeField({
           size={15}
           color={theme.mutedForeground}
         />
-        <Text className="text-sm tabular-nums text-foreground">{label}</Text>
+        <Text className="text-body tabular-nums text-foreground">{label}</Text>
       </Pressable>
       {/* The Android dialog carries its own confirm row, so there is nothing to
           tap here; the iOS spinner needs one. */}
@@ -1516,7 +1516,7 @@ function TimeField({
             accessibilityRole="button"
             className="mt-2 items-center rounded-md bg-primary px-4 py-2"
           >
-            <Text className="text-sm font-medium text-primary-foreground">
+            <Text className="text-body font-medium text-primary-foreground">
               {t("common.done")}
             </Text>
           </Pressable>

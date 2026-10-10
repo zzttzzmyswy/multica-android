@@ -64,7 +64,7 @@ export function HtmlBlockPreview({ html, selectable = true }: Props) {
     <>
       <View className="bg-card border border-border rounded-lg overflow-hidden">
         <View className="flex-row items-center justify-between px-3 py-2">
-          <Text className="text-xs text-muted-foreground">
+          <Text className="text-caption text-muted-foreground">
             {t("richContent.html.title")}
           </Text>
           <View className="flex-row gap-1">
@@ -94,7 +94,7 @@ export function HtmlBlockPreview({ html, selectable = true }: Props) {
           accessibilityRole="button"
           accessibilityLabel={t("richContent.html.viewFullscreen")}
         >
-          <Text className="text-xs text-foreground">
+          <Text className="text-caption text-foreground">
             {t("richContent.html.viewFullscreen")}
           </Text>
         </Pressable>
@@ -138,7 +138,7 @@ function TabButton({
       }`}
       accessibilityRole="button"
     >
-      <Text className={`text-xs ${active ? "text-foreground" : "text-muted-foreground"}`}>
+      <Text className={`text-caption ${active ? "text-foreground" : "text-muted-foreground"}`}>
         {label}
       </Text>
     </Pressable>

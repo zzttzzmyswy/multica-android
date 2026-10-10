@@ -430,7 +430,7 @@ function Chip({ label, onClear }: { label: string; onClear: () => void }) {
       onPress={onClear}
       className="flex-row items-center gap-1 pl-2.5 pr-2 py-1 rounded-full border border-border bg-secondary/40 active:bg-secondary"
     >
-      <Text className="text-xs text-foreground">{label}</Text>
+      <Text className="text-caption text-foreground">{label}</Text>
       <Ionicons
         name="close"
         size={12}
@@ -481,7 +481,7 @@ export function IssueSectionHeader({
     <>
       {chevron}
       <StatusIcon status={section.status} size={14} />
-      <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+      <Text className="text-caption uppercase tracking-wider text-muted-foreground font-medium">
         {statusLabel(section.status)}
       </Text>
     </>
@@ -489,7 +489,7 @@ export function IssueSectionHeader({
     <>
       {chevron}
       <View className="w-[18px]" />
-      <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+      <Text className="text-caption uppercase tracking-wider text-muted-foreground font-medium">
         {translate("filter.noAssignee")}
       </Text>
     </>
@@ -503,7 +503,7 @@ export function IssueSectionHeader({
       />
       <Text
         numberOfLines={1}
-        className="flex-1 text-xs font-medium text-muted-foreground"
+        className="flex-1 text-caption font-medium text-muted-foreground"
       >
         {getName(section.assigneeType, section.assigneeId)}
       </Text>
@@ -514,7 +514,7 @@ export function IssueSectionHeader({
     return (
       <View className="flex-row items-center gap-2 px-4 py-2 bg-background">
         {body}
-        <Text className="text-xs text-muted-foreground/60">{count}</Text>
+        <Text className="text-caption text-muted-foreground/60">{count}</Text>
       </View>
     );
   }
@@ -532,7 +532,7 @@ export function IssueSectionHeader({
       }
     >
       {body}
-      <Text className="text-xs text-muted-foreground/60">{count}</Text>
+      <Text className="text-caption text-muted-foreground/60">{count}</Text>
     </Pressable>
   );
 }
@@ -540,7 +540,7 @@ export function IssueSectionHeader({
 export function SurfaceEmptyState({ message }: { message: string }) {
   return (
     <View className="flex-1 items-center justify-center px-6">
-      <Text className="text-sm text-muted-foreground text-center">
+      <Text className="text-body text-muted-foreground text-center">
         {message}
       </Text>
     </View>

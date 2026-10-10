@@ -345,7 +345,7 @@ export default function NewIssueModal() {
                 >
                   <Text
                     className={cn(
-                      "text-sm font-medium",
+                      "text-body font-medium",
                       active ? "text-background" : "text-muted-foreground",
                     )}
                   >
@@ -367,7 +367,7 @@ export default function NewIssueModal() {
                 size={13}
                 color={MOBILE_PLACEHOLDER_COLOR}
               />
-              <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+              <Text className="text-caption text-muted-foreground" numberOfLines={1}>
                 {t("newIssue.parentChip", {
                   identifier: parentIssueIdentifier
                     ? String(parentIssueIdentifier)
@@ -396,7 +396,7 @@ export default function NewIssueModal() {
                 onChangeText={setTitle}
                 placeholder={t("newIssue.titlePlaceholder")}
                 placeholderTextColor={MOBILE_PLACEHOLDER_COLOR}
-                className="text-2xl font-semibold text-foreground py-2"
+                className="text-display-sm font-semibold text-foreground py-2"
                 autoFocus
                 returnKeyType="next"
                 editable={!isSubmitting}

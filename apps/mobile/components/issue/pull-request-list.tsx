@@ -84,7 +84,7 @@ export function PullRequestList({ issueId }: { issueId: string }) {
   return (
     <View className="border-t border-border">
       <View className="px-4 pt-2 pb-1">
-        <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+        <Text className="text-caption uppercase tracking-wider text-muted-foreground font-medium">
           {t("pullRequest.sectionTitle")}
         </Text>
       </View>

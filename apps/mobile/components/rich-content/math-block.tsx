@@ -73,7 +73,7 @@ export function MathBlock({ expression, displayMode = true }: Props) {
         />
       </View>
       <View className="px-3 py-1 border-t border-border">
-        <Text className="text-xs text-muted-foreground">
+        <Text className="text-caption text-muted-foreground">
           {t("richContent.math.title")}
         </Text>
       </View>

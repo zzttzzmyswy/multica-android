@@ -55,7 +55,7 @@ export interface McpServerFormServer {
 }
 
 function FieldError({ text }: { text: string }) {
-  return <Text className="text-xs text-destructive">{text}</Text>;
+  return <Text className="text-caption text-destructive">{text}</Text>;
 }
 
 export function McpServerForm({
@@ -184,7 +184,7 @@ export function McpServerForm({
     <View className="px-4 pt-4 gap-5">
       {editing ? (
         <View className="rounded-md border border-border bg-muted/50 px-3 py-2.5">
-          <Text className="text-xs text-muted-foreground leading-5">
+          <Text className="text-caption text-muted-foreground leading-5">
             {t("mcp.writeOnlyNote")}
           </Text>
         </View>
@@ -192,7 +192,7 @@ export function McpServerForm({
 
       {/* Name */}
       <View className="gap-1.5">
-        <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+        <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
           {t("mcp.form.name")}
         </Text>
         <TextField
@@ -224,7 +224,7 @@ export function McpServerForm({
       />
 
       {!formAvailable ? (
-        <Text className="text-xs text-muted-foreground leading-5">
+        <Text className="text-caption text-muted-foreground leading-5">
           {t("mcp.form.formUnavailable")}
         </Text>
       ) : null}
@@ -240,7 +240,7 @@ export function McpServerForm({
         <>
           {/* Transport */}
           <View className="gap-2">
-            <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
               {t("mcp.form.transport")}
             </Text>
             <View className="flex-row gap-2">
@@ -262,7 +262,7 @@ export function McpServerForm({
                 >
                   <Text
                     className={cn(
-                      "text-sm font-medium",
+                      "text-body font-medium",
                       form.transport === option
                         ? "text-brand"
                         : "text-foreground",
@@ -281,7 +281,7 @@ export function McpServerForm({
             <>
               {/* Command */}
               <View className="gap-1.5">
-                <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
                   {t("mcp.form.command")}
                 </Text>
                 <TextField
@@ -300,7 +300,7 @@ export function McpServerForm({
 
               {/* Args */}
               <View className="gap-1.5">
-                <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
                   {t("mcp.form.args")}
                 </Text>
                 <TextField
@@ -342,7 +342,7 @@ export function McpServerForm({
             <>
               {/* URL */}
               <View className="gap-1.5">
-                <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
                   {t("mcp.form.url")}
                 </Text>
                 <TextField
@@ -390,7 +390,7 @@ export function McpServerForm({
       )}
 
       {showErrors && errorText ? (
-        <Text className="text-xs text-destructive">{errorText}</Text>
+        <Text className="text-caption text-destructive">{errorText}</Text>
       ) : null}
 
       {/* Actions */}
@@ -436,7 +436,7 @@ function KeyValueRows({
 }) {
   return (
     <View className="gap-2">
-      <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+      <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
         {label}
       </Text>
       {rows.map((row, index) => (
@@ -478,7 +478,7 @@ function KeyValueRows({
         accessibilityLabel={addLabel}
       >
         <Ionicons name="add" size={15} color={theme.mutedForeground} />
-        <Text className="text-sm text-muted-foreground">{addLabel}</Text>
+        <Text className="text-body text-muted-foreground">{addLabel}</Text>
       </Pressable>
     </View>
   );

@@ -64,7 +64,7 @@ export function ChatQueue({
     <View className="mx-3 mb-[-6] rounded-t-lg border border-b-0 border-border bg-card px-3 pt-2 pb-3">
       <View className="mb-1.5 flex-row items-center gap-1.5">
         <Ionicons name="albums-outline" size={14} color={mutedColor} />
-        <Text className="flex-1 text-xs font-medium text-muted-foreground">
+        <Text className="flex-1 text-caption font-medium text-muted-foreground">
           {t("chat.queue.title", { count: tasks.length })}
         </Text>
         <IconButton
@@ -85,7 +85,7 @@ export function ChatQueue({
             <Ionicons name="arrow-redo-outline" size={13} color={mutedColor} />
             <Text
               numberOfLines={1}
-              className="min-w-0 flex-1 text-sm text-muted-foreground"
+              className="min-w-0 flex-1 text-body text-muted-foreground"
             >
               {rowText}
             </Text>

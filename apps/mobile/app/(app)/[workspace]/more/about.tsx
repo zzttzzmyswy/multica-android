@@ -149,8 +149,8 @@ export default function AboutPage() {
           className="h-20 w-20 rounded-2xl"
           resizeMode="contain"
         />
-        <Text className="text-2xl font-semibold text-foreground">Multica</Text>
-        <Text className="text-sm text-muted-foreground">
+        <Text className="text-display-sm font-semibold text-foreground">Multica</Text>
+        <Text className="text-body text-muted-foreground">
           {t("about.subtitle")}
         </Text>
       </View>
@@ -181,7 +181,7 @@ export default function AboutPage() {
           <Text>{t("about.sourceCode")}</Text>
         </Button>
 
-        <Text className="text-center text-xs text-muted-foreground/70" style={{ color: muted }}>
+        <Text className="text-center text-caption text-muted-foreground/70" style={{ color: muted }}>
           {t("update.installUnknownSourcesHint")}
         </Text>
       </View>
@@ -200,8 +200,8 @@ function InfoRow({
 }) {
   return (
     <View className={cn("flex-row items-center justify-between", !last && "mb-3")}>
-      <Text className="text-sm text-muted-foreground">{label}</Text>
-      <Text className="text-sm font-medium text-foreground">{value}</Text>
+      <Text className="text-body text-muted-foreground">{label}</Text>
+      <Text className="text-body font-medium text-foreground">{value}</Text>
     </View>
   );
 }
@@ -267,13 +267,13 @@ function UpdateCard({
       <View className="flex-row items-center justify-between gap-3">
         <View className="flex-1 gap-1">
           <Text
-            className={cn("text-sm", tone ?? "text-muted-foreground")}
+            className={cn("text-body", tone ?? "text-muted-foreground")}
             numberOfLines={2}
           >
             {status}
           </Text>
           {latestTag && !hasUpdate && phase !== "checking" && (
-            <Text className="text-xs text-muted-foreground/70">
+            <Text className="text-caption text-muted-foreground/70">
               {t("about.latestVersion", {
                 version: latestTag.replace(/^v/i, ""),
               })}

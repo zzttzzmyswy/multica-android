@@ -180,7 +180,7 @@ export default function MembersPage() {
         )}
         {invitationsError && !invitationsLoading ? (
           <View className="px-4 pt-3">
-            <Text className="text-xs text-destructive">
+            <Text className="text-caption text-destructive">
               {t("members.loadError")}
               {invitationsError instanceof Error
                 ? invitationsError.message
@@ -196,7 +196,7 @@ export default function MembersPage() {
           </View>
         ) : error ? (
           <View className="px-4 gap-3 pt-4">
-            <Text className="text-sm text-destructive">
+            <Text className="text-body text-destructive">
               {t("members.loadError")}
               {error instanceof Error ? error.message : t("common.unknownError")}
             </Text>
@@ -207,10 +207,10 @@ export default function MembersPage() {
         ) : showBlank ? (
           <View className="pt-16 items-center justify-center px-6 gap-1">
             <Ionicons name="people-outline" size={32} color={theme.mutedForeground} />
-            <Text className="text-sm text-muted-foreground text-center mt-2">
+            <Text className="text-body text-muted-foreground text-center mt-2">
               {t("members.emptyTitle")}
             </Text>
-            <Text className="text-xs text-muted-foreground/70 text-center">
+            <Text className="text-caption text-muted-foreground/70 text-center">
               {t("members.emptyDescription")}
             </Text>
           </View>
@@ -255,7 +255,7 @@ function InviteEntry({ onPress }: { onPress: () => void }) {
       className="mx-4 mt-4 flex-row items-center gap-2 rounded-xl border border-border bg-background px-3 py-3 active:bg-secondary"
     >
       <Ionicons name="person-add-outline" size={17} color={theme.brand} />
-      <Text className="flex-1 text-sm font-medium text-foreground">
+      <Text className="flex-1 text-body font-medium text-foreground">
         {t("members.inviteTitle")}
       </Text>
       <Ionicons
@@ -298,18 +298,18 @@ function MemberRow({
         <View className="flex-1 min-w-0 gap-0.5">
           <View className="flex-row items-center gap-2">
             <Text
-              className="flex-1 text-sm font-medium text-foreground"
+              className="flex-1 text-body font-medium text-foreground"
               numberOfLines={1}
             >
               {member.name}
             </Text>
             <RoleBadge role={member.role} />
           </View>
-          <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+          <Text className="text-caption text-muted-foreground" numberOfLines={1}>
             {member.email}
           </Text>
           {joined ? (
-            <Text className="text-xs text-muted-foreground/70">
+            <Text className="text-caption text-muted-foreground/70">
               {t("members.joinedAt", { time: joined })}
             </Text>
           ) : null}
@@ -367,14 +367,14 @@ function InvitationRow({
       </View>
       <View className="flex-1 min-w-0 gap-0.5">
         <Text
-          className="text-sm font-medium text-foreground"
+          className="text-body font-medium text-foreground"
           numberOfLines={1}
         >
           {invitation.invitee_email}
         </Text>
         <Text
           className={cn(
-            "text-xs",
+            "text-caption",
             isExpired ? "text-destructive" : "text-muted-foreground",
           )}
           numberOfLines={1}
@@ -442,7 +442,7 @@ function InviteMemberModal({
         <View className="flex-1 items-center justify-center px-6">
           <Pressable onPress={() => {}} className="w-full max-w-sm">
             <View className="bg-popover rounded-2xl p-4 gap-3">
-              <Text className="text-base font-semibold text-foreground">
+              <Text className="text-title-sm font-semibold text-foreground">
                 {t("members.inviteTitle")}
               </Text>
               <TextField
@@ -461,7 +461,7 @@ function InviteMemberModal({
                 autoFocus
               />
               {emailError ? (
-                <Text className="text-xs text-destructive">{emailError}</Text>
+                <Text className="text-caption text-destructive">{emailError}</Text>
               ) : null}
               <RolePicker
                 value={role}
@@ -501,7 +501,7 @@ function RolePicker({
   const { t } = useTranslation();
   return (
     <View className="flex-row items-center gap-2">
-      <Text className="text-xs text-muted-foreground">{t("members.inviteRole")}</Text>
+      <Text className="text-caption text-muted-foreground">{t("members.inviteRole")}</Text>
       <View className="flex-1 flex-row gap-2">
         {(["member", "admin"] as const).map((role) => {
           const selected = value === role;
@@ -520,7 +520,7 @@ function RolePicker({
             >
               <Text
                 className={cn(
-                  "text-sm font-medium",
+                  "text-body font-medium",
                   selected ? "text-brand" : "text-foreground",
                 )}
               >
@@ -536,7 +536,7 @@ function RolePicker({
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <Text className="px-4 pt-5 pb-2 text-xs uppercase tracking-wider text-muted-foreground font-medium">
+    <Text className="px-4 pt-5 pb-2 text-caption uppercase tracking-wider text-muted-foreground font-medium">
       {children}
     </Text>
   );

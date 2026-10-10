@@ -105,14 +105,14 @@ export default function RepositoriesPage() {
       <Stack.Screen options={{ title: t("screen.repositories") }} />
       <View className="flex-1 bg-background">
         <View className="border-b border-border px-4 py-2.5">
-          <Text className="text-xs text-muted-foreground leading-4">
+          <Text className="text-caption text-muted-foreground leading-4">
             {t("repositories.description")}
           </Text>
         </View>
 
         {!canManage ? (
           <View className="border-b border-border px-4 py-2">
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-caption text-muted-foreground">
               {t("repositories.manageHint")}
             </Text>
           </View>
@@ -124,7 +124,7 @@ export default function RepositoriesPage() {
           </View>
         ) : error ? (
           <View className="px-4 gap-3 pt-4">
-            <Text className="text-sm text-destructive">
+            <Text className="text-body text-destructive">
               {error instanceof Error
                 ? error.message
                 : t("common.unknownError")}
@@ -136,7 +136,7 @@ export default function RepositoriesPage() {
         ) : repos.length === 0 ? (
           <View className="flex-1 items-center justify-center px-6 gap-1">
             <Ionicons name="git-branch-outline" size={32} color={theme.mutedForeground} />
-            <Text className="text-sm text-muted-foreground text-center mt-2">
+            <Text className="text-body text-muted-foreground text-center mt-2">
               {t("repositories.empty")}
             </Text>
             {canManage ? (
@@ -250,11 +250,11 @@ function RepoRow({
   const body = (
     <View className="flex-1 min-w-0 gap-0.5">
       <View className="flex-row items-center gap-2">
-        <Text className="flex-1 font-mono text-sm text-foreground" numberOfLines={1}>
+        <Text className="flex-1 font-mono text-body text-foreground" numberOfLines={1}>
           {repo.url}
         </Text>
         <View className="rounded-full bg-secondary px-1.5 py-0.5">
-          <Text className="text-[10px] text-muted-foreground font-medium">
+          <Text className="text-micro text-muted-foreground font-medium">
             {source === "github"
               ? t("repositories.sourceGitHub")
               : t("repositories.sourceManual")}
@@ -262,7 +262,7 @@ function RepoRow({
         </View>
       </View>
       {repo.description ? (
-        <Text className="text-xs text-muted-foreground/70" numberOfLines={1}>
+        <Text className="text-caption text-muted-foreground/70" numberOfLines={1}>
           {repo.description}
         </Text>
       ) : null}
@@ -362,11 +362,11 @@ function EditRepositoryModal({
       >
         <View className="flex-1 justify-end">
           <Pressable onPress={() => {}} className="bg-popover rounded-t-2xl p-4 gap-3">
-            <Text className="text-base font-semibold text-foreground">
+            <Text className="text-title-sm font-semibold text-foreground">
               {t("repositories.editTitle")}
             </Text>
             <View className="gap-1.5">
-              <Text className="text-xs text-muted-foreground mb-1">URL</Text>
+              <Text className="text-caption text-muted-foreground mb-1">URL</Text>
               <TextField
                 value={url}
                 onChangeText={(v) => {
@@ -381,11 +381,11 @@ function EditRepositoryModal({
                 invalid={!!errorText}
               />
               {errorText ? (
-                <Text className="text-xs text-destructive">{errorText}</Text>
+                <Text className="text-caption text-destructive">{errorText}</Text>
               ) : null}
             </View>
             <View className="gap-1.5">
-              <Text className="text-xs text-muted-foreground mb-1">
+              <Text className="text-caption text-muted-foreground mb-1">
                 {t("repositories.description")}
               </Text>
               <TextField
@@ -461,11 +461,11 @@ function AddRepositoryModal({
       >
         <View className="flex-1 justify-end">
           <Pressable onPress={() => {}} className="bg-popover rounded-t-2xl p-4 gap-3">
-            <Text className="text-base font-semibold text-foreground">
+            <Text className="text-title-sm font-semibold text-foreground">
               {t("repositories.addTitle")}
             </Text>
             <View className="gap-1.5">
-              <Text className="text-xs text-muted-foreground mb-1">URL</Text>
+              <Text className="text-caption text-muted-foreground mb-1">URL</Text>
               <TextField
                 value={url}
                 onChangeText={(v) => {
@@ -480,11 +480,11 @@ function AddRepositoryModal({
                 invalid={!!errorText}
               />
               {errorText ? (
-                <Text className="text-xs text-destructive">{errorText}</Text>
+                <Text className="text-caption text-destructive">{errorText}</Text>
               ) : null}
             </View>
             <View className="gap-1.5">
-              <Text className="text-xs text-muted-foreground mb-1">
+              <Text className="text-caption text-muted-foreground mb-1">
                 {t("repositories.description")}
               </Text>
               <TextField

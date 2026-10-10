@@ -46,7 +46,7 @@ import { THEME } from "@/lib/theme";
 import type { SkillCreateMethod } from "@/lib/skill-import";
 
 function FieldError({ text }: { text: string }) {
-  return <Text className="text-xs text-destructive">{text}</Text>;
+  return <Text className="text-caption text-destructive">{text}</Text>;
 }
 
 /**
@@ -68,7 +68,7 @@ function BackToMethods({ onPress }: { onPress: () => void }) {
         size={16}
         color={THEME[colorScheme].mutedForeground}
       />
-      <Text className="text-xs text-muted-foreground">
+      <Text className="text-caption text-muted-foreground">
         {t("skills.create.back")}
       </Text>
     </Pressable>
@@ -202,7 +202,7 @@ export function SkillForm({
       <View className="px-4 pt-4 gap-5">
         {/* Name */}
         <View className="gap-1.5">
-          <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
             {t("skills.form.name")}
           </Text>
           <TextField
@@ -221,7 +221,7 @@ export function SkillForm({
 
         {/* Description */}
         <View className="gap-1.5">
-          <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
             {t("skills.form.description")}
           </Text>
           <AutosizeTextArea
@@ -252,7 +252,7 @@ export function SkillForm({
             accessibilityLabel={t("skills.delete")}
           >
             <Ionicons name="trash-outline" size={17} color={destructive} />
-            <Text className="text-sm font-medium text-destructive">
+            <Text className="text-body font-medium text-destructive">
               {t("skills.delete")}
             </Text>
           </Pressable>

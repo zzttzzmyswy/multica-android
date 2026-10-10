@@ -35,7 +35,7 @@ export function StagePickerBody({ value, maxStage = 0, onChange }: Props) {
   return (
     <ScrollView showsVerticalScrollIndicator={false}>
       <View className="px-4 pt-3 pb-2">
-        <Text className="text-lg font-semibold text-foreground">
+        <Text className="text-title font-semibold text-foreground">
           {t("stage.title")}
         </Text>
       </View>
@@ -51,7 +51,7 @@ export function StagePickerBody({ value, maxStage = 0, onChange }: Props) {
             size={16}
             color={dim}
           />
-          <Text className="flex-1 text-base text-muted-foreground">
+          <Text className="flex-1 text-title-sm text-muted-foreground">
             {t("stage.none")}
           </Text>
           {value == null ? (
@@ -69,7 +69,7 @@ export function StagePickerBody({ value, maxStage = 0, onChange }: Props) {
               size={16}
               color={dim}
             />
-            <Text className="flex-1 text-base text-foreground">
+            <Text className="flex-1 text-title-sm text-foreground">
               {t("stage.value", { n: stage })}
             </Text>
             {value === stage ? (

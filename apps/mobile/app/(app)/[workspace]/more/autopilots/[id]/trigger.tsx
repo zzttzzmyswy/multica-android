@@ -304,7 +304,7 @@ export default function TriggerFormPage() {
                   >
                     <Text
                       className={cn(
-                        "text-sm",
+                        "text-body",
                         kind === value
                           ? "text-foreground font-medium"
                           : "text-muted-foreground",
@@ -358,7 +358,7 @@ export default function TriggerFormPage() {
                 />
               </View>
               <View className="flex-row items-center justify-between rounded-md border border-border bg-secondary/50 px-3 py-2.5">
-                <Text className="text-sm text-foreground">
+                <Text className="text-body text-foreground">
                   {t("autopilots.trigger.enabled")}
                 </Text>
                 <Switch
@@ -390,7 +390,7 @@ function FieldLabel({
         size={13}
         color={THEME[colorScheme].mutedForeground}
       />
-      <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+      <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
         {text}
       </Text>
     </View>

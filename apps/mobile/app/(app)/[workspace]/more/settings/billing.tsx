@@ -336,10 +336,10 @@ export default function BillingScreen() {
         <Stack.Screen options={{ title: t("screen.billing") }} />
         <View className="px-4 pt-4 gap-3">
           <View className="rounded-xl border border-border bg-card p-4 gap-2">
-            <Text className="text-sm font-semibold text-foreground">
+            <Text className="text-body font-semibold text-foreground">
               {t("billing.notEnabledTitle")}
             </Text>
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-caption text-muted-foreground">
               {t("billing.notEnabledDescription")}
             </Text>
           </View>
@@ -369,10 +369,10 @@ export default function BillingScreen() {
         <Stack.Screen options={{ title: t("screen.billing") }} />
         <View className="px-4 pt-4 gap-3">
           <View className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 gap-2">
-            <Text className="text-sm font-semibold text-destructive">
+            <Text className="text-body font-semibold text-destructive">
               {t("billing.loadFailedTitle")}
             </Text>
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-caption text-muted-foreground">
               {t("billing.loadFailedDescription")}
             </Text>
             <View className="pt-1">
@@ -416,7 +416,7 @@ export default function BillingScreen() {
     <ScrollView className="flex-1 bg-background">
       <Stack.Screen options={{ title: t("screen.billing") }} />
       <View className="px-4 py-4 gap-5">
-        <Text className="text-xs text-muted-foreground leading-4">
+        <Text className="text-caption text-muted-foreground leading-4">
           {t("billing.description")}
         </Text>
 
@@ -424,20 +424,20 @@ export default function BillingScreen() {
           <View className="rounded-xl border border-border bg-card px-4 py-3 gap-1 flex-row items-center gap-2">
             <ActivityIndicator size="small" />
             <View className="flex-1 gap-0.5">
-              <Text className="text-sm font-semibold text-foreground">
+              <Text className="text-body font-semibold text-foreground">
                 {t("billing.returnSyncingTitle")}
               </Text>
-              <Text className="text-xs text-muted-foreground">
+              <Text className="text-caption text-muted-foreground">
                 {t("billing.returnSyncingDescription")}
               </Text>
             </View>
           </View>
         ) : syncState === "timedOut" ? (
           <View className="rounded-xl border border-border bg-card px-4 py-3 gap-1">
-            <Text className="text-sm font-semibold text-foreground">
+            <Text className="text-body font-semibold text-foreground">
               {t("billing.returnSyncingTitle")}
             </Text>
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-caption text-muted-foreground">
               {t("billing.returnTimeoutDescription")}
             </Text>
           </View>
@@ -445,10 +445,10 @@ export default function BillingScreen() {
 
         {entitlements.status === "past_due" ? (
           <View className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 gap-1">
-            <Text className="text-sm font-semibold text-destructive">
+            <Text className="text-body font-semibold text-destructive">
               {t("billing.pastDueTitle")}
             </Text>
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-caption text-muted-foreground">
               {t("billing.pastDueDescription")}
             </Text>
           </View>
@@ -456,10 +456,10 @@ export default function BillingScreen() {
 
         {!canManage && membersFetched ? (
           <View className="rounded-xl border border-border bg-card px-4 py-3 gap-1">
-            <Text className="text-sm font-semibold text-foreground">
+            <Text className="text-body font-semibold text-foreground">
               {t("billing.readOnlyTitle")}
             </Text>
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-caption text-muted-foreground">
               {t("billing.readOnlyDescription")}
             </Text>
           </View>
@@ -467,10 +467,10 @@ export default function BillingScreen() {
 
         {actionError ? (
           <View className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 gap-1">
-            <Text className="text-sm font-semibold text-destructive">
+            <Text className="text-body font-semibold text-destructive">
               {t("billing.errorTitle")}
             </Text>
-            <Text className="text-xs text-muted-foreground">{actionError}</Text>
+            <Text className="text-caption text-muted-foreground">{actionError}</Text>
           </View>
         ) : null}
 
@@ -498,7 +498,7 @@ export default function BillingScreen() {
               label={t("billing.currentMembers")}
               description={t("billing.currentMembersDescription")}
               value={
-                <Text className="text-sm font-medium text-foreground tabular-nums">
+                <Text className="text-body font-medium text-foreground tabular-nums">
                   {t("billing.currentMemberCount", { count: entitlements.seats })}
                 </Text>
               }
@@ -510,7 +510,7 @@ export default function BillingScreen() {
                   label={t("billing.currentPeriodEnd")}
                   description={t("billing.currentPeriodEndDescription")}
                   value={
-                    <Text className="text-sm font-medium text-foreground tabular-nums">
+                    <Text className="text-body font-medium text-foreground tabular-nums">
                       {periodEnd}
                     </Text>
                   }
@@ -542,7 +542,7 @@ export default function BillingScreen() {
                   >
                     <Text
                       className={cn(
-                        "text-sm font-medium",
+                        "text-body font-medium",
                         interval === value
                           ? "text-background"
                           : "text-muted-foreground",
@@ -556,7 +556,7 @@ export default function BillingScreen() {
                 ))}
               </View>
 
-              <Text className="text-sm font-medium text-foreground">
+              <Text className="text-body font-medium text-foreground">
                 {t("billing.upgradeProForTeam", { count: entitlements.seats })}
               </Text>
 
@@ -567,11 +567,11 @@ export default function BillingScreen() {
                 </View>
               ) : formattedUnitPrice ? (
                 <View className="gap-0.5">
-                  <Text className="text-sm font-semibold text-foreground tabular-nums">
+                  <Text className="text-body font-semibold text-foreground tabular-nums">
                     {t("billing.upgradeUnitPrice", { price: formattedUnitPrice })}
                   </Text>
                   {formattedEstimatedTotal ? (
-                    <Text className="text-xs text-muted-foreground tabular-nums">
+                    <Text className="text-caption text-muted-foreground tabular-nums">
                       {t(
                         interval === "month"
                           ? "billing.upgradeEstimatedMonthlyTotal"
@@ -583,7 +583,7 @@ export default function BillingScreen() {
                 </View>
               ) : null}
 
-              <Text className="text-xs text-muted-foreground">
+              <Text className="text-caption text-muted-foreground">
                 {t("billing.upgradePriceAtCheckout")}
               </Text>
 
@@ -639,7 +639,7 @@ export default function BillingScreen() {
                   <Text>{t("billing.actionManage")}</Text>
                 </Button>
               ) : (
-                <Text className="text-xs text-muted-foreground">
+                <Text className="text-caption text-muted-foreground">
                   {t("billing.managementPortalUnavailable")}
                 </Text>
               )}
@@ -657,7 +657,7 @@ export default function BillingScreen() {
               label={t("billing.limitsIssues")}
               description={t("billing.limitsIssuesDescription")}
               value={
-                <Text className="text-sm font-medium text-foreground tabular-nums">
+                <Text className="text-body font-medium text-foreground tabular-nums">
                   {entitlements.issueWindow === null
                     ? t("billing.limitsUnlimited")
                     : new Intl.NumberFormat(locale).format(entitlements.issueWindow)}
@@ -669,7 +669,7 @@ export default function BillingScreen() {
               label={t("billing.limitsAutopilots")}
               description={t("billing.limitsAutopilotsDescription")}
               value={
-                <Text className="text-sm font-medium text-foreground tabular-nums">
+                <Text className="text-body font-medium text-foreground tabular-nums">
                   {entitlements.autopilotRuns === null
                     ? t("billing.limitsUnlimited")
                     : t("billing.limitsPerMonth", {
@@ -689,7 +689,7 @@ export default function BillingScreen() {
           <View className="rounded-xl border border-border bg-card p-4 gap-3">
             {reconcileMessage ? (
               <View className="rounded-lg border border-border bg-secondary/40 px-3 py-2">
-                <Text className="text-xs text-foreground">
+                <Text className="text-caption text-foreground">
                   {t("billing.seatsUpdated")} — {reconcileMessage}
                 </Text>
               </View>
@@ -699,7 +699,7 @@ export default function BillingScreen() {
               description={t("billing.seatsHumanMembersDescription")}
               value={
                 <View className="gap-2 items-end">
-                  <Text className="text-sm font-medium text-foreground tabular-nums">
+                  <Text className="text-body font-medium text-foreground tabular-nums">
                     {t("billing.currentMemberCount", { count: entitlements.seats })}
                   </Text>
                   {canManage && hasManagedSubscription ? (
@@ -739,9 +739,9 @@ function Section({
   return (
     <View className="gap-2">
       <View className="px-0.5 gap-0.5">
-        <Text className="text-sm font-semibold text-foreground">{title}</Text>
+        <Text className="text-body font-semibold text-foreground">{title}</Text>
         {description ? (
-          <Text className="text-xs text-muted-foreground">{description}</Text>
+          <Text className="text-caption text-muted-foreground">{description}</Text>
         ) : null}
       </View>
       {children}
@@ -769,9 +769,9 @@ function InfoRow({
   return (
     <View className="flex-row items-start justify-between gap-3">
       <View className="flex-1 gap-0.5">
-        <Text className="text-sm font-medium text-foreground">{label}</Text>
+        <Text className="text-body font-medium text-foreground">{label}</Text>
         {description ? (
-          <Text className="text-xs text-muted-foreground leading-4">
+          <Text className="text-caption text-muted-foreground leading-4">
             {description}
           </Text>
         ) : null}

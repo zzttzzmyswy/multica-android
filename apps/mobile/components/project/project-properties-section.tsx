@@ -64,7 +64,7 @@ export function ProjectPropertiesSection({
         onPress={onPressStatus}
         left={<ProjectStatusIcon status={project.status} size={16} />}
         right={
-          <Text className="text-sm text-foreground">
+          <Text className="text-body text-foreground">
             {projectStatusLabel(project.status)}
           </Text>
         }
@@ -75,7 +75,7 @@ export function ProjectPropertiesSection({
         onPress={onPressPriority}
         left={<ProjectPriorityIcon priority={project.priority} size={16} />}
         right={
-          <Text className="text-sm text-foreground">
+          <Text className="text-body text-foreground">
             {projectPriorityLabel(project.priority)}
           </Text>
         }
@@ -100,8 +100,8 @@ export function ProjectPropertiesSection({
           <Text
             className={
               leadName
-                ? "text-sm text-foreground"
-                : "text-sm text-muted-foreground"
+                ? "text-body text-foreground"
+                : "text-body text-muted-foreground"
             }
           >
             {leadName ?? t("picker.unassigned")}
@@ -165,10 +165,10 @@ function DateRow({
         <Text
           className={
             !value
-              ? "text-sm text-muted-foreground"
+              ? "text-body text-muted-foreground"
               : overdue
-                ? "text-sm text-destructive"
-                : "text-sm text-foreground"
+                ? "text-body text-destructive"
+                : "text-body text-foreground"
           }
         >
           {value ? display : emptyLabel}
@@ -194,7 +194,7 @@ function Row({
       onPress={onPress}
       className="flex-row items-center gap-3 px-4 py-3 active:bg-secondary"
     >
-      <Text className="text-sm text-muted-foreground w-20">{label}</Text>
+      <Text className="text-body text-muted-foreground w-20">{label}</Text>
       <View className="flex-row items-center gap-2 flex-1">
         {left}
         {right}

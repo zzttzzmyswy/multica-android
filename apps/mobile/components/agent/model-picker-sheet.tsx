@@ -94,7 +94,7 @@ export function ModelPickerSheet({
           <Pressable onPress={() => {}} className="w-full max-w-sm">
             <View className="bg-popover rounded-2xl overflow-hidden">
               <View className="px-4 py-3 border-b border-border">
-                <Text className="text-base font-semibold text-foreground">
+                <Text className="text-title-sm font-semibold text-foreground">
                   {t("agents.new.modelLabel")}
                 </Text>
               </View>
@@ -106,29 +106,29 @@ export function ModelPickerSheet({
                   placeholderTextColor={theme.mutedForeground}
                   autoCapitalize="none"
                   autoCorrect={false}
-                  className="h-9 rounded-md bg-secondary px-3 text-sm text-foreground"
+                  className="h-9 rounded-md bg-secondary px-3 text-body text-foreground"
                 />
               </View>
               <ScrollView className="max-h-96" keyboardShouldPersistTaps="handled">
                 {loading ? (
                   <View className="py-8 items-center gap-2">
                     <ActivityIndicator />
-                    <Text className="text-xs text-muted-foreground">
+                    <Text className="text-caption text-muted-foreground">
                       {t("agents.modelPicker.discovering")}
                     </Text>
                   </View>
                 ) : failed && models.length === 0 ? (
                   <View className="px-4 py-8 gap-1">
-                    <Text className="text-sm text-destructive text-center">
+                    <Text className="text-body text-destructive text-center">
                       {t("agents.modelPicker.discoveryFailed")}
                     </Text>
-                    <Text className="text-xs text-muted-foreground text-center">
+                    <Text className="text-caption text-muted-foreground text-center">
                       {t("agents.modelPicker.manualFallbackHint")}
                     </Text>
                   </View>
                 ) : grouped.length === 0 && !canCreate ? (
                   <View className="px-4 py-8">
-                    <Text className="text-sm text-muted-foreground text-center">
+                    <Text className="text-body text-muted-foreground text-center">
                       {t("agents.modelPicker.empty")}
                     </Text>
                   </View>
@@ -156,11 +156,11 @@ export function ModelPickerSheet({
                             accessibilityLabel={row.model.label || row.model.id}
                           >
                             <View className="flex-1 min-w-0">
-                              <Text className="text-sm font-medium text-foreground" numberOfLines={1}>
+                              <Text className="text-body font-medium text-foreground" numberOfLines={1}>
                                 {row.model.label || row.model.id}
                               </Text>
                               {row.model.label !== row.model.id ? (
-                                <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+                                <Text className="text-caption text-muted-foreground" numberOfLines={1}>
                                   {row.model.id}
                                 </Text>
                               ) : null}
@@ -184,7 +184,7 @@ export function ModelPickerSheet({
                     className="flex-row items-center gap-2 px-4 py-2.5 active:bg-secondary"
                   >
                     <Ionicons name="add" size={16} color={theme.primary} />
-                    <Text className="flex-1 text-sm text-primary" numberOfLines={1}>
+                    <Text className="flex-1 text-body text-primary" numberOfLines={1}>
                       {t("agents.modelPicker.useCustom", { value: trimmed })}
                     </Text>
                   </Pressable>
@@ -199,7 +199,7 @@ export function ModelPickerSheet({
                     className="mt-1 flex-row items-center gap-2 border-t border-border px-4 py-2.5 active:bg-secondary"
                   >
                     <Ionicons name="close-circle-outline" size={15} color={theme.mutedForeground} />
-                    <Text className="text-xs text-muted-foreground">
+                    <Text className="text-caption text-muted-foreground">
                       {t("agents.modelPicker.clear")}
                     </Text>
                   </Pressable>

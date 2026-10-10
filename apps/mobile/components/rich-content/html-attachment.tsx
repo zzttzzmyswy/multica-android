@@ -115,11 +115,11 @@ export function HtmlAttachmentPreview({
       <View className="bg-card border border-border rounded-lg px-3 py-2" style={{ minHeight: ERROR_HEIGHT_PX }}>
         <View className="flex-row items-center gap-2">
           <Ionicons name="document-outline" size={18} color={THEME[isDarkColorScheme ? "dark" : "light"].mutedForeground} />
-          <Text className="flex-1 text-sm text-muted-foreground" numberOfLines={1}>
+          <Text className="flex-1 text-body text-muted-foreground" numberOfLines={1}>
             {filename}
           </Text>
         </View>
-        <Text className="text-xs text-muted-foreground mt-1">{t(messageKey)}</Text>
+        <Text className="text-caption text-muted-foreground mt-1">{t(messageKey)}</Text>
         <View className="flex-row gap-2 mt-2">
           {isRetryable ? (
             <ActionButton
@@ -146,7 +146,7 @@ export function HtmlAttachmentPreview({
         className="bg-card border border-border rounded-lg justify-center px-3"
         style={{ height: ERROR_HEIGHT_PX }}
       >
-        <Text className="text-xs text-muted-foreground">
+        <Text className="text-caption text-muted-foreground">
           {t("richContent.html.previewLoading")}
         </Text>
       </View>
@@ -184,7 +184,7 @@ export function HtmlAttachmentPreview({
     <>
       <View className="bg-card border border-border rounded-lg overflow-hidden">
         <View className="flex-row items-center justify-between px-3 py-2">
-          <Text className="flex-1 text-xs text-muted-foreground" numberOfLines={1}>
+          <Text className="flex-1 text-caption text-muted-foreground" numberOfLines={1}>
             {filename}
           </Text>
           <View className="flex-row items-center gap-1">
@@ -217,7 +217,7 @@ export function HtmlAttachmentPreview({
           accessibilityRole="button"
           accessibilityLabel={t("richContent.html.viewFullscreen")}
         >
-          <Text className="text-xs text-foreground">
+          <Text className="text-caption text-foreground">
             {t("richContent.html.viewFullscreen")}
           </Text>
         </Pressable>
@@ -259,7 +259,7 @@ function TabButton({
       accessibilityRole="button"
     >
       <Text
-        className={`text-xs ${active ? "text-foreground" : "text-muted-foreground"}`}
+        className={`text-caption ${active ? "text-foreground" : "text-muted-foreground"}`}
       >
         {label}
       </Text>
@@ -309,7 +309,7 @@ function ActionButton({
       className="flex-row items-center gap-1 rounded-md border border-border px-2 py-1 active:opacity-80"
     >
       <Ionicons name={icon} size={14} color={THEME[colorScheme].foreground} />
-      <Text className="text-xs text-foreground">{label}</Text>
+      <Text className="text-caption text-foreground">{label}</Text>
     </Pressable>
   );
 }

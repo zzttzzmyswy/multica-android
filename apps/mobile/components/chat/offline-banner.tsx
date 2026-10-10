@@ -43,7 +43,7 @@ export function OfflineBanner({ agentName, availability }: Props) {
           className="text-warning"
         />
         <Text
-          className="flex-1 text-xs text-warning"
+          className="flex-1 text-caption text-warning"
           numberOfLines={1}
         >
           {t("chat.offlineUnstable", { name })}
@@ -60,7 +60,7 @@ export function OfflineBanner({ agentName, availability }: Props) {
         className="text-muted-foreground"
       />
       <Text
-        className="flex-1 text-xs text-muted-foreground"
+        className="flex-1 text-caption text-muted-foreground"
         numberOfLines={1}
       >
         {t("chat.offlineHard", { name })}

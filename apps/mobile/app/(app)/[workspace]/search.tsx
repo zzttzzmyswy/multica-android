@@ -208,14 +208,14 @@ function SearchIssueRow({ item, query, slug }: SearchIssueRowProps) {
           size={14}
         />
         <PriorityIcon priority={item.priority} size={14} />
-        <Text className="text-xs text-muted-foreground shrink-0 w-16">
+        <Text className="text-caption text-muted-foreground shrink-0 w-16">
           {item.identifier}
         </Text>
         <View className="flex-1">
           <HighlightText
             text={item.title}
             query={query}
-            className="text-sm text-foreground"
+            className="text-body text-foreground"
             numberOfLines={1}
           />
         </View>
@@ -243,7 +243,7 @@ function SearchIssueRow({ item, query, slug }: SearchIssueRowProps) {
             <HighlightText
               text={snippet.text}
               query={query}
-              className="text-xs text-muted-foreground"
+              className="text-caption text-muted-foreground"
               numberOfLines={1}
             />
           </View>
@@ -273,13 +273,13 @@ function SearchProjectRow({ item, query, slug }: SearchProjectRowProps) {
           <HighlightText
             text={item.title}
             query={query}
-            className="text-sm text-foreground"
+            className="text-body text-foreground"
             numberOfLines={1}
           />
         </View>
         <View className="flex-row items-center gap-1.5 shrink-0">
           <ProjectStatusIcon status={item.status} size={12} />
-          <Text className="text-xs text-muted-foreground">
+          <Text className="text-caption text-muted-foreground">
             {projectStatusLabel(item.status)}
           </Text>
         </View>
@@ -290,7 +290,7 @@ function SearchProjectRow({ item, query, slug }: SearchProjectRowProps) {
             <HighlightText
               text={item.matched_snippet ?? ""}
               query={query}
-              className="text-xs text-muted-foreground"
+              className="text-caption text-muted-foreground"
               numberOfLines={1}
             />
           </View>
@@ -318,17 +318,17 @@ function SearchMemberRow({ member, query, slug }: SearchMemberRowProps) {
           <HighlightText
             text={member.name}
             query={query}
-            className="text-sm text-foreground"
+            className="text-body text-foreground"
             numberOfLines={1}
           />
           <HighlightText
             text={member.email}
             query={query}
-            className="text-xs text-muted-foreground"
+            className="text-caption text-muted-foreground"
             numberOfLines={1}
           />
         </View>
-        <Text className="text-xs text-muted-foreground shrink-0">
+        <Text className="text-caption text-muted-foreground shrink-0">
           {member.role}
         </Text>
       </View>
@@ -355,10 +355,10 @@ function RecentRow({ item, slug }: RecentRowProps) {
           color={statusEntry?.is_system ? undefined : (statusEntry?.color ?? undefined)}
           size={14}
         />
-        <Text className="text-xs text-muted-foreground shrink-0 w-16">
+        <Text className="text-caption text-muted-foreground shrink-0 w-16">
           {item.identifier}
         </Text>
-        <Text className="flex-1 text-sm text-foreground" numberOfLines={1}>
+        <Text className="flex-1 text-body text-foreground" numberOfLines={1}>
           {item.title}
         </Text>
         <IssueAssigneeAvatar
@@ -425,7 +425,7 @@ function ActionRow({
         <HighlightText
           text={label}
           query={query}
-          className="flex-1 text-sm text-foreground"
+          className="flex-1 text-body text-foreground"
           numberOfLines={1}
         />
         {trailing}
@@ -658,7 +658,7 @@ export default function SearchModal() {
       switch (item.kind) {
         case "header":
           return (
-            <Text className="px-4 pt-4 pb-1 text-xs font-medium text-muted-foreground uppercase">
+            <Text className="px-4 pt-4 pb-1 text-caption font-medium text-muted-foreground uppercase">
               {item.title}
             </Text>
           );
@@ -717,7 +717,7 @@ export default function SearchModal() {
             autoCapitalize="none"
             returnKeyType="search"
             clearButtonMode="while-editing"
-            className="flex-1 text-base text-foreground"
+            className="flex-1 text-title-sm text-foreground"
           />
         </View>
 
@@ -735,13 +735,13 @@ export default function SearchModal() {
               </View>
             ) : trimmedQuery && !hasResults ? (
               <View className="items-center justify-center py-12 px-6">
-                <Text className="text-sm text-muted-foreground text-center">
+                <Text className="text-body text-muted-foreground text-center">
                   {t("search.noResults", { query: trimmedQuery })}
                 </Text>
               </View>
             ) : !trimmedQuery && recentIssues.length === 0 ? (
               <View className="items-center justify-center py-12 px-6">
-                <Text className="text-sm text-muted-foreground text-center">
+                <Text className="text-body text-muted-foreground text-center">
                   {t("search.empty")}
                 </Text>
               </View>

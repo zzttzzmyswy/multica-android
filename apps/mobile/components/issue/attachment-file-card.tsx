@@ -79,11 +79,11 @@ export function FileCard({ attachment, kind, theme, source }: Props) {
     >
       <Ionicons name={iconForKind(kind)} size={20} color={theme.mutedForeground} />
       <View className="flex-1">
-        <Text className="text-sm text-foreground" numberOfLines={1}>
+        <Text className="text-body text-foreground" numberOfLines={1}>
           {attachment.filename}
         </Text>
         {sizeLabel ? (
-          <Text className="text-xs text-muted-foreground">{sizeLabel}</Text>
+          <Text className="text-caption text-muted-foreground">{sizeLabel}</Text>
         ) : null}
       </View>
       <Ionicons

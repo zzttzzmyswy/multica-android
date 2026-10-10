@@ -126,7 +126,7 @@ export function DeliveriesSection({
 
   return (
     <View className="gap-1.5">
-      <Text className="px-4 pt-5 pb-2 text-xs uppercase tracking-wider text-muted-foreground font-medium">
+      <Text className="px-4 pt-5 pb-2 text-caption uppercase tracking-wider text-muted-foreground font-medium">
         {t("autopilots.deliveries.sectionTitle")}
       </Text>
       {deliveriesRead.state !== "ready" ? (
@@ -147,10 +147,10 @@ export function DeliveriesSection({
               >
                 <DeliveryVisual delivery={delivery} t={t} />
                 <View className="flex-1 min-w-0">
-                  <Text className="text-xs text-muted-foreground">
+                  <Text className="text-caption text-muted-foreground">
                     {delivery.provider || "—"}
                   </Text>
-                  <Text className="text-xs text-muted-foreground font-mono" numberOfLines={1}>
+                  <Text className="text-caption text-muted-foreground font-mono" numberOfLines={1}>
                     {delivery.event || t("autopilots.deliveries.unknownEvent")}
                   </Text>
                 </View>
@@ -163,7 +163,7 @@ export function DeliveriesSection({
                     })}
                   />
                 ) : null}
-                <Text className="text-xs text-muted-foreground tabular-nums">
+                <Text className="text-caption text-muted-foreground tabular-nums">
                   {formatDateTime(delivery.received_at || delivery.created_at)}
                 </Text>
               </Pressable>
@@ -198,7 +198,7 @@ function DeliveryVisual({
   return (
     <View className="w-24 shrink-0 flex-row items-center gap-1">
       <Ionicons name={visual.icon} size={13} color={visual.color} />
-      <Text className={cn("text-xs font-medium", visual.className)} numberOfLines={1}>
+      <Text className={cn("text-caption font-medium", visual.className)} numberOfLines={1}>
         {label}
       </Text>
     </View>
@@ -209,7 +209,7 @@ function RowBadge({ text, icon }: { text: string; icon?: React.ComponentProps<ty
   return (
     <View className="shrink-0 flex-row items-center gap-0.5 rounded border border-border px-1.5 py-0.5">
       {icon ? <Ionicons name={icon} size={10} color="#a1a1aa" /> : null}
-      <Text className="text-[10px] text-muted-foreground">{text}</Text>
+      <Text className="text-micro text-muted-foreground">{text}</Text>
     </View>
   );
 }
@@ -298,7 +298,7 @@ function DeliveryDetailModal({
             <View className="bg-popover rounded-2xl overflow-hidden max-h-[80vh]">
               <View className="flex-row items-center gap-2 border-b border-border px-4 py-3">
                 <Ionicons name="link-outline" size={15} color="#a1a1aa" />
-                <Text className="flex-1 text-base font-semibold text-foreground">
+                <Text className="flex-1 text-title-sm font-semibold text-foreground">
                   {t("autopilots.deliveries.detailTitle")}
                 </Text>
                 <Pressable onPress={onClose} hitSlop={8} accessibilityLabel={t("common.close")}>
@@ -318,7 +318,7 @@ function DeliveryDetailModal({
                     <View className="flex-row flex-wrap items-center gap-2">
                       <View className="flex-row items-center gap-1.5">
                         <Ionicons name={visual.icon} size={14} color={visual.color} />
-                        <Text className={cn("text-sm font-medium", visual.className)}>
+                        <Text className={cn("text-body font-medium", visual.className)}>
                           {statusLabel}
                         </Text>
                       </View>
@@ -343,12 +343,12 @@ function DeliveryDetailModal({
                     <View className="rounded-md border border-border px-3 py-2 gap-1.5">
                       {metaRows.map((row) => (
                         <View key={row.key} className="flex-row">
-                          <Text className="w-32 text-xs text-muted-foreground">
+                          <Text className="w-32 text-caption text-muted-foreground">
                             {row.label}
                           </Text>
                           <Text
                             className={cn(
-                              "flex-1 text-xs text-foreground",
+                              "flex-1 text-caption text-foreground",
                               row.mono ? "font-mono" : undefined,
                             )}
                             numberOfLines={2}
@@ -359,10 +359,10 @@ function DeliveryDetailModal({
                       ))}
                       {full.error ? (
                         <View className="flex-row">
-                          <Text className="w-32 text-xs text-destructive">
+                          <Text className="w-32 text-caption text-destructive">
                             {t("autopilots.deliveries.error")}
                           </Text>
-                          <Text className="flex-1 text-xs text-destructive">
+                          <Text className="flex-1 text-caption text-destructive">
                             {full.error}
                           </Text>
                         </View>
@@ -389,7 +389,7 @@ function DeliveryDetailModal({
                     {/* Replay + disabled reason */}
                     <View className="gap-1.5">
                       {disableReasonKey ? (
-                        <Text className="text-xs text-muted-foreground">
+                        <Text className="text-caption text-muted-foreground">
                           {t(disableReasonKey)}
                         </Text>
                       ) : null}
@@ -456,9 +456,9 @@ function CodeBlock({
         </Pressable>
       </View>
       <ScrollView className="max-h-40 bg-muted/40 px-3 py-2" nestedScrollEnabled>
-        <Text className="text-xs font-mono text-foreground leading-relaxed">{display}</Text>
+        <Text className="text-caption font-mono text-foreground leading-relaxed">{display}</Text>
         {truncated ? (
-          <Text className="pt-2 text-xs text-muted-foreground">{truncatedMarker}</Text>
+          <Text className="pt-2 text-caption text-muted-foreground">{truncatedMarker}</Text>
         ) : null}
       </ScrollView>
     </View>

@@ -167,10 +167,10 @@ export function WakeupsSection({ issueId, closed = false, defaultAgentId }: Prop
             size={12}
             color={theme.mutedForeground}
           />
-          <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+          <Text className="text-caption uppercase tracking-wider text-muted-foreground font-medium">
             {t("wakeups.title")}
           </Text>
-          <Text className="text-xs tabular-nums text-muted-foreground">
+          <Text className="text-caption tabular-nums text-muted-foreground">
             {current.length + systemRules.length}
           </Text>
         </Pressable>
@@ -212,14 +212,14 @@ export function WakeupsSection({ issueId, closed = false, defaultAgentId }: Prop
               accessibilityRole="button"
               className="py-1 active:opacity-70"
             >
-              <Text className="text-xs text-muted-foreground">
+              <Text className="text-caption text-muted-foreground">
                 {t("wakeups.retry")}
               </Text>
             </Pressable>
           ) : null}
 
           {closed ? (
-            <Text className="py-1 text-xs text-muted-foreground">
+            <Text className="py-1 text-caption text-muted-foreground">
               {t("wakeups.closedHint")}
             </Text>
           ) : null}
@@ -245,7 +245,7 @@ export function WakeupsSection({ issueId, closed = false, defaultAgentId }: Prop
                   size={12}
                   color={theme.mutedForeground}
                 />
-                <Text className="text-xs text-muted-foreground">
+                <Text className="text-caption text-muted-foreground">
                   {t("wakeups.ended", { count: history.length })}
                 </Text>
               </Pressable>
@@ -322,13 +322,13 @@ function WakeupRow({
             <ActorAvatar type="agent" id={wakeup.agent_id} size={16} />
           </View>
           <View className="flex-1 min-w-0">
-            <Text className="text-xs text-foreground" numberOfLines={2}>
+            <Text className="text-caption text-foreground" numberOfLines={2}>
               {wakeupTrigger(text, wakeup)}
             </Text>
             {/* Second line: who is woken, and where the rule stands. The state
                 is the fact the reader came for — "turned off" and "already
                 fired" must not both read as "not running". */}
-            <Text className="text-[10px] text-muted-foreground" numberOfLines={2}>
+            <Text className="text-micro text-muted-foreground" numberOfLines={2}>
               {[
                 t("wakeups.wakeAgent", { agent: wakeup.agent_name }),
                 wakeupStateText(text, wakeup, closed),
@@ -338,12 +338,12 @@ function WakeupRow({
                 .join(" · ")}
             </Text>
             {paused ? (
-              <Text className={`text-[10px] ${tone ?? ""}`}>{paused}</Text>
+              <Text className={`text-micro ${tone ?? ""}`}>{paused}</Text>
             ) : null}
             {/* A rule that errored needs attention; naming that beats a silent
                 row that looks merely inactive. */}
             {wakeup.last_error ? (
-              <Text className="text-[10px] text-destructive">
+              <Text className="text-micro text-destructive">
                 {t("wakeups.needsAttention")}
               </Text>
             ) : null}
@@ -351,7 +351,7 @@ function WakeupRow({
                 a button that does nothing, which is indistinguishable from a
                 broken one. */}
             {blockedKey ? (
-              <Text className="text-[10px] text-muted-foreground">
+              <Text className="text-micro text-muted-foreground">
                 {t(blockedKey)}
               </Text>
             ) : null}
@@ -394,14 +394,14 @@ function WakeupRow({
 
       {expanded ? (
         <View className="pl-6 pb-1.5">
-          <Text className="text-[10px] text-muted-foreground">
+          <Text className="text-micro text-muted-foreground">
             {t("wakeups.instructionTitle")}
           </Text>
-          <Text className="text-xs text-foreground">
+          <Text className="text-caption text-foreground">
             {wakeup.instruction || t("wakeups.noInstruction")}
           </Text>
           {wakeup.expires_at ? (
-            <Text className="mt-1 text-[10px] text-muted-foreground">
+            <Text className="mt-1 text-micro text-muted-foreground">
               {t("wakeups.expiryTitle")}:{" "}
               {t("wakeups.expiryAt", {
                 time: formatWakeupTime(wakeup.expires_at),
@@ -445,20 +445,20 @@ function WakeupHistory({
   );
   return (
     <View className="mt-1.5">
-      <Text className="text-[10px] text-muted-foreground">
+      <Text className="text-micro text-muted-foreground">
         {t("wakeups.historyTitle")}
       </Text>
       {isError ? (
-        <Text className="text-[10px] text-muted-foreground">
+        <Text className="text-micro text-muted-foreground">
           {t("wakeups.historyError")}
         </Text>
       ) : runs && runs.length === 0 ? (
-        <Text className="text-[10px] text-muted-foreground">
+        <Text className="text-micro text-muted-foreground">
           {t("wakeups.historyEmpty")}
         </Text>
       ) : (
         (runs ?? []).map((run) => (
-          <Text key={run.id} className="text-[10px] text-muted-foreground">
+          <Text key={run.id} className="text-micro text-muted-foreground">
             {run.checkin_note
               ? t("wakeups.runCheckin", { note: run.checkin_note })
               : wakeupRunStateText(text, run.status)}
@@ -538,16 +538,16 @@ function SystemWakeupRow({
         />
         <View className="flex-1 min-w-0">
           <View className="flex-row items-center gap-1.5">
-            <Text className="text-xs text-foreground" numberOfLines={2}>
+            <Text className="text-caption text-foreground" numberOfLines={2}>
               {title}
             </Text>
             <View className="rounded bg-secondary px-1">
-              <Text className="text-[10px] text-muted-foreground">
+              <Text className="text-micro text-muted-foreground">
                 {t("wakeups.system.badge")}
               </Text>
             </View>
           </View>
-          <Text className="text-[10px] text-muted-foreground" numberOfLines={2}>
+          <Text className="text-micro text-muted-foreground" numberOfLines={2}>
             {summary}
           </Text>
         </View>
@@ -644,13 +644,13 @@ function SystemWakeupDetail({
         value={t("wakeups.system.source")}
       />
       {paused ? (
-        <Text className="mt-1 text-xs text-amber-600 dark:text-amber-500">
+        <Text className="mt-1 text-caption text-amber-600 dark:text-amber-500">
           {paused}
         </Text>
       ) : null}
 
       <View className="mt-3 flex-row items-center justify-between gap-2">
-        <Text className="text-xs font-medium text-foreground">
+        <Text className="text-caption font-medium text-foreground">
           {t("wakeups.system.instruction")}
         </Text>
         <Pressable
@@ -664,19 +664,19 @@ function SystemWakeupDetail({
         </Pressable>
       </View>
       {rule.instruction ? (
-        <Text className="text-xs text-foreground">{rule.instruction}</Text>
+        <Text className="text-caption text-foreground">{rule.instruction}</Text>
       ) : (
         <View>
-          <Text className="text-xs text-muted-foreground">
+          <Text className="text-caption text-muted-foreground">
             {t("wakeups.system.instructionDefault")}
           </Text>
-          <Text className="text-xs text-muted-foreground" numberOfLines={4}>
+          <Text className="text-caption text-muted-foreground" numberOfLines={4}>
             {rule.default_instruction}
           </Text>
         </View>
       )}
 
-      <Text className="mt-3 text-[10px] text-muted-foreground">
+      <Text className="mt-3 text-micro text-muted-foreground">
         {rule.workspace_default
           ? t("wakeups.system.defaultOn")
           : t("wakeups.system.defaultOff")}
@@ -688,8 +688,8 @@ function SystemWakeupDetail({
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <View className="mt-1.5">
-      <Text className="text-[10px] text-muted-foreground">{label}</Text>
-      <Text className="text-xs text-foreground">{value}</Text>
+      <Text className="text-micro text-muted-foreground">{label}</Text>
+      <Text className="text-caption text-foreground">{value}</Text>
     </View>
   );
 }
@@ -749,10 +749,10 @@ function SystemInstructionEditor({
           setValue(next);
           setErrorKey(null);
         }}
-        className="rounded-md border border-border bg-background p-2 text-sm text-foreground"
+        className="rounded-md border border-border bg-background p-2 text-body text-foreground"
       />
       {errorKey ? (
-        <Text className="mt-1 text-xs text-destructive">{t(errorKey)}</Text>
+        <Text className="mt-1 text-caption text-destructive">{t(errorKey)}</Text>
       ) : null}
       <View className="mt-3 flex-row justify-end gap-2">
         <Pressable
@@ -761,7 +761,7 @@ function SystemInstructionEditor({
           accessibilityRole="button"
           className="rounded-md border border-border px-3 py-2 active:bg-secondary"
         >
-          <Text className="text-sm text-foreground">
+          <Text className="text-body text-foreground">
             {t("wakeups.instructionCancel")}
           </Text>
         </Pressable>
@@ -774,7 +774,7 @@ function SystemInstructionEditor({
             update.isPending || unchanged ? "opacity-50" : ""
           }`}
         >
-          <Text className="text-sm font-medium text-primary-foreground">
+          <Text className="text-body font-medium text-primary-foreground">
             {update.isPending
               ? t("wakeups.instructionSaving")
               : t("wakeups.instructionSave")}

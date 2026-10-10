@@ -73,7 +73,7 @@ export function SquadMemberPicker({
           <Pressable onPress={() => {}} className="w-full max-w-sm">
             <View className="bg-popover rounded-2xl overflow-hidden">
               <View className="px-4 py-3 border-b border-border">
-                <Text className="text-base font-semibold text-foreground">
+                <Text className="text-title-sm font-semibold text-foreground">
                   {t(
                     mode === "leader"
                       ? "squads.picker.selectLeader"
@@ -85,7 +85,7 @@ export function SquadMemberPicker({
               <ScrollView className="max-h-96">
                 {showEmpty ? (
                   <View className="px-4 py-8">
-                    <Text className="text-sm text-muted-foreground text-center">
+                    <Text className="text-body text-muted-foreground text-center">
                       {t("squads.picker.noOptions")}
                     </Text>
                   </View>
@@ -162,7 +162,7 @@ function PickerSection({
   return (
     <View>
       <View className="px-4 pt-2.5 pb-1">
-        <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+        <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
           {title}
         </Text>
       </View>
@@ -175,21 +175,21 @@ function PickerSection({
           <ActorAvatar type={item.type} id={item.avatarId} size={32} />
           <View className="flex-1">
             <Text
-              className="text-sm font-medium text-foreground"
+              className="text-body font-medium text-foreground"
               numberOfLines={1}
             >
               {item.name}
             </Text>
             {item.subtitle ? (
               <Text
-                className="text-xs text-muted-foreground mt-0.5"
+                className="text-caption text-muted-foreground mt-0.5"
                 numberOfLines={1}
               >
                 {item.subtitle}
               </Text>
             ) : null}
           </View>
-          <Text className="text-xs text-muted-foreground/70">
+          <Text className="text-caption text-muted-foreground/70">
             {t(
               item.type === "agent"
                 ? "squads.picker.agentTag"

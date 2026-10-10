@@ -95,7 +95,7 @@ export function TranscriptEntryRow({ entry }: { entry: TaskMessagePayload }) {
       {copied ? (
         <>
           <Ionicons name="checkmark" size={13} color={theme.success} />
-          <Text className="text-[10px] text-success">{t("runs.transcript.copied")}</Text>
+          <Text className="text-micro text-success">{t("runs.transcript.copied")}</Text>
         </>
       ) : (
         <Ionicons name="copy-outline" size={13} color={theme.mutedForeground} />
@@ -116,13 +116,13 @@ export function TranscriptEntryRow({ entry }: { entry: TaskMessagePayload }) {
         <View style={{ width: 12 }} />
       )}
       <View className={cn("shrink-0 rounded px-1.5 py-0.5 self-start", badgeClass(entry.type))}>
-        <Text className={cn("text-[10px] font-medium", badgeTextClass(entry.type))}>
+        <Text className={cn("text-micro font-medium", badgeTextClass(entry.type))}>
           {label}
         </Text>
       </View>
       <Text
         className={cn(
-          "flex-1 text-xs",
+          "flex-1 text-caption",
           entry.type === "error" ? "text-destructive" : "text-muted-foreground",
           (entry.type === "thinking" || entry.type === "text") && "italic",
         )}
@@ -181,7 +181,7 @@ function DetailBody({
     if (diffDetail?.kind === "file") {
       return (
         <View className="rounded bg-muted/40 px-2 py-1.5">
-          <Text className="mb-1 text-[10px] font-mono text-muted-foreground" numberOfLines={1}>
+          <Text className="mb-1 text-micro font-mono text-muted-foreground" numberOfLines={1}>
             {diffDetail.path}
           </Text>
           <CodeBlock
@@ -284,7 +284,7 @@ function TranscriptDiffBlock({ path, lines }: { path: string; lines: TranscriptD
 
   return (
     <View className="rounded bg-muted/40 px-2 py-1.5">
-      <Text className="mb-1 text-[10px] font-mono text-muted-foreground" numberOfLines={1}>
+      <Text className="mb-1 text-micro font-mono text-muted-foreground" numberOfLines={1}>
         {path}
       </Text>
       {safeLines.map((line, index) => {

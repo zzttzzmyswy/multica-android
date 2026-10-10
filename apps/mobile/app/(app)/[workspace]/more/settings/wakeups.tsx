@@ -84,7 +84,7 @@ export default function WakeupsSettingsScreen() {
     >
       <Stack.Screen options={{ title: t("settings.wakeups.title") }} />
 
-      <Text className="text-sm text-muted-foreground px-1">
+      <Text className="text-body text-muted-foreground px-1">
         {t("settings.wakeups.description")}
       </Text>
 
@@ -97,7 +97,7 @@ export default function WakeupsSettingsScreen() {
         // defaults" — the absence-claim defect this fork has closed
         // repeatedly. It says the read failed and offers a retry.
         <View className="gap-3">
-          <Text className="text-sm text-destructive">
+          <Text className="text-body text-destructive">
             {t("settings.wakeups.load_error")}
           </Text>
           <Button variant="outline" onPress={() => void refetch()}>
@@ -110,13 +110,13 @@ export default function WakeupsSettingsScreen() {
         // A successful read with no child_done row: the server has not
         // materialized the rule in this workspace yet. Stated as such rather
         // than drawn as an empty card with dead controls.
-        <Text className="text-sm text-muted-foreground">
+        <Text className="text-body text-muted-foreground">
           {t("settings.wakeups.empty")}
         </Text>
       )}
 
       {!canManage && childDone && !isLoading && !isError ? (
-        <Text className="text-xs text-muted-foreground px-1">
+        <Text className="text-caption text-muted-foreground px-1">
           {t("settings.wakeups.admin_only")}
         </Text>
       ) : null}
@@ -179,10 +179,10 @@ function ChildDoneDefault({
   return (
     <View className="gap-2">
       <View className="px-1">
-        <Text className="text-xs uppercase tracking-wider text-muted-foreground">
+        <Text className="text-caption uppercase tracking-wider text-muted-foreground">
           {t("settings.wakeups.child_done_title")}
         </Text>
-        <Text className="text-xs text-muted-foreground mt-1">
+        <Text className="text-caption text-muted-foreground mt-1">
           {t("settings.wakeups.child_done_description")}
         </Text>
       </View>
@@ -190,11 +190,11 @@ function ChildDoneDefault({
       <View className="rounded-md border border-border bg-card overflow-hidden">
         <View className="flex-row items-center px-4 py-3.5 gap-3">
           <View className="flex-1">
-            <Text className="text-base font-medium text-foreground">
+            <Text className="text-title-sm font-medium text-foreground">
               {t("settings.wakeups.enabled")}
             </Text>
             {rule.customized > 0 ? (
-              <Text className="text-xs text-muted-foreground mt-0.5">
+              <Text className="text-caption text-muted-foreground mt-0.5">
                 {t("settings.wakeups.customized", { count: rule.customized })}
               </Text>
             ) : null}
@@ -213,10 +213,10 @@ function ChildDoneDefault({
         <Separator />
 
         <View className="px-4 py-3.5 gap-2">
-          <Text className="text-base font-medium text-foreground">
+          <Text className="text-title-sm font-medium text-foreground">
             {t("settings.wakeups.instruction")}
           </Text>
-          <Text className="text-xs leading-5 text-muted-foreground">
+          <Text className="text-caption leading-5 text-muted-foreground">
             {t("settings.wakeups.instruction_hint")}
           </Text>
           <AutosizeTextArea
@@ -230,7 +230,7 @@ function ChildDoneDefault({
             accessibilityLabel={t("settings.wakeups.instruction")}
           />
           {errorKey ? (
-            <Text className="text-xs text-destructive" accessibilityRole="alert">
+            <Text className="text-caption text-destructive" accessibilityRole="alert">
               {t(errorKey)}
             </Text>
           ) : null}
@@ -238,7 +238,7 @@ function ChildDoneDefault({
               that the number is noise, above it the user is about to be
               refused and needs to see why. */}
           {bytes > WAKEUP_SYSTEM_INSTRUCTION_MAX_BYTES / 2 ? (
-            <Text className="text-xs tabular-nums text-muted-foreground self-end">
+            <Text className="text-caption tabular-nums text-muted-foreground self-end">
               {t("settings.wakeups.bytes", {
                 bytes,
                 max: WAKEUP_SYSTEM_INSTRUCTION_MAX_BYTES,
@@ -263,10 +263,10 @@ function ChildDoneDefault({
 
         {rule.builtin_instruction ? (
           <View className="border-t border-border bg-secondary/40 px-4 py-3 gap-1">
-            <Text className="text-xs font-medium text-muted-foreground">
+            <Text className="text-caption font-medium text-muted-foreground">
               {t("settings.wakeups.builtin")}
             </Text>
-            <Text className="text-xs leading-5 text-muted-foreground">
+            <Text className="text-caption leading-5 text-muted-foreground">
               {rule.builtin_instruction}
             </Text>
           </View>

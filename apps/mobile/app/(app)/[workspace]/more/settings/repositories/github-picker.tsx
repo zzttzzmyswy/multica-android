@@ -180,7 +180,7 @@ export default function GitHubPickerPage() {
       ) : installations.length === 0 ? (
         <View className="flex-1 items-center justify-center bg-background px-6 gap-3">
           <Ionicons name="logo-github" size={40} color={theme.mutedForeground} />
-          <Text className="text-sm text-muted-foreground text-center">
+          <Text className="text-body text-muted-foreground text-center">
             {t("repositories.githubNotConfigured")}
           </Text>
           {connectConfigured ? (
@@ -192,12 +192,12 @@ export default function GitHubPickerPage() {
               </Text>
             </Button>
           ) : (
-            <Text className="text-xs text-muted-foreground/70 text-center">
+            <Text className="text-caption text-muted-foreground/70 text-center">
               {t("repositories.githubBrowseNotConfigured")}
             </Text>
           )}
           {connectError ? (
-            <Text className="text-xs text-destructive text-center">
+            <Text className="text-caption text-destructive text-center">
               {connectError}
             </Text>
           ) : null}
@@ -230,7 +230,7 @@ export default function GitHubPickerPage() {
                   >
                     <Text
                       className={cn(
-                        "text-xs font-medium",
+                        "text-caption font-medium",
                         active ? "text-foreground" : "text-muted-foreground",
                       )}
                     >
@@ -242,7 +242,7 @@ export default function GitHubPickerPage() {
             </ScrollView>
           ) : (
             <View className="border-b border-border px-4 py-2.5">
-              <Text className="text-xs text-muted-foreground">
+              <Text className="text-caption text-muted-foreground">
                 {t("repositories.chooseFromGitHub")}:{" "}
                 <Text className="font-medium text-foreground">
                   {installations[0].account_login}
@@ -256,7 +256,7 @@ export default function GitHubPickerPage() {
               <View className="flex-row items-center gap-2 rounded-md border border-border bg-background px-3">
                 <Ionicons name="search" size={14} color={theme.mutedForeground} />
                 <TextInput
-                  className="flex-1 py-2 text-sm text-foreground"
+                  className="flex-1 py-2 text-body text-foreground"
                   placeholder={t("repositories.githubSearchPlaceholder")}
                   placeholderTextColor={theme.mutedForeground}
                   value={query}
@@ -279,7 +279,7 @@ export default function GitHubPickerPage() {
             </View>
           ) : filtered.length === 0 ? (
             <View className="flex-1 items-center justify-center px-6">
-              <Text className="text-sm text-muted-foreground text-center">
+              <Text className="text-body text-muted-foreground text-center">
                 {query
                   ? t("repositories.githubNoResults")
                   : t("repositories.githubEmpty")}
@@ -313,33 +313,33 @@ export default function GitHubPickerPage() {
                     />
                     <View className="flex-1 min-w-0 gap-0.5">
                       <View className="flex-row flex-wrap items-center gap-2">
-                        <Text className="text-sm font-medium text-foreground" numberOfLines={1}>
+                        <Text className="text-body font-medium text-foreground" numberOfLines={1}>
                           {item.full_name}
                         </Text>
                         {item.private ? (
                           <View className="rounded-full bg-secondary px-1.5 py-0.5">
-                            <Text className="text-[10px] text-muted-foreground font-medium">
+                            <Text className="text-micro text-muted-foreground font-medium">
                               {t("repositories.githubPrivate")}
                             </Text>
                           </View>
                         ) : null}
                         {item.archived ? (
                           <View className="rounded-full bg-secondary px-1.5 py-0.5">
-                            <Text className="text-[10px] text-muted-foreground font-medium">
+                            <Text className="text-micro text-muted-foreground font-medium">
                               {t("repositories.githubArchived")}
                             </Text>
                           </View>
                         ) : null}
                         {alreadyAdded ? (
                           <View className="rounded-full bg-secondary px-1.5 py-0.5">
-                            <Text className="text-[10px] text-muted-foreground font-medium">
+                            <Text className="text-micro text-muted-foreground font-medium">
                               {t("repositories.githubAdded")}
                             </Text>
                           </View>
                         ) : null}
                       </View>
                       {item.description ? (
-                        <Text className="text-xs text-muted-foreground/70" numberOfLines={1}>
+                        <Text className="text-caption text-muted-foreground/70" numberOfLines={1}>
                           {item.description}
                         </Text>
                       ) : null}
@@ -352,7 +352,7 @@ export default function GitHubPickerPage() {
 
           {installationId ? (
             <View className="absolute inset-x-0 bottom-0 flex-row items-center justify-between border-t border-border bg-card px-4 py-3">
-              <Text className="text-xs text-muted-foreground">
+              <Text className="text-caption text-muted-foreground">
                 {t("repositories.githubSelectedCount", {
                   count: selected.size,
                 })}

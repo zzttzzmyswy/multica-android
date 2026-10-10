@@ -148,14 +148,14 @@ export function MultiSelectSheet({
         {leading ? leading(row) : null}
         <View className="flex-1 min-w-0 gap-0.5">
           <Text
-            className="text-sm font-medium text-foreground"
+            className="text-body font-medium text-foreground"
             numberOfLines={1}
           >
             {row.title}
           </Text>
           {row.subtitle ? (
             <Text
-              className="text-xs text-muted-foreground"
+              className="text-caption text-muted-foreground"
               numberOfLines={2}
             >
               {row.subtitle}
@@ -185,11 +185,11 @@ export function MultiSelectSheet({
           <Pressable onPress={() => {}} className="w-full max-w-sm">
             <View className="bg-popover rounded-2xl overflow-hidden">
               <View className="flex-row items-center justify-between px-4 py-3 border-b border-border">
-                <Text className="text-base font-semibold text-foreground">
+                <Text className="text-title-sm font-semibold text-foreground">
                   {title}
                 </Text>
                 <Pressable onPress={onClose} accessibilityLabel={t("common.done")}>
-                  <Text className="text-sm font-medium text-brand">
+                  <Text className="text-body font-medium text-brand">
                     {t("common.done")}
                   </Text>
                 </Pressable>
@@ -234,20 +234,20 @@ export function MultiSelectSheet({
                   />
                 ) : !hasAny ? (
                   <View className="px-4 py-8">
-                    <Text className="text-sm text-muted-foreground text-center">
+                    <Text className="text-body text-muted-foreground text-center">
                       {emptyText}
                     </Text>
                   </View>
                 ) : noMatch ? (
                   <View className="px-4 py-8">
-                    <Text className="text-sm text-muted-foreground text-center">
+                    <Text className="text-body text-muted-foreground text-center">
                       {noMatchText ?? emptyText}
                     </Text>
                   </View>
                 ) : filteredGroups ? (
                   filteredGroups.map((group) => (
                     <View key={group.label}>
-                      <Text className="px-4 pt-3 pb-1 text-xs uppercase tracking-wider text-muted-foreground">
+                      <Text className="px-4 pt-3 pb-1 text-caption uppercase tracking-wider text-muted-foreground">
                         {group.label}
                       </Text>
                       {group.rows.map(renderRow)}

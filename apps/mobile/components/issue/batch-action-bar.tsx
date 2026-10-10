@@ -248,7 +248,7 @@ export function BatchActionBar({ issues }: Props) {
             }`}
           >
             <Text
-              className={`text-sm font-medium ${
+              className={`text-body font-medium ${
                 toast.kind === "error"
                   ? "text-destructive-foreground"
                   : "text-background"
@@ -268,7 +268,7 @@ export function BatchActionBar({ issues }: Props) {
             accessibilityLabel={t("batch.exit")}
           >
             <Ionicons name="close" size={18} color="currentColor" />
-            <Text className="text-sm font-medium text-foreground">
+            <Text className="text-body font-medium text-foreground">
               {t("batch.selected", { count })}
             </Text>
           </Pressable>
@@ -292,7 +292,7 @@ export function BatchActionBar({ issues }: Props) {
                   size={16}
                   color="currentColor"
                 />
-                <Text className="text-sm text-muted-foreground">
+                <Text className="text-body text-muted-foreground">
                   {allVisibleSelected
                     ? t("batch.clearSelection")
                     : t("batch.selectAll")}
@@ -484,14 +484,14 @@ function AssignConfirmDialog({
       <Pressable className="flex-1 bg-black/40" onPress={onClose}>
         <View className="flex-1 justify-center px-6">
           <Pressable onPress={() => {}} className="bg-popover rounded-2xl p-4">
-            <Text className="text-base font-semibold text-foreground">
+            <Text className="text-title-sm font-semibold text-foreground">
               {t("batch.confirmAssignTitle")}
             </Text>
-            <Text className="text-sm text-muted-foreground leading-5 mt-1.5">
+            <Text className="text-body text-muted-foreground leading-5 mt-1.5">
               {headline}
             </Text>
             <View className="mt-3">
-              <Text className="text-xs font-medium text-foreground">
+              <Text className="text-caption font-medium text-foreground">
                 {t("batch.handoffNote")}
               </Text>
               <TextInput
@@ -500,7 +500,7 @@ function AssignConfirmDialog({
                 placeholder={t("batch.handoffPlaceholder")}
                 placeholderTextColor={THEME[colorScheme].mutedForeground}
                 multiline
-                className="border border-border rounded-lg px-3 py-2 mt-1.5 text-sm text-foreground min-h-[72px]"
+                className="border border-border rounded-lg px-3 py-2 mt-1.5 text-body text-foreground min-h-[72px]"
               />
             </View>
             <View className="flex-row gap-2 mt-4">

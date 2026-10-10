@@ -27,7 +27,7 @@ export function ProjectStatusPickerBody({ value, onChange }: Props) {
   return (
     <ScrollView showsVerticalScrollIndicator={false}>
       <View className="px-4 pt-3 pb-2">
-        <Text className="text-lg font-semibold text-foreground">{t("picker.status")}</Text>
+        <Text className="text-title font-semibold text-foreground">{t("picker.status")}</Text>
       </View>
       <View className="px-2">
         {PROJECT_STATUSES.map((status) => {
@@ -39,7 +39,7 @@ export function ProjectStatusPickerBody({ value, onChange }: Props) {
               className="flex-row items-center gap-3 rounded-lg px-3 py-3 active:bg-secondary"
             >
               <ProjectStatusIcon status={status} size={18} />
-              <Text className="flex-1 text-base text-foreground">
+              <Text className="flex-1 text-title-sm text-foreground">
                 {projectStatusLabel(status)}
               </Text>
               {selected ? (

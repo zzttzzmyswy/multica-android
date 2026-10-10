@@ -110,10 +110,10 @@ export default function Login() {
           <View className="items-center gap-3">
             <MulticaLogo size={32} />
             <View className="gap-1 items-center">
-              <Text className="text-2xl font-semibold text-foreground">
+              <Text className="text-display-sm font-semibold text-foreground">
                 {t("login.title")}
               </Text>
-              <Text className="text-sm text-muted-foreground text-center">
+              <Text className="text-body text-muted-foreground text-center">
                 {t("login.subtitle")}
               </Text>
             </View>
@@ -134,7 +134,7 @@ export default function Login() {
               invalid={!!error}
             />
             {error ? (
-              <Text className="text-sm text-destructive">{error}</Text>
+              <Text className="text-body text-destructive">{error}</Text>
             ) : null}
             {error && failedServer && hasCustomApiBaseUrl() ? (
               <ServerUnreachableNotice
@@ -171,13 +171,13 @@ export default function Login() {
                 accessibilityState={{ expanded: serverOpen }}
                 className="flex-row items-center justify-between active:opacity-70"
               >
-                <Text className="text-xs font-medium text-muted-foreground">
+                <Text className="text-caption font-medium text-muted-foreground">
                   {t("login.server")}
                 </Text>
                 <View className="flex-row items-center gap-2 flex-1 justify-end">
                   {currentServer ? (
                     <Text
-                      className="text-xs text-muted-foreground max-w-[70%]"
+                      className="text-caption text-muted-foreground max-w-[70%]"
                       numberOfLines={1}
                     >
                       {currentServer}
@@ -194,7 +194,7 @@ export default function Login() {
             <CollapsibleContent>
               <View className="mt-3 gap-2">
                 {hasCustomApiBaseUrl() ? (
-                  <Text className="text-xs text-muted-foreground">
+                  <Text className="text-caption text-muted-foreground">
                     {t("login.usingCustomServer")}
                   </Text>
                 ) : null}
@@ -210,10 +210,10 @@ export default function Login() {
                   invalid={!!serverError}
                 />
                 {serverError ? (
-                  <Text className="text-sm text-destructive">{serverError}</Text>
+                  <Text className="text-body text-destructive">{serverError}</Text>
                 ) : null}
                 {serverSaved ? (
-                  <Text className="text-sm text-foreground">
+                  <Text className="text-body text-foreground">
                     {t("login.serverUpdated")}
                   </Text>
                 ) : null}

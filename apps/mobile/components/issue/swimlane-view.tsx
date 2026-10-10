@@ -428,12 +428,12 @@ export function SwimlaneView({
               <LaneGlyph lane={lane} />
               <Text
                 numberOfLines={1}
-                className="flex-shrink text-sm font-medium text-foreground"
+                className="flex-shrink text-body font-medium text-foreground"
               >
                 {laneLabel(lane)}
               </Text>
             </Pressable>
-            <Text className="text-xs text-muted-foreground/60">
+            <Text className="text-caption text-muted-foreground/60">
               {lane.total}
             </Text>
             {lane.pinned ? null : (
@@ -494,7 +494,7 @@ export function SwimlaneView({
   if (issues.length === 0) {
     return (
       <View className="flex-1 items-center justify-center px-6">
-        <Text className="text-sm text-muted-foreground text-center">
+        <Text className="text-body text-muted-foreground text-center">
           {emptyLabel}
         </Text>
       </View>
@@ -526,10 +526,10 @@ export function SwimlaneView({
           accessibilityRole="button"
           accessibilityLabel={t("issues.swimlane.groupBy")}
         >
-          <Text className="text-xs text-muted-foreground">
+          <Text className="text-caption text-muted-foreground">
             {t("issues.swimlane.groupBy")}
           </Text>
-          <Text className="text-xs font-medium text-foreground">
+          <Text className="text-caption font-medium text-foreground">
             {t(GROUPING_LABEL_KEY[grouping])}
           </Text>
           <Ionicons
@@ -569,7 +569,7 @@ export function SwimlaneView({
               size={13}
               color={THEME[colorScheme].mutedForeground}
             />
-            <Text className="text-xs font-medium text-muted-foreground">
+            <Text className="text-caption font-medium text-muted-foreground">
               {hiddenStatuses.length}
             </Text>
           </Pressable>

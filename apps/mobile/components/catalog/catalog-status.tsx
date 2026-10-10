@@ -92,7 +92,7 @@ export function CatalogStatus({
             color={theme.mutedForeground}
           />
         ) : null}
-        <Text className="text-sm text-destructive text-center">
+        <Text className="text-body text-destructive text-center">
           {errorMessage ?? t("catalog.loadError")}
         </Text>
         <Pressable
@@ -100,7 +100,7 @@ export function CatalogStatus({
           accessibilityRole="button"
           className="px-2.5 py-1.5 rounded-md bg-secondary active:opacity-70"
         >
-          <Text className="text-xs font-medium text-foreground">
+          <Text className="text-caption font-medium text-foreground">
             {t("common.retry")}
           </Text>
         </Pressable>
@@ -119,7 +119,7 @@ export function CatalogStatus({
         className,
       )}
     >
-      <Text className="text-sm text-muted-foreground text-center">
+      <Text className="text-body text-muted-foreground text-center">
         {emptyMessage}
       </Text>
     </View>
@@ -166,7 +166,7 @@ export function CatalogEmptySlot({
 
   return (
     <View className={cn("items-center px-4 py-8", className)}>
-      <Text className="text-sm text-muted-foreground text-center">
+      <Text className="text-body text-muted-foreground text-center">
         {verdict.kind === "no-match" ? t("picker.noMatches") : emptyMessage}
       </Text>
     </View>

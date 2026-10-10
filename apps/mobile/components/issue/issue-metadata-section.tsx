@@ -57,12 +57,12 @@ export function IssueMetadataSection({ metadata }: Props) {
         )}`}
         className="flex-row items-center gap-1 py-1 active:opacity-70"
       >
-        <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+        <Text className="text-caption uppercase tracking-wider text-muted-foreground font-medium">
           {t("issue.metadata.sectionTitle")}
         </Text>
         {/* Web prints the key count next to the heading (`· N`), which is the
             only signal that the bag is worth opening. */}
-        <Text className="text-xs tabular-nums text-muted-foreground">
+        <Text className="text-caption tabular-nums text-muted-foreground">
           · {count}
         </Text>
       </Pressable>
@@ -77,7 +77,7 @@ export function IssueMetadataSection({ metadata }: Props) {
           <Pressable className="absolute inset-0" onPress={() => setOpen(false)} />
           <View className="max-h-[80%] rounded-t-2xl bg-popover">
             <View className="flex-row items-center gap-2 border-b border-border px-4 py-3">
-              <Text className="flex-1 text-base font-semibold text-foreground">
+              <Text className="flex-1 text-title-sm font-semibold text-foreground">
                 {t("issue.metadata.sectionTitle")}
               </Text>
               <Pressable
@@ -106,7 +106,7 @@ export function IssueMetadataSection({ metadata }: Props) {
             >
               <Text
                 selectable
-                className="font-mono text-xs leading-5 text-foreground"
+                className="font-mono text-caption leading-5 text-foreground"
               >
                 {JSON.stringify(metadata ?? {}, null, 2)}
               </Text>

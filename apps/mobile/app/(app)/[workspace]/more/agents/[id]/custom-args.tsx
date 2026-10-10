@@ -166,10 +166,10 @@ export default function AgentCustomArgsPage() {
 
   return (
     <ScrollView className="flex-1 bg-background" contentContainerClassName="pb-10">
-      <Text className="px-4 pt-4 text-sm text-foreground leading-5">
+      <Text className="px-4 pt-4 text-body text-foreground leading-5">
         {t("agents.customArgs.intro")}
       </Text>
-      <Text className="px-4 pt-1 text-xs text-muted-foreground/80 leading-5">
+      <Text className="px-4 pt-1 text-caption text-muted-foreground/80 leading-5">
         {t("agents.customArgs.argumentsDescription")}
       </Text>
 
@@ -210,10 +210,10 @@ export default function AgentCustomArgsPage() {
 
       {entries.length === 0 ? (
         <View className="px-4 pt-6">
-          <Text className="text-sm font-medium text-foreground">
+          <Text className="text-body font-medium text-foreground">
             {t("agents.customArgs.emptyTitle")}
           </Text>
-          <Text className="pt-1 text-xs text-muted-foreground/80">
+          <Text className="pt-1 text-caption text-muted-foreground/80">
             {t("agents.customArgs.emptyHint")}
           </Text>
         </View>
@@ -245,7 +245,7 @@ export default function AgentCustomArgsPage() {
               </View>
             ) : (
               <View key={entry.id} className="flex-row items-center gap-2">
-                <Text className="flex-1 shrink font-mono text-sm text-foreground">
+                <Text className="flex-1 shrink font-mono text-body text-foreground">
                   {entry.value}
                 </Text>
                 <Pressable
@@ -276,11 +276,11 @@ export default function AgentCustomArgsPage() {
 
       {launchPreview(runtime?.launch_header, currentArgs) ? (
         <View className="px-4 pt-6">
-          <Text className="text-sm font-semibold text-foreground">
+          <Text className="text-body font-semibold text-foreground">
             {t("agents.customArgs.commandPreviewLabel")}
           </Text>
           <View className="mt-2 rounded-md border border-border bg-muted px-3 py-2">
-            <Text className="font-mono text-xs text-foreground" selectable>
+            <Text className="font-mono text-caption text-foreground" selectable>
               {launchPreview(runtime?.launch_header, currentArgs)}
             </Text>
           </View>
@@ -290,7 +290,7 @@ export default function AgentCustomArgsPage() {
       <View className="flex-row items-center gap-3 px-4 pt-6">
         <View className="flex-1" />
         {dirty ? (
-          <Text className="text-xs text-muted-foreground">
+          <Text className="text-caption text-muted-foreground">
             {t("common.unsavedChanges")}
           </Text>
         ) : null}

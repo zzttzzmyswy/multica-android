@@ -190,7 +190,7 @@ export default function SettingsPage() {
                 <AvatarImage source={{ uri: user.avatar_url }} />
               ) : null}
               <AvatarFallback>
-                <Text className="text-sm font-semibold text-muted-foreground">
+                <Text className="text-body font-semibold text-muted-foreground">
                   {initialsOf(user?.name)}
                 </Text>
               </AvatarFallback>
@@ -241,7 +241,7 @@ export default function SettingsPage() {
           </View>
         ) : error ? (
           <View className="p-4">
-            <Text className="text-sm text-destructive">
+            <Text className="text-body text-destructive">
               {t("settings.workspacesLoadError")}
             </Text>
           </View>
@@ -346,7 +346,7 @@ export default function SettingsPage() {
                   className="flex-row items-center px-4 py-3.5 active:bg-secondary gap-3"
                 >
                   <RadioGroupItem value={opt.value} />
-                  <Text className="flex-1 text-base font-medium text-foreground">
+                  <Text className="flex-1 text-title-sm font-medium text-foreground">
                     {t(opt.labelKey)}
                   </Text>
                 </Pressable>
@@ -375,7 +375,7 @@ export default function SettingsPage() {
                   className="flex-row items-center px-4 py-3.5 active:bg-secondary gap-3"
                 >
                   <RadioGroupItem value={opt.id} />
-                  <Text className="flex-1 text-base font-medium text-foreground">
+                  <Text className="flex-1 text-title-sm font-medium text-foreground">
                     {t(opt.labelKey)}
                   </Text>
                 </Pressable>
@@ -454,9 +454,9 @@ function NavRow({
     >
       {leading}
       <View className="flex-1">
-        <Text className="text-base font-medium text-foreground">{title}</Text>
+        <Text className="text-title-sm font-medium text-foreground">{title}</Text>
         {subtitle ? (
-          <Text className="text-sm text-muted-foreground mt-0.5">
+          <Text className="text-body text-muted-foreground mt-0.5">
             {subtitle}
           </Text>
         ) : null}
@@ -475,7 +475,7 @@ function SectionGroup({
 }) {
   return (
     <View className="gap-2">
-      <Text className="text-xs uppercase tracking-wider text-muted-foreground px-1">
+      <Text className="text-caption uppercase tracking-wider text-muted-foreground px-1">
         {title}
       </Text>
       <View className="rounded-md border border-border bg-card overflow-hidden">
@@ -505,8 +505,8 @@ function WorkspaceRow({
       className="flex-row items-center px-4 py-3.5 active:bg-secondary"
     >
       <View className="flex-1">
-        <Text className="text-base font-medium text-foreground">{name}</Text>
-        <Text className="text-xs text-muted-foreground mt-0.5">/{slug}</Text>
+        <Text className="text-title-sm font-medium text-foreground">{name}</Text>
+        <Text className="text-caption text-muted-foreground mt-0.5">/{slug}</Text>
       </View>
       <Ionicons
         name={isActive ? "checkmark" : "chevron-forward"}

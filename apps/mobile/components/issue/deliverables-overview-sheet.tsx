@@ -140,10 +140,10 @@ export function DeliverablesOverviewSheet({
         <View className="max-h-[85%] rounded-t-2xl bg-popover">
           <View className="flex-row items-center gap-2 border-b border-border px-4 py-3">
             <View className="min-w-0 flex-1">
-              <Text className="text-base font-semibold text-foreground" numberOfLines={1}>
+              <Text className="text-title-sm font-semibold text-foreground" numberOfLines={1}>
                 {t("deliverables.overviewTitle", { identifier })}
               </Text>
-              <Text className="text-xs tabular-nums text-muted-foreground">
+              <Text className="text-caption tabular-nums text-muted-foreground">
                 {summary}
               </Text>
             </View>
@@ -193,7 +193,7 @@ export function DeliverablesOverviewSheet({
               // only reachable here after the reader picked a chip: the section
               // that opens this sheet renders nothing at all when the issue
               // delivered nothing, so there is no "empty issue" reading of it.
-              <Text className="pt-16 text-center text-sm text-muted-foreground">
+              <Text className="pt-16 text-center text-body text-muted-foreground">
                 {t("deliverables.overviewEmpty")}
               </Text>
             ) : (
@@ -219,12 +219,12 @@ export function DeliverablesOverviewSheet({
                   <View key={group.commentId} className="pt-3">
                     <View className="mb-2 flex-row items-center gap-2">
                       <ActorAvatar type={actorType} id={actorId} size={24} />
-                      <Text className="flex-1 text-sm font-medium" numberOfLines={1}>
+                      <Text className="flex-1 text-body font-medium" numberOfLines={1}>
                         {t("deliverables.groupCommentBy", {
                           name,
                         })}
                       </Text>
-                      <Text className="text-xs text-muted-foreground">
+                      <Text className="text-caption text-muted-foreground">
                         {timeAgo(at)}
                       </Text>
                     </View>
@@ -284,8 +284,8 @@ function FilterChip({
         active ? "border-foreground bg-secondary" : "border-border"
       }`}
     >
-      <Text className="text-xs text-foreground">{label}</Text>
-      <Text className="text-xs tabular-nums text-muted-foreground">{count}</Text>
+      <Text className="text-caption text-foreground">{label}</Text>
+      <Text className="text-caption tabular-nums text-muted-foreground">{count}</Text>
     </Pressable>
   );
 }
@@ -326,10 +326,10 @@ function FileTile({
         <DeliverableThumbnail attachment={latest} showTypeLabel={false} />
       </View>
       <View className="min-w-0 flex-1">
-        <Text className="text-sm text-foreground" numberOfLines={1}>
+        <Text className="text-body text-foreground" numberOfLines={1}>
           {latest.filename}
         </Text>
-        <Text className="text-xs tabular-nums text-muted-foreground">
+        <Text className="text-caption tabular-nums text-muted-foreground">
           {[kindLabel, size].filter(Boolean).join(" · ")}
         </Text>
       </View>
@@ -344,7 +344,7 @@ function FileTile({
           })}
           className="flex-row items-center gap-0.5 rounded-sm bg-secondary px-1.5 py-0.5 active:opacity-70"
         >
-          <Text className="text-[10px] font-medium tabular-nums text-muted-foreground">
+          <Text className="text-micro font-medium tabular-nums text-muted-foreground">
             {t("deliverables.versionOf", {
               version: file.versions.length,
               total: file.versions.length,
@@ -391,7 +391,7 @@ function VersionPickerSheet({
         <Pressable className="absolute inset-0" onPress={onClose} />
         <View className="max-h-[60%] rounded-t-2xl bg-popover">
           <View className="flex-row items-center gap-2 border-b border-border px-4 py-3">
-            <Text className="flex-1 text-base font-semibold text-foreground" numberOfLines={1}>
+            <Text className="flex-1 text-title-sm font-semibold text-foreground" numberOfLines={1}>
               {file?.latest.filename}
             </Text>
             <Pressable
@@ -421,10 +421,10 @@ function VersionPickerSheet({
                   accessibilityState={{ selected: current }}
                   className="flex-row items-center gap-3 px-4 py-2.5 active:bg-secondary/50"
                 >
-                  <Text className="w-8 text-sm font-medium tabular-nums text-foreground">
+                  <Text className="w-8 text-body font-medium tabular-nums text-foreground">
                     {t("deliverables.versionShort", { version })}
                   </Text>
-                  <Text className="flex-1 text-xs tabular-nums text-muted-foreground">
+                  <Text className="flex-1 text-caption tabular-nums text-muted-foreground">
                     {[timeAgo(attachment.created_at), size]
                       .filter(Boolean)
                       .join(" · ")}

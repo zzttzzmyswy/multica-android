@@ -167,7 +167,7 @@ export function AgentSkillsSection({
     <View className="mt-1">
       {/* Assigned workspace skills */}
       <View className="px-4 pt-5 pb-2 flex-row items-center justify-between gap-3">
-        <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+        <Text className="text-caption uppercase tracking-wider text-muted-foreground font-medium">
           {t("agents.skills.assignedTitle")}
         </Text>
         {availableSkills.length > 0 ? (
@@ -199,7 +199,7 @@ export function AgentSkillsSection({
               emptyMessage={t("agents.skills.emptyWorkspace")}
             />
           ) : (
-            <Text className="text-xs text-muted-foreground/80 py-1">
+            <Text className="text-caption text-muted-foreground/80 py-1">
               {t("agents.skills.emptyTitle")}
             </Text>
           )
@@ -225,8 +225,8 @@ export function AgentSkillsSection({
                     <Text
                       className={
                         enabled
-                          ? "text-sm font-medium text-foreground"
-                          : "text-sm font-medium text-muted-foreground"
+                          ? "text-body font-medium text-foreground"
+                          : "text-body font-medium text-muted-foreground"
                       }
                       numberOfLines={1}
                     >
@@ -273,7 +273,7 @@ export function AgentSkillsSection({
 
       {/* Inherited runtime-local skills */}
       <View className="px-4 pt-5 pb-2 flex-row items-center justify-between gap-3">
-        <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+        <Text className="text-caption uppercase tracking-wider text-muted-foreground font-medium">
           {t("agents.skills.runtimeTitle")}
         </Text>
         {runtimeId ? (
@@ -289,7 +289,7 @@ export function AgentSkillsSection({
               size={14}
               color={muted}
             />
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-caption text-muted-foreground">
               {t("agents.skills.refreshAction")}
             </Text>
           </Pressable>
@@ -340,8 +340,8 @@ export function AgentSkillsSection({
                     <Text
                       className={
                         disabled
-                          ? "text-sm font-medium text-muted-foreground"
-                          : "text-sm font-medium text-foreground"
+                          ? "text-body font-medium text-muted-foreground"
+                          : "text-body font-medium text-foreground"
                       }
                       numberOfLines={1}
                     >

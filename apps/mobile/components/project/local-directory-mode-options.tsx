@@ -69,7 +69,7 @@ export function ModeErrorNotice({ error }: { error: WorktreeUnsupportedInfo }) {
       <View className="flex-1 gap-1">
         {/* The server's own sentence — already written for the user, and the
             only text that names the offending path. */}
-        <Text className="text-xs text-destructive">{error.message}</Text>
+        <Text className="text-caption text-destructive">{error.message}</Text>
         {error.minVersion ? (
           <Text className="text-micro text-destructive/80">
             {t("resource.modeUpgradeRequired", {
@@ -129,12 +129,12 @@ function ModeOption({
       />
       <View className="flex-1 min-w-0">
         <View className="flex-row items-center gap-2">
-          <Text className="text-sm font-medium text-foreground">{title}</Text>
-          <Text className="font-mono text-[10px] text-muted-foreground">
+          <Text className="text-body font-medium text-foreground">{title}</Text>
+          <Text className="font-mono text-micro text-muted-foreground">
             {identifier}
           </Text>
         </View>
-        <Text className="mt-0.5 text-xs text-muted-foreground">
+        <Text className="mt-0.5 text-caption text-muted-foreground">
           {description}
         </Text>
       </View>

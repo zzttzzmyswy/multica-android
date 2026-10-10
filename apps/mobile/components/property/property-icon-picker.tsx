@@ -40,7 +40,7 @@ export function PropertyIconPickerModal({
         <View className="flex-1 justify-end">
           <Pressable onPress={() => {}} className="bg-popover rounded-t-2xl max-h-[75%]">
             <View className="flex-row items-center justify-between border-b border-border px-4 py-3">
-              <Text className="text-base font-semibold text-foreground">
+              <Text className="text-title-sm font-semibold text-foreground">
                 {t("properties.form.iconPickerTitle")}
               </Text>
               <Pressable onPress={onClose} hitSlop={8}>
@@ -96,7 +96,7 @@ export function PropertyIconPickerModal({
                     size={18}
                     color={theme.mutedForeground}
                   />
-                  <Text className="text-sm text-muted-foreground">
+                  <Text className="text-body text-muted-foreground">
                     {t("properties.form.iconRemove")}
                   </Text>
                 </Pressable>

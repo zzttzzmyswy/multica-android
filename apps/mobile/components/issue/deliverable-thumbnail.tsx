@@ -104,7 +104,7 @@ function FileFace({
         color={theme.mutedForeground}
       />
       {showTypeLabel && label ? (
-        <Text className="text-[10px] font-medium tracking-wide text-muted-foreground">
+        <Text className="text-micro font-medium tracking-wide text-muted-foreground">
           {label}
         </Text>
       ) : null}

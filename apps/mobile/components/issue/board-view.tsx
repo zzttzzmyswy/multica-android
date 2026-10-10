@@ -351,11 +351,11 @@ function ColumnHeader({
       {leading}
       <Text
         numberOfLines={1}
-        className="flex-shrink text-xs uppercase tracking-wider font-medium text-muted-foreground"
+        className="flex-shrink text-caption uppercase tracking-wider font-medium text-muted-foreground"
       >
         {label}
       </Text>
-      <Text className="ml-auto text-xs text-muted-foreground/60">
+      <Text className="ml-auto text-caption text-muted-foreground/60">
         {column.data.length}
       </Text>
       {/* Column-header quick create (web board-column.tsx:226-246, whose
@@ -431,7 +431,7 @@ function HiddenColumnsLane({
     >
       <View className="px-3 pt-3 pb-2 flex-row items-center gap-2">
         <Ionicons name="eye-off-outline" size={14} color={dim} />
-        <Text className="text-xs uppercase tracking-wider font-medium text-muted-foreground">
+        <Text className="text-caption uppercase tracking-wider font-medium text-muted-foreground">
           {t("issues.boardHiddenColumns")}
         </Text>
       </View>
@@ -450,7 +450,7 @@ function HiddenColumnsLane({
             })}
           >
             <StatusIcon status={status} size={14} />
-            <Text numberOfLines={1} className="flex-1 text-sm text-foreground">
+            <Text numberOfLines={1} className="flex-1 text-body text-foreground">
               {statusLabel(status)}
             </Text>
             <Ionicons name="eye-outline" size={15} color={dim} />
@@ -764,7 +764,7 @@ const BoardColumn = memo(function BoardColumn({
       </View>
       {laneIds.length === 0 ? (
         <View className="flex-1 items-center justify-center px-4 pb-6">
-          <Text className="text-xs text-muted-foreground/50">
+          <Text className="text-caption text-muted-foreground/50">
             {translate("issues.boardEmptyColumn")}
           </Text>
         </View>
@@ -1514,7 +1514,7 @@ export function BoardView({
     return (
       <View className="flex-1">
         <View className="flex-1 items-center justify-center px-6">
-          <Text className="text-sm text-muted-foreground text-center">
+          <Text className="text-body text-muted-foreground text-center">
             {t("issues.boardAllHidden")}
           </Text>
         </View>
@@ -1531,7 +1531,7 @@ export function BoardView({
   if (issues.length === 0) {
     return (
       <View className="flex-1 items-center justify-center px-6">
-        <Text className="text-sm text-muted-foreground text-center">
+        <Text className="text-body text-muted-foreground text-center">
           {emptyLabel}
         </Text>
       </View>

@@ -96,10 +96,10 @@ export default function SelectWorkspace() {
     <SafeAreaView className="flex-1 bg-background">
       <ScrollView contentContainerClassName="px-6 py-6 gap-6">
         <View className="gap-1">
-          <Text className="text-xs uppercase tracking-wider text-muted-foreground">
+          <Text className="text-caption uppercase tracking-wider text-muted-foreground">
             {t("workspace.signedInAs")}
           </Text>
-          <Text className="text-base text-foreground">{user?.email}</Text>
+          <Text className="text-title-sm text-foreground">{user?.email}</Text>
         </View>
 
         {/* Onboarding entry — first-run setup. Shown until the user has
@@ -109,10 +109,10 @@ export default function SelectWorkspace() {
         {notOnboarded && data !== undefined && (
           <View className="gap-3 rounded-lg border border-border p-4 bg-secondary/30">
             <View className="gap-1">
-              <Text className="text-base font-semibold text-foreground">
+              <Text className="text-title-sm font-semibold text-foreground">
                 {t("onboarding.bannerTitle")}
               </Text>
-              <Text className="text-sm text-muted-foreground">
+              <Text className="text-body text-muted-foreground">
                 {t("onboarding.bannerLede")}
               </Text>
             </View>
@@ -124,7 +124,7 @@ export default function SelectWorkspace() {
 
         {pending.length > 0 && (
           <View className="gap-2">
-            <Text className="text-xs uppercase tracking-wider text-muted-foreground">
+            <Text className="text-caption uppercase tracking-wider text-muted-foreground">
               {t("invite.pendingTitle")} · {pending.length}
             </Text>
             {pending.map((inv) => (
@@ -135,10 +135,10 @@ export default function SelectWorkspace() {
                 }}
               >
                 <View className="gap-1">
-                  <Text className="text-base font-semibold text-foreground">
+                  <Text className="text-title-sm font-semibold text-foreground">
                     {inv.workspace_name ?? t("invite.fallbackWorkspaceName")}
                   </Text>
-                  <Text className="text-xs text-muted-foreground">
+                  <Text className="text-caption text-muted-foreground">
                     {(inv.inviter_name || inv.inviter_email) +
                       (inv.role === "admin"
                         ? " " + t("invite.invitedRoleAdmin")
@@ -172,7 +172,7 @@ export default function SelectWorkspace() {
         )}
 
         <View className="gap-3">
-          <Text className="text-2xl font-semibold text-foreground">
+          <Text className="text-display-sm font-semibold text-foreground">
             {t("workspace.selectTitle")}
           </Text>
 
@@ -182,7 +182,7 @@ export default function SelectWorkspace() {
             </View>
           ) : error ? (
             <View className="gap-3">
-              <Text className="text-sm text-destructive">
+              <Text className="text-body text-destructive">
                 {t("workspace.loadError")}
                 {error instanceof Error ? error.message : t("common.unknownError")}
               </Text>
@@ -192,10 +192,10 @@ export default function SelectWorkspace() {
             </View>
           ) : !data || data.length === 0 ? (
             <View className="gap-4 py-3">
-              <Text className="text-sm text-muted-foreground">
+              <Text className="text-body text-muted-foreground">
                 {t("workspace.empty")}
               </Text>
-              <Text className="text-sm text-foreground">
+              <Text className="text-body text-foreground">
                 {t("workspace.emptyHint")}
               </Text>
               <Button
@@ -216,14 +216,14 @@ export default function SelectWorkspace() {
                   key={ws.id}
                   onPress={() => onSelect(ws.id, ws.slug)}
                 >
-                  <Text className="text-base font-semibold text-foreground">
+                  <Text className="text-title-sm font-semibold text-foreground">
                     {ws.name}
                   </Text>
-                  <Text className="text-xs text-muted-foreground mt-1">
+                  <Text className="text-caption text-muted-foreground mt-1">
                     /{ws.slug}
                   </Text>
                   {ws.description ? (
-                    <Text className="text-sm text-muted-foreground mt-2">
+                    <Text className="text-body text-muted-foreground mt-2">
                       {ws.description}
                     </Text>
                   ) : null}

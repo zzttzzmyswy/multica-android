@@ -66,7 +66,7 @@ export function EmojiPickerSheetBody<T extends ReactionLike>({
   return (
     <View className="flex-1">
       <View className="px-4 pt-3 pb-2">
-        <Text className="text-lg font-semibold text-foreground">{title}</Text>
+        <Text className="text-title font-semibold text-foreground">{title}</Text>
       </View>
       <View className="flex-1">
         <EmojiKeyboard

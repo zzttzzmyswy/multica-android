@@ -66,7 +66,7 @@ function FieldLabel({
         size={13}
         color={THEME[colorScheme].mutedForeground}
       />
-      <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+      <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
         {text}
       </Text>
     </View>
@@ -74,7 +74,7 @@ function FieldLabel({
 }
 
 function FieldError({ text }: { text: string }) {
-  return <Text className="text-xs text-destructive">{text}</Text>;
+  return <Text className="text-caption text-destructive">{text}</Text>;
 }
 
 export function QuickActionForm({ action }: { action?: QuickAction | null }) {
@@ -241,12 +241,12 @@ export function QuickActionForm({ action }: { action?: QuickAction | null }) {
                     size={14}
                     color={theme.mutedForeground}
                   />
-                  <Text className="text-sm font-medium text-foreground">
+                  <Text className="text-body font-medium text-foreground">
                     {option === "public"
                       ? t("quickActions.visibilityPublic")
                       : t("quickActions.visibilityPrivate")}
                   </Text>
-                  <Text className="text-xs text-muted-foreground">
+                  <Text className="text-caption text-muted-foreground">
                     {option === "public"
                       ? t("quickActions.visibilityPublicHint")
                       : t("quickActions.visibilityPrivateHint")}
@@ -256,7 +256,7 @@ export function QuickActionForm({ action }: { action?: QuickAction | null }) {
             })}
           </View>
           {visibility === "public" ? (
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-caption text-muted-foreground">
               {t("quickActions.publicTargetHint")}
             </Text>
           ) : null}
@@ -276,7 +276,7 @@ export function QuickActionForm({ action }: { action?: QuickAction | null }) {
                 <Ionicons name="person" size={15} color={theme.mutedForeground} />
               </View>
             )}
-            <Text className="flex-1 text-sm text-foreground" numberOfLines={1}>
+            <Text className="flex-1 text-body text-foreground" numberOfLines={1}>
               {assigneeRowLabel()}
             </Text>
             <Ionicons name="chevron-down" size={14} color={theme.mutedForeground} />
@@ -302,7 +302,7 @@ export function QuickActionForm({ action }: { action?: QuickAction | null }) {
               })}
             />
           ) : (
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-caption text-muted-foreground">
               {t("quickActions.promptHint")}
             </Text>
           )}
@@ -322,7 +322,7 @@ export function QuickActionForm({ action }: { action?: QuickAction | null }) {
               className="flex-row items-center gap-3 px-4 py-3.5 active:bg-secondary"
             >
               <Ionicons name="archive-outline" size={16} color={theme.mutedForeground} />
-              <Text className="flex-1 text-sm text-foreground">
+              <Text className="flex-1 text-body text-foreground">
                 {archived ? t("quickActions.unarchive") : t("quickActions.archive")}
               </Text>
             </Pressable>
@@ -333,7 +333,7 @@ export function QuickActionForm({ action }: { action?: QuickAction | null }) {
               className="flex-row items-center gap-3 px-4 py-3.5 active:bg-secondary"
             >
               <Ionicons name="trash-outline" size={16} color={theme.destructive} />
-              <Text className="flex-1 text-sm text-destructive">
+              <Text className="flex-1 text-body text-destructive">
                 {t("quickActions.delete")}
               </Text>
             </Pressable>

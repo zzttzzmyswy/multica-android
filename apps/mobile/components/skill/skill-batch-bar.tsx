@@ -250,7 +250,7 @@ export function SkillBatchBar({
               }`}
             >
               <Text
-                className={`text-sm font-medium ${
+                className={`text-body font-medium ${
                   toast.kind === "error"
                     ? "text-destructive-foreground"
                     : "text-background"
@@ -270,7 +270,7 @@ export function SkillBatchBar({
               accessibilityLabel={t("batch.exit")}
             >
               <Ionicons name="close" size={18} color="currentColor" />
-              <Text className="text-sm font-medium text-foreground">
+              <Text className="text-body font-medium text-foreground">
                 {t("batch.selected", { count })}
               </Text>
             </Pressable>
@@ -293,7 +293,7 @@ export function SkillBatchBar({
                   size={16}
                   color="currentColor"
                 />
-                <Text className="text-sm text-muted-foreground">
+                <Text className="text-body text-muted-foreground">
                   {allVisibleSelected
                     ? t("batch.clearSelection")
                     : t("batch.selectAll")}

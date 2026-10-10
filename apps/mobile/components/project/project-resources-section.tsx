@@ -129,11 +129,11 @@ export function ProjectResourcesSection({ projectId, onAdd }: Props) {
   return (
     <View>
       <View className="flex-row items-center justify-between px-4 py-2 bg-background">
-        <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+        <Text className="text-caption uppercase tracking-wider text-muted-foreground font-medium">
           {t("resource.sectionTitle")}
         </Text>
         <Pressable onPress={onAdd} className="px-2 py-1 active:bg-secondary rounded">
-          <Text className="text-xs text-brand">{t("resource.add")}</Text>
+          <Text className="text-caption text-brand">{t("resource.add")}</Text>
         </Pressable>
       </View>
       {isLoading ? (
@@ -142,7 +142,7 @@ export function ProjectResourcesSection({ projectId, onAdd }: Props) {
         </View>
       ) : !resources || resources.length === 0 ? (
         <View className="px-4 py-3">
-          <Text className="text-sm text-muted-foreground/70">
+          <Text className="text-body text-muted-foreground/70">
             {t("project.noResources")}
           </Text>
         </View>
@@ -203,11 +203,11 @@ function ResourceRow({
         color={THEME[colorScheme].mutedForeground}
       />
       <View className="flex-1 min-w-0">
-        <Text className="text-sm text-foreground" numberOfLines={1}>
+        <Text className="text-body text-foreground" numberOfLines={1}>
           {resource.label ?? subtitle}
         </Text>
         {resource.label ? (
-          <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+          <Text className="text-caption text-muted-foreground" numberOfLines={1}>
             {subtitle}
           </Text>
         ) : null}
@@ -223,8 +223,8 @@ function ResourceRow({
           <Text
             className={
               executionModeOf(local) === "worktree"
-                ? "text-[10px] font-medium text-brand"
-                : "text-[10px] text-muted-foreground"
+                ? "text-micro font-medium text-brand"
+                : "text-micro text-muted-foreground"
             }
           >
             {executionModeOf(local) === "worktree"
@@ -313,7 +313,7 @@ function LocalDirectoryModeSheet({
         <View className="flex-1 justify-end">
           <Pressable onPress={() => {}} className="bg-popover rounded-t-2xl">
             <View className="px-4 py-3 border-b border-border flex-row items-center justify-between">
-              <Text className="text-base font-semibold text-foreground">
+              <Text className="text-title-sm font-semibold text-foreground">
                 {t("resource.modeEdit")}
               </Text>
               <Pressable onPress={onClose} hitSlop={8}>
@@ -321,7 +321,7 @@ function LocalDirectoryModeSheet({
               </Pressable>
             </View>
             <ScrollView className="px-4 py-3 max-h-[70vh]">
-              <Text className="text-xs text-muted-foreground">
+              <Text className="text-caption text-muted-foreground">
                 {t("resource.modeDescription")}
               </Text>
               <View

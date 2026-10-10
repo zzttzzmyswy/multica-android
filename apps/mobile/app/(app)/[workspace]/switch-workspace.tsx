@@ -82,7 +82,7 @@ export default function SwitchWorkspaceRoute() {
   return (
     <View className="flex-1">
       <View className="px-4 pt-4 pb-3">
-        <Text className="text-base font-semibold text-foreground">
+        <Text className="text-title-sm font-semibold text-foreground">
           {tr.t("switchWorkspace.title")}
         </Text>
       </View>
@@ -118,7 +118,7 @@ export default function SwitchWorkspaceRoute() {
             className="flex-row items-center gap-2 px-4 py-3"
           >
             <Ionicons name="add-circle-outline" size={20} color={t.foreground} />
-            <Text className="text-sm font-medium text-foreground">
+            <Text className="text-body font-medium text-foreground">
               {tr.t("workspace.createNew")}
             </Text>
           </Pressable>
@@ -167,7 +167,7 @@ function WorkspaceRow({
       />
       <Text
         className={cn(
-          "flex-1 text-sm text-foreground",
+          "flex-1 text-body text-foreground",
           active && "font-semibold",
         )}
         numberOfLines={1}

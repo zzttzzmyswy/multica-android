@@ -305,12 +305,12 @@ export default function AgentEnvPage() {
       {keyCount > 0 ? (
         <View className="px-4 pt-4 flex-row items-center gap-2">
           <Ionicons name="lock-closed" size={14} color={theme.mutedForeground} />
-          <Text className="text-sm text-foreground">
+          <Text className="text-body text-foreground">
             {t("agents.env.configuredCount", { count: keyCount })}
           </Text>
         </View>
       ) : null}
-      <Text className="px-4 pt-2 text-xs text-muted-foreground/80 leading-5">
+      <Text className="px-4 pt-2 text-caption text-muted-foreground/80 leading-5">
         {revealed ? t("agents.env.introRevealed") : t("agents.env.introHidden")}
       </Text>
 
@@ -359,7 +359,7 @@ export default function AgentEnvPage() {
                 spellCheck={false}
                 minHeight={192}
                 maxHeight={400}
-                className="font-mono text-sm"
+                className="font-mono text-body"
                 style={
                   bulkError
                     ? { borderColor: theme.destructive, borderWidth: 1 }
@@ -367,17 +367,17 @@ export default function AgentEnvPage() {
                 }
               />
               {bulkError ? (
-                <Text className="text-xs" style={{ color: theme.destructive }}>
+                <Text className="text-caption" style={{ color: theme.destructive }}>
                   {describeParseError(bulkError)}
                 </Text>
               ) : (
-                <Text className="text-xs text-muted-foreground/80">
+                <Text className="text-caption text-muted-foreground/80">
                   {t("agents.env.bulkPlaintextNotice")}
                 </Text>
               )}
             </View>
           ) : entries.length === 0 ? (
-            <Text className="px-4 pt-3 text-xs italic text-muted-foreground/80">
+            <Text className="px-4 pt-3 text-caption italic text-muted-foreground/80">
               {t("agents.env.emptyEditable")}
             </Text>
           ) : (
@@ -439,7 +439,7 @@ export default function AgentEnvPage() {
           <View className="flex-row items-center gap-3 px-4 pt-4">
             <View className="flex-1" />
             {hasUnsavedWork ? (
-              <Text className="text-xs text-muted-foreground">
+              <Text className="text-caption text-muted-foreground">
                 {t("common.unsavedChanges")}
               </Text>
             ) : null}

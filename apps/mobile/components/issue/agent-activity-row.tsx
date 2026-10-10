@@ -100,7 +100,7 @@ function ActiveContent({
     <View className="flex-1 flex-row items-center gap-2">
       <AvatarStack actors={actors} max={3} size={24} />
       <PulseDot />
-      <Text className="text-sm font-medium text-foreground">{t("issue.working")}</Text>
+      <Text className="text-body font-medium text-foreground">{t("issue.working")}</Text>
     </View>
   );
 }
@@ -117,7 +117,7 @@ function IdleContent({
   return (
     <View className="flex-1 flex-row items-center gap-2">
       <Ionicons name="time-outline" size={16} color={mutedFg} />
-      <Text className="text-sm text-foreground">{t("issue.runsCount", { count })}</Text>
+      <Text className="text-body text-foreground">{t("issue.runsCount", { count })}</Text>
     </View>
   );
 }

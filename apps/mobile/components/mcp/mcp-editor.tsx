@@ -69,9 +69,9 @@ export function McpJsonField({
   return (
     <View className="gap-1.5">
       {hint ? (
-        <Text className="text-xs text-muted-foreground leading-5">{hint}</Text>
+        <Text className="text-caption text-muted-foreground leading-5">{hint}</Text>
       ) : null}
-      <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+      <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
         {t("mcp.form.jsonLabel")}
       </Text>
       <AutosizeTextArea
@@ -86,8 +86,8 @@ export function McpJsonField({
         accessibilityLabel={t("mcp.form.jsonAria")}
         className={
           invalid
-            ? "rounded-md border border-destructive/60 bg-destructive/10 px-3 py-2 font-mono text-sm"
-            : "rounded-md border border-border bg-secondary/50 px-3 py-2 font-mono text-sm"
+            ? "rounded-md border border-destructive/60 bg-destructive/10 px-3 py-2 font-mono text-body"
+            : "rounded-md border border-border bg-secondary/50 px-3 py-2 font-mono text-body"
         }
       />
       <Text className="text-micro text-muted-foreground/70">

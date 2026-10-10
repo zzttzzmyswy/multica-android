@@ -200,7 +200,7 @@ export default function IssuesFilterPickerRoute() {
         // the filter was saved, and the surface controller strips it before
         // querying. Saying "no matches" here is a fact, not a guess.
         <View className="px-3 py-8 items-center">
-          <Text className="text-sm text-muted-foreground">
+          <Text className="text-body text-muted-foreground">
             {t("picker.noMatches")}
           </Text>
         </View>
@@ -331,9 +331,9 @@ function PickerChrome({
   return (
     <View className="flex-1">
       <View className="flex-row items-center justify-between px-4 pt-4 pb-2">
-        <Text className="text-base font-semibold text-foreground">{title}</Text>
+        <Text className="text-title-sm font-semibold text-foreground">{title}</Text>
         <Pressable onPress={onDone} hitSlop={8} className="px-2 py-1 active:opacity-60">
-          <Text className="text-sm text-primary font-medium">{t("common.done")}</Text>
+          <Text className="text-body text-primary font-medium">{t("common.done")}</Text>
         </Pressable>
       </View>
       <View className="flex-1">{children}</View>

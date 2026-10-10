@@ -157,7 +157,7 @@ export default function NewProject() {
   const headerLeft = useCallback(() => {
     return (
       <Pressable onPress={onCancel} className="px-1 py-1">
-        <Text className="text-base text-brand">{t("newProject.cancel")}</Text>
+        <Text className="text-title-sm text-brand">{t("newProject.cancel")}</Text>
       </Pressable>
     );
   }, [onCancel, t]);
@@ -169,7 +169,7 @@ export default function NewProject() {
         disabled={!canCreate}
         className={canCreate ? "px-1 py-1" : "px-1 py-1 opacity-40"}
       >
-        <Text className="text-base text-brand font-semibold">
+        <Text className="text-title-sm text-brand font-semibold">
           {create.isPending ? t("newProject.creating") : t("newProject.create")}
         </Text>
       </Pressable>
@@ -194,7 +194,7 @@ export default function NewProject() {
               onChangeText={(v) => setIcon(v.slice(0, 4))}
               placeholder="📦"
               placeholderTextColor={MOBILE_PLACEHOLDER_COLOR}
-              className="text-2xl text-foreground bg-secondary/50 rounded-md px-3 py-2 self-start min-w-[60px] text-center"
+              className="text-display-sm text-foreground bg-secondary/50 rounded-md px-3 py-2 self-start min-w-[60px] text-center"
               maxLength={4}
             />
           </Field>
@@ -205,7 +205,7 @@ export default function NewProject() {
               onChangeText={setTitle}
               placeholder={t("newProject.titlePlaceholder")}
               placeholderTextColor={MOBILE_PLACEHOLDER_COLOR}
-              className="text-base text-foreground bg-secondary/50 rounded-md px-3 py-2"
+              className="text-title-sm text-foreground bg-secondary/50 rounded-md px-3 py-2"
               autoFocus
               returnKeyType="next"
             />
@@ -229,7 +229,7 @@ export default function NewProject() {
                   className="flex-row items-center gap-2 bg-secondary/50 rounded-md px-3 py-2.5"
                 >
                   <ProjectStatusIcon status={status} size={16} />
-                  <Text className="text-sm text-foreground flex-1">
+                  <Text className="text-body text-foreground flex-1">
                     {projectStatusLabel(status)}
                   </Text>
                 </Pressable>
@@ -242,7 +242,7 @@ export default function NewProject() {
                   className="flex-row items-center gap-2 bg-secondary/50 rounded-md px-3 py-2.5"
                 >
                   <ProjectPriorityIcon priority={priority} size={16} />
-                  <Text className="text-sm text-foreground flex-1">
+                  <Text className="text-body text-foreground flex-1">
                     {projectPriorityLabel(priority)}
                   </Text>
                 </Pressable>
@@ -264,7 +264,7 @@ function Field({
 }) {
   return (
     <View className="gap-1.5">
-      <Text className="text-xs uppercase tracking-wider text-muted-foreground">
+      <Text className="text-caption uppercase tracking-wider text-muted-foreground">
         {label}
       </Text>
       {children}

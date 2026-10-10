@@ -188,7 +188,7 @@ export default function OnboardingRoute() {
               accessibilityLabel={t("onboarding.back")}
             >
               <Ionicons name="chevron-back" size={22} color={tint.foreground} />
-              <Text className="text-sm text-foreground">{t("onboarding.back")}</Text>
+              <Text className="text-body text-foreground">{t("onboarding.back")}</Text>
             </Pressable>
           )}
         </View>
@@ -242,11 +242,11 @@ function StepHeader({
   const { t } = useTranslation();
   return (
     <View className="gap-2 items-center mb-6">
-      <Text className="text-2xl font-semibold text-foreground text-center">
+      <Text className="text-display-sm font-semibold text-foreground text-center">
         {t(titleKey)}
       </Text>
       {ledeKey ? (
-        <Text className="text-sm text-muted-foreground text-center">
+        <Text className="text-body text-muted-foreground text-center">
           {t(ledeKey)}
         </Text>
       ) : null}
@@ -266,10 +266,10 @@ function WelcomeStep({
     <View className="flex-1 items-center gap-6 pt-10">
       <MulticaLogo size={56} />
       <View className="items-center gap-2">
-        <Text className="text-2xl font-semibold text-foreground text-center">
+        <Text className="text-display-sm font-semibold text-foreground text-center">
           {t("onboarding.welcome.heading")}
         </Text>
-        <Text className="text-sm text-muted-foreground text-center max-w-[300]">
+        <Text className="text-body text-muted-foreground text-center max-w-[300]">
           {t("onboarding.welcome.lede")}
         </Text>
       </View>
@@ -335,7 +335,7 @@ function AboutYouStep({ onNext }: { onNext: () => void }) {
           invalid={!!error}
         />
         {error ? (
-          <Text className="text-sm text-destructive">{error}</Text>
+          <Text className="text-body text-destructive">{error}</Text>
         ) : null}
         <View className="flex-row gap-3 mt-2">
           <Button
@@ -431,7 +431,7 @@ function WorkspaceStep({
       />
       <View className="gap-4">
         <View className="gap-1.5">
-          <Text className="text-sm font-medium text-foreground">
+          <Text className="text-body font-medium text-foreground">
             {t("onboarding.workspace.nameLabel")}
           </Text>
           <TextField
@@ -444,7 +444,7 @@ function WorkspaceStep({
           />
         </View>
         <View className="gap-1.5">
-          <Text className="text-sm font-medium text-foreground">
+          <Text className="text-body font-medium text-foreground">
             {t("onboarding.workspace.slugLabel")}
           </Text>
           <TextField
@@ -456,12 +456,12 @@ function WorkspaceStep({
             editable={!submitting}
             invalid={!!formError}
           />
-          <Text className="text-xs text-muted-foreground">
+          <Text className="text-caption text-muted-foreground">
             {t("onboarding.workspace.slugHint")}
           </Text>
         </View>
         <View className="gap-1.5">
-          <Text className="text-sm font-medium text-foreground">
+          <Text className="text-body font-medium text-foreground">
             {t("onboarding.workspace.descriptionLabel")}
           </Text>
           <AutosizeTextArea
@@ -470,12 +470,12 @@ function WorkspaceStep({
             value={description}
             onChangeText={setDescription}
             editable={!submitting}
-            className="border rounded-md px-3 py-2 text-sm text-foreground"
+            className="border rounded-md px-3 py-2 text-body text-foreground"
           />
         </View>
 
         {formError ? (
-          <Text className="text-sm text-destructive">{formError}</Text>
+          <Text className="text-body text-destructive">{formError}</Text>
         ) : null}
 
         <Button size="lg" disabled={submitting} onPress={() => void create()}>
@@ -508,17 +508,17 @@ function RuntimeStep({
         ledeKey="onboarding.runtime.lede"
       />
       <View className="gap-3 rounded-lg border border-border p-4 bg-secondary/40">
-        <Text className="text-sm text-foreground">
+        <Text className="text-body text-foreground">
           {`1. ${t("onboarding.runtime.step1")}`}
         </Text>
-        <Text className="text-sm text-foreground">
+        <Text className="text-body text-foreground">
           {`2. ${t("onboarding.runtime.step2")}`}
         </Text>
-        <Text className="text-sm text-foreground">
+        <Text className="text-body text-foreground">
           {`3. ${t("onboarding.runtime.step3")}`}
         </Text>
       </View>
-      <Text className="text-xs text-muted-foreground text-center">
+      <Text className="text-caption text-muted-foreground text-center">
         {t("onboarding.runtime.later")}
       </Text>
       <Button size="lg" disabled={busy} onPress={onNext}>

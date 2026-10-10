@@ -92,7 +92,7 @@ export default function NotificationsSettingsScreen() {
   if (error) {
     return (
       <View className="flex-1 items-center justify-center bg-background px-6">
-        <Text className="text-sm text-destructive text-center">
+        <Text className="text-body text-destructive text-center">
           {t("notif.loadError")}
         </Text>
       </View>
@@ -115,10 +115,10 @@ export default function NotificationsSettingsScreen() {
             <View key={group.key}>
               <View className="flex-row items-center px-4 py-3 gap-3">
                 <View className="flex-1">
-                  <Text className="text-base font-medium text-foreground">
+                  <Text className="text-title-sm font-medium text-foreground">
                     {t(group.labelKey)}
                   </Text>
-                  <Text className="text-xs text-muted-foreground mt-0.5">
+                  <Text className="text-caption text-muted-foreground mt-0.5">
                     {t(group.descriptionKey)}
                   </Text>
                 </View>
@@ -139,10 +139,10 @@ export default function NotificationsSettingsScreen() {
       >
         <View className="flex-row items-center px-4 py-3 gap-3">
           <View className="flex-1">
-            <Text className="text-base font-medium text-foreground">
+            <Text className="text-title-sm font-medium text-foreground">
               {t("notif.systemRow")}
             </Text>
-            <Text className="text-xs text-muted-foreground mt-0.5">
+            <Text className="text-caption text-muted-foreground mt-0.5">
               {t("notif.systemRowDescription")}
             </Text>
           </View>
@@ -170,11 +170,11 @@ function Section({
   return (
     <View className="gap-2">
       <View className="px-1">
-        <Text className="text-xs uppercase tracking-wider text-muted-foreground">
+        <Text className="text-caption uppercase tracking-wider text-muted-foreground">
           {title}
         </Text>
         {description ? (
-          <Text className="text-xs text-muted-foreground mt-1">
+          <Text className="text-caption text-muted-foreground mt-1">
             {description}
           </Text>
         ) : null}

@@ -430,7 +430,7 @@ export function BuilderWorkspace({
               color={theme.mutedForeground}
             />
             <Text
-              className="text-xs text-muted-foreground"
+              className="text-caption text-muted-foreground"
               numberOfLines={1}
             >
               {runtimeDisplayLabel(selectedRuntime)}
@@ -500,7 +500,7 @@ export function BuilderWorkspace({
           />
           {error ? (
             <View className="mx-4 mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2">
-              <Text className="text-xs text-destructive">{error}</Text>
+              <Text className="text-caption text-destructive">{error}</Text>
             </View>
           ) : null}
           <View className="border-t border-border" />
@@ -570,7 +570,7 @@ export function BuilderWorkspace({
                 ) : (
                   <Text
                     className={cn(
-                      "text-sm font-semibold",
+                      "text-body font-semibold",
                       canCreate
                         ? "text-primary-foreground"
                         : "text-muted-foreground",
@@ -581,12 +581,12 @@ export function BuilderWorkspace({
                 )}
               </Pressable>
               {!canCreate && draft.name.trim().length === 0 ? (
-                <Text className="text-center text-xs text-muted-foreground">
+                <Text className="text-center text-caption text-muted-foreground">
                   {t("agents.new.ai.nameRequiredHint")}
                 </Text>
               ) : null}
               {!canCreate && draft.name.trim().length > 0 && !sending && !draft.runtimeId ? (
-                <Text className="text-center text-xs text-muted-foreground">
+                <Text className="text-center text-caption text-muted-foreground">
                   {t("agents.new.ai.runtimeRequiredHint")}
                 </Text>
               ) : null}
@@ -621,7 +621,7 @@ function TabButton({
     >
       <Text
         className={cn(
-          "text-xs font-medium",
+          "text-caption font-medium",
           active ? "text-foreground" : "text-muted-foreground",
         )}
       >
@@ -629,7 +629,7 @@ function TabButton({
       </Text>
       {badge ? (
         <View className="h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1">
-          <Text className="text-[10px] font-semibold text-primary-foreground">
+          <Text className="text-micro font-semibold text-primary-foreground">
             {badge}
           </Text>
         </View>

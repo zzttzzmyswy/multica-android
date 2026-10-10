@@ -239,7 +239,7 @@ export const AutopilotForm = forwardRef<AutopilotFormHandle, Props>(
             />
           ) : agents.length === 0 && squads.length === 0 ? (
             <View className="rounded-md border border-border px-3 py-3">
-              <Text className="text-sm text-muted-foreground">
+              <Text className="text-body text-muted-foreground">
                 {t("autopilots.new.agentsEmpty")}
               </Text>
             </View>
@@ -264,7 +264,7 @@ export const AutopilotForm = forwardRef<AutopilotFormHandle, Props>(
                       size={28}
                     />
                     <View className="flex-1">
-                      <Text className="text-sm text-foreground" numberOfLines={1}>
+                      <Text className="text-body text-foreground" numberOfLines={1}>
                         {selectedAssignee.name}
                       </Text>
                       {selectedAssignee.description?.trim() ? (
@@ -282,7 +282,7 @@ export const AutopilotForm = forwardRef<AutopilotFormHandle, Props>(
                   <>
                     <Text
                       className={cn(
-                        "flex-1 text-sm",
+                        "flex-1 text-body",
                         showErrors && assigneeMissing
                           ? "text-destructive"
                           : "text-muted-foreground",
@@ -338,14 +338,14 @@ export const AutopilotForm = forwardRef<AutopilotFormHandle, Props>(
             >
               {selectedProject ? (
                 <>
-                  <Text className="flex-1 text-sm text-foreground" numberOfLines={1}>
+                  <Text className="flex-1 text-body text-foreground" numberOfLines={1}>
                     {selectedProject.title}
                   </Text>
                   <Ionicons name="chevron-down" size={16} color={muted} />
                 </>
               ) : (
                 <>
-                  <Text className="flex-1 text-sm text-muted-foreground">
+                  <Text className="flex-1 text-body text-muted-foreground">
                     {t("autopilots.new.noProject")}
                   </Text>
                   <Ionicons name="chevron-down" size={16} color={muted} />
@@ -379,7 +379,7 @@ export const AutopilotForm = forwardRef<AutopilotFormHandle, Props>(
                     className="flex-row items-center gap-1 rounded-full border border-border bg-secondary/60 px-2 py-1"
                   >
                     <ActorAvatar type="member" id={m.user_id} size={18} />
-                    <Text className="text-xs text-foreground">{m.name}</Text>
+                    <Text className="text-caption text-foreground">{m.name}</Text>
                     <Pressable
                       onPress={() => {
                         const next = new Set(subscriberIds);
@@ -411,7 +411,7 @@ export const AutopilotForm = forwardRef<AutopilotFormHandle, Props>(
                 size={14}
                 color={THEME[colorScheme].mutedForeground}
               />
-              <Text className="text-xs text-muted-foreground">
+              <Text className="text-caption text-muted-foreground">
                 {t("autopilots.subscribers.add")}
               </Text>
             </Pressable>
@@ -463,7 +463,7 @@ function FieldLabel({
         size={13}
         color={THEME[colorScheme].mutedForeground}
       />
-      <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+      <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
         {text}
       </Text>
     </View>
@@ -471,7 +471,7 @@ function FieldLabel({
 }
 
 function FieldError({ text }: { text: string }) {
-  return <Text className="text-xs text-destructive">{text}</Text>;
+  return <Text className="text-caption text-destructive">{text}</Text>;
 }
 
 function ModeSelector({
@@ -502,7 +502,7 @@ function ModeSelector({
             aria-label={t(opt.labelKey)}
             disabled={disabled}
           />
-          <Text className="text-sm text-foreground">{t(opt.labelKey)}</Text>
+          <Text className="text-body text-foreground">{t(opt.labelKey)}</Text>
         </Pressable>
       ))}
     </RadioGroup>

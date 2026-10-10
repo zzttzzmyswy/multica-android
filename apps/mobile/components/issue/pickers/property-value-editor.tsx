@@ -150,7 +150,7 @@ export function PropertyValueEditor({ issueId, propertyId, onClose }: Props) {
     return (
       <View className="flex-1 items-center justify-center bg-background px-6 gap-1">
         <Ionicons name="options-outline" size={32} color={theme.mutedForeground} />
-        <Text className="text-sm text-muted-foreground text-center mt-2">
+        <Text className="text-body text-muted-foreground text-center mt-2">
           {t("properties.notFound")}
         </Text>
       </View>
@@ -214,12 +214,12 @@ export function PropertyValueEditor({ issueId, propertyId, onClose }: Props) {
             size={16}
             color={theme.mutedForeground}
           />
-          <Text className="text-base font-semibold text-foreground" numberOfLines={1}>
+          <Text className="text-title-sm font-semibold text-foreground" numberOfLines={1}>
             {property.name}
           </Text>
           {property.archived ? (
             <View className="rounded-full bg-secondary px-1.5 py-0.5">
-              <Text className="text-[10px] text-muted-foreground font-medium">
+              <Text className="text-micro text-muted-foreground font-medium">
                 {t("properties.archivedBadge")}
               </Text>
             </View>
@@ -228,7 +228,7 @@ export function PropertyValueEditor({ issueId, propertyId, onClose }: Props) {
         <View className="flex-row items-center gap-1">
           {hasValue ? (
             <Pressable onPress={clear} hitSlop={6} className="px-2 py-1 rounded-md active:bg-secondary">
-              <Text className="text-sm text-destructive">{t("common.clear")}</Text>
+              <Text className="text-body text-destructive">{t("common.clear")}</Text>
             </Pressable>
           ) : null}
           {TEXTISH_TYPES.has(property.type) && (
@@ -251,7 +251,7 @@ export function PropertyValueEditor({ issueId, propertyId, onClose }: Props) {
               hitSlop={6}
               className="px-2 py-1 rounded-md active:bg-secondary"
             >
-              <Text className="text-sm font-medium text-primary">{t("common.done")}</Text>
+              <Text className="text-body font-medium text-primary">{t("common.done")}</Text>
             </Pressable>
           )}
         </View>
@@ -260,9 +260,9 @@ export function PropertyValueEditor({ issueId, propertyId, onClose }: Props) {
       {readOnly ? (
         <View className="flex-1">
           <View className="flex-row items-center gap-2 px-4 py-3">
-            <Text className="text-sm text-foreground">{valueLabel}</Text>
+            <Text className="text-body text-foreground">{valueLabel}</Text>
           </View>
-          <Text className="px-4 text-xs text-muted-foreground">
+          <Text className="px-4 text-caption text-muted-foreground">
             {unknownActorRef
               ? t("properties.value.unknownHint")
               : t("properties.value.archivedHint")}
@@ -300,7 +300,7 @@ export function PropertyValueEditor({ issueId, propertyId, onClose }: Props) {
                 />
                 <Text
                   className={cn(
-                    "flex-1 text-base",
+                    "flex-1 text-title-sm",
                     selected ? "text-foreground font-medium" : "text-foreground",
                   )}
                   numberOfLines={1}
@@ -374,7 +374,7 @@ export function PropertyValueEditor({ issueId, propertyId, onClose }: Props) {
                   : t("properties.value.valuePlaceholder")
             }
             placeholderTextColor={theme.mutedForeground}
-            className="border border-border rounded-md px-3 py-2.5 text-sm text-foreground"
+            className="border border-border rounded-md px-3 py-2.5 text-body text-foreground"
             style={{ fontSize: 14, includeFontPadding: false, textAlignVertical: "center" }}
           />
         </View>
@@ -396,7 +396,7 @@ function CheckRow({
   const theme = THEME[colorScheme];
   return (
     <Pressable onPress={onPress} className="flex-row items-center gap-3 px-4 py-3 active:bg-secondary">
-      <Text className="flex-1 text-base text-foreground">{label}</Text>
+      <Text className="flex-1 text-title-sm text-foreground">{label}</Text>
       {selected ? <Ionicons name="checkmark" size={20} color={theme.primary} /> : null}
     </Pressable>
   );
@@ -426,7 +426,7 @@ function DateBody({
         onPress={() => onDone(toDateOnly(draft))}
         className="mt-2 rounded-md px-4 py-2 active:bg-secondary"
       >
-        <Text className="text-sm font-medium text-primary">{t("common.done")}</Text>
+        <Text className="text-body font-medium text-primary">{t("common.done")}</Text>
       </Pressable>
     </View>
   );
@@ -503,11 +503,11 @@ function ActorRefBody({
           placeholder={t("properties.value.actorSearchPlaceholder")}
           placeholderTextColor={theme.mutedForeground}
           autoCorrect={false}
-          className="border border-border rounded-md px-3 py-2 text-sm text-foreground"
+          className="border border-border rounded-md px-3 py-2 text-body text-foreground"
           style={{ fontSize: 14, includeFontPadding: false, textAlignVertical: "center" }}
         />
         {atCapacity ? (
-          <Text className="mt-2 text-xs text-muted-foreground">
+          <Text className="mt-2 text-caption text-muted-foreground">
             {t("properties.value.actorLimit", {
               count: MAX_ISSUE_PROPERTY_ACTOR_VALUES,
             })}
@@ -536,7 +536,7 @@ function ActorRefBody({
               <ActorAvatar type="member" id={member.user_id} size={28} />
               <Text
                 className={cn(
-                  "flex-1 text-base",
+                  "flex-1 text-title-sm",
                   isSelected ? "text-foreground font-medium" : "text-foreground",
                 )}
                 numberOfLines={1}

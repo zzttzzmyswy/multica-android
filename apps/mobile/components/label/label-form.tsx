@@ -81,7 +81,7 @@ function FieldLabel({
         size={13}
         color={THEME[colorScheme].mutedForeground}
       />
-      <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+      <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
         {text}
       </Text>
     </View>
@@ -89,7 +89,7 @@ function FieldLabel({
 }
 
 function FieldError({ text }: { text: string }) {
-  return <Text className="text-xs text-destructive">{text}</Text>;
+  return <Text className="text-caption text-destructive">{text}</Text>;
 }
 
 export function LabelForm({
@@ -220,7 +220,7 @@ export function LabelForm({
           {/* Scope hint — mirrors web's `labels.editor.scope_hint` under the
               dialog title. The scope is fixed once the label exists. */}
           <View className="rounded-md border border-border bg-secondary/40 px-3 py-2">
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-caption text-muted-foreground">
               {t("labels.form.scopeHint", { scope: t(`labels.scope.${scope}`) })}
             </Text>
           </View>
@@ -266,7 +266,7 @@ export function LabelForm({
                 );
               })}
             </View>
-            <Text className="text-xs text-muted-foreground/70">{color}</Text>
+            <Text className="text-caption text-muted-foreground/70">{color}</Text>
           </View>
 
           {/* Description */}
@@ -293,7 +293,7 @@ export function LabelForm({
               accessibilityLabel={t("labels.delete")}
             >
               <Ionicons name="trash-outline" size={17} color={THEME[colorScheme].destructive} />
-              <Text className="text-sm font-medium text-destructive">
+              <Text className="text-body font-medium text-destructive">
                 {t("labels.delete")}
               </Text>
             </Pressable>

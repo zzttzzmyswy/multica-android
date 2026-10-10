@@ -231,17 +231,17 @@ export function RuntimeSkillImportPanel({
                 index > 0 && "border-t border-border",
               )}
             >
-              <Text className="text-sm text-muted-foreground">
+              <Text className="text-body text-muted-foreground">
                 {t(`skills.runtimeImport.${key}`)}
               </Text>
-              <Text className="text-sm font-medium text-foreground">{count}</Text>
+              <Text className="text-body font-medium text-foreground">{count}</Text>
             </View>
           ))}
         </View>
 
         {summary.problems.length > 0 ? (
           <View className="gap-2">
-            <Text className="text-xs uppercase tracking-wider text-muted-foreground">
+            <Text className="text-caption uppercase tracking-wider text-muted-foreground">
               {t("skills.runtimeImport.problems")}
             </Text>
             <View className="rounded-md border border-border bg-card overflow-hidden">
@@ -253,7 +253,7 @@ export function RuntimeSkillImportPanel({
                     index > 0 && "border-t border-border",
                   )}
                 >
-                  <Text className="text-sm text-foreground" numberOfLines={1}>
+                  <Text className="text-body text-foreground" numberOfLines={1}>
                     {row.name}
                   </Text>
                   <Text className="text-micro text-muted-foreground leading-4">
@@ -276,7 +276,7 @@ export function RuntimeSkillImportPanel({
 
   return (
     <View className="px-4 pt-4 gap-4">
-      <Text className="text-xs text-muted-foreground leading-4">
+      <Text className="text-caption text-muted-foreground leading-4">
         {t("skills.runtimeImport.hint")}
       </Text>
 
@@ -291,7 +291,7 @@ export function RuntimeSkillImportPanel({
             <Text className="text-micro text-muted-foreground">
               {t("skills.runtimeImport.runtimeLabel")}
             </Text>
-            <Text className="text-sm text-foreground" numberOfLines={1}>
+            <Text className="text-body text-foreground" numberOfLines={1}>
               {runtime ? runtimeDisplayLabel(runtime) : "—"}
             </Text>
           </View>
@@ -304,7 +304,7 @@ export function RuntimeSkillImportPanel({
       {notice ? (
         <View className="flex-row items-center gap-3 py-2">
           {skillsQuery.isLoading ? <ActivityIndicator /> : null}
-          <Text className="flex-1 text-xs text-muted-foreground">{notice}</Text>
+          <Text className="flex-1 text-caption text-muted-foreground">{notice}</Text>
           {skillsQuery.isError ? (
             <Button
               variant="outline"
@@ -316,7 +316,7 @@ export function RuntimeSkillImportPanel({
           ) : null}
         </View>
       ) : runtimeSkills.length === 0 ? (
-        <Text className="text-xs text-muted-foreground py-2">
+        <Text className="text-caption text-muted-foreground py-2">
           {t("skills.runtimeImport.empty")}
         </Text>
       ) : (
@@ -344,13 +344,13 @@ export function RuntimeSkillImportPanel({
                 size={16}
                 color={allVisibleSelected ? theme.brand : theme.mutedForeground}
               />
-              <Text className="text-xs text-muted-foreground">
+              <Text className="text-caption text-muted-foreground">
                 {allVisibleSelected
                   ? t("skills.runtimeImport.clearAll")
                   : t("skills.runtimeImport.selectAll")}
               </Text>
             </Pressable>
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-caption text-muted-foreground">
               {t("skills.runtimeImport.selectedCount", { count: selected.size })}
             </Text>
           </View>
@@ -361,7 +361,7 @@ export function RuntimeSkillImportPanel({
             nestedScrollEnabled
           >
             {visibleSkills.length === 0 ? (
-              <Text className="px-3 py-3 text-xs text-muted-foreground">
+              <Text className="px-3 py-3 text-caption text-muted-foreground">
                 {t("skills.runtimeImport.searchEmpty")}
               </Text>
             ) : (
@@ -388,7 +388,7 @@ export function RuntimeSkillImportPanel({
                     />
                     <View className="flex-1 min-w-0 gap-0.5">
                       <Text
-                        className="text-sm text-foreground"
+                        className="text-body text-foreground"
                         numberOfLines={1}
                       >
                         {skill.name}

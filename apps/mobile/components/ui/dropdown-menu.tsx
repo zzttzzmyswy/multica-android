@@ -77,7 +77,7 @@ function DropdownMenuItem({
   return (
     <TextClassContext.Provider
       value={cn(
-        "text-sm",
+        "text-body",
         variant === "destructive"
           ? "text-destructive group-active:text-destructive"
           : "text-popover-foreground group-active:text-accent-foreground",
@@ -106,7 +106,7 @@ function DropdownMenuLabel({
   return (
     <DropdownMenuPrimitive.Label
       className={cn(
-        "text-muted-foreground px-2 py-1.5 text-xs font-medium",
+        "text-muted-foreground px-2 py-1.5 text-caption font-medium",
         inset && "pl-8",
         className,
       )}

@@ -93,7 +93,7 @@ export default function IssuesFilterDateRoute() {
   return (
     <View className="flex-1">
       <View className="flex-row items-center justify-between px-4 pt-4 pb-2">
-        <Text className="text-base font-semibold text-foreground">
+        <Text className="text-title-sm font-semibold text-foreground">
           {t("filter.dateCustomRange")}
         </Text>
         <View className="flex-row items-center gap-1">
@@ -103,7 +103,7 @@ export default function IssuesFilterDateRoute() {
               hitSlop={6}
               className="px-2 py-1 rounded-md active:bg-secondary"
             >
-              <Text className="text-sm text-destructive">{t("common.clear")}</Text>
+              <Text className="text-body text-destructive">{t("common.clear")}</Text>
             </Pressable>
           ) : null}
           <Pressable
@@ -111,7 +111,7 @@ export default function IssuesFilterDateRoute() {
             hitSlop={6}
             className="px-2 py-1 rounded-md active:bg-secondary"
           >
-            <Text className="text-sm font-medium text-primary">{t("common.done")}</Text>
+            <Text className="text-body font-medium text-primary">{t("common.done")}</Text>
           </Pressable>
         </View>
       </View>
@@ -135,7 +135,7 @@ export default function IssuesFilterDateRoute() {
                 size={18}
                 color={selected ? tint : muted}
               />
-              <Text className="flex-1 text-sm text-foreground">
+              <Text className="flex-1 text-body text-foreground">
                 {fieldLabel(option)}
               </Text>
             </Pressable>
@@ -146,7 +146,7 @@ export default function IssuesFilterDateRoute() {
         <SectionLabel>{t("filter.dateRange")}</SectionLabel>
         {Platform.OS === "ios" ? (
           <View className="px-4 pb-2">
-            <Text className="pb-1 text-sm text-muted-foreground">
+            <Text className="pb-1 text-body text-muted-foreground">
               {t("filter.dateStart")}
             </Text>
             <DateTimePicker
@@ -157,7 +157,7 @@ export default function IssuesFilterDateRoute() {
                 if (selected) setFrom(selected);
               }}
             />
-            <Text className="pb-1 pt-3 text-sm text-muted-foreground">
+            <Text className="pb-1 pt-3 text-body text-muted-foreground">
               {t("filter.dateEnd")}
             </Text>
             <DateTimePicker
@@ -184,10 +184,10 @@ export default function IssuesFilterDateRoute() {
                     size={18}
                     color={muted}
                   />
-                  <Text className="flex-1 text-sm text-foreground">
+                  <Text className="flex-1 text-body text-foreground">
                     {t(kind === "from" ? "filter.dateStart" : "filter.dateEnd")}
                   </Text>
-                  <Text className="text-sm text-muted-foreground">
+                  <Text className="text-body text-muted-foreground">
                     {toDateOnly(value)}
                   </Text>
                   <Ionicons name="chevron-forward" size={16} color={muted} />
@@ -212,7 +212,7 @@ export default function IssuesFilterDateRoute() {
         )}
 
         <View className="px-4 pt-2 pb-4">
-          <Text className="text-xs text-muted-foreground">
+          <Text className="text-caption text-muted-foreground">
             {t("filter.dateRangeHint")}
           </Text>
         </View>
@@ -224,7 +224,7 @@ export default function IssuesFilterDateRoute() {
 function SectionLabel({ children }: { children: string }) {
   return (
     <View className="px-4 pt-3 pb-1.5">
-      <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+      <Text className="text-caption uppercase tracking-wider text-muted-foreground font-medium">
         {children}
       </Text>
     </View>

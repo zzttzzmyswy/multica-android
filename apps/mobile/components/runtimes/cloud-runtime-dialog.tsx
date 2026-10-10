@@ -152,7 +152,7 @@ export function CloudRuntimeDialog({ onClose }: { onClose: () => void }) {
             <Ionicons name="cloud-outline" size={16} color={theme.mutedForeground} />
           </View>
           <View className="flex-1">
-            <Text className="text-base font-semibold text-foreground">
+            <Text className="text-title-sm font-semibold text-foreground">
               {t("runtimes.cloudRuntime.title")}
             </Text>
             <Text className="text-micro text-muted-foreground">
@@ -184,10 +184,10 @@ export function CloudRuntimeDialog({ onClose }: { onClose: () => void }) {
             /* 503 — this instance has no cloud node service */
             <View className="items-center gap-2 rounded-lg border border-border bg-secondary/40 px-5 py-8">
               <Ionicons name="cloud-offline-outline" size={28} color={theme.mutedForeground} />
-              <Text className="text-sm font-medium text-foreground">
+              <Text className="text-body font-medium text-foreground">
                 {t("runtimes.cloudRuntime.notEnabledTitle")}
               </Text>
-              <Text className="text-xs text-muted-foreground text-center leading-5">
+              <Text className="text-caption text-muted-foreground text-center leading-5">
                 {t("runtimes.cloudRuntime.notEnabledHint")}
               </Text>
             </View>
@@ -195,10 +195,10 @@ export function CloudRuntimeDialog({ onClose }: { onClose: () => void }) {
             <>
               {/* Create form */}
               <View className="gap-3 rounded-lg border border-border p-4">
-                <Text className="text-sm font-medium text-foreground">
+                <Text className="text-body font-medium text-foreground">
                   {t("runtimes.cloudRuntime.createTitle")}
                 </Text>
-                <Text className="text-xs text-muted-foreground">
+                <Text className="text-caption text-muted-foreground">
                   {t("runtimes.cloudRuntime.createHint")}
                 </Text>
                 <View className="gap-3">
@@ -233,7 +233,7 @@ export function CloudRuntimeDialog({ onClose }: { onClose: () => void }) {
                           >
                             <Text
                               className={cn(
-                                "text-xs font-medium",
+                                "text-caption font-medium",
                                 active ? "text-primary" : "text-foreground",
                               )}
                             >
@@ -261,7 +261,7 @@ export function CloudRuntimeDialog({ onClose }: { onClose: () => void }) {
               {/* Node list */}
               <View className="gap-2">
                 <View className="flex-row items-center justify-between">
-                  <Text className="text-sm font-medium text-foreground">
+                  <Text className="text-body font-medium text-foreground">
                     {t("runtimes.cloudRuntime.nodesTitle")}
                   </Text>
                   <Button
@@ -276,7 +276,7 @@ export function CloudRuntimeDialog({ onClose }: { onClose: () => void }) {
                       color={theme.mutedForeground}
                       className={nodesQuery.isFetching ? "animate-spin" : ""}
                     />
-                    <Text className="text-xs text-muted-foreground">
+                    <Text className="text-caption text-muted-foreground">
                       {t("runtimes.cloudRuntime.refresh")}
                     </Text>
                   </Button>
@@ -289,17 +289,17 @@ export function CloudRuntimeDialog({ onClose }: { onClose: () => void }) {
                 ) : nodesQuery.isError ? (
                   <View className="items-center gap-1 rounded-lg border border-border px-5 py-8">
                     <Ionicons name="alert-circle-outline" size={24} color={theme.destructive} />
-                    <Text className="text-sm font-medium text-foreground">
+                    <Text className="text-body font-medium text-foreground">
                       {t("runtimes.cloudRuntime.nodesFailed")}
                     </Text>
-                    <Text className="text-xs text-muted-foreground text-center">
+                    <Text className="text-caption text-muted-foreground text-center">
                       {t("runtimes.cloudRuntime.nodesFailedHint")}
                     </Text>
                   </View>
                 ) : sortedNodes.length === 0 ? (
                   <View className="items-center gap-2 rounded-lg border border-border px-5 py-8">
                     <Ionicons name="cloud-outline" size={24} color={theme.mutedForeground} />
-                    <Text className="text-sm font-medium text-foreground">
+                    <Text className="text-body font-medium text-foreground">
                       {t("runtimes.cloudRuntime.nodesEmpty")}
                     </Text>
                   </View>
@@ -377,7 +377,7 @@ function NodeRow({
       <View className="flex-row items-start justify-between gap-2">
         <View className="flex-1 min-w-0">
           <View className="flex-row items-center gap-2">
-            <Text className="flex-1 text-sm font-medium text-foreground" numberOfLines={1}>
+            <Text className="flex-1 text-body font-medium text-foreground" numberOfLines={1}>
               {title}
             </Text>
             <StatusBadge status={node.status} />
@@ -399,7 +399,7 @@ function NodeRow({
         </Pressable>
       </View>
       {node.instance_id ? (
-        <Text className="mt-1.5 font-mono text-[10px] text-muted-foreground" numberOfLines={1}>
+        <Text className="mt-1.5 font-mono text-micro text-muted-foreground" numberOfLines={1}>
           {node.instance_id}
         </Text>
       ) : null}
@@ -426,7 +426,7 @@ function StatusBadge({ status }: { status: string }) {
     >
       <Text
         className={cn(
-          "font-mono text-[10px] font-medium",
+          "font-mono text-micro font-medium",
           active && "text-success",
           pending && "text-warning",
           failed && "text-destructive",

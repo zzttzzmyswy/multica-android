@@ -145,10 +145,10 @@ export function IssuePickerBody({
       {/* Sheet title — body-rendered since the formSheet hides the native
           nav header. Identifier block mirrors web's CommandDialog header. */}
       <View className="px-4 pt-3 pb-1">
-        <Text className="text-base font-semibold text-foreground">{title}</Text>
+        <Text className="text-title-sm font-semibold text-foreground">{title}</Text>
       </View>
       {description ? (
-        <Text className="px-4 pb-2 text-sm text-muted-foreground">
+        <Text className="px-4 pb-2 text-body text-muted-foreground">
           {description}
         </Text>
       ) : null}
@@ -165,7 +165,7 @@ export function IssuePickerBody({
           autoCapitalize="none"
           returnKeyType="search"
           clearButtonMode="while-editing"
-          className="flex-1 text-base text-foreground"
+          className="flex-1 text-title-sm text-foreground"
         />
       </View>
       <FlatList
@@ -183,16 +183,16 @@ export function IssuePickerBody({
             {isLoading ? (
               <View className="items-center gap-2 py-4">
                 <ActivityIndicator />
-                <Text className="text-sm text-muted-foreground">
+                <Text className="text-body text-muted-foreground">
                   {t("issueRelation.searching")}
                 </Text>
               </View>
             ) : showPrompt ? (
-              <Text className="text-sm text-muted-foreground">
+              <Text className="text-body text-muted-foreground">
                 {t("issueRelation.promptToSearch")}
               </Text>
             ) : showEmpty ? (
-              <Text className="text-sm text-muted-foreground">
+              <Text className="text-body text-muted-foreground">
                 {t("issueRelation.noResults")}
               </Text>
             ) : null}
@@ -224,10 +224,10 @@ function IssuePickerRow({
         }
         size={14}
       />
-      <Text className="text-xs text-muted-foreground shrink-0">
+      <Text className="text-caption text-muted-foreground shrink-0">
         {issue.identifier}
       </Text>
-      <Text className="flex-1 text-sm text-foreground" numberOfLines={1}>
+      <Text className="flex-1 text-body text-foreground" numberOfLines={1}>
         {issue.title}
       </Text>
     </Pressable>

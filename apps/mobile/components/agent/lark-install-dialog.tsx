@@ -205,7 +205,7 @@ export function LarkInstallDialog({
           <View className="size-8 rounded-lg bg-secondary items-center justify-center">
             <Ionicons name="paper-plane" size={16} color={theme.mutedForeground} />
           </View>
-          <Text className="flex-1 text-base font-semibold text-foreground">{title}</Text>
+          <Text className="flex-1 text-title-sm font-semibold text-foreground">{title}</Text>
           <Pressable
             onPress={onClose}
             accessibilityLabel={t("agents.integrations.larkClose")}
@@ -216,14 +216,14 @@ export function LarkInstallDialog({
         </View>
 
         <ScrollView className="flex-1" contentContainerClassName="px-4 py-5 gap-4">
-          <Text className="text-xs text-muted-foreground leading-5">
+          <Text className="text-caption text-muted-foreground leading-5">
             {t("agents.integrations.larkDialogDescription")}
           </Text>
 
           {beginning && !session ? (
             <View className="flex-row items-center gap-2">
               <ActivityIndicator size="small" />
-              <Text className="text-xs text-muted-foreground">
+              <Text className="text-caption text-muted-foreground">
                 {t("agents.integrations.larkStarting")}
               </Text>
             </View>
@@ -251,12 +251,12 @@ export function LarkInstallDialog({
               </Button>
               <View className="flex-row items-center gap-2">
                 <ActivityIndicator size="small" />
-                <Text className="flex-1 text-xs text-muted-foreground leading-4">
+                <Text className="flex-1 text-caption text-muted-foreground leading-4">
                   {t("agents.integrations.larkWaiting")}
                 </Text>
               </View>
               {linkError ? (
-                <Text className="text-xs text-destructive">
+                <Text className="text-caption text-destructive">
                   {t("agents.integrations.larkOpenLinkFailed")}
                 </Text>
               ) : null}
@@ -266,7 +266,7 @@ export function LarkInstallDialog({
           {status === "success" ? (
             <View className="flex-row items-center gap-2">
               <Ionicons name="checkmark-circle" size={18} color={theme.success} />
-              <Text className="text-sm font-medium text-foreground">
+              <Text className="text-body font-medium text-foreground">
                 {t("agents.integrations.larkSuccess")}
               </Text>
             </View>
@@ -274,7 +274,7 @@ export function LarkInstallDialog({
 
           {status === "error" ? (
             <View className="gap-2">
-              <Text className="text-sm font-medium text-destructive">
+              <Text className="text-body font-medium text-destructive">
                 {t(errorKey ?? "agents.integrations.larkErrorGeneric")}
               </Text>
               {errorMessage ? (

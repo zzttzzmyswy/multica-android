@@ -103,7 +103,7 @@ export default function IssueRunsRoute() {
     <View className="flex-1">
       <View className="px-4 pt-4 pb-3">
         <View className="flex-row items-center justify-between gap-2">
-          <Text className="flex-1 text-base font-semibold text-foreground">
+          <Text className="flex-1 text-title-sm font-semibold text-foreground">
             {t("runs.agentRuns")}
           </Text>
           {usageTotal ? (
@@ -182,11 +182,11 @@ function UsageTotalChip({
       accessibilityLabel={t("runs.usageTotal")}
       className="flex-row items-center gap-1 rounded-md bg-secondary px-2 py-1 active:opacity-70"
     >
-      <Text className="text-xs font-medium text-foreground tabular-nums">
+      <Text className="text-caption font-medium text-foreground tabular-nums">
         {formatTokens(total.tokens)}
       </Text>
-      <Text className="text-xs text-muted-foreground">·</Text>
-      <Text className="text-xs text-muted-foreground tabular-nums">
+      <Text className="text-caption text-muted-foreground">·</Text>
+      <Text className="text-caption text-muted-foreground tabular-nums">
         {formatUsd(total.cost)}
       </Text>
     </Pressable>

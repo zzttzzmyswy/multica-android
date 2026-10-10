@@ -120,7 +120,7 @@ function AndroidDateRow({
         accessibilityLabel={t("datePicker.chooseDate")}
         className="flex-row items-center justify-between rounded-lg border border-border px-4 py-3 active:bg-secondary"
       >
-        <Text className="text-base text-foreground">
+        <Text className="text-title-sm text-foreground">
           {formatIssueDate(
             iso,
             { year: "numeric", month: "long", day: "numeric" },

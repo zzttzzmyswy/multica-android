@@ -164,7 +164,7 @@ export default function NewSquadPage() {
             <FieldLabel icon="person-outline" text={t("squads.new.leader")} />
             {agents.length === 0 ? (
               <View className="rounded-md border border-border px-3 py-3">
-                <Text className="text-sm text-muted-foreground">
+                <Text className="text-body text-muted-foreground">
                   {t("squads.new.leadersEmpty")}
                 </Text>
               </View>
@@ -184,7 +184,7 @@ export default function NewSquadPage() {
                   {selectedAgent ? (
                     <>
                       <ActorAvatar type="agent" id={selectedAgent.id} size={28} />
-                      <Text className="flex-1 text-sm text-foreground">
+                      <Text className="flex-1 text-body text-foreground">
                         {selectedAgent.name}
                       </Text>
                       <Ionicons name="chevron-down" size={16} color={muted} />
@@ -193,7 +193,7 @@ export default function NewSquadPage() {
                     <>
                       <Text
                         className={cn(
-                          "flex-1 text-sm",
+                          "flex-1 text-body",
                           showErrors && leaderMissing
                             ? "text-destructive"
                             : "text-muted-foreground",
@@ -241,7 +241,7 @@ function FieldLabel({
         size={13}
         color={THEME[colorScheme].mutedForeground}
       />
-      <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+      <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
         {text}
       </Text>
     </View>
@@ -249,5 +249,5 @@ function FieldLabel({
 }
 
 function FieldError({ text }: { text: string }) {
-  return <Text className="text-xs text-destructive">{text}</Text>;
+  return <Text className="text-caption text-destructive">{text}</Text>;
 }

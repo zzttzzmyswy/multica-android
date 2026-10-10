@@ -119,7 +119,7 @@ export function AgentFilterSheet({
         color={checked ? theme.primary : theme.mutedForeground}
       />
       {leading}
-      <Text className="flex-1 text-sm text-foreground" numberOfLines={1}>
+      <Text className="flex-1 text-body text-foreground" numberOfLines={1}>
         {label}
       </Text>
       <Text className="text-caption tabular-nums text-muted-foreground">
@@ -222,7 +222,7 @@ export function AgentFilterSheet({
               activeCount === 0 ? "opacity-40" : "active:bg-secondary",
             )}
           >
-            <Text className="text-sm font-medium text-foreground">
+            <Text className="text-body font-medium text-foreground">
               {t("agents.filter.clear")}
             </Text>
           </Pressable>
@@ -238,7 +238,7 @@ function EmptyRow() {
   const { t } = useTranslation();
   return (
     <View className="px-4 py-3">
-      <Text className="text-sm text-muted-foreground">
+      <Text className="text-body text-muted-foreground">
         {t("agents.filter.noOptions")}
       </Text>
     </View>

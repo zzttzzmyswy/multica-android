@@ -375,7 +375,7 @@ function ResolvedThreadBar({
       >
         <Ionicons name="checkmark-circle" size={18} color={mutedFg} />
         <Text
-          className="flex-1 text-sm text-muted-foreground"
+          className="flex-1 text-body text-muted-foreground"
           numberOfLines={1}
         >
           {t("comment.resolvedBar", {
@@ -449,7 +449,7 @@ function CommentsFoldBar({
       })}
     >
       <Ionicons name="chevron-forward" size={13} color={mutedFg} />
-      <Text className="flex-1 text-sm text-muted-foreground" numberOfLines={1}>
+      <Text className="flex-1 text-body text-muted-foreground" numberOfLines={1}>
         {t("comment.foldBar", {
           count: total,
           messageCount,
@@ -471,7 +471,7 @@ function ResolutionBadge() {
   return (
     <View className="flex-row items-center gap-1 pb-1.5">
       <Ionicons name="checkmark-circle" size={13} color="#22c55e" />
-      <Text className="text-xs font-medium text-emerald-500">
+      <Text className="text-caption font-medium text-emerald-500">
         {t("comment.resolutionBadge")}
       </Text>
     </View>
@@ -513,11 +513,11 @@ function ResolvedIndicator({
       accessibilityLabel={t("comment.collapseResolvedLabel")}
     >
       <Ionicons name="checkmark-circle" size={14} color={mutedFg} />
-      <Text className="text-xs text-muted-foreground flex-1" numberOfLines={1}>
+      <Text className="text-caption text-muted-foreground flex-1" numberOfLines={1}>
         {t("comment.resolvedBy", { name: resolverName })}
         {entry.resolved_at ? ` · ${timeAgo(entry.resolved_at)}` : ""}
       </Text>
-      <Text className="text-xs text-muted-foreground">{t("common.collapse")}</Text>
+      <Text className="text-caption text-muted-foreground">{t("common.collapse")}</Text>
     </Pressable>
   );
 }
@@ -762,7 +762,7 @@ function CommentBody({
   // reaction bar for a comment that no longer exists.
   if (isDeletedComment(entry)) {
     return (
-      <Text className="text-sm italic text-muted-foreground">
+      <Text className="text-body italic text-muted-foreground">
         {t("comment.deletedPlaceholder")}
       </Text>
     );
@@ -809,13 +809,13 @@ function CommentBody({
         <Text
           numberOfLines={1}
           ellipsizeMode="tail"
-          className="shrink text-sm font-medium text-foreground"
+          className="shrink text-body font-medium text-foreground"
         >
           {name}
         </Text>
         <Text
           numberOfLines={1}
-          className="shrink-0 text-xs text-muted-foreground"
+          className="shrink-0 text-caption text-muted-foreground"
         >
           · {timeAgo(entry.created_at)}
           {edited ? ` · ${t("comment.edited")}` : ""}
@@ -827,13 +827,13 @@ function CommentBody({
           <Text
             numberOfLines={1}
             ellipsizeMode="tail"
-            className="min-w-0 flex-1 text-xs text-muted-foreground"
+            className="min-w-0 flex-1 text-caption text-muted-foreground"
           >
             {commentPreview(entry.content)}
           </Text>
         ) : null}
         {isFolded && replyCount > 0 ? (
-          <Text className="shrink-0 text-xs text-muted-foreground">
+          <Text className="shrink-0 text-caption text-muted-foreground">
             {t(
               replyCount === 1
                 ? "comment.replyCount_one"
@@ -970,7 +970,7 @@ function CommentEditBox({
         editable={!saving}
         maxHeight={240}
         placeholder={t("comment.placeholder")}
-        className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+        className="rounded-md border border-border bg-background px-3 py-2 text-body text-foreground"
         accessibilityLabel={t("comment.editComment")}
       />
       <View className="flex-row justify-end gap-2">
@@ -1012,7 +1012,7 @@ function FailedActions({
     <View className="flex-row items-center gap-2 mt-0.5">
       <Ionicons name="alert-circle" size={14} color={destructive} />
       <Text
-        className="flex-1 text-xs text-destructive"
+        className="flex-1 text-caption text-destructive"
         numberOfLines={1}
       >
         {error || t("comment.couldntSend")}
@@ -1023,7 +1023,7 @@ function FailedActions({
         accessibilityRole="button"
         accessibilityLabel={t("comment.retryLabel")}
       >
-        <Text className="text-xs text-primary font-medium">{t("common.retry")}</Text>
+        <Text className="text-caption text-primary font-medium">{t("common.retry")}</Text>
       </Pressable>
       <Pressable
         onPress={onDiscard}
@@ -1031,7 +1031,7 @@ function FailedActions({
         accessibilityRole="button"
         accessibilityLabel={t("comment.discardFailedLabel")}
       >
-        <Text className="text-xs text-muted-foreground font-medium">
+        <Text className="text-caption text-muted-foreground font-medium">
           {t("comment.discard")}
         </Text>
       </Pressable>

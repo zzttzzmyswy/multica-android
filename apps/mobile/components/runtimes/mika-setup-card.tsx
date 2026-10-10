@@ -62,13 +62,13 @@ export function MikaSetupCard({
       <View className="mx-4 mb-4 rounded-xl border border-border bg-card p-4">
         <View className="flex-row items-start gap-3">
           <View className="size-10 shrink-0 items-center justify-center rounded-full bg-muted">
-            <Text className="text-lg leading-none">{MIKA_PLACEHOLDER_EMOJI}</Text>
+            <Text className="text-title leading-none">{MIKA_PLACEHOLDER_EMOJI}</Text>
           </View>
           <View className="flex-1 min-w-0 gap-1">
-            <Text className="text-sm font-semibold text-foreground">
+            <Text className="text-body font-semibold text-foreground">
               {t("runtimes.mikaSetup.title")}
             </Text>
-            <Text className="text-xs leading-relaxed text-muted-foreground">
+            <Text className="text-caption leading-relaxed text-muted-foreground">
               {t("runtimes.mikaSetup.description")}
             </Text>
           </View>
@@ -179,9 +179,9 @@ function MikaSetupDialog({
       <View className="flex-1 bg-background">
         <View className="border-b border-border px-4 py-3 flex-row items-center gap-3">
           <View className="size-8 rounded-lg bg-secondary items-center justify-center">
-            <Text className="text-base leading-none">{MIKA_PLACEHOLDER_EMOJI}</Text>
+            <Text className="text-title-sm leading-none">{MIKA_PLACEHOLDER_EMOJI}</Text>
           </View>
-          <Text className="flex-1 text-base font-semibold text-foreground">
+          <Text className="flex-1 text-title-sm font-semibold text-foreground">
             {t("runtimes.mikaSetup.dialogTitle")}
           </Text>
           <Pressable
@@ -194,7 +194,7 @@ function MikaSetupDialog({
         </View>
 
         <ScrollView contentContainerClassName="px-4 py-4 gap-4">
-          <Text className="text-xs leading-relaxed text-muted-foreground">
+          <Text className="text-caption leading-relaxed text-muted-foreground">
             {t("runtimes.mikaSetup.dialogDescription")}
           </Text>
 
@@ -204,7 +204,7 @@ function MikaSetupDialog({
             </View>
           ) : usable.length === 0 ? (
             <View className="rounded-xl border border-border bg-secondary/30 px-4 py-4">
-              <Text className="text-sm text-muted-foreground">
+              <Text className="text-body text-muted-foreground">
                 {t("runtimes.mikaSetup.noRuntimes")}
               </Text>
             </View>
@@ -232,7 +232,7 @@ function MikaSetupDialog({
           )}
 
           {error ? (
-            <Text className="text-sm text-destructive">{error}</Text>
+            <Text className="text-body text-destructive">{error}</Text>
           ) : null}
         </ScrollView>
 
@@ -302,7 +302,7 @@ function ChoiceRow({
 }) {
   return (
     <View className="gap-1.5">
-      <Text className="text-xs font-medium text-muted-foreground">{label}</Text>
+      <Text className="text-caption font-medium text-muted-foreground">{label}</Text>
       <Pressable
         onPress={onPress}
         disabled={disabled}
@@ -313,7 +313,7 @@ function ChoiceRow({
           disabled ? "opacity-50" : "active:opacity-70",
         )}
       >
-        <Text className="flex-1 text-sm text-foreground" numberOfLines={1}>
+        <Text className="flex-1 text-body text-foreground" numberOfLines={1}>
           {value}
         </Text>
         <Ionicons name="chevron-down" size={14} color={theme.mutedForeground} />

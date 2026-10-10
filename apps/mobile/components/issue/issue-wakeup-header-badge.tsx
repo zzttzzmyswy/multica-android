@@ -106,7 +106,7 @@ export function IssueWakeupHeaderBadge({ issueId }: Props) {
           two other buttons already in it, and the headline is a full clause.
           The full sentence is the accessibility label and the sheet's title. */}
       {primary.count > 1 ? (
-        <Text className="text-xs tabular-nums text-muted-foreground">
+        <Text className="text-caption tabular-nums text-muted-foreground">
           {primary.count}
         </Text>
       ) : null}

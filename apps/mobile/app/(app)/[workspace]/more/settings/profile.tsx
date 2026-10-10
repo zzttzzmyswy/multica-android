@@ -110,7 +110,7 @@ export default function ProfileSettingsScreen() {
           onUploaded={persistAvatar}
           onRemove={() => persistAvatar("")}
         />
-        <Text className="text-xs text-muted-foreground">
+        <Text className="text-caption text-muted-foreground">
           {t("profile.tapToChangePhoto")}
         </Text>
       </View>
@@ -119,7 +119,7 @@ export default function ProfileSettingsScreen() {
 
       <View className="gap-4">
         <View>
-          <Text className="text-xs text-muted-foreground mb-1.5">{t("settings.name")}</Text>
+          <Text className="text-caption text-muted-foreground mb-1.5">{t("settings.name")}</Text>
           <TextField
             value={name}
             onChangeText={setName}
@@ -130,7 +130,7 @@ export default function ProfileSettingsScreen() {
           />
         </View>
         <View>
-          <Text className="text-xs text-muted-foreground mb-1.5">
+          <Text className="text-caption text-muted-foreground mb-1.5">
             {t("profile.aboutLabel")}
           </Text>
           <AutosizeTextArea
@@ -148,21 +148,21 @@ export default function ProfileSettingsScreen() {
             }
           />
           <View className="flex-row justify-between mt-1.5 gap-3">
-            <Text className="flex-1 text-xs text-muted-foreground/70">
+            <Text className="flex-1 text-caption text-muted-foreground/70">
               {t("profile.aboutHint")}
             </Text>
             <Text
               className={
                 descriptionTooLong
-                  ? "text-xs text-destructive tabular-nums"
-                  : "text-xs text-muted-foreground tabular-nums"
+                  ? "text-caption text-destructive tabular-nums"
+                  : "text-caption text-muted-foreground tabular-nums"
               }
             >
               {description.length}/{MAX_PROFILE_DESCRIPTION_LEN}
             </Text>
           </View>
           {descriptionTooLong ? (
-            <Text className="text-xs text-destructive mt-1.5">
+            <Text className="text-caption text-destructive mt-1.5">
               {t("profile.aboutTooLong", {
                 max: MAX_PROFILE_DESCRIPTION_LEN,
                 count: description.length,
@@ -171,13 +171,13 @@ export default function ProfileSettingsScreen() {
           ) : null}
         </View>
         <View>
-          <Text className="text-xs text-muted-foreground mb-1.5">{t("settings.email")}</Text>
+          <Text className="text-caption text-muted-foreground mb-1.5">{t("settings.email")}</Text>
           <View className="rounded-md border border-border bg-muted px-3 py-2.5">
-            <Text className="text-base text-muted-foreground">
+            <Text className="text-title-sm text-muted-foreground">
               {user?.email ?? "—"}
             </Text>
           </View>
-          <Text className="text-xs text-muted-foreground mt-1.5">
+          <Text className="text-caption text-muted-foreground mt-1.5">
             {t("profile.emailSetAtSignup")}
           </Text>
         </View>

@@ -191,7 +191,7 @@ export function ChannelByoDialog({
           <View className="size-8 rounded-lg bg-secondary items-center justify-center">
             <Ionicons name="link-outline" size={16} color={theme.mutedForeground} />
           </View>
-          <Text className="flex-1 text-base font-semibold text-foreground">
+          <Text className="flex-1 text-title-sm font-semibold text-foreground">
             {t(TITLE_KEY[channel])}
           </Text>
           <Pressable
@@ -208,7 +208,7 @@ export function ChannelByoDialog({
           contentContainerClassName="px-4 py-5 gap-4"
           keyboardShouldPersistTaps="handled"
         >
-          <Text className="text-xs text-muted-foreground leading-5">
+          <Text className="text-caption text-muted-foreground leading-5">
             {t(DESCRIPTION_KEY[channel])}
           </Text>
 
@@ -216,7 +216,7 @@ export function ChannelByoDialog({
             const message = showErrors ? errors[field.name] : undefined;
             return (
               <View key={field.name} className="gap-1.5">
-                <Text className="text-xs font-medium text-foreground">
+                <Text className="text-caption font-medium text-foreground">
                   {t(field.labelKey)}
                 </Text>
                 <TextField
@@ -232,7 +232,7 @@ export function ChannelByoDialog({
                   invalid={!!message}
                 />
                 {message ? (
-                  <Text className="text-xs text-destructive">{t(message)}</Text>
+                  <Text className="text-caption text-destructive">{t(message)}</Text>
                 ) : field.hintKey ? (
                   <Text className="text-micro text-muted-foreground leading-4">
                     {t(field.hintKey)}
@@ -243,7 +243,7 @@ export function ChannelByoDialog({
           })}
 
           {submitError ? (
-            <Text className="text-xs text-destructive leading-4">{submitError}</Text>
+            <Text className="text-caption text-destructive leading-4">{submitError}</Text>
           ) : null}
         </ScrollView>
 

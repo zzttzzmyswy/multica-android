@@ -43,21 +43,21 @@ export function ChatEmptyState({ hasSessions, agentName, onPickPrompt }: Props) 
     return (
       <View className="flex-1 items-center justify-center px-6 py-8">
         <View className="max-w-xs items-center gap-3">
-          <Text className="text-base font-semibold text-foreground text-center">
+          <Text className="text-title-sm font-semibold text-foreground text-center">
             {t("chat.emptyFirstTitle")}
           </Text>
-          <Text className="text-sm text-muted-foreground text-center">
-            <Text className="text-sm text-muted-foreground">
+          <Text className="text-body text-muted-foreground text-center">
+            <Text className="text-body text-muted-foreground">
               ✨ {t("chat.emptyFirstIntro")}
             </Text>
-            <Text className="text-sm font-medium text-foreground">
+            <Text className="text-body font-medium text-foreground">
               {t("chat.emptyFirstStrong")}
             </Text>
-            <Text className="text-sm text-muted-foreground">
+            <Text className="text-body text-muted-foreground">
               {t("chat.emptyFirstOutro")}
             </Text>
           </Text>
-          <Text className="text-sm text-muted-foreground text-center">
+          <Text className="text-body text-muted-foreground text-center">
             {t("chat.emptyFirstLine")}
           </Text>
         </View>
@@ -72,10 +72,10 @@ export function ChatEmptyState({ hasSessions, agentName, onPickPrompt }: Props) 
   return (
     <View className="flex-1 items-center justify-center px-6 py-8 gap-5">
       <View className="items-center gap-1">
-        <Text className="text-base font-semibold text-foreground text-center">
+        <Text className="text-title-sm font-semibold text-foreground text-center">
           {title}
         </Text>
-        <Text className="text-sm text-muted-foreground text-center">
+        <Text className="text-body text-muted-foreground text-center">
           {t("chat.tryAsking")}
         </Text>
       </View>
@@ -90,8 +90,8 @@ export function ChatEmptyState({ hasSessions, agentName, onPickPrompt }: Props) 
               className="h-auto justify-start px-3 py-2.5"
               accessibilityLabel={promptText}
             >
-              <Text className="text-sm text-foreground">
-                <Text className="text-sm">{p.icon}  </Text>
+              <Text className="text-body text-foreground">
+                <Text className="text-body">{p.icon}  </Text>
                 {promptText}
               </Text>
             </Button>

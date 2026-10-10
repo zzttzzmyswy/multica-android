@@ -101,7 +101,7 @@ function LightboxHeader({
       style={{ paddingTop: insets.top + 8 }}
     >
       <Text
-        className="flex-1 pl-2 text-sm font-medium text-white"
+        className="flex-1 pl-2 text-body font-medium text-white"
         numberOfLines={1}
       >
         {title}
@@ -124,7 +124,7 @@ function LightboxHeader({
         accessibilityLabel={closingLabel}
         className="ml-2 h-11 w-11 items-center justify-center rounded-full bg-black/45 active:opacity-80"
       >
-        <Text className="text-lg text-white">✕</Text>
+        <Text className="text-title text-white">✕</Text>
       </Pressable>
     </View>
   );
@@ -182,7 +182,7 @@ export function LightboxProvider({ children }: { children: ReactNode }) {
         ? function LightboxCounter() {
             return (
               <View className="items-center pb-10">
-                <Text className="text-sm text-white">
+                <Text className="text-body text-white">
                   {currentIndex + 1} / {total}
                 </Text>
               </View>

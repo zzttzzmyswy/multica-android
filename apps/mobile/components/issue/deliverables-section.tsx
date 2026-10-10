@@ -85,13 +85,13 @@ export function DeliverablesSection({
           size={12}
           color={theme.mutedForeground}
         />
-        <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+        <Text className="text-caption uppercase tracking-wider text-muted-foreground font-medium">
           {t("deliverables.sectionTitle")}
         </Text>
         {/* The total, never the number of rows below: the grid and the file
             rows are capped, so anything that counted what is rendered would
             understate the issue's output. */}
-        <Text className="text-xs tabular-nums text-muted-foreground">
+        <Text className="text-caption tabular-nums text-muted-foreground">
           {files.length}
         </Text>
       </Pressable>
@@ -134,7 +134,7 @@ export function DeliverablesSection({
             className="mt-1 flex-row items-center gap-2 py-1 active:opacity-70"
           >
             <Ionicons name="grid-outline" size={14} color={theme.mutedForeground} />
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-caption text-muted-foreground">
               {t("deliverables.viewAll", { count: files.length })}
             </Text>
           </Pressable>
@@ -176,7 +176,7 @@ function versionBadge(
   if (file.versions.length < 2) return null;
   return (
     <View className="absolute right-1 bottom-1 rounded-sm bg-black/60 px-1">
-      <Text className="text-[10px] font-medium tabular-nums text-white">
+      <Text className="text-micro font-medium tabular-nums text-white">
         {t("deliverables.versionShort", { version: file.versions.length })}
       </Text>
     </View>
@@ -211,21 +211,21 @@ function DeliverableRow({
         size={14}
         color={theme.mutedForeground}
       />
-      <Text className="flex-1 text-xs text-foreground" numberOfLines={1}>
+      <Text className="flex-1 text-caption text-foreground" numberOfLines={1}>
         {latest.filename}
       </Text>
       {kindLabel ? (
-        <Text className="text-[10px] text-muted-foreground">{kindLabel}</Text>
+        <Text className="text-micro text-muted-foreground">{kindLabel}</Text>
       ) : null}
       {file.versions.length > 1 ? (
         <View className="rounded-sm bg-secondary px-1">
-          <Text className="text-[10px] font-medium tabular-nums text-muted-foreground">
+          <Text className="text-micro font-medium tabular-nums text-muted-foreground">
             {t("deliverables.versionShort", { version: file.versions.length })}
           </Text>
         </View>
       ) : null}
       {size ? (
-        <Text className="text-[10px] tabular-nums text-muted-foreground">
+        <Text className="text-micro tabular-nums text-muted-foreground">
           {size}
         </Text>
       ) : null}

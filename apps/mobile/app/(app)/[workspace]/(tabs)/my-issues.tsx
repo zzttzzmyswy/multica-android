@@ -605,7 +605,7 @@ export default function MyIssues() {
         <IssuesLoading />
       ) : surfaceError ? (
         <View className="px-4 gap-3 pt-4">
-          <Text className="text-sm text-destructive">
+          <Text className="text-body text-destructive">
             {t("myIssues.loadError")}
             {surfaceError instanceof Error
               ? surfaceError.message

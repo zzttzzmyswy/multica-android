@@ -178,10 +178,10 @@ export default function TokensSettingsScreen() {
       }
     >
       <View className="gap-1.5">
-        <Text className="text-sm text-muted-foreground">
+        <Text className="text-body text-muted-foreground">
           {t("tokens.description")}
         </Text>
-        <Text className="text-xs text-muted-foreground/70">
+        <Text className="text-caption text-muted-foreground/70">
           {t("tokens.securityNote")}
         </Text>
       </View>
@@ -213,7 +213,7 @@ export default function TokensSettingsScreen() {
               >
                 <Text
                   className={cn(
-                    "text-xs font-medium",
+                    "text-caption font-medium",
                     selected ? "text-primary-foreground" : "text-foreground",
                   )}
                 >
@@ -241,7 +241,7 @@ export default function TokensSettingsScreen() {
         </View>
       ) : error ? (
         <View className="gap-3 pt-2">
-          <Text className="text-sm text-destructive">
+          <Text className="text-body text-destructive">
             {t("tokens.loadFailed")}
             {error instanceof Error ? ` — ${error.message}` : ""}
           </Text>
@@ -252,7 +252,7 @@ export default function TokensSettingsScreen() {
       ) : showEmpty ? (
         <View className="rounded-md border border-border bg-card py-10 px-6 items-center gap-2">
           <Ionicons name="key-outline" size={28} color={theme.mutedForeground} />
-          <Text className="text-sm text-muted-foreground text-center">
+          <Text className="text-body text-muted-foreground text-center">
             {t("tokens.empty")}
           </Text>
         </View>
@@ -284,10 +284,10 @@ export default function TokensSettingsScreen() {
       >
         <View className="flex-1 bg-black/40 items-center justify-center px-6">
           <View className="w-full max-w-sm bg-popover rounded-2xl p-4 gap-3">
-            <Text className="text-base font-semibold text-foreground">
+            <Text className="text-title-sm font-semibold text-foreground">
               {t("tokens.createdTitle")}
             </Text>
-            <Text className="text-sm text-muted-foreground">
+            <Text className="text-body text-muted-foreground">
               {t("tokens.createdWarningPrefix")}
               <Text className="font-medium text-foreground">
                 {t("tokens.createdWarningEmphasis")}
@@ -298,7 +298,7 @@ export default function TokensSettingsScreen() {
             <View className="flex-row items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2">
               <Text
                 selectable
-                className="flex-1 font-mono text-xs text-foreground"
+                className="flex-1 font-mono text-caption text-foreground"
               >
                 {newToken}
               </Text>
@@ -316,13 +316,13 @@ export default function TokensSettingsScreen() {
             </View>
 
             <View className="gap-1.5">
-              <Text className="text-xs text-muted-foreground">
+              <Text className="text-caption text-muted-foreground">
                 {t("tokens.createdCliHint")}
               </Text>
               <View className="flex-row items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2">
                 <Text
                   selectable
-                  className="flex-1 font-mono text-xs text-foreground"
+                  className="flex-1 font-mono text-caption text-foreground"
                 >
                   {`multica login --token ${newToken}`}
                 </Text>
@@ -351,7 +351,7 @@ export default function TokensSettingsScreen() {
                 size={20}
                 color={storedConfirmed ? theme.primary : theme.mutedForeground}
               />
-              <Text className="flex-1 text-sm text-foreground">
+              <Text className="flex-1 text-body text-foreground">
                 {t("tokens.createdConfirmStored")}
               </Text>
             </Pressable>
@@ -384,12 +384,12 @@ function TokenRow({
     <View className="flex-row items-center gap-3 px-4 py-3">
       <View className="flex-1 min-w-0">
         <Text
-          className="text-base font-medium text-foreground"
+          className="text-title-sm font-medium text-foreground"
           numberOfLines={1}
         >
           {token.name}
         </Text>
-        <Text className="text-xs text-muted-foreground mt-0.5" numberOfLines={2}>
+        <Text className="text-caption text-muted-foreground mt-0.5" numberOfLines={2}>
           {meta}
         </Text>
       </View>

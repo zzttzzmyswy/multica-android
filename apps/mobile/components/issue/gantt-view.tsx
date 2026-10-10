@@ -99,12 +99,12 @@ const GanttLabelCell = memo(function GanttLabelCell({
       <PriorityIcon priority={issue.priority} size={12} />
       <Text
         numberOfLines={1}
-        className="text-[10px] text-muted-foreground tabular-nums"
+        className="text-micro text-muted-foreground tabular-nums"
         style={{ width: 52 }}
       >
         {issue.identifier}
       </Text>
-      <Text numberOfLines={1} className="flex-1 text-xs">
+      <Text numberOfLines={1} className="flex-1 text-caption">
         {issue.title}
       </Text>
       {projectIcon ? <ProjectIcon icon={projectIcon} size="sm" /> : null}
@@ -162,7 +162,7 @@ const GanttRow = memo(function GanttRow({
           }}
         >
           {!bar.isMarker && bar.width > 60 ? (
-            <Text numberOfLines={1} className="px-1.5 text-[9px] leading-3 text-white">
+            <Text numberOfLines={1} className="px-1.5 text-micro leading-3 text-white">
               {issue.title}
             </Text>
           ) : null}
@@ -293,7 +293,7 @@ export function GanttView({
   if (scheduled.length === 0) {
     return (
       <View className="flex-1 items-center justify-center px-8">
-        <Text className="text-center text-sm text-muted-foreground">{emptyLabel}</Text>
+        <Text className="text-center text-body text-muted-foreground">{emptyLabel}</Text>
       </View>
     );
   }
@@ -368,7 +368,7 @@ export function GanttView({
           style={{ width: LEFT_COL_WIDTH, borderRightWidth: 0.5, borderColor: theme.border }}
         >
           <View style={{ height: HEADER_HEIGHT }} className="justify-end border-b border-border px-3 pb-1.5">
-            <Text className="text-[10px] font-medium text-muted-foreground">
+            <Text className="text-micro font-medium text-muted-foreground">
               {t("issues.gantt.headerIssue")}
             </Text>
           </View>
@@ -404,7 +404,7 @@ export function GanttView({
                     style={{ position: "absolute", left: b.left, width: b.width, top: 0, bottom: 0, justifyContent: "center", paddingLeft: 4 }}
                   >
                     {b.width > 40 ? (
-                      <Text numberOfLines={1} className="text-[10px] font-medium text-muted-foreground">
+                      <Text numberOfLines={1} className="text-micro font-medium text-muted-foreground">
                         {b.label}
                       </Text>
                     ) : null}
@@ -434,15 +434,15 @@ export function GanttView({
                   >
                     {tick.showLabel ? (
                       zoom === "day" ? (
-                        <Text className="text-[8px] leading-none text-muted-foreground tabular-nums">
+                        <Text className="text-micro leading-none text-muted-foreground tabular-nums">
                           {tick.date.getUTCDate()}
                         </Text>
                       ) : zoom === "week" ? (
-                        <Text className="text-[9px] leading-none text-muted-foreground tabular-nums">
+                        <Text className="text-micro leading-none text-muted-foreground tabular-nums">
                           {tick.date.getUTCDate()}
                         </Text>
                       ) : (
-                        <Text className="text-[8px] leading-none text-muted-foreground tabular-nums whitespace-nowrap">
+                        <Text className="text-micro leading-none text-muted-foreground tabular-nums whitespace-nowrap">
                           {MONTH_NAMES[tick.date.getUTCMonth()]} {tick.date.getUTCDate()}
                         </Text>
                       )

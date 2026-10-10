@@ -79,15 +79,15 @@ export function MermaidBlock({ source, selectable = true }: Props) {
   if (error) {
     return (
       <View className="bg-code-surface border border-border rounded-lg px-3 py-2">
-        <Text className="text-xs text-destructive mb-1">
+        <Text className="text-caption text-destructive mb-1">
           {t("richContent.mermaid.renderFailed")}
         </Text>
         {error !== "webview error" ? (
-          <Text className="text-xs text-muted-foreground mb-2">
+          <Text className="text-caption text-muted-foreground mb-2">
             {t("richContent.mermaid.renderFailedHint")}
           </Text>
         ) : null}
-        <Text className="text-xs text-muted-foreground mb-2" selectable>
+        <Text className="text-caption text-muted-foreground mb-2" selectable>
           {error}
         </Text>
         <CodeBlock code={source} lang="mermaid" selectable={selectable} />
@@ -99,7 +99,7 @@ export function MermaidBlock({ source, selectable = true }: Props) {
     <>
       <View className="bg-card border border-border rounded-lg overflow-hidden">
         <View className="flex-row items-center justify-between px-3 py-2">
-          <Text className="text-xs text-muted-foreground">
+          <Text className="text-caption text-muted-foreground">
             {t("richContent.mermaid.title")}
           </Text>
           <View className="flex-row gap-2">
@@ -157,7 +157,7 @@ function HeaderButton({
       className="rounded px-2 py-0.5"
       accessibilityRole="button"
     >
-      <Text className="text-xs text-foreground">{label}</Text>
+      <Text className="text-caption text-foreground">{label}</Text>
     </Pressable>
   );
 }

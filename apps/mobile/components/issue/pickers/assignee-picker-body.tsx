@@ -264,7 +264,7 @@ export function AssigneePickerBody({
               className="rounded-full border border-dashed border-muted-foreground/40 items-center justify-center"
               style={{ width: AVATAR_SIZE, height: AVATAR_SIZE }}
             >
-              <Text className="text-sm text-muted-foreground">∅</Text>
+              <Text className="text-body text-muted-foreground">∅</Text>
             </View>
           ) : item.kind === "member" ? (
             <ActorAvatar
@@ -277,7 +277,7 @@ export function AssigneePickerBody({
           ) : (
             <ActorAvatar type="squad" id={item.squad.id} size={AVATAR_SIZE} />
           )}
-          <Text className="flex-1 text-base text-foreground">
+          <Text className="flex-1 text-title-sm text-foreground">
             {item.kind === "unassigned"
               ? t("picker.unassigned")
               : item.kind === "member"
@@ -305,11 +305,11 @@ export function AssigneePickerBody({
               pattern used throughout iOS Settings — type tag in lighter font on
               the same row. Members carry no tag (they're the default actor). */}
           {item.kind === "agent" ? (
-            <Text className="text-sm text-muted-foreground">
+            <Text className="text-body text-muted-foreground">
               {isAgentRuntimeBound(item.agent) ? t("picker.agent") : t("picker.needsRuntime")}
             </Text>
           ) : item.kind === "squad" ? (
-            <Text className="text-sm text-muted-foreground">
+            <Text className="text-body text-muted-foreground">
               {needsRuntime ? t("picker.leaderNeedsRuntime") : t("picker.squad")}
             </Text>
           ) : null}

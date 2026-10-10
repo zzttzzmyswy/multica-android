@@ -84,7 +84,7 @@ export function IssueAgentActivityIndicator({
       {isRunning ? <PulseDot size={6} /> : null}
       <Text
         className={cn(
-          "text-[10px]",
+          "text-micro",
           isRunning ? "text-foreground" : "text-muted-foreground",
         )}
       >

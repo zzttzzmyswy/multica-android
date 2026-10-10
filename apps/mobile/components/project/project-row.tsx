@@ -67,7 +67,7 @@ export function ProjectRow({
         <ProjectIcon icon={project.icon} size="lg" />
         <View className="flex-1 gap-1">
           <Text
-            className="text-base text-foreground font-medium"
+            className="text-title-sm text-foreground font-medium"
             numberOfLines={2}
           >
             {project.title}
@@ -75,14 +75,14 @@ export function ProjectRow({
           <View className="flex-row items-center gap-3">
             <View className="flex-row items-center gap-1.5">
               <ProjectStatusIcon status={project.status} size={12} />
-              <Text className="text-xs text-muted-foreground">
+              <Text className="text-caption text-muted-foreground">
                 {projectStatusLabel(project.status)}
               </Text>
             </View>
             {project.priority !== "none" ? (
               <View className="flex-row items-center gap-1.5">
                 <ProjectPriorityIcon priority={project.priority} size={12} />
-                <Text className="text-xs text-muted-foreground">
+                <Text className="text-caption text-muted-foreground">
                   {projectPriorityLabel(project.priority)}
                 </Text>
               </View>
@@ -91,11 +91,11 @@ export function ProjectRow({
         </View>
         <View className="items-end gap-1">
           {showCount ? (
-            <Text className="text-xs text-muted-foreground tabular-nums">
+            <Text className="text-caption text-muted-foreground tabular-nums">
               {project.done_count}/{totalIssues}
             </Text>
           ) : (
-            <Text className="text-xs text-muted-foreground/60">—</Text>
+            <Text className="text-caption text-muted-foreground/60">—</Text>
           )}
           <Text className="text-micro text-muted-foreground/70">
             {timeAgo(project.updated_at)}

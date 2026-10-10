@@ -83,7 +83,7 @@ export function IssueChildrenSection({ issueId, subIssues, wsSlug }: Props) {
   return (
     <View className="border-t border-border">
       <View className="flex-row items-center justify-between pr-2 pl-4 py-2">
-        <Text className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+        <Text className="text-caption uppercase tracking-wider text-muted-foreground font-medium">
           {t("timeline.subtasks")}
         </Text>
         <Pressable
@@ -98,7 +98,7 @@ export function IssueChildrenSection({ issueId, subIssues, wsSlug }: Props) {
           accessibilityLabel={t("issueRelation.addChildTitle")}
         >
           <Ionicons name="add" size={14} color="#71717a" />
-          <Text className="text-xs font-medium text-muted-foreground">
+          <Text className="text-caption font-medium text-muted-foreground">
             {t("issueRelation.addChildTitle")}
           </Text>
         </Pressable>
@@ -107,7 +107,7 @@ export function IssueChildrenSection({ issueId, subIssues, wsSlug }: Props) {
         <View key={group.stage?.toString() ?? `unstaged-${gi}`}>
           {group.stage != null ? (
             <View className="px-4 pt-2 pb-1">
-              <Text className="text-xs font-medium text-muted-foreground">
+              <Text className="text-caption font-medium text-muted-foreground">
                 {t("timeline.stage", { stage: group.stage })}
               </Text>
             </View>

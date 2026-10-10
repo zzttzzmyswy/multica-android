@@ -446,7 +446,7 @@ export default function UsagePage() {
           </View>
         ) : error ? (
           <View className="px-4 gap-3 pt-4">
-            <Text className="text-sm text-destructive">
+            <Text className="text-body text-destructive">
               {t("usage.loadError")}
               {error instanceof Error ? error.message : t("common.unknownError")}
             </Text>
@@ -469,10 +469,10 @@ export default function UsagePage() {
         ) : showEmpty ? (
           <View className="flex-1 items-center justify-center px-6 gap-1">
             <Ionicons name="bar-chart-outline" size={32} color={muted} />
-            <Text className="text-sm text-muted-foreground text-center mt-2">
+            <Text className="text-body text-muted-foreground text-center mt-2">
               {t("usage.emptyTitle")}
             </Text>
-            <Text className="text-xs text-muted-foreground/70 text-center">
+            <Text className="text-caption text-muted-foreground/70 text-center">
               {t("usage.emptyDescription")}
             </Text>
           </View>
@@ -521,7 +521,7 @@ export default function UsagePage() {
                     >
                       <Text
                         className={cn(
-                          "text-xs font-medium",
+                          "text-caption font-medium",
                           active ? "text-background" : "text-muted-foreground",
                         )}
                       >
@@ -545,7 +545,7 @@ export default function UsagePage() {
                 <Text
                   numberOfLines={1}
                   className={cn(
-                    "text-xs font-medium flex-shrink",
+                    "text-caption font-medium flex-shrink",
                     selectedProject
                       ? "text-foreground"
                       : "text-muted-foreground",
@@ -566,7 +566,7 @@ export default function UsagePage() {
                 dashboard-page header). Dropped entirely when the stored zone
                 is one Intl can't name. */}
             {freshness ? (
-              <Text className="px-4 pb-1 text-[10px] text-muted-foreground/70">
+              <Text className="px-4 pb-1 text-micro text-muted-foreground/70">
                 {freshness}
               </Text>
             ) : null}
@@ -724,7 +724,7 @@ function RangePickerModal({
           <Pressable onPress={() => {}} className="w-full max-w-sm">
             <View className="bg-popover rounded-2xl overflow-hidden">
               <View className="px-4 py-3 border-b border-border">
-                <Text className="text-base font-semibold text-foreground">
+                <Text className="text-title-sm font-semibold text-foreground">
                   {t("usage.periodLabel")}
                 </Text>
               </View>
@@ -738,7 +738,7 @@ function RangePickerModal({
                       onPress={() => onPick(r)}
                       className="flex-row items-center justify-between px-4 py-3 active:bg-secondary"
                     >
-                      <Text className="text-sm text-foreground">
+                      <Text className="text-body text-foreground">
                         {t(`usage.range${r}`)}
                       </Text>
                       {active ? (
@@ -794,7 +794,7 @@ function ProjectPickerModal({
           <Pressable onPress={() => {}} className="w-full max-w-sm">
             <View className="bg-popover rounded-2xl overflow-hidden">
               <View className="px-4 py-3 border-b border-border">
-                <Text className="text-base font-semibold text-foreground">
+                <Text className="text-title-sm font-semibold text-foreground">
                   {t("usage.projectFilterLabel")}
                 </Text>
               </View>
@@ -832,7 +832,7 @@ function ProjectPickerModal({
                         )}
                         <Text
                           numberOfLines={1}
-                          className="flex-shrink text-sm text-foreground"
+                          className="flex-shrink text-body text-foreground"
                         >
                           {label}
                         </Text>
@@ -867,7 +867,7 @@ function ModePill({
       onPress={onPress}
       className={cn("rounded-full px-4 py-1.5", active ? "bg-foreground" : "bg-muted")}
     >
-      <Text className={cn("text-xs font-medium", active ? "text-background" : "text-muted-foreground")}>
+      <Text className={cn("text-caption font-medium", active ? "text-background" : "text-muted-foreground")}>
         {t(label)}
       </Text>
     </Pressable>
@@ -903,7 +903,7 @@ function KpiCard({
         </Text>
       </View>
       <Text
-        className="mt-1 text-lg font-semibold text-foreground"
+        className="mt-1 text-title font-semibold text-foreground"
         numberOfLines={1}
         adjustsFontSizeToFit
         minimumFontScale={0.7}
@@ -915,7 +915,7 @@ function KpiCard({
         // Output" pair is the only place those two numbers appear, and a
         // quarter-width tile clips it to "Input 2.4B · …" — which is the half
         // of the pair a reader can already guess. Two lines is the cap.
-        <Text className="mt-0.5 text-[10px] leading-tight text-muted-foreground/70" numberOfLines={2}>
+        <Text className="mt-0.5 text-micro leading-tight text-muted-foreground/70" numberOfLines={2}>
           {hint}
         </Text>
       ) : null}
@@ -1013,7 +1013,7 @@ function TrendSection({
     <View className="mt-3 px-4 gap-3">
       <View className="rounded-xl border border-border bg-card p-3">
         <View className="mb-2 flex-row flex-wrap items-center justify-between gap-2">
-          <Text className="text-xs font-medium text-foreground">{title}</Text>
+          <Text className="text-caption font-medium text-foreground">{title}</Text>
           <View className="flex-row items-center gap-1">
             {METRIC_ORDER.map((m) => (
               <MetricPill
@@ -1082,7 +1082,7 @@ function TrendSection({
                   idx > 0 && "border-t border-border/60",
                 )}
               >
-                <Text className="w-14 text-xs font-medium text-foreground">{d.label}</Text>
+                <Text className="w-14 text-caption font-medium text-foreground">{d.label}</Text>
                 <TokenCell label={t("usage.inputLabel")} value={d.input} muted={muted} />
                 <TokenCell label={t("usage.outputLabel")} value={d.output} muted={muted} />
                 <TokenCell
@@ -1090,7 +1090,7 @@ function TrendSection({
                   value={d.cacheRead + d.cacheWrite}
                   muted={muted}
                 />
-                <Text className="w-16 text-right text-xs font-semibold text-foreground">
+                <Text className="w-16 text-right text-caption font-semibold text-foreground">
                   {formatTokens(d.total)}
                 </Text>
               </View>
@@ -1104,11 +1104,11 @@ function TrendSection({
                     idx > 0 && "border-t border-border/60",
                   )}
                 >
-                  <Text className="w-14 text-xs font-medium text-foreground">{d.label}</Text>
+                  <Text className="w-14 text-caption font-medium text-foreground">{d.label}</Text>
                   <UsdCell label={t("usage.inputLabel")} value={d.input} muted={muted} />
                   <UsdCell label={t("usage.outputLabel")} value={d.output} muted={muted} />
                   <UsdCell label={t("usage.cacheWriteLabel")} value={d.cacheWrite} muted={muted} />
-                  <Text className="w-16 text-right text-xs font-semibold text-foreground">
+                  <Text className="w-16 text-right text-caption font-semibold text-foreground">
                     {formatUsd(d.total)}
                   </Text>
                 </View>
@@ -1128,7 +1128,7 @@ function TrendSection({
                       idx > 0 && "border-t border-border/60",
                     )}
                   >
-                    <Text className="w-14 text-xs font-medium text-foreground">{d.label}</Text>
+                    <Text className="w-14 text-caption font-medium text-foreground">{d.label}</Text>
                     <StatCell
                       value={formatDuration(d.totalSeconds, t("usage.lessThanMinute"))}
                       sublabel={t("usage.timeLabel")}
@@ -1147,7 +1147,7 @@ function TrendSection({
                     idx > 0 && "border-t border-border/60",
                   )}
                 >
-                  <Text className="w-14 text-xs font-medium text-foreground">{d.label}</Text>
+                  <Text className="w-14 text-caption font-medium text-foreground">{d.label}</Text>
                   <StatCell value={String(d.completed)} sublabel={t("usage.completedLabel")} muted={muted} />
                   <StatCell value={String(d.failed)} sublabel={t("usage.failedLabel")} muted={muted} />
                   <StatCell value={String(d.cancelled)} sublabel={t("usage.cancelledLabel")} muted={muted} />
@@ -1207,7 +1207,7 @@ function MetricPill({
     >
       <Text
         className={cn(
-          "text-[10px] font-medium",
+          "text-micro font-medium",
           active ? "text-background" : "text-muted-foreground",
         )}
       >
@@ -1239,7 +1239,7 @@ function ChartLegendDot({
   return (
     <View className="flex-row items-center gap-1">
       <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: color }} />
-      <Text className="text-[10px] text-muted-foreground">{t(LEGEND_LABEL[segment.key])}</Text>
+      <Text className="text-micro text-muted-foreground">{t(LEGEND_LABEL[segment.key])}</Text>
     </View>
   );
 }
@@ -1274,7 +1274,7 @@ function StackedTrendBars({
 }) {
   const theme = THEME[colorScheme];
   if (rows.length === 0) {
-    return <Text className="text-xs text-muted-foreground">{noDataLabel}</Text>;
+    return <Text className="text-caption text-muted-foreground">{noDataLabel}</Text>;
   }
   const segments = trendStackSegments(metric);
   const labelEvery = rows.length > 8 ? 2 : 1;
@@ -1321,11 +1321,11 @@ function StackedTrendBars({
                 ))}
             </View>
             {i % labelEvery === 0 ? (
-              <Text className="text-[9px] text-muted-foreground" numberOfLines={1}>
+              <Text className="text-micro text-muted-foreground" numberOfLines={1}>
                 {d.label}
               </Text>
             ) : (
-              <Text className="text-[9px] text-transparent" numberOfLines={1}>
+              <Text className="text-micro text-transparent" numberOfLines={1}>
                 ·
               </Text>
             )}
@@ -1349,7 +1349,7 @@ function TrendBars({
   noDataLabel: string;
 }) {
   if (rows.length === 0) {
-    return <Text className="text-xs text-muted-foreground">{noDataLabel}</Text>;
+    return <Text className="text-caption text-muted-foreground">{noDataLabel}</Text>;
   }
   const labelEvery = rows.length > 8 ? 2 : 1;
   return (
@@ -1370,11 +1370,11 @@ function TrendBars({
               }}
             />
             {i % labelEvery === 0 ? (
-              <Text className="text-[9px] text-muted-foreground" numberOfLines={1}>
+              <Text className="text-micro text-muted-foreground" numberOfLines={1}>
                 {d.label}
               </Text>
             ) : (
-              <Text className="text-[9px] text-transparent" numberOfLines={1}>
+              <Text className="text-micro text-transparent" numberOfLines={1}>
                 ·
               </Text>
             )}
@@ -1403,7 +1403,7 @@ function TasksStack({
   noDataLabel: string;
 }) {
   if (rows.length === 0) {
-    return <Text className="text-xs text-muted-foreground">{noDataLabel}</Text>;
+    return <Text className="text-caption text-muted-foreground">{noDataLabel}</Text>;
   }
   const labelEvery = rows.length > 8 ? 2 : 1;
   return (
@@ -1431,11 +1431,11 @@ function TasksStack({
               <View style={{ flex: d.failed, backgroundColor: theme.destructive }} />
             </View>
             {i % labelEvery === 0 ? (
-              <Text className="text-[9px] text-muted-foreground" numberOfLines={1}>
+              <Text className="text-micro text-muted-foreground" numberOfLines={1}>
                 {d.label}
               </Text>
             ) : (
-              <Text className="text-[9px] text-transparent" numberOfLines={1}>
+              <Text className="text-micro text-transparent" numberOfLines={1}>
                 ·
               </Text>
             )}
@@ -1458,11 +1458,11 @@ function StatCell({
 }) {
   return (
     <View className="flex-1">
-      <Text className="text-right text-xs font-medium text-foreground" numberOfLines={1}>
+      <Text className="text-right text-caption font-medium text-foreground" numberOfLines={1}>
         {value}
       </Text>
       <Text
-        className="text-right text-[9px] text-muted-foreground"
+        className="text-right text-micro text-muted-foreground"
         style={{ color: muted }}
         numberOfLines={1}
       >
@@ -1483,10 +1483,10 @@ function TokenCell({
 }) {
   return (
     <View className="flex-1">
-      <Text className="text-right text-xs font-medium text-foreground" numberOfLines={1}>
+      <Text className="text-right text-caption font-medium text-foreground" numberOfLines={1}>
         {formatTokens(value)}
       </Text>
-      <Text className="text-right text-[9px] text-muted-foreground" style={{ color: muted }} numberOfLines={1}>
+      <Text className="text-right text-micro text-muted-foreground" style={{ color: muted }} numberOfLines={1}>
         {label}
       </Text>
     </View>
@@ -1505,10 +1505,10 @@ function UsdCell({
 }) {
   return (
     <View className="flex-1">
-      <Text className="text-right text-xs font-medium text-foreground" numberOfLines={1}>
+      <Text className="text-right text-caption font-medium text-foreground" numberOfLines={1}>
         {`$${value.toFixed(2)}`}
       </Text>
-      <Text className="text-right text-[9px] text-muted-foreground" style={{ color: muted }} numberOfLines={1}>
+      <Text className="text-right text-micro text-muted-foreground" style={{ color: muted }} numberOfLines={1}>
         {label}
       </Text>
     </View>
@@ -1576,7 +1576,7 @@ function LeaderboardSection({
   if (rows.length === 0) {
     return (
       <View className="mt-6 items-center">
-        <Text className="text-xs text-muted-foreground">{t("usage.noData")}</Text>
+        <Text className="text-caption text-muted-foreground">{t("usage.noData")}</Text>
       </View>
     );
   }
@@ -1585,11 +1585,11 @@ function LeaderboardSection({
     <View className="mt-3 px-4">
       <View className="rounded-xl border border-border bg-card">
         <View className="flex-row flex-wrap items-center justify-between gap-2 border-b border-border/60 px-3 pt-3 pb-2">
-          <Text className="text-xs font-medium text-foreground">
+          <Text className="text-caption font-medium text-foreground">
             {t("usage.leaderboardTitle")}
           </Text>
           <View className="flex-row items-center gap-2">
-            <Text className="text-[10px] text-muted-foreground">
+            <Text className="text-micro text-muted-foreground">
               {view.deletedCount > 0
                 ? t("usage.leaderboardCaptionDeleted", {
                     count: view.namedCount,
@@ -1603,7 +1603,7 @@ function LeaderboardSection({
                 deleted bucket splits the caption (web parity). */}
             {view.collapsible ? (
               <Pressable onPress={() => setShowAll((v) => !v)} hitSlop={8}>
-                <Text className="text-[10px] text-muted-foreground underline">
+                <Text className="text-micro text-muted-foreground underline">
                   {showAll
                     ? t("usage.leaderboardShowLess", { count: LEADERBOARD_LIMIT })
                     : t("usage.leaderboardShowAll")}
@@ -1643,7 +1643,7 @@ function LeaderboardSection({
                 )}
               </View>
               <View className="flex-1">
-                <Text className="text-xs font-medium text-foreground" numberOfLines={1}>
+                <Text className="text-caption font-medium text-foreground" numberOfLines={1}>
                   {agentName(r.agentId)}
                 </Text>
                 <View className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-muted">
@@ -1659,48 +1659,48 @@ function LeaderboardSection({
                 </View>
               </View>
               <View className="w-12 items-end">
-                <Text className="text-xs font-medium text-foreground" numberOfLines={1}>
+                <Text className="text-caption font-medium text-foreground" numberOfLines={1}>
                   {formatTokens(r.tokens)}
                 </Text>
-                <Text className="text-[9px] text-muted-foreground" numberOfLines={1}>
+                <Text className="text-micro text-muted-foreground" numberOfLines={1}>
                   {t("usage.metricTokens")}
                 </Text>
               </View>
               <View className="w-16 items-end">
                 <Text
                   className={cn(
-                    "text-xs tabular-nums",
+                    "text-caption tabular-nums",
                     sortBy === "cost" ? "font-semibold text-foreground" : "text-muted-foreground",
                   )}
                   numberOfLines={1}
                 >
                   {`$${r.cost.toFixed(2)}`}
                 </Text>
-                <Text className="text-[9px] text-muted-foreground" numberOfLines={1}>
+                <Text className="text-micro text-muted-foreground" numberOfLines={1}>
                   {t("usage.metricCost")}
                 </Text>
               </View>
               <View className="w-12 items-end">
                 {deleted ? (
-                  <Text className="text-xs text-muted-foreground">—</Text>
+                  <Text className="text-caption text-muted-foreground">—</Text>
                 ) : (
                   <>
-                    <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+                    <Text className="text-caption text-muted-foreground" numberOfLines={1}>
                       {formatDuration(r.seconds, less)}
                     </Text>
-                    <Text className="text-[9px] text-muted-foreground/70">{t("usage.timeLabel")}</Text>
+                    <Text className="text-micro text-muted-foreground/70">{t("usage.timeLabel")}</Text>
                   </>
                 )}
               </View>
               <View className="w-10 items-end">
                 {deleted ? (
-                  <Text className="text-xs text-muted-foreground">—</Text>
+                  <Text className="text-caption text-muted-foreground">—</Text>
                 ) : (
                   <>
-                    <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+                    <Text className="text-caption text-muted-foreground" numberOfLines={1}>
                       {r.taskCount}
                     </Text>
-                    <Text className="text-[9px] text-muted-foreground/70">{t("usage.tasksShort")}</Text>
+                    <Text className="text-micro text-muted-foreground/70">{t("usage.tasksShort")}</Text>
                   </>
                 )}
               </View>
@@ -1802,7 +1802,7 @@ function ErrorsSection({
       {totals.failed === 0 ? (
         <View className="items-center gap-2 py-12">
           <Ionicons name="alert-circle-outline" size={32} color={muted} />
-          <Text className="text-center text-xs text-muted-foreground">
+          <Text className="text-center text-caption text-muted-foreground">
             {t("usage.errors.noData")}
           </Text>
         </View>
@@ -1859,13 +1859,13 @@ function ErrorTrendSection({
   return (
     <View className="rounded-xl border border-border bg-card p-3">
       <View className="mb-3 flex-row flex-wrap items-center justify-between gap-2">
-        <Text className="text-xs font-medium text-foreground">
+        <Text className="text-caption font-medium text-foreground">
           {t(weekly ? "usage.errors.weekTrendTitle" : "usage.errors.trendTitle")}
         </Text>
         <DimPill allowedDims={allowedDims} value={dim} onChange={onDimChange} />
       </View>
       {rows.length === 0 ? (
-        <Text className="text-xs text-muted-foreground">{t("usage.noData")}</Text>
+        <Text className="text-caption text-muted-foreground">{t("usage.noData")}</Text>
       ) : (
         <View className="flex-row items-end gap-1.5" style={{ height: CHART_HEIGHT + 22 }}>
           {rows.map((d, i) => {
@@ -1884,11 +1884,11 @@ function ErrorTrendSection({
                   }}
                 />
                 {i % labelEvery === 0 ? (
-                  <Text className="text-[9px] text-muted-foreground" numberOfLines={1}>
+                  <Text className="text-micro text-muted-foreground" numberOfLines={1}>
                     {d.label}
                   </Text>
                 ) : (
-                  <Text className="text-[9px] text-transparent" numberOfLines={1}>
+                  <Text className="text-micro text-transparent" numberOfLines={1}>
                     ·
                   </Text>
                 )}
@@ -1922,7 +1922,7 @@ function ErrorMixCard({
   return (
     <View className="rounded-xl border border-border bg-card">
       <View className="flex-row items-center justify-between border-b border-border/60 px-4 pb-2 pt-3">
-        <Text className="text-xs font-medium text-foreground">
+        <Text className="text-caption font-medium text-foreground">
           {t("usage.errors.mixTitle", { failed: totals.failed })}
         </Text>
         <Pressable onPress={() => setShowReasons((v) => !v)} hitSlop={8}>
@@ -2057,9 +2057,9 @@ function OffendersCard({
   return (
     <View className="rounded-xl border border-border bg-card">
       <View className="flex-row flex-wrap items-center justify-between gap-2 border-b border-border/60 px-4 pb-2 pt-3">
-        <Text className="text-xs font-medium text-foreground">{t("usage.errors.byAgent")}</Text>
+        <Text className="text-caption font-medium text-foreground">{t("usage.errors.byAgent")}</Text>
         <View className="flex-row items-center gap-1.5">
-          <Text className="text-[10px] text-muted-foreground">{t("usage.errors.sortLabel")}</Text>
+          <Text className="text-micro text-muted-foreground">{t("usage.errors.sortLabel")}</Text>
           <SortPill
             active={sortBy === "failed"}
             label={t("usage.errors.sortFailed")}
@@ -2076,23 +2076,23 @@ function OffendersCard({
         <View className="px-4">
           <View className="flex-row items-center gap-2 border-b border-border/60 py-2">
             <View className="w-5" />
-            <Text className="flex-1 text-[10px] font-medium text-muted-foreground">
+            <Text className="flex-1 text-micro font-medium text-muted-foreground">
               {t("usage.errors.headerAgent")}
             </Text>
             <Text
               className={cn(
-                "w-12 text-right text-[10px] font-medium",
+                "w-12 text-right text-micro font-medium",
                 sortBy === "failed" ? "text-foreground" : "text-muted-foreground",
               )}
             >
               {t("usage.errors.headerFailed")}
             </Text>
-            <Text className="w-12 text-right text-[10px] font-medium text-muted-foreground">
+            <Text className="w-12 text-right text-micro font-medium text-muted-foreground">
               {t("usage.errors.headerRuns")}
             </Text>
             <Text
               className={cn(
-                "w-14 text-right text-[10px] font-medium",
+                "w-14 text-right text-micro font-medium",
                 sortBy === "rate" ? "text-foreground" : "text-muted-foreground",
               )}
             >
@@ -2140,7 +2140,7 @@ function SortPill({
     >
       <Text
         className={cn(
-          "text-[10px] font-medium",
+          "text-micro font-medium",
           active ? "text-background" : "text-muted-foreground",
         )}
       >
@@ -2203,7 +2203,7 @@ function OffenderRow({
           {unresolved || !wsSlug ? (
             <Text
               className={cn(
-                "text-xs",
+                "text-caption",
                 unresolved ? "italic text-muted-foreground" : "font-medium text-foreground",
               )}
               numberOfLines={1}
@@ -2216,7 +2216,7 @@ function OffenderRow({
               asChild
             >
               <Pressable accessibilityRole="link">
-                <Text className="text-xs font-medium text-foreground" numberOfLines={1}>
+                <Text className="text-caption font-medium text-foreground" numberOfLines={1}>
                   {name}
                 </Text>
               </Pressable>
@@ -2246,18 +2246,18 @@ function OffenderRow({
         </View>
         <Text
           className={cn(
-            "w-12 text-right text-xs tabular-nums",
+            "w-12 text-right text-caption tabular-nums",
             sortBy === "failed" ? "font-semibold text-foreground" : "text-muted-foreground",
           )}
         >
           {row.failed}
         </Text>
-        <Text className="w-12 text-right text-xs tabular-nums text-muted-foreground">
+        <Text className="w-12 text-right text-caption tabular-nums text-muted-foreground">
           {row.total}
         </Text>
         <Text
           className={cn(
-            "w-14 text-right text-xs tabular-nums",
+            "w-14 text-right text-caption tabular-nums",
             sortBy === "rate" && !weakSample
               ? "font-semibold text-foreground"
               : "text-muted-foreground",
@@ -2267,7 +2267,7 @@ function OffenderRow({
         </Text>
       </View>
       {weakSample ? (
-        <Text className="mt-1 text-[9px] text-muted-foreground/70">
+        <Text className="mt-1 text-micro text-muted-foreground/70">
           {t("usage.errors.lowSample", { count: MIN_RATE_SAMPLE })}
         </Text>
       ) : null}

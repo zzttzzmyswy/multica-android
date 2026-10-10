@@ -10,7 +10,7 @@
  *        - everything else  → small ActorAvatar (size 16)
  *      The icon does the recognition work — user sees the new state at a
  *      glance before they read the verb.
- *   3. Whole row is `text-xs text-muted-foreground` (web parity). Actor name
+ *   3. Whole row is `text-caption text-muted-foreground` (web parity). Actor name
  *      is `font-medium` but inherits the muted color — activity is supposed
  *      to feel quiet next to comment bubbles.
  *   4. Time is **relative**, right-aligned (`ml-auto`). Web shows absolute
@@ -141,24 +141,24 @@ export function ActivityRow({ entry }: { entry: TimelineEntry }) {
         <LeadIcon entry={entry} mutedFg={mutedFg} />
       </View>
       <Text
-        className="text-xs text-muted-foreground flex-1"
+        className="text-caption text-muted-foreground flex-1"
         numberOfLines={1}
       >
-        <Text className="text-xs text-muted-foreground font-medium">
+        <Text className="text-caption text-muted-foreground font-medium">
           {actorName}
         </Text>
         {verb ? (
-          <Text className="text-xs text-muted-foreground"> {verb}</Text>
+          <Text className="text-caption text-muted-foreground"> {verb}</Text>
         ) : null}
       </Text>
       {showCoalesceBadge ? (
         <View className="bg-muted rounded px-1.5 py-0.5 shrink-0">
-          <Text className="text-xs font-medium text-muted-foreground tabular-nums">
+          <Text className="text-caption font-medium text-muted-foreground tabular-nums">
             ×{entry.coalesced_count}
           </Text>
         </View>
       ) : null}
-      <Text className="text-xs text-muted-foreground shrink-0">
+      <Text className="text-caption text-muted-foreground shrink-0">
         {timeAgo(entry.created_at)}
       </Text>
     </View>

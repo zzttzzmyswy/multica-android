@@ -478,10 +478,10 @@ function OlderMessagesHeader({
         className="flex-row items-center justify-center gap-1.5 py-3 active:opacity-70"
       >
         <Ionicons name="refresh" size={14} className="text-muted-foreground" />
-        <Text className="text-xs text-muted-foreground">
+        <Text className="text-caption text-muted-foreground">
           {t("chat.olderLoadFailed")}
         </Text>
-        <Text className="text-xs font-medium text-primary">
+        <Text className="text-caption font-medium text-primary">
           {t("common.retry")}
         </Text>
       </Pressable>
@@ -490,7 +490,7 @@ function OlderMessagesHeader({
   return (
     <View className="flex-row items-center justify-center gap-2 py-3">
       <ActivityIndicator size="small" />
-      <Text className="text-xs text-muted-foreground">
+      <Text className="text-caption text-muted-foreground">
         {t("chat.loadingOlder")}
       </Text>
     </View>
@@ -671,7 +671,7 @@ function AssistantRow({
         <ChatTimeline items={timelineItems} />
       ) : null}
       {isNoResponse ? (
-        <Text className="text-sm italic text-muted-foreground">
+        <Text className="text-body italic text-muted-foreground">
           {t("chat.finishedWithoutReply")}
         </Text>
       ) : (
@@ -769,7 +769,7 @@ function QuickActionsSkeleton() {
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
     >
-      <Text className="shrink-0 text-xs text-muted-foreground">
+      <Text className="shrink-0 text-caption text-muted-foreground">
         {t("chat.quickActionsHeading")}
       </Text>
       <View className="h-10 w-24 rounded-full bg-muted" />
@@ -838,7 +838,7 @@ function QuickActions({
       className="flex-row flex-wrap items-center gap-2 pt-0.5"
       accessibilityLabel={t("a11y.suggestedFollowUps")}
     >
-      <Text className="shrink-0 text-xs text-muted-foreground">
+      <Text className="shrink-0 text-caption text-muted-foreground">
         {t("chat.quickActionsHeading")}
       </Text>
       {actions.slice(0, 3).map((action, index) => (
@@ -859,14 +859,14 @@ function QuickActions({
           <Text
             numberOfLines={1}
             className={cn(
-              "shrink text-sm font-medium",
+              "shrink text-body font-medium",
               action.primary ? "text-primary" : "text-foreground",
             )}
           >
             {action.label}
           </Text>
           {action.primary ? (
-            <Text className="text-sm font-medium text-primary">↗</Text>
+            <Text className="text-body font-medium text-primary">↗</Text>
           ) : null}
         </Pressable>
       ))}
@@ -916,7 +916,7 @@ function ElapsedCaption({
         ? t("chat.finishedIn", { elapsed })
         : t("chat.failedAfter", { elapsed });
   return (
-    <Text className="text-xs text-muted-foreground/80 mt-1">{label}</Text>
+    <Text className="text-caption text-muted-foreground/80 mt-1">{label}</Text>
   );
 }
 
@@ -951,7 +951,7 @@ function FailureBubble({
             : "border-destructive/30",
         )}
       >
-        <Text className="text-xs font-semibold text-destructive">
+        <Text className="text-caption font-semibold text-destructive">
           {reasonLabel}
         </Text>
         {hasRawError ? (
@@ -967,7 +967,7 @@ function FailureBubble({
                   size={12}
                   className="text-muted-foreground"
                 />
-                <Text className="text-xs text-muted-foreground">
+                <Text className="text-caption text-muted-foreground">
                   {t("a11y.showDetails")}
                 </Text>
               </View>
@@ -975,7 +975,7 @@ function FailureBubble({
             <CollapsibleContent>
               <View className="mt-1 rounded bg-muted/40 px-2 py-1.5">
                 <Text
-                  className="text-xs text-muted-foreground"
+                  className="text-caption text-muted-foreground"
                   selectable={isSelecting}
                 >
                   {rawError}

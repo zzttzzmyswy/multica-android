@@ -116,10 +116,10 @@ export function BuilderConfigPanel({
   return (
     <View className="gap-5">
       <View className="gap-1">
-        <Text className="text-base font-semibold text-foreground">
+        <Text className="text-title-sm font-semibold text-foreground">
           {t("agents.new.ai.liveDraft")}
         </Text>
-        <Text className="text-xs text-muted-foreground/80">
+        <Text className="text-caption text-muted-foreground/80">
           {t("agents.new.ai.liveDraftHint")}
         </Text>
       </View>
@@ -158,7 +158,7 @@ export function BuilderConfigPanel({
           value={draft.instructions}
           onChangeText={(text) => set("instructions", text)}
           placeholder={t("agents.new.instructionsPlaceholder")}
-          className="border border-border rounded-md px-3 py-2 min-h-[120px] font-mono text-sm leading-6"
+          className="border border-border rounded-md px-3 py-2 min-h-[120px] font-mono text-body leading-6"
         />
       </View>
 
@@ -177,7 +177,7 @@ export function BuilderConfigPanel({
           />
           <Text
             className={cn(
-              "flex-1 text-sm",
+              "flex-1 text-body",
               selectedSkills.length > 0
                 ? "text-foreground"
                 : "text-muted-foreground",
@@ -188,7 +188,7 @@ export function BuilderConfigPanel({
               ? selectedSkills.map((skill) => skill.name).join(", ")
               : t("agents.new.skillsPlaceholder")}
           </Text>
-          <Text className="text-xs text-muted-foreground tabular-nums">
+          <Text className="text-caption text-muted-foreground tabular-nums">
             {selectedSkills.length > 0 ? `${selectedSkills.length}` : ""}
           </Text>
           <Ionicons name="chevron-down" size={16} color={theme.mutedForeground} />
@@ -230,12 +230,12 @@ export function BuilderConfigPanel({
                 size={16}
                 color={theme.mutedForeground}
               />
-              <Text className="flex-1 text-sm text-foreground" numberOfLines={1}>
+              <Text className="flex-1 text-body text-foreground" numberOfLines={1}>
                 {runtimeDisplayLabel(selectedRuntime)}
               </Text>
             </>
           ) : (
-            <Text className="flex-1 text-sm text-muted-foreground">
+            <Text className="flex-1 text-body text-muted-foreground">
               {t("agents.new.runtimePlaceholder")}
             </Text>
           )}
@@ -278,7 +278,7 @@ export function BuilderConfigPanel({
           autoCapitalize="none"
           autoCorrect={false}
         />
-        <Text className="text-xs text-muted-foreground/70">
+        <Text className="text-caption text-muted-foreground/70">
           {t("agents.new.modelHint")}
         </Text>
       </View>
@@ -304,10 +304,10 @@ export function BuilderConfigPanel({
                 aria-label={t(scope.titleKey)}
               />
               <View className="flex-1">
-                <Text className="text-sm font-medium text-foreground">
+                <Text className="text-body font-medium text-foreground">
                   {t(scope.titleKey)}
                 </Text>
-                <Text className="text-xs text-muted-foreground">
+                <Text className="text-caption text-muted-foreground">
                   {t(scope.descKey)}
                 </Text>
               </View>
@@ -331,7 +331,7 @@ export function BuilderConfigPanel({
             />
             <Text
               className={cn(
-                "flex-1 text-sm",
+                "flex-1 text-body",
                 selectedMembers.length > 0
                   ? "text-foreground"
                   : "text-muted-foreground",
@@ -342,7 +342,7 @@ export function BuilderConfigPanel({
                 ? selectedMembers.map((m) => m.name).join(", ")
                 : t("agents.new.membersPlaceholder")}
             </Text>
-            <Text className="text-xs text-muted-foreground tabular-nums">
+            <Text className="text-caption text-muted-foreground tabular-nums">
               {selectedMembers.length > 0 ? `${selectedMembers.length}` : ""}
             </Text>
             <Ionicons name="chevron-down" size={16} color={theme.mutedForeground} />
@@ -372,7 +372,7 @@ export function BuilderConfigPanel({
 
       {formError ? (
         <View className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2.5">
-          <Text className="text-sm text-destructive">{formError}</Text>
+          <Text className="text-body text-destructive">{formError}</Text>
         </View>
       ) : null}
     </View>
@@ -398,7 +398,7 @@ function FieldLabel({
 }) {
   return (
     <View className="flex-row items-center gap-1">
-      <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+      <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
         {text}
       </Text>
       {required ? <Text className="text-destructive">*</Text> : null}

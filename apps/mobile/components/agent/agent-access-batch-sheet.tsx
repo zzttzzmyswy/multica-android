@@ -76,11 +76,11 @@ export function AgentAccessBatchSheet({
           <Pressable onPress={() => {}} className="w-full max-w-sm">
             <View className="bg-popover rounded-2xl overflow-hidden">
               <View className="flex-row items-center justify-between px-4 py-3 border-b border-border">
-                <Text className="text-base font-semibold text-foreground">
+                <Text className="text-title-sm font-semibold text-foreground">
                   {t("agents.batch.actions.setAccess")}
                 </Text>
                 <Pressable onPress={onClose} disabled={applying}>
-                  <Text className="text-sm font-medium text-brand">
+                  <Text className="text-body font-medium text-brand">
                     {t("common.cancel")}
                   </Text>
                 </Pressable>
@@ -98,7 +98,7 @@ export function AgentAccessBatchSheet({
                 </View>
               </ScrollView>
               <View className="flex-row items-center justify-between gap-3 px-4 py-3 border-t border-border">
-                <Text className="flex-1 text-xs text-muted-foreground">
+                <Text className="flex-1 text-caption text-muted-foreground">
                   {t("agents.batch.actions.setAccess")}
                 </Text>
                 <Button

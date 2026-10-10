@@ -129,7 +129,7 @@ export function SubscriberPickerSheet({
             autoCapitalize="none"
             returnKeyType="search"
             clearButtonMode="while-editing"
-            className="flex-1 text-base text-foreground"
+            className="flex-1 text-title-sm text-foreground"
           />
         </View>
         <FlatList
@@ -244,7 +244,7 @@ function SubscriberRow({
         color={subscribed ? checkColor : mutedColor}
       />
       <ActorAvatar type={type} id={id} size={32} />
-      <Text className="flex-1 text-sm text-foreground" numberOfLines={1}>
+      <Text className="flex-1 text-body text-foreground" numberOfLines={1}>
         {name}
       </Text>
     </Pressable>

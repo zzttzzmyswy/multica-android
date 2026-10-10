@@ -73,7 +73,7 @@ export function SkillUrlImportForm({ onImported }: { onImported: () => void }) {
   return (
     <View className="px-4 pt-4 gap-5">
       <View className="gap-1.5">
-        <Text className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+        <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
           {t("skills.import.urlLabel")}
         </Text>
         <TextField
@@ -95,7 +95,7 @@ export function SkillUrlImportForm({ onImported }: { onImported: () => void }) {
       </View>
 
       <View className="gap-2">
-        <Text className="text-xs text-muted-foreground">
+        <Text className="text-caption text-muted-foreground">
           {t("skills.import.supportedSources")}
         </Text>
         <View className="flex-row gap-2">
@@ -114,7 +114,7 @@ export function SkillUrlImportForm({ onImported }: { onImported: () => void }) {
                   active ? "border-brand bg-brand/5" : "border-border",
                 )}
               >
-                <Text className="text-xs font-medium text-foreground">
+                <Text className="text-caption font-medium text-foreground">
                   {t(SKILL_SOURCE_LABEL_KEY[option])}
                 </Text>
                 <Text
@@ -139,7 +139,7 @@ export function SkillUrlImportForm({ onImported }: { onImported: () => void }) {
             size={14}
             color={theme.destructive}
           />
-          <Text className="flex-1 text-xs text-destructive leading-4">
+          <Text className="flex-1 text-caption text-destructive leading-4">
             {error}
           </Text>
         </View>

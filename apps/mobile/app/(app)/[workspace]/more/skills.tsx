@@ -218,7 +218,7 @@ export default function SkillsPage() {
           </View>
         ) : error ? (
           <View className="px-4 gap-3 pt-4">
-            <Text className="text-sm text-destructive">
+            <Text className="text-body text-destructive">
               {t("skills.loadError")}
               {error instanceof Error ? error.message : t("common.unknownError")}
             </Text>
@@ -229,10 +229,10 @@ export default function SkillsPage() {
         ) : showEmpty ? (
           <View className="flex-1 items-center justify-center px-6 gap-1">
             <Ionicons name="extension-puzzle-outline" size={32} color={muted} />
-            <Text className="text-sm text-muted-foreground text-center mt-2">
+            <Text className="text-body text-muted-foreground text-center mt-2">
               {t("skills.emptyTitle")}
             </Text>
-            <Text className="text-xs text-muted-foreground/70 text-center">
+            <Text className="text-caption text-muted-foreground/70 text-center">
               {t("skills.emptyDescription")}
             </Text>
             {wsSlug ? (
@@ -265,7 +265,7 @@ export default function SkillsPage() {
                 </View>
                 {narrowed ? (
                   <Text
-                    className="text-xs tabular-nums text-muted-foreground"
+                    className="text-caption tabular-nums text-muted-foreground"
                     accessibilityLabel={t("skills.list.resultCount", {
                       visible: rows.length,
                       total: allRows.length,
@@ -298,7 +298,7 @@ export default function SkillsPage() {
                   selectionMode && selectedSkills.length > 0 ? 132 : 24,
               }}
               ListEmptyComponent={
-                <Text className="px-4 py-8 text-center text-sm text-muted-foreground">
+                <Text className="px-4 py-8 text-center text-body text-muted-foreground">
                   {t("skills.list.noMatches")}
                 </Text>
               }
@@ -385,7 +385,7 @@ function SkillFilterChip({
       />
       {active ? (
         <Text
-          className="text-xs font-medium tabular-nums"
+          className="text-caption font-medium tabular-nums"
           style={{ color: THEME[colorScheme].primaryForeground }}
         >
           {activeCount}
@@ -465,7 +465,7 @@ function SkillSortChip({
       className="flex-row items-center gap-1 rounded-md border border-border bg-secondary/50 px-2 py-1.5 active:opacity-70"
     >
       <Ionicons name="swap-vertical" size={14} color={muted} />
-      <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+      <Text className="text-caption text-muted-foreground" numberOfLines={1}>
         {activeLabel}
       </Text>
     </Pressable>
@@ -616,7 +616,7 @@ function SkillFilterSheet({
             accessibilityRole="button"
             className="py-3 active:opacity-70"
           >
-            <Text className="text-center text-sm text-destructive">
+            <Text className="text-center text-body text-destructive">
               {t("skills.list.filterClear")}
             </Text>
           </Pressable>
@@ -678,11 +678,11 @@ function SkillRowItem({
         )}
         <View className="flex-1 min-w-0 gap-0.5">
           <View className="flex-row items-center gap-1.5">
-            <Text className="text-sm font-medium text-foreground" numberOfLines={1}>
+            <Text className="text-body font-medium text-foreground" numberOfLines={1}>
               {skill.name}
             </Text>
             <View className="px-1.5 py-px rounded-full bg-secondary">
-              <Text className="text-[10px] text-muted-foreground font-medium">
+              <Text className="text-micro text-muted-foreground font-medium">
                 {t(origin)}
               </Text>
             </View>
@@ -702,7 +702,7 @@ function SkillRowItem({
           </View>
           {skill.description ? (
             <Text
-              className="text-xs text-muted-foreground/70"
+              className="text-caption text-muted-foreground/70"
               numberOfLines={1}
             >
               {skill.description}

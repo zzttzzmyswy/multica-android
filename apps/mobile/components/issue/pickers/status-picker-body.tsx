@@ -40,7 +40,7 @@ export function StatusPickerBody({ value, onChange }: Props) {
   return (
     <ScrollView showsVerticalScrollIndicator={false}>
       <View className="px-4 pt-3 pb-2">
-        <Text className="text-lg font-semibold text-foreground">{t("picker.status")}</Text>
+        <Text className="text-title font-semibold text-foreground">{t("picker.status")}</Text>
       </View>
       <View className="px-2">
         {groups.map((group) => {
@@ -49,7 +49,7 @@ export function StatusPickerBody({ value, onChange }: Props) {
             <View key={group.category}>
               {heading ? (
                 <View className="px-3 pt-2 pb-1">
-                  <Text className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
+                  <Text className="text-caption font-medium uppercase tracking-wider text-muted-foreground/70">
                     {t(`enum.status.${group.category}`)}
                   </Text>
                 </View>
@@ -68,7 +68,7 @@ export function StatusPickerBody({ value, onChange }: Props) {
                       color={option.color ?? undefined}
                       size={18}
                     />
-                    <Text className="flex-1 text-base text-foreground">
+                    <Text className="flex-1 text-title-sm text-foreground">
                       {option.label}
                     </Text>
                     {selected ? (

@@ -43,7 +43,7 @@ export function IssueListFooter({
         accessibilityRole="button"
         className="py-3 items-center"
       >
-        <Text className="text-xs text-destructive">
+        <Text className="text-caption text-destructive">
           {t("issues.loadMoreFailed")}
         </Text>
       </Pressable>
@@ -59,7 +59,7 @@ export function IssueListFooter({
         {isLoadingMore ? (
           <>
             <ActivityIndicator size="small" color={theme.mutedForeground} />
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-caption text-muted-foreground">
               {t("issues.loadingMore")}
             </Text>
           </>
@@ -71,7 +71,7 @@ export function IssueListFooter({
   if (total > PAGINATED_THRESHOLD) {
     return (
       <View className="py-3 items-center">
-        <Text className="text-xs text-muted-foreground">
+        <Text className="text-caption text-muted-foreground">
           {t("issues.noMore")}
         </Text>
       </View>

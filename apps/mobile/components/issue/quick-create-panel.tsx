@@ -83,7 +83,7 @@ export function QuickCreatePanel({ prompt, onPromptChange, disabled }: Props) {
         onChangeText={onPromptChange}
         placeholder={t("newIssue.agentPlaceholder")}
         placeholderTextColor={MOBILE_PLACEHOLDER_COLOR}
-        className="min-h-24 py-2 text-base text-foreground"
+        className="min-h-24 py-2 text-title-sm text-foreground"
         multiline
         textAlignVertical="top"
         editable={!disabled}

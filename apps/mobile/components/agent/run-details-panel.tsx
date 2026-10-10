@@ -58,7 +58,7 @@ export function RunDetailsPanel({
           onPress={() => {}}
         >
           <View className="flex-row items-center gap-2 border-b border-border px-4 py-3">
-            <Text className="flex-1 text-base font-semibold text-foreground">
+            <Text className="flex-1 text-title-sm font-semibold text-foreground">
               {t("runs.transcript.runInfo")}
             </Text>
             <Pressable
@@ -105,12 +105,12 @@ function DetailRow({ row }: { row: RunDetailRow }) {
   const { t } = useTranslation();
   return (
     <View className="flex-row items-start gap-3">
-      <Text className="w-20 shrink-0 text-xs text-muted-foreground">
+      <Text className="w-20 shrink-0 text-caption text-muted-foreground">
         {t(row.labelKey)}
       </Text>
       <Text
         className={cn(
-          "flex-1 text-xs text-foreground break-all",
+          "flex-1 text-caption text-foreground break-all",
           row.mono && "font-mono",
         )}
         selectable

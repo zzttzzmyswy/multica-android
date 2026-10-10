@@ -182,7 +182,7 @@ export default function MachineDetailPage() {
         <Stack.Screen options={{ title: t("screen.runtimes") }} />
         <View className="flex-1 items-center justify-center bg-background px-6 gap-3">
           <Ionicons name="cloud-offline-outline" size={32} color={theme.mutedForeground} />
-          <Text className="text-sm text-destructive text-center">
+          <Text className="text-body text-destructive text-center">
             {t("catalog.loadError")}
           </Text>
           <Button variant="outline" onPress={() => refetch()}>
@@ -199,10 +199,10 @@ export default function MachineDetailPage() {
         <Stack.Screen options={{ title: t("screen.runtimes") }} />
         <View className="flex-1 items-center justify-center bg-background px-6 gap-3">
           <Ionicons name="alert-circle-outline" size={32} color={theme.destructive} />
-          <Text className="text-sm font-medium text-foreground text-center">
+          <Text className="text-body font-medium text-foreground text-center">
             {t("runtimes.machine.not_found_title")}
           </Text>
-          <Text className="text-xs text-muted-foreground text-center">
+          <Text className="text-caption text-muted-foreground text-center">
             {t("runtimes.machine.not_found_hint")}
           </Text>
           <Button variant="outline" onPress={() => refetch()}>
@@ -283,18 +283,18 @@ export default function MachineDetailPage() {
             </View>
             <View className="flex-1 min-w-0 gap-1">
               <View className="flex-row items-center gap-1.5 flex-wrap">
-                <Text className="text-base font-semibold text-foreground">
+                <Text className="text-title-sm font-semibold text-foreground">
                   {machine.title}
                 </Text>
                 <View className="px-1.5 py-px rounded-full bg-secondary">
-                  <Text className="text-[10px] text-muted-foreground font-medium">
+                  <Text className="text-micro text-muted-foreground font-medium">
                     {t(`runtimes.machine.section_${machine.section}`)}
                   </Text>
                 </View>
               </View>
               <View className="flex-row items-center gap-1.5">
                 <View className={cn("size-2 rounded-full", HEALTH_DOT[machine.health])} />
-                <Text className={cn("text-xs font-medium", HEALTH_TONE[machine.health])}>
+                <Text className={cn("text-caption font-medium", HEALTH_TONE[machine.health])}>
                   {t(`runtimes.health.${machine.health}`)}
                 </Text>
               </View>
@@ -302,7 +302,7 @@ export default function MachineDetailPage() {
           </View>
 
           {machine.subtitle ? (
-            <Text className="text-xs text-muted-foreground mt-1" numberOfLines={2}>
+            <Text className="text-caption text-muted-foreground mt-1" numberOfLines={2}>
               {machine.subtitle}
             </Text>
           ) : null}
@@ -310,11 +310,11 @@ export default function MachineDetailPage() {
           {/* Machine stats — runtime count / workload / last seen, the same
               three the web header prints (runtime-detail-page.tsx:250-271). */}
           <View className="flex-row items-center gap-1.5 flex-wrap mt-1.5">
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-caption text-muted-foreground">
               {t("runtimes.machine.runtime_count", { count: machine.runtimes.length })}
             </Text>
-            <Text className="text-xs text-muted-foreground">·</Text>
-            <Text className="text-xs text-muted-foreground">
+            <Text className="text-caption text-muted-foreground">·</Text>
+            <Text className="text-caption text-muted-foreground">
               {busyCount > 0
                 ? t("runtimes.machine.metrics.workload_hint", {
                     running: machine.runningCount,
@@ -324,8 +324,8 @@ export default function MachineDetailPage() {
             </Text>
             {machine.lastSeenAt ? (
               <>
-                <Text className="text-xs text-muted-foreground">·</Text>
-                <Text className="text-xs text-muted-foreground">
+                <Text className="text-caption text-muted-foreground">·</Text>
+                <Text className="text-caption text-muted-foreground">
                   {timeAgo(machine.lastSeenAt)}
                 </Text>
               </>
@@ -337,7 +337,7 @@ export default function MachineDetailPage() {
           {showCliSection ? (
             <View className="mt-4 rounded-lg border border-border">
               <View className="border-b border-border px-3 py-2">
-                <Text className="text-xs font-semibold text-foreground">
+                <Text className="text-caption font-semibold text-foreground">
                   {t("runtimes.update.section_title")}
                 </Text>
               </View>
@@ -345,10 +345,10 @@ export default function MachineDetailPage() {
                 {machine.mode !== "local" ? (
                   <View className="flex-row items-center gap-2">
                     <Ionicons name="cube-outline" size={14} color={theme.mutedForeground} />
-                    <Text className="text-xs text-muted-foreground">
+                    <Text className="text-caption text-muted-foreground">
                       {t("runtimes.update.cli_version_label")}
                     </Text>
-                    <Text className="text-xs font-mono text-foreground">
+                    <Text className="text-caption font-mono text-foreground">
                       {machine.cliVersion ?? t("runtimes.update.version_unknown")}
                     </Text>
                   </View>
@@ -370,7 +370,7 @@ export default function MachineDetailPage() {
           {renameTarget || canAddRuntime ? (
             <View className="mt-4 rounded-lg border border-border">
               <View className="border-b border-border px-3 py-2">
-                <Text className="text-xs font-semibold text-foreground">
+                <Text className="text-caption font-semibold text-foreground">
                   {t("runtimes.machine.actions")}
                 </Text>
               </View>
@@ -385,7 +385,7 @@ export default function MachineDetailPage() {
                         autoFocus
                         maxLength={100}
                       />
-                      <Text className="text-xs text-muted-foreground">
+                      <Text className="text-caption text-muted-foreground">
                         {t("runtimes.machine.rename_dialog.hint")}
                       </Text>
                       <View className="flex-row gap-2">
@@ -419,7 +419,7 @@ export default function MachineDetailPage() {
                       onPress={openRename}
                     >
                       <Ionicons name="pencil-outline" size={14} color={theme.mutedForeground} />
-                      <Text className="text-xs text-foreground">
+                      <Text className="text-caption text-foreground">
                         {t("runtimes.machine.rename")}
                       </Text>
                     </Button>
@@ -443,7 +443,7 @@ export default function MachineDetailPage() {
                         size={14}
                         color={theme.mutedForeground}
                       />
-                      <Text className="text-xs text-foreground">
+                      <Text className="text-caption text-foreground">
                         {t("runtimes.profiles.addCustom")}
                       </Text>
                     </Button>
@@ -455,10 +455,10 @@ export default function MachineDetailPage() {
 
           {/* Runtimes on this machine */}
           <View className="mt-4 gap-1">
-            <Text className="text-xs font-semibold text-foreground px-0.5">
+            <Text className="text-caption font-semibold text-foreground px-0.5">
               {t("runtimes.machine.metrics.runtimes")}
             </Text>
-            <Text className="text-xs text-muted-foreground px-0.5">
+            <Text className="text-caption text-muted-foreground px-0.5">
               {t("runtimes.machine.select_runtime")}
             </Text>
           </View>
@@ -495,10 +495,10 @@ export default function MachineDetailPage() {
           ) : (
             <View className="mt-2 rounded-lg border border-dashed border-border px-6 py-10 items-center">
               <Ionicons name="server-outline" size={28} color={theme.mutedForeground} />
-              <Text className="text-sm font-medium text-foreground mt-3">
+              <Text className="text-body font-medium text-foreground mt-3">
                 {t("runtimes.machine.no_runtimes_title")}
               </Text>
-              <Text className="text-xs text-muted-foreground text-center mt-1">
+              <Text className="text-caption text-muted-foreground text-center mt-1">
                 {t("runtimes.machine.no_runtimes_hint")}
               </Text>
             </View>
@@ -574,11 +574,11 @@ function MachineRuntimeRow({
       <View className="flex-row items-start gap-2">
         <View className="flex-1 min-w-0 gap-1">
           <View className="flex-row items-center gap-1.5 flex-wrap">
-            <Text className="text-sm font-medium text-foreground" numberOfLines={1}>
+            <Text className="text-body font-medium text-foreground" numberOfLines={1}>
               {displayName}
             </Text>
             <View className="px-1.5 py-px rounded-full bg-secondary">
-              <Text className="text-[10px] text-muted-foreground font-medium">
+              <Text className="text-micro text-muted-foreground font-medium">
                 {runtime.profile_id
                   ? t("runtimes.kind.custom")
                   : t("runtimes.kind.builtin")}
@@ -588,7 +588,7 @@ function MachineRuntimeRow({
 
           <View className="flex-row items-center gap-1.5">
             <View className={cn("size-1.5 rounded-full", HEALTH_DOT[health])} />
-            <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+            <Text className="text-caption text-muted-foreground" numberOfLines={1}>
               {healthLine}
             </Text>
           </View>
@@ -652,16 +652,16 @@ function MachineRuntimeCost({ runtimeId, tz }: { runtimeId: string; tz: string }
   const cell = runtimeCostCell(usage, tz);
 
   if (cell.kind === "none") {
-    return <Text className="text-xs text-muted-foreground/60">—</Text>;
+    return <Text className="text-caption text-muted-foreground/60">—</Text>;
   }
 
   return (
     <View className="items-end">
-      <Text className="text-xs font-medium text-foreground tabular-nums">
+      <Text className="text-caption font-medium text-foreground tabular-nums">
         {cell.label}
       </Text>
       {cell.delta != null ? (
-        <Text className={cn("text-[10px] tabular-nums", COST_TONE[cell.tone])}>
+        <Text className={cn("text-micro tabular-nums", COST_TONE[cell.tone])}>
           {cell.delta === 0
             ? t("runtimes.row.costFlat")
             : `${cell.delta > 0 ? "↑" : "↓"}${Math.abs(cell.delta)}%`}

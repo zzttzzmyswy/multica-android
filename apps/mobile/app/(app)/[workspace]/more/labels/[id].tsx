@@ -49,7 +49,7 @@ export default function EditLabelPage() {
   if (error) {
     return (
       <View className="flex-1 items-center justify-center bg-background px-6 gap-3">
-        <Text className="text-sm text-destructive">
+        <Text className="text-body text-destructive">
           {t("labels.loadError")}
           {error instanceof Error ? error.message : t("common.unknownError")}
         </Text>
@@ -64,7 +64,7 @@ export default function EditLabelPage() {
     return (
       <View className="flex-1 items-center justify-center bg-background px-6 gap-1">
         <Ionicons name="pricetags-outline" size={32} color={muted} />
-        <Text className="text-sm text-muted-foreground text-center mt-2">
+        <Text className="text-body text-muted-foreground text-center mt-2">
           {t("labels.notFound")}
         </Text>
       </View>

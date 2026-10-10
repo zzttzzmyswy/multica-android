@@ -104,7 +104,7 @@ export function ProjectPickerBody({ value, query, onChange }: Props) {
             <ProjectIcon icon={item.project.icon} size="md" />
           )}
           <Text
-            className="flex-1 text-base text-foreground"
+            className="flex-1 text-title-sm text-foreground"
             numberOfLines={1}
           >
             {item.kind === "none" ? t("picker.noProject") : item.project.title}

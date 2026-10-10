@@ -61,13 +61,13 @@ export function RunLog({
   if (isError) {
     return (
       <View className="py-2 items-start gap-2">
-        <Text className="text-xs text-destructive">{t("runs.logLoadError")}</Text>
+        <Text className="text-caption text-destructive">{t("runs.logLoadError")}</Text>
         <Pressable
           onPress={() => refetch()}
           accessibilityRole="button"
           className="px-2 py-1 rounded-md bg-secondary active:opacity-70"
         >
-          <Text className="text-xs font-medium text-foreground">{t("issue.retry")}</Text>
+          <Text className="text-caption font-medium text-foreground">{t("issue.retry")}</Text>
         </Pressable>
       </View>
     );
@@ -78,7 +78,7 @@ export function RunLog({
     return (
       <View className={embedded ? "gap-1" : "ml-9 mt-1 gap-1"}>
         {live ? <LiveBadge label={t("runs.liveLog")} /> : null}
-        <Text className="py-1 text-xs text-muted-foreground">{t("runs.noLogsYet")}</Text>
+        <Text className="py-1 text-caption text-muted-foreground">{t("runs.noLogsYet")}</Text>
       </View>
     );
   }

@@ -141,10 +141,10 @@ export default function InviteRoute() {
           ) : fetchError || !invitation ? (
             <>
               <Ionicons name="close-circle-outline" size={40} className="text-destructive" />
-              <Text className="text-lg font-semibold text-foreground text-center">
+              <Text className="text-title font-semibold text-foreground text-center">
                 {t("invite.notFoundTitle")}
               </Text>
-              <Text className="text-sm text-muted-foreground text-center">
+              <Text className="text-body text-muted-foreground text-center">
                 {t("invite.notFoundDesc")}
               </Text>
               <Button variant="outline" onPress={goHome}>
@@ -154,20 +154,20 @@ export default function InviteRoute() {
           ) : done === "accepted" ? (
             <>
               <Ionicons name="checkmark-circle" size={40} className="text-primary" />
-              <Text className="text-lg font-semibold text-foreground text-center">
+              <Text className="text-title font-semibold text-foreground text-center">
                 {t("invite.acceptedTitle", { workspace_name: wsName })}
               </Text>
-              <Text className="text-sm text-muted-foreground text-center">
+              <Text className="text-body text-muted-foreground text-center">
                 {t("invite.redirecting")}
               </Text>
             </>
           ) : done === "declined" ? (
             <>
               <Ionicons name="close-circle-outline" size={40} className="text-muted-foreground" />
-              <Text className="text-lg font-semibold text-foreground text-center">
+              <Text className="text-title font-semibold text-foreground text-center">
                 {t("invite.declinedTitle")}
               </Text>
-              <Text className="text-sm text-muted-foreground text-center">
+              <Text className="text-body text-muted-foreground text-center">
                 {t("invite.declinedDesc")}
               </Text>
               <Button variant="outline" onPress={goHome}>
@@ -180,10 +180,10 @@ export default function InviteRoute() {
                 <Ionicons name="people" size={26} className="text-primary" />
               </View>
               <View className="items-center gap-1">
-                <Text className="text-xl font-semibold text-foreground text-center">
+                <Text className="text-title-lg font-semibold text-foreground text-center">
                   {t("invite.joinTitle", { workspace_name: wsName })}
                 </Text>
-                <Text className="text-sm text-muted-foreground text-center">
+                <Text className="text-body text-muted-foreground text-center">
                   {inviter}{" "}
                   {invitation.role === "admin"
                     ? t("invite.invitedRoleAdmin")
@@ -192,13 +192,13 @@ export default function InviteRoute() {
               </View>
 
               {isAlreadyHandled ? (
-                <Text className="text-sm text-muted-foreground text-center">
+                <Text className="text-body text-muted-foreground text-center">
                   {invitation.status === "accepted"
                     ? t("invite.alreadyHandledAccepted")
                     : t("invite.alreadyHandledDeclined")}
                 </Text>
               ) : isExpired ? (
-                <Text className="text-sm text-muted-foreground text-center">
+                <Text className="text-body text-muted-foreground text-center">
                   {t("invite.expired")}
                 </Text>
               ) : (

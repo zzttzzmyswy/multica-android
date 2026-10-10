@@ -77,7 +77,7 @@ export function SegmentedControl<T extends string>({
             ) : null}
             <Text
               className={cn(
-                "text-xs",
+                "text-caption",
                 active && !disabled
                   ? "text-foreground font-medium"
                   : "text-muted-foreground",

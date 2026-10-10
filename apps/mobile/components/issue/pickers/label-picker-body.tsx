@@ -141,7 +141,7 @@ export function LabelPickerBody({
               className="size-3 rounded-full"
               style={{ backgroundColor: pickInlineColor(item.name) }}
             />
-            <Text className="flex-1 text-base text-foreground">
+            <Text className="flex-1 text-title-sm text-foreground">
               {t("picker.createWithGuess", { name: item.name })}
             </Text>
             <Ionicons name="add" size={20} color={checkColor} />
@@ -156,7 +156,7 @@ export function LabelPickerBody({
               style={{ backgroundColor: item.label.color }}
             />
             <Text
-              className="flex-1 text-base text-foreground"
+              className="flex-1 text-title-sm text-foreground"
               numberOfLines={1}
             >
               {item.label.name}
