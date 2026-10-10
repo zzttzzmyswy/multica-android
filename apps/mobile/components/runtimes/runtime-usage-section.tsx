@@ -941,8 +941,10 @@ function HeatmapView({ heatmap }: { heatmap: HeatmapData }) {
     <View className="gap-3">
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View style={{ width: gridWidth }}>
-          {/* Month labels */}
-          <View className="mb-1 h-3.5 flex-row">
+          {/* Month labels. `h-4` (16dp) fits the `micro` line box (15dp); the
+              previous `h-3.5` (14dp) was sized for the arbitrary 9px these
+              labels used to carry and clipped them at the ladder's 11/15. */}
+          <View className="mb-1 h-4 flex-row">
             {months.map((m) => (
               <Text
                 key={`${m.label}-${m.week}`}
@@ -954,8 +956,12 @@ function HeatmapView({ heatmap }: { heatmap: HeatmapData }) {
             ))}
           </View>
           <View className="flex-row gap-0.5">
-            {/* Row labels (Mon / Wed / Fri) */}
-            <View className="mr-1 w-5">
+            {/* Row labels (Mon / Wed / Fri). `w-7` (28dp) matches the room web
+                reserves for the same labels (`labelWidth = 28` in
+                activity-heatmap.tsx) and clears "Wed"/"周三" at `micro`; the
+                previous `w-5` (20dp) was sized for arbitrary 8px and truncated
+                them once they moved to the ladder. */}
+            <View className="mr-1 w-7">
               {[0, 2, 4].map((i) => (
                 <Text key={i} className="text-micro text-muted-foreground" style={{ height: CELL + CELL_GAP }}>
                   {weekdayLabels[i] ?? ""}
