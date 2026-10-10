@@ -18,13 +18,14 @@ import { useCallback, useMemo } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import type { Issue, IssuePriority, IssueStatus } from "@multica/core/types";
+import type { Issue, IssuePriority, IssueStatus, WorkingAgentSummary } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { StatusIcon } from "@/components/ui/status-icon";
 import { IssueRow } from "@/components/issue/issue-row";
 import { ViewModeToggle } from "@/components/issue/view-mode-toggle";
+import { AgentsWorkingChip } from "@/components/issue/agents-working-chip";
 import { useIssueBatchSelectionStore } from "@/data/stores/issue-batch-selection-store";
 import { projectListOptions } from "@/data/queries/projects";
 import { labelListOptions } from "@/data/queries/labels";
@@ -150,6 +151,12 @@ export function FilterTriggerButton({
  * the screen. Shrinking the group only clipped the pills under the mode
  * switch — the buttons overflow their shrunken box. Scrolling keeps every
  * scope reachable and the mode switch fixed.
+ *
+ * `agentsWorking` is passed through to the second row rather than seated here:
+ * web puts the chip on the same flex row as its display controls, but mobile's
+ * row is already at capacity (three scopes + five mode buttons + filter), and
+ * a chip carrying an avatar stack and a count sentence would be the first thing
+ * to be squeezed. `IssueSurfaceAgentActivityRow` below is where it lives.
  */
 export function IssueSurfaceScopeToolbar<S extends string>({
   scopes,
@@ -206,6 +213,43 @@ export function IssueSurfaceScopeToolbar<S extends string>({
           hasActiveFilters={hasActiveFilters}
         />
       </View>
+    </View>
+  );
+}
+
+/**
+ * The agents-working row: web's header chip plus its "viewing issues with
+ * agents working" caption (`issues-header.tsx:1061-1070`), on a line of its
+ * own under the toolbar.
+ *
+ * Web renders the caption inline before the chip, on the same row, because a
+ * desktop header has the width. On a phone the chip already carries the count
+ * and the roster is one tap away, so the caption is dropped rather than
+ * wrapped — it repeats what the filled tier already says, and a second line of
+ * muted text above every issue list is noise. The row itself is kept (rather
+ * than folding the chip into the toolbar) because the chip's width is variable:
+ * a full avatar stack plus "3 agents working" is wider than the space the
+ * toolbar has left, and squeezing it there would either clip the label or push
+ * the mode switch off-screen.
+ *
+ * The row renders ONLY where the surface exposes the filter. The project
+ * surface passes `workingOnly: false` to its rows and has no toggle in its
+ * store, so a chip there would advertise a filter its rows ignore — the
+ * contradiction `lib/issue-table-group-counts.ts` already documents for that
+ * surface's counts.
+ */
+export function IssueSurfaceAgentActivityRow({
+  value,
+  onToggle,
+  agents,
+}: {
+  value: boolean;
+  onToggle: () => void;
+  agents: readonly WorkingAgentSummary[] | undefined;
+}) {
+  return (
+    <View className="flex-row items-center px-4 pb-2">
+      <AgentsWorkingChip value={value} onToggle={onToggle} agents={agents} />
     </View>
   );
 }

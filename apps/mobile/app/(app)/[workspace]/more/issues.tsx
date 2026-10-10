@@ -46,10 +46,12 @@ import {
   IssueSection,
   IssueSectionHeader,
   IssueSelectionRow,
+  IssueSurfaceAgentActivityRow,
   IssueSurfaceScopeToolbar,
   SurfaceEmptyState,
 } from "@/components/issue/issue-surface-chrome";
 import { ganttIssuesOptions, issueListOptions } from "@/data/queries/issues";
+import { workingAgentsFacetOptions } from "@/data/queries/working-agents";
 import { readIssueRows } from "@/data/queries/issue-list-cache";
 import {
   hasMoreIssues,
@@ -377,6 +379,32 @@ export default function IssuesPage() {
     [scope, countWindow, showSubIssues],
   );
 
+  // The header chip's own count, from the surface's `working_agents` facet.
+  //
+  // A separate request from `groupCountQuery` even though both are Table
+  // facets, because the two must not share a query identity: the group counts
+  // carry `working_issue_ids` (they answer about the FILTERED rows), while this
+  // one strips it. Sharing would re-key the chip's request every time the
+  // toggle flipped, and the number would flicker at the exact moment the user
+  // clicked the chip it labels (web keeps the same split — see
+  // `workingAgentsQuerySpec` in `use-issue-surface-controller.ts:523`).
+  //
+  // Built from the UNNARROWED window, which is what makes the number stable
+  // across the toggle: the server drops the facet's own dimension before
+  // counting, so "who would I see if I turned this on" is also the answer while
+  // it is on.
+  const workingAgentsQuery = useMemo(
+    () => ({
+      scope: workspaceIssueTableScope(scope),
+      window,
+      includeSubIssues: showSubIssues,
+    }),
+    [scope, window, showSubIssues],
+  );
+  const { data: headerWorkingAgents } = useQuery(
+    workingAgentsFacetOptions(wsId, workingAgentsQuery),
+  );
+
   // Paginated window. `GET /api/issues` clamps limit to 100 server-side, so a
   // one-shot fetch used to drop every issue past row 100 with no hint; the
   // list view now scrolls the window and the aggregate views drain it (below).
@@ -528,6 +556,16 @@ export default function IssuesPage() {
         view={view}
         onViewChange={setView}
         t={t}
+      />
+      {/* The agents-working toggle, on its own row under the toolbar — see
+          `IssueSurfaceAgentActivityRow` for why it is not seated in the
+          toolbar itself. Its count comes from the surface's own
+          `working_agents` facet, so it says how many agents are working inside
+          the rows THIS scope + filter set would show, not the workspace. */}
+      <IssueSurfaceAgentActivityRow
+        value={workingOnly}
+        onToggle={() => useIssuesViewStore.getState().toggleWorkingOnly()}
+        agents={headerWorkingAgents}
       />
       <IssueViewBar
         wsId={wsId}

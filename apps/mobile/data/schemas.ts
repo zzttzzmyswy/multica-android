@@ -106,6 +106,7 @@ import type {
   WorkspaceWakeup,
   WorkspaceWakeupPage,
   WorkspaceSystemWakeup,
+  WorkspaceWorkingAgent,
 } from "@multica/core/types";
 import type { CloudRuntimeNode } from "@multica/core/runtimes";
 import type { MikaBootstrapResponse } from "@multica/core/types";
@@ -889,6 +890,30 @@ export const AgentRunCountSchema: z.ZodType<AgentRunCount> = z.object({
 export const AgentRunCountListSchema = z.array(AgentRunCountSchema).default([]);
 
 export const EMPTY_AGENT_RUN_COUNT_LIST: AgentRunCount[] = [];
+
+// Privacy-safe display summary from GET /api/working-agents — one row per
+// user-authored agent holding at least one RUNNING issue task. Mirrors
+// WorkspaceWorkingAgent in packages/core/types/agent.ts:211-220. `issue_ids`
+// is the narrowed set of issues this agent's running tasks reference, which is
+// what lets a caller intersect the projection with the rows it is showing.
+// Lenient: a row missing its id carries no usable key (it could not be
+// matched to an agent, and the avatar stack would render a blank chip), so
+// the id defaults to "" and the caller filters those out rather than
+// rendering a nameless entry.
+export const WorkspaceWorkingAgentSchema: z.ZodType<WorkspaceWorkingAgent> =
+  z.object({
+    id: z.string().default(""),
+    name: z.string().default(""),
+    avatar_url: z.string().nullable().default(null),
+    running_task_count: z.number().default(0),
+    issue_ids: z.array(z.string()).default([]),
+  }).loose();
+
+export const WorkspaceWorkingAgentListSchema = z
+  .array(WorkspaceWorkingAgentSchema)
+  .default([]);
+
+export const EMPTY_WORKSPACE_WORKING_AGENT_LIST: WorkspaceWorkingAgent[] = [];
 
 // Per-actor assignment frequency for the current user, feeding the assignee
 // picker's usage sort. Mirrors AssigneeFrequencyEntry in

@@ -33,6 +33,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Issue } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { IssueRow } from "./issue-row";
+import { SubIssuesWorkingChip } from "./sub-issues-working-chip";
 import { useTranslation } from "@/lib/i18n/react";
 import { groupSubIssuesByStage } from "@/lib/sub-issue-grouping";
 import { openIssuePicker } from "@/lib/issue-picker-route";
@@ -83,9 +84,18 @@ export function IssueChildrenSection({ issueId, subIssues, wsSlug }: Props) {
   return (
     <View className="border-t border-border">
       <View className="flex-row items-center justify-between pr-2 pl-4 py-2">
-        <Text className="text-caption uppercase tracking-wider text-muted-foreground font-medium">
-          {t("timeline.subtasks")}
-        </Text>
+        <View className="flex-row items-center gap-2 min-w-0">
+          <Text className="text-caption uppercase tracking-wider text-muted-foreground font-medium">
+            {t("timeline.subtasks")}
+          </Text>
+          {/* Web renders this chip straight after the sub-issue progress pill
+              (issue-detail.tsx:2801), under the same header the per-row
+              indicators live in. It reads `?parent=<issue.id>`, so it counts
+              the agents on THIS parent's direct children — and keeps that
+              signal readable without scanning (or unfolding) the rows. Its own
+              data is the only thing it needs, so it is self-contained. */}
+          <SubIssuesWorkingChip parentIssueId={issueId} />
+        </View>
         <Pressable
           onPress={() => {
             if (wsSlug)
