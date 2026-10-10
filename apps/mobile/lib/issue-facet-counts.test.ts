@@ -320,25 +320,40 @@ describe("facetScopeFor", () => {
 });
 
 describe("propertyFacetable", () => {
-  it("accepts only the three types the server can facet", () => {
-    // issue_table_facets.go:236-247 answers select / multi_select / checkbox.
-    expect(propertyFacetable("select")).toBe(true);
-    expect(propertyFacetable("multi_select")).toBe(true);
-    expect(propertyFacetable("checkbox")).toBe(true);
+  it("accepts every type the filter menu can offer", () => {
+    // Verified against the live deployment (MYS-2056 probe, 2026-10-10): all
+    // nine shipped types answer a `property` facet with
+    // `values=[{key:"__none__", …}]` rather than `property_type_unsupported`.
+    // A `select` / `multi_select` / `checkbox` facet used to be the only
+    // three the server's switch answered; the scalar branches have since
+    // landed there.
+    for (const type of [
+      "select",
+      "multi_select",
+      "checkbox",
+      "actor",
+      "multi_actor",
+      "text",
+      "number",
+      "date",
+      "url",
+    ]) {
+      expect(propertyFacetable(type)).toBe(true);
+    }
   });
 
-  it("rejects the types the server answers with property_type_unsupported", () => {
-    // A rejection fails the whole batch, taking the six base dimensions'
-    // badges down with it — so these must never be requested.
-    expect(propertyFacetable("actor")).toBe(false);
-    expect(propertyFacetable("multi_actor")).toBe(false);
-    expect(propertyFacetable("text")).toBe(false);
-    expect(propertyFacetable("number")).toBe(false);
-    expect(propertyFacetable("date")).toBe(false);
-    expect(propertyFacetable("url")).toBe(false);
+  it("rejects unknown and missing types", () => {
+    // A type this build cannot read the values of is not one to ask counts
+    // for — and a rejection fails the WHOLE batch, taking the six base
+    // dimensions' badges down with it.
     expect(propertyFacetable(undefined)).toBe(false);
-    // A type a newer server adds is not facetable until this build knows how
-    // to read its values either.
+    expect(propertyFacetable("")).toBe(false);
+    // `multi_text` / `multi_url` are upstream types this deployment's server
+    // does not accept at all (`POST /api/properties` answers
+    // `invalid type "multi_text"`, same message as a nonsense type), so they
+    // stay out of both the filter menu and the facet request.
     expect(propertyFacetable("multi_text")).toBe(false);
+    expect(propertyFacetable("multi_url")).toBe(false);
+    expect(propertyFacetable("future_type")).toBe(false);
   });
 });

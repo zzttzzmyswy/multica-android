@@ -22,7 +22,7 @@
  * (`usePickerSearch`), because Expo does not render
  * `headerSearchBarOptions` on Android at all. Same search semantics.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, TextInput, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -34,7 +34,7 @@ import type {
   Project,
   Squad,
 } from "@multica/core/types";
-import { isActorPropertyType } from "@multica/core/types";
+import { isActorPropertyType, isScalarPropertyType } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { ProjectIcon } from "@/components/ui/project-icon";
@@ -468,11 +468,22 @@ export function FilterPropertyPickerBody({
   property,
   selected,
   onToggle,
+  onSetValues,
   counts,
 }: {
   property: IssueProperty;
   selected: string[];
   onToggle: (optionId: string) => void;
+  /**
+   * Replace this definition's whole selection (web `setPropertyFilterValues`).
+   *
+   * Required, not optional: the scalar types (text / number / date / url)
+   * build their selection from a value input, and an omitted handler would
+   * leave that input wired to nothing — a control the user can type into but
+   * that silently commits nothing. Making it required means the compiler
+   * refuses such a call site.
+   */
+  onSetValues: (values: string[]) => void;
   /** Facet counts by option key; `undefined` renders no badges. */
   counts?: ReadonlyMap<string, number>;
 }) {
@@ -482,6 +493,7 @@ export function FilterPropertyPickerBody({
   const currentUserId = useAuthStore((s) => s.user?.id);
   const [query, setQuery] = useState("");
   const actorProperty = isActorPropertyType(property.type);
+  const scalarProperty = isScalarPropertyType(property.type);
   // Four-state read: an actor property with a failed member directory must
   // name that failure, not claim the definition has no selectable values.
   const membersRead = catalogRead(
@@ -514,6 +526,20 @@ export function FilterPropertyPickerBody({
     if (!q) return options;
     return options.filter((option) => matchesNameOrPinyin(option.name, q));
   }, [options, actorProperty, query]);
+
+  // Scalar definitions (text / number / date / url) are not a list of options
+  // at all — web renders a value input beside a mutually-exclusive "No value"
+  // row, and mobile renders the same pair. See `ScalarPropertyFilterBody`.
+  if (scalarProperty) {
+    return (
+      <ScalarPropertyFilterBody
+        property={property}
+        selected={selected}
+        onSetValues={onSetValues}
+        counts={counts}
+      />
+    );
+  }
 
   return (
     <View className="flex-1">
@@ -589,6 +615,126 @@ export function FilterPropertyPickerBody({
           )
         }
       />
+    </View>
+  );
+}
+/**
+ * Scalar-property filter body (text / number / date / url).
+ *
+ * Web's `PropertyFilterOptions` renders these as a value input plus a
+ * mutually-exclusive "No value" row (`issues-header.tsx:837-840` routes every
+ * `isScalarPropertyType` through that branch). Mobile renders the same pair:
+ * one text input that commits a value, and one "No value" row for the
+ * `NO_PROPERTY_VALUE` sentinel.
+ *
+ * Two semantics are load-bearing, both mirrored from web:
+ *
+ *   - The sentinel is RESERVED. A draft equal to `"__none__"` is refused rather
+ *     than committed, because the server reads that string as "key absent" —
+ *     letting it through would silently turn a value filter into a No-value
+ *     filter. Web's `commitValue` does the same.
+ *   - Value and "No value" COMPOSE rather than replace: committing a value
+ *     preserves an existing No-value selection and vice versa, so the two are
+ *     an OR (an issue matching either is shown). Web's review round 2 fixed
+ *     exactly this after an early version dropped one when the other was set.
+ *
+ * The numeric keyboard is the only per-type divergence: web can rely on
+ * `type="number"`, while RN needs `keyboardType` — same reason the issue
+ * editor's own scalar input sets it.
+ */
+function ScalarPropertyFilterBody({
+  property,
+  selected,
+  onSetValues,
+  counts,
+}: {
+  property: IssueProperty;
+  selected: string[];
+  onSetValues: (values: string[]) => void;
+  counts?: ReadonlyMap<string, number>;
+}) {
+  const { t } = useTranslation();
+  const { colorScheme } = useSystemColorScheme();
+  const theme = THEME[colorScheme];
+
+  // A value member is any selection that is not the sentinel.
+  const committed = selected.find((v) => v !== NO_VALUE_KEY);
+  const hasNoValue = selected.includes(NO_VALUE_KEY);
+  // Draft syncs to the committed value, so a filter cleared or rewritten
+  // elsewhere cannot be written back from a stale input (same rule as web's
+  // `useEffect(() => setDraft(committedScalar))`).
+  const [draft, setDraft] = useState(committed ?? "");
+  useEffect(() => setDraft(committed ?? ""), [committed]);
+
+  const commitValue = (raw: string) => {
+    const value = raw.trim();
+    // Reserved sentinel — see the doc comment.
+    if (value === NO_VALUE_KEY) return;
+    onSetValues([
+      ...(value ? [value] : []),
+      ...(hasNoValue ? [NO_VALUE_KEY] : []),
+    ]);
+  };
+
+  const toggleNoValue = () => {
+    onSetValues([
+      ...(committed ? [committed] : []),
+      ...(hasNoValue ? [] : [NO_VALUE_KEY]),
+    ]);
+  };
+
+  return (
+    <View className="flex-1">
+      <View className="px-4 pt-3 pb-1">
+        <View className="flex-row items-center gap-2 rounded-xl px-3 py-2 border border-border bg-secondary/40">
+          <Ionicons name="search" size={16} color={theme.mutedForeground} />
+          <TextInput
+            value={draft}
+            onChangeText={setDraft}
+            onSubmitEditing={() => commitValue(draft)}
+            onBlur={() => commitValue(draft)}
+            returnKeyType="done"
+            autoCorrect={false}
+            keyboardType={
+              property.type === "number"
+                ? "decimal-pad"
+                : property.type === "url"
+                  ? "url"
+                  : "default"
+            }
+            placeholder={
+              property.type === "url"
+                ? t("properties.value.urlPlaceholder")
+                : property.type === "number"
+                  ? t("properties.value.numberPlaceholder")
+                  : t("properties.value.valuePlaceholder")
+            }
+            placeholderTextColor={theme.mutedForeground}
+            className="flex-1 text-body text-foreground"
+            style={{ fontSize: 14, includeFontPadding: false, textAlignVertical: "center" }}
+          />
+        </View>
+      </View>
+      <Pressable
+        onPress={toggleNoValue}
+        className={cn(
+          "flex-row items-center gap-3 px-4 py-3 active:bg-secondary",
+          hasNoValue && "bg-secondary/60",
+        )}
+      >
+        <Ionicons
+          name="remove-circle-outline"
+          size={16}
+          color={MOBILE_PLACEHOLDER_COLOR}
+        />
+        <Text className="flex-1 text-title-sm text-foreground">
+          {t("filter.noPropertyValue")}
+        </Text>
+        <OptionCountBadge count={counts?.get(NO_VALUE_KEY)} />
+        {hasNoValue ? (
+          <Ionicons name="checkmark" size={20} color={theme.primary} />
+        ) : null}
+      </Pressable>
     </View>
   );
 }

@@ -311,6 +311,11 @@ function PropertyPickerBody({
           .getState()
           .togglePropertyFilter(property.id, optionId)
       }
+      onSetValues={(values) =>
+        issueFilterStoreForScope(scope)
+          .getState()
+          .setPropertyFilterValues(property.id, values)
+      }
     />
   );
 }

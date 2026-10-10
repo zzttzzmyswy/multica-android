@@ -252,6 +252,12 @@ export interface IssueFilterSlice {
    *  definition). Dropping the last selected option removes the definition
    *  from the record — an empty record on the wire is no filter. */
   togglePropertyFilter: (propertyId: string, optionId: string) => void;
+  /** Replace one definition's whole selection set (web
+   *  `setPropertyFilterValues`). The scalar types (text / number / date / url)
+   *  commit a VALUE rather than toggling a member, so they need a
+   *  set-the-whole-thing action; `togglePropertyFilter` cannot express them.
+   *  An empty array clears the definition, like toggling the last member off. */
+  setPropertyFilterValues: (propertyId: string, values: string[]) => void;
   /** Drop every selection of one custom-property definition. */
   clearPropertyFilter: (propertyId: string) => void;
   setDateFilter: (filter: IssueDateFilterValue | null) => void;
@@ -407,6 +413,7 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
   | "setSortDirection"
   | "setGrouping"
   | "togglePropertyFilter"
+  | "setPropertyFilterValues"
   | "clearPropertyFilter"
   | "setDateFilter"
   | "toggleWorkingOnly"
@@ -492,6 +499,15 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
         const propertyFilters = { ...state.propertyFilters };
         if (next.length === 0) delete propertyFilters[propertyId];
         else propertyFilters[propertyId] = next;
+        return { propertyFilters };
+      }),
+    setPropertyFilterValues: (propertyId, values) =>
+      set((state) => {
+        const propertyFilters = { ...state.propertyFilters };
+        // An empty set is not a filter: dropping the key keeps the wire
+        // request clean and matches `togglePropertyFilter`'s convention.
+        if (values.length === 0) delete propertyFilters[propertyId];
+        else propertyFilters[propertyId] = values.slice();
         return { propertyFilters };
       }),
     clearPropertyFilter: (propertyId) =>
