@@ -42,6 +42,7 @@ import {
   IssueSectionHeader,
   IssueSelectionRow,
   IssueSection,
+  IssueSurfaceAgentActivityRow,
   IssueSurfaceScopeToolbar,
   SurfaceEmptyState,
 } from "@/components/issue/issue-surface-chrome";
@@ -89,6 +90,7 @@ import {
   withWorkingCountDimension,
 } from "@/lib/issue-table-group-counts";
 import { useGroupingProperty } from "@/lib/use-grouping-property";
+import { workingAgentsFacetOptions } from "@/data/queries/working-agents";
 import { useListSectionFolding } from "@/data/stores/issue-workbench-layout-store";
 import { BOARD_STATUSES } from "@/lib/issue-status-core";
 import {
@@ -399,6 +401,23 @@ export default function MyIssues() {
     [scope, countWindow, showSubIssues],
   );
 
+  // The header chip's own count — same split as the workspace Issues screen:
+  // the group counts carry `working_issue_ids`, this one strips it so the
+  // number does not re-key when the toggle it labels flips. Built from the
+  // UNNARROWED window, which is what makes it stable across the toggle (the
+  // server drops the facet's own dimension before counting).
+  const workingAgentsQuery = useMemo(
+    () => ({
+      scope: myIssueTableScope(scope),
+      window,
+      includeSubIssues: showSubIssues,
+    }),
+    [scope, window, showSubIssues],
+  );
+  const { data: headerWorkingAgents } = useQuery(
+    workingAgentsFacetOptions(wsId, workingAgentsQuery),
+  );
+
   // Paginated window — see the workspace Issues screen for the rationale
   // (`GET /api/issues` clamps limit to 100 server-side). The list view
   // infinite-scrolls; board / swimlane / table drain the window instead.
@@ -552,6 +571,16 @@ export default function MyIssues() {
         view={view}
         onViewChange={setView}
         t={t}
+      />
+      {/* The agents-working toggle, on its own row under the toolbar — see
+          `IssueSurfaceAgentActivityRow`. Web renders this chip on the My
+          Issues header too (`my-issues-header.tsx:167`), reading the same
+          `working_agents` facet narrowed by THIS surface's scope relation and
+          filters, so the count answers about the rows below it. */}
+      <IssueSurfaceAgentActivityRow
+        value={workingOnly}
+        onToggle={() => useMyIssuesViewStore.getState().toggleWorkingOnly()}
+        agents={headerWorkingAgents}
       />
       <IssueViewBar
         wsId={wsId}

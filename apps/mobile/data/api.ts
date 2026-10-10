@@ -67,6 +67,9 @@ import type {
   WorkspaceWakeupFilters,
   WorkspaceWakeupPage,
   WorkspaceSystemWakeup,
+  WorkspaceWorkingAgent,
+  WorkspaceWorkingAgentType,
+  WorkspaceWorkingAgentMineRelation,
   IssueWakeupInput,
   SystemWakeup,
   WakeupRun,
@@ -448,6 +451,8 @@ import {
   EMPTY_AGENT_ACTIVITY_BUCKET_LIST,
   AgentRunCountListSchema,
   EMPTY_AGENT_RUN_COUNT_LIST,
+  WorkspaceWorkingAgentListSchema,
+  EMPTY_WORKSPACE_WORKING_AGENT_LIST,
   CreateFeedbackResponseSchema,
   EMPTY_FEEDBACK_RESPONSE,
   CommentTriggerPreviewSchema,
@@ -2496,6 +2501,48 @@ class ApiClient {
     return parseWithFallback(raw, AgentTaskListSchema, EMPTY_AGENT_TASK_LIST, {
       endpoint: "listAgentTaskSnapshot",
     });
+  }
+
+  // Privacy-safe workspace projection of "which agents are working on issues
+  // right now" (web parity: core/api/client.ts:2085-2090). One row per
+  // user-authored agent holding ≥1 RUNNING issue task, each carrying the
+  // distinct issue ids its running tasks reference.
+  //
+  // Three narrowings, and the server rejects combining them:
+  //   - `type` + `mineRelation` — the workspace-wide read (the Issues list
+  //     header chip), optionally restricted to the caller's own relation.
+  //   - `parentIssueId` — one issue's DIRECT children, which is how the
+  //     sub-issues header on issue detail reads the same source. Verified
+  //     against the deployment: `?type=issue&parent=<uuid>` answers a list,
+  //     and a non-uuid parent answers 400, so the parameter is genuinely
+  //     parsed rather than ignored.
+  // Scope and parent are mutually exclusive server-side (both ⇒ 400), so the
+  // caller passes one or the other — same rule as web's client.
+  async getWorkspaceWorkingAgents(
+    type?: WorkspaceWorkingAgentType,
+    mineRelation?: WorkspaceWorkingAgentMineRelation,
+    parentIssueId?: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<WorkspaceWorkingAgent[]> {
+    const search = new URLSearchParams();
+    if (type) search.set("type", type);
+    if (mineRelation) {
+      search.set("scope", "mine");
+      search.set("relation", mineRelation);
+    } else if (parentIssueId) {
+      search.set("parent", parentIssueId);
+    }
+    const query = search.toString();
+    const raw = await this.fetch<unknown>(
+      `/api/working-agents${query ? `?${query}` : ""}`,
+      { signal: opts?.signal },
+    );
+    return parseWithFallback(
+      raw,
+      WorkspaceWorkingAgentListSchema,
+      EMPTY_WORKSPACE_WORKING_AGENT_LIST,
+      { endpoint: "getWorkspaceWorkingAgents" },
+    );
   }
 
   // Workspace-wide per-agent daily activity for the last 30 days, anchored on

@@ -112,6 +112,12 @@ const RUN_SENSE_KEYS = [
   "inbox.emptySubtitle",
   "inbox.type.task_completed",
   "inbox.type.task_failed",
+  // The agents-working roster's per-agent running count. A ROW's count is a
+  // number of agent runs, not of filed issues — web labels the same value
+  // `agent_activity.tasks_count` — so it takes the run term like every other
+  // count of executions.
+  "issue.agentsWorkingTasks_one",
+  "issue.agentsWorkingTasks_other",
   "issue.qa.coalesced",
   "notif.groupAgentActivityDesc",
   "plugins.disabled",
