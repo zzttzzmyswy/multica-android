@@ -533,6 +533,14 @@ export function useUpdateIssue(
         // replacement — never patch them into the optimistic Issue (web
         // mutations.ts note). The server's response carries the final list.
         attachment_ids: _attachmentIds,
+        // suppress_run / handoff_note are write-time CONTROL fields, not Issue
+        // columns (types/api.ts). Patching them in would leave every
+        // optimistic row carrying phantom fields the server's response then
+        // "removes" — and `handoff_note` would sit in the cache until the
+        // settle refetch. Web strips both in the same place
+        // (packages/core/issues/mutations.ts:111-119).
+        suppress_run: _suppressRun,
+        handoff_note: _handoffNote,
         ...optimisticPatch
       } = patch;
       if (prev) {

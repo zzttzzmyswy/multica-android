@@ -45,6 +45,7 @@ import type {
   IssueStatusCategory,
   IssueStatusEntry,
   IssueSubscriber,
+  IssueTriggerPreview,
   Label,
   ListIssueStatusesResponse,
   ListLabelsResponse,
@@ -2971,3 +2972,15 @@ export const WorkspaceSystemWakeupListSchema = z
   .array(WorkspaceSystemWakeupSchema)
   .default([]);
 export const EMPTY_WORKSPACE_SYSTEM_WAKEUP_LIST: WorkspaceSystemWakeup[] = [];
+
+/** `POST /api/issues/preview-trigger` fallback. The schema itself is core's
+ *  (`packages/core/api/schemas.ts:888`, a pure Zod export on the sharing
+ *  whitelist); only the mobile-side empty value lives here, following the
+ *  `EMPTY_COMMENT_TRIGGER_PREVIEW` precedent above. "No run would start" is
+ *  the honest reading of a malformed or unreachable answer, and it is the
+ *  benign direction for the one consumer: the create form's caption stays
+ *  parked rather than promising a run that may not happen. */
+export const EMPTY_ISSUE_TRIGGER_PREVIEW: IssueTriggerPreview = {
+  triggers: [],
+  total_count: 0,
+};

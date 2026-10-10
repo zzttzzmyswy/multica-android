@@ -100,9 +100,15 @@ function assigneeKey(type: IssueAssigneeType | null, id: string | null): string 
  * assignment may start runs, EXCEPT when every selected issue is in backlog —
  * a parking-lot assignment can never start one (web handleBatchAssignee
  * short-circuit).
+ *
+ * Typed on the one field it reads, not on a whole `Issue`: the single-issue
+ * assign path has only `status` in hand at the call site (the picker's detail
+ * cache is legitimately cold for a sub-issue row), and widening here is what
+ * lets both surfaces run the SAME predicate instead of the single path
+ * carrying a second copy of the rule.
  */
 export function needRunConfirm(
-  issues: readonly Issue[],
+  issues: readonly Pick<Issue, "status">[],
   assigneeType: IssueAssigneeType | null | undefined,
 ): boolean {
   if (assigneeType !== "agent" && assigneeType !== "squad") return false;
