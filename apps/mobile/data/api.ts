@@ -2721,7 +2721,13 @@ class ApiClient {
         // uses strings.Split on a single query value). Match web's serialization
         // in packages/core/api/client.ts:781-782 — repeated keys would silently
         // collapse to the first value only.
-        if (v.length > 0) {
+        //
+        // `ids` is the one list whose EMPTY form is meaningful: presence means
+        // "restrict to these", so `ids=` must reach the wire as an empty window
+        // (server reads `Has("ids")`, issue.go:1136). Every other list keeps
+        // the `length > 0` guard — an empty `statuses=` would be a malformed
+        // facet rather than a restriction. Same rule as web client.ts:770.
+        if (v.length > 0 || k === "ids") {
           // Actor filters are `{type, id}` objects — serialize each as
           // `type:id` (server parseActorFilterList, issue.go:1435). Match web
           // client.ts:756-761 exactly: this is NOT `String(v)` which would
@@ -2758,6 +2764,26 @@ class ApiClient {
       }
     }
     const qs = search.toString();
+    // An `ids` facet can carry hundreds of UUIDs (the agents-working filter
+    // sends the live running-issue set) — enough to blow the ~8 KB request-line
+    // cap of common reverse proxies. Route those windows through the POST twin,
+    // which takes the SAME key/value pairs as a JSON body and rebuilds the
+    // query string server-side (issues.go `QueryIssues` → `ListIssues`), so the
+    // two transports cannot drift. Mirrors web's client.ts:791-800, which
+    // routes on the same condition.
+    if (params.ids) {
+      const raw = await this.fetch<unknown>("/api/issues/query", {
+        method: "POST",
+        body: JSON.stringify(Object.fromEntries(search)),
+        signal: opts?.signal,
+      });
+      return parseWithFallback(
+        raw,
+        ListIssuesResponseSchema,
+        EMPTY_LIST_ISSUES_RESPONSE,
+        { endpoint: "POST /api/issues/query" },
+      );
+    }
     const raw = await this.fetch<unknown>(
       `/api/issues${qs ? `?${qs}` : ""}`,
       { signal: opts?.signal },

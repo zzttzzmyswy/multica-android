@@ -78,17 +78,28 @@ const WORKING_AGENTS_STALE_MS = 30 * 1000;
  * server drops the facet's own dimension before counting
  * (`issue_table_facets.go:69-77`).
  *
- * `working_issue_ids` is stripped from the window first. The server ignores it
- * for this facet anyway, so this is purely about query IDENTITY: without the
- * strip, flipping the toggle would re-key the request and the number the chip
- * is labelling would flicker as it labelled it (web does the same — see
- * `workingAgentsQuerySpec` in the controller).
- */
+ * `working_issue_ids` is stripped from the window first, and so is `ids` —
+ * the row channel's spelling of the same restriction (MYS-2066). The server
+ * ignores both for this facet anyway, so this is purely about query IDENTITY:
+ * without the strip, flipping the toggle would re-key the request and the
+ * number the chip is labelling would flicker as it labelled it (web does the
+ * same — see `workingAgentsQuerySpec` in the controller).
+ *
+ * Both spellings must go, and that is not belt-and-braces: the chip's window
+ * is the ROW window, which carries `ids` while the toggle is on. Stripping
+ * only the count spelling would leave the row spelling in the bag — and
+ * although `buildIssueFacetQuerySpec` does not project `ids` into the spec
+ * filters today, a key that stays stable only because a downstream builder
+ * happens to ignore a field is one refactor away from flickering. */
 export function workingAgentsFacetOptions(
   wsId: string | null,
   query: IssueFacetCountQuery,
 ) {
-  const { working_issue_ids: _running, ...unfiltered } = query.window;
+  const {
+    working_issue_ids: _counts,
+    ids: _rows,
+    ...unfiltered
+  } = query.window;
   const spec = buildIssueFacetQuerySpec(
     query.scope,
     unfiltered,

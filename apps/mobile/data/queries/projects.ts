@@ -16,7 +16,11 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type { Project } from "@multica/core/types";
 import { api } from "@/data/api";
-import { issueKeys } from "@/data/queries/issue-keys";
+import {
+  issueKeys,
+  issueParamsKey,
+  type IssueListWindowParams,
+} from "@/data/queries/issue-keys";
 import {
   ISSUE_PAGE_SIZE,
   makeIssuePage,
@@ -65,17 +69,38 @@ export const projectResourcesOptions = (wsId: string | null, id: string) =>
  * `issueKeys.list(wsId)` also refreshes this list — single source of
  * truth for issue caches. Paginated like the workspace list
  * (`InfiniteData<IssuePage>`); read it with `readIssueRows`.
+ *
+ * `window` (MYS-2066) carries this surface's server-side narrowing. It used to
+ * take none: the project page's filters were applied purely client-side, which
+ * is only equivalent while a project fits in one page — and measured on the
+ * deployment, four of twelve projects hold more than 100 issues (432 at the
+ * top), so 「显示子任务」 off hid the sub-issues that happened to be in the
+ * loaded page rather than all of them. The window rides IN the key (suffix,
+ * mirroring `myWindowSuffix`) so each narrowing keeps its own cache entry.
+ *
+ * The key stays under the `[…, "byProject", projectId]` prefix whether or not a
+ * window is present, which is what lets the realtime patcher reach every window
+ * variant of one project with a single prefix match.
  */
-export const projectIssuesOptions = (wsId: string | null, projectId: string) =>
-  infiniteQueryOptions({
-    queryKey: [
-      ...issueKeys.list(wsId),
-      "byProject",
-      projectId,
-    ] as const,
+export const projectIssuesOptions = (
+  wsId: string | null,
+  projectId: string,
+  window: IssueListWindowParams = {},
+) => {
+  const key: unknown[] = [...issueKeys.list(wsId), "byProject", projectId];
+  // Same rule as the other two surfaces: a bag with no active dimension keeps
+  // the historical key shape, so nothing that already reads it needs updating.
+  if (Object.keys(window).length > 0) key.push(`w:${issueParamsKey(window)}`);
+  return infiniteQueryOptions({
+    queryKey: key,
     queryFn: async ({ pageParam, signal }) => {
       const res = await api.listIssues(
-        { project_id: projectId, limit: ISSUE_PAGE_SIZE, offset: pageParam },
+        {
+          project_id: projectId,
+          ...window,
+          limit: ISSUE_PAGE_SIZE,
+          offset: pageParam,
+        },
         { signal },
       );
       return makeIssuePage(res.issues, res.total);
@@ -84,6 +109,7 @@ export const projectIssuesOptions = (wsId: string | null, projectId: string) =>
     getNextPageParam: (_lastPage, allPages) => nextIssuePageParam(allPages),
     enabled: !!wsId && !!projectId,
   });
+};
 
 /**
  * Helper for the read-only project chip — returns the project matching id,
