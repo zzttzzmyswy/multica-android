@@ -63,6 +63,48 @@ export function isActorPropertyType(type: string): boolean {
   return type === "actor" || type === "multi_actor";
 }
 
+/** Single-valued scalar properties: text / number / date / url. */
+export type ScalarIssuePropertyType = Extract<IssuePropertyType, "text" | "number" | "date" | "url">;
+
+export function isScalarPropertyType(type: string): type is ScalarIssuePropertyType {
+  return type === "text" || type === "url" || type === "number" || type === "date";
+}
+
+/**
+ * Types the issue filter menu exposes for value + "No value" filtering.
+ * Kept as an explicit enumeration (rather than delegating to
+ * isKnownPropertyType) so a future property type must opt into filtering —
+ * it should never become filterable by default.
+ *
+ * Mirrors upstream `packages/core/types/property.ts`. Note this is the
+ * CLIENT's list of what the filter menu may offer: a deployed server decides
+ * independently which of these it can actually match, and this fork's server
+ * accepts all eight (verified against the live deployment — see
+ * `apps/mobile/lib/filter-issues.ts` for the matcher's matching semantics).
+ */
+export function isFilterablePropertyType(type: string): boolean {
+  return (
+    type === "select" ||
+    type === "multi_select" ||
+    type === "checkbox" ||
+    isScalarPropertyType(type) ||
+    isActorPropertyType(type)
+  );
+}
+
+/**
+ * The filter value that means "this property is unset" rather than a literal
+ * string. Mirrors the server's `noPropertyValue` constant
+ * (`server/internal/handler/property.go`), which compiles it to a key-absence
+ * predicate.
+ *
+ * Load-bearing on the client too: a text property whose stored value happens
+ * to be the literal `__none__` is matched as a *value*, because the server's
+ * key-absence predicate excludes it from a No-value filter. The client matcher
+ * must agree with that rather than treating the sentinel as a wildcard.
+ */
+export const NO_PROPERTY_VALUE = "__none__";
+
 export function formatActorRef(kind: IssuePropertyActorKind, id: string): string {
   return `${kind}:${id}`;
 }

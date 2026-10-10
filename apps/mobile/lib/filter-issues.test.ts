@@ -420,6 +420,53 @@ describe("issueMatchesPropertyFilters", () => {
       issueMatchesPropertyFilters(item, { defA: ["a"], defB: ["c"] }),
     ).toBe(false);
   });
+
+  /**
+   * "No value" (`__none__`) — the sentinel is a KEY-ABSENCE predicate, not a
+   * wildcard and not a literal. Both halves matter:
+   *
+   *   - an issue WITHOUT the property matches it (that is the whole point);
+   *   - an issue whose stored text is literally `"__none__"` does NOT, because
+   *     the server's key-absence predicate excludes a set value. A matcher
+   *     that treated the sentinel as "match anything" would also make a
+   *     combined `[value, __none__]` filter match every issue, which the
+   *     server does not.
+   */
+  it("__none__ matches an unset property", () => {
+    expect(
+      issueMatchesPropertyFilters(mk({ other: "x" }), { def: ["__none__"] }),
+    ).toBe(true);
+  });
+
+  it("__none__ never matches a SET value, even a literal '__none__'", () => {
+    expect(issueMatchesPropertyFilters(mk({ def: "a" }), { def: ["__none__"] })).toBe(false);
+    // The literal string is a real value; the sentinel is not a wildcard.
+    expect(
+      issueMatchesPropertyFilters(mk({ def: "__none__" }), { def: ["__none__"] }),
+    ).toBe(false);
+  });
+
+  it("value and __none__ compose as an OR", () => {
+    const filter = { def: ["a", "__none__"] };
+    expect(issueMatchesPropertyFilters(mk({ def: "a" }), filter)).toBe(true);
+    expect(issueMatchesPropertyFilters(mk({ other: "x" }), filter)).toBe(true);
+    expect(issueMatchesPropertyFilters(mk({ def: "b" }), filter)).toBe(false);
+  });
+
+  /**
+   * Numbers compare NUMERICALLY. The server's jsonb number containment does
+   * the same, so a string comparison here would make the rows on screen
+   * disagree with the "N issues" badge the server computed for the same
+   * filter.
+   */
+  it("number values match numerically, not as strings", () => {
+    const issue3_5 = mk({ est: 3.5 });
+    expect(issueMatchesPropertyFilters(issue3_5, { est: ["3.50"] })).toBe(true);
+    expect(issueMatchesPropertyFilters(issue3_5, { est: ["3.5"] })).toBe(true);
+    expect(issueMatchesPropertyFilters(issue3_5, { est: ["4"] })).toBe(false);
+    // A stored ZERO must not be confused with the "no value" case.
+    expect(issueMatchesPropertyFilters(mk({ est: 0 }), { est: ["0"] })).toBe(true);
+  });
 });
 
 describe("applyIssueFilters with propertyFilters", () => {

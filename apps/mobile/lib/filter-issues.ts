@@ -24,7 +24,11 @@ import type {
   IssueStatus,
   IssueStatusCategory,
 } from "@multica/core/types";
-import { formatActorRef, isActorPropertyType } from "@multica/core/types";
+import {
+  NO_PROPERTY_VALUE,
+  formatActorRef,
+  isActorPropertyType,
+} from "@multica/core/types";
 import type {
   ActorFilterValue,
   IssueDateFilterValue,
@@ -101,11 +105,26 @@ export const EMPTY_ISSUE_FILTER: IssueFilterState = {
 
 /**
  * Match one issue against the property filters. Mirrors web's
- * `issueMatchesPropertyFilters` (packages/views/issues/utils/filter.ts:61-82):
- * select values are single option-id strings, multi_select values are
- * option-id arrays, checkbox values are booleans compared against the
- * "true"/"false" pseudo-options. An issue with no value for a filtered
- * definition never matches it.
+ * `issueMatchesPropertyFilters`
+ * (packages/views/issues/utils/filter.ts:145-181):
+ *
+ *   - select stores one option-id string, multi_select an option-id array,
+ *     checkbox a boolean compared against the "true"/"false" pseudo-options,
+ *     the scalar types (text/number/date/url) one plain string or number, and
+ *     the actor types a `member:<user_id>` string or an array of them.
+ *   - every selected member is compared against the whole stored value, and
+ *     ONE match is enough (OR within a definition); every definition must
+ *     match (AND across definitions) — that is the `some`/`every` shape below.
+ *   - numbers compare NUMERICALLY, so the filter "3.50" matches a stored 3.5.
+ *     The server does the same (its jsonb number containment), and a client
+ *     string-comparing would answer differently from the count on screen.
+ *   - `NO_PROPERTY_VALUE` ("__none__") matches an issue with the key ABSENT.
+ *     It never matches a SET value: a text property whose literal value is
+ *     "__none__" is a real value, and the server's key-absence predicate
+ *     excludes it from a No-value filter. This must agree with that.
+ *
+ * An issue with no value for a filtered definition matches only when the
+ * No-value sentinel is among the selections.
  */
 export function issueMatchesPropertyFilters(
   issue: Issue,
@@ -116,16 +135,22 @@ export function issueMatchesPropertyFilters(
   for (const [propertyId, selected] of Object.entries(propertyFilters)) {
     if (selected.length === 0) continue;
     const value = issue.properties?.[propertyId];
-    if (value === undefined) return false;
-    if (typeof value === "string") {
-      if (!selected.includes(value)) return false;
-    } else if (Array.isArray(value)) {
-      if (!value.some((id) => selected.includes(id))) return false;
-    } else if (typeof value === "boolean") {
-      if (!selected.includes(String(value))) return false;
-    } else {
+    if (value === undefined) {
+      // Unset: only a No-value selection can be satisfied.
+      if (selected.includes(NO_PROPERTY_VALUE)) continue;
       return false;
     }
+    const matched = selected.some((member) => {
+      // The sentinel never matches a set value — see the doc comment.
+      if (member === NO_PROPERTY_VALUE) return false;
+      if (typeof value === "string") return member === value;
+      // Numeric comparison, matching the server's jsonb number containment.
+      if (typeof value === "number") return Number(member) === value;
+      if (Array.isArray(value)) return value.includes(member);
+      if (typeof value === "boolean") return member === String(value);
+      return false;
+    });
+    if (!matched) return false;
   }
   return true;
 }

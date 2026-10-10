@@ -26,7 +26,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { IssuePriority } from "@multica/core/types";
-import { isActorPropertyType } from "@multica/core/types";
+import { isFilterablePropertyType } from "@multica/core/types";
 import { addDaysDateOnly, todayDateOnly } from "@multica/core/issues/date";
 import { Text } from "@/components/ui/text";
 import { StatusIcon } from "@/components/ui/status-icon";
@@ -199,16 +199,15 @@ export default function IssuesFilterRoute() {
   // instead of branching on a length.
   const catalog = useActivePropertyCatalog(wsId);
   const properties = catalog.definitions;
-  const filterableProperties = properties.filter(
-    (p) =>
-      p.type === "select" ||
-      p.type === "multi_select" ||
-      p.type === "checkbox" ||
-      // Actor properties filter by member reference (`member:<user_id>`),
-      // the same containment semantics the server's `@>` uses for
-      // multi_select. Web exposes them through `isFilterablePropertyType`
-      // (packages/core/types/property.ts).
-      isActorPropertyType(p.type),
+  // The filterable set comes from core's `isFilterablePropertyType`, which is
+  // the same predicate web's filter menu uses. Mobile used to keep its own
+  // hardcoded list here (select / multi_select / checkbox / actor /
+  // multi_actor), which silently dropped the four SCALAR types — text,
+  // number, date and url were not filterable on the phone at all, while web
+  // offered all eight. Reading the shared predicate is what keeps the two
+  // from drifting again.
+  const filterableProperties = properties.filter((p) =>
+    isFilterablePropertyType(p.type),
   );
   // Disjunctive server facet counts — one "N issues" badge per filter option,
   // matching web (issues-header.tsx:1266 status / :1309 priority / :387

@@ -60,6 +60,7 @@ const SLICE: IssueFilterSlice = {
   toggleNoProject: () => {},
   toggleLabelFilter: () => {},
   togglePropertyFilter: () => {},
+  setPropertyFilterValues: () => {},
   clearPropertyFilter: () => {},
   setDateFilter: () => {},
   toggleWorkingOnly: () => {},

@@ -105,7 +105,13 @@ describe("the filter menu offers actor properties", () => {
   const filter = code("app/(app)/[workspace]/issues-filter.tsx");
 
   it("includes both actor types in its filterable set", () => {
-    expect(filter).toMatch(/filterableProperties[\s\S]*?isActorPropertyType/);
+    // The panel now reads core's `isFilterablePropertyType` instead of a local
+    // enumeration (iteration 220: that local list is what silently dropped the
+    // four scalar types). The actor types are still in the set it admits —
+    // `property.scalar.test.ts` pins their membership — so the assertion is
+    // that the panel uses the shared predicate, not a narrower local one.
+    expect(filter).toContain("isFilterablePropertyType");
+    expect(filter).not.toMatch(/p\.type === "actor"/);
   });
 
   it("lists members as the filter's candidate values", () => {

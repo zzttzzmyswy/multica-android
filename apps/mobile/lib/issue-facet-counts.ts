@@ -26,6 +26,7 @@ import type {
   IssueTableQuerySpec,
   IssueTableScope,
 } from "@multica/core/types";
+import { isFilterablePropertyType } from "@multica/core/types";
 import type { IssueCountWindowParams } from "@/data/queries/issue-keys";
 import {
   assigneeTypesForScopeTab,
@@ -127,15 +128,27 @@ export function facetScopeFor(
 /**
  * Whether the server can facet this property type.
  *
- * `issue_table_facets.go:236-247` answers `select`, `multi_select` and
- * `checkbox`, and rejects everything else with `property_type_unsupported` —
- * and that rejection fails the WHOLE batch, so asking for an actor property
- * would cost the six base dimensions their badges too. The filter sheet
- * therefore asks only for the facetable definitions and shows the rest
- * without a count.
+ * Every type the filter menu offers is facetable on the deployed server, so
+ * this is now `isFilterablePropertyType` rather than a second, narrower list.
+ * The old three-type allowlist (select / multi_select / checkbox) mirrored
+ * `issue_table_facets.go`'s switch at the time; the deployment has since
+ * gained the scalar branches (upstream 46c9ea38a, "extend property filter to
+ * text / number / date / url", #7240), verified directly against
+ * `mu.zztweb.top` — a `text` definition answers
+ * `values=[{key:"__none__", count:…}]` rather than `property_type_unsupported`.
+ *
+ * Why the distinction was load-bearing, and still is: `ListIssueTableFacets`
+ * resolves non-batchable facets ONE BY ONE, and a rejected type answers 422 and
+ * returns — failing the WHOLE response, so one bad id would cost the six base
+ * dimensions their badges too. Asking for a type the server cannot facet is
+ * therefore not a missing badge but a blank panel, which is why the caller
+ * filters through here instead of sending every definition it can see.
  */
 export function propertyFacetable(type: string | undefined): boolean {
-  return type === "select" || type === "multi_select" || type === "checkbox";
+  // The filterable set IS the facetable set on this server. Reading it from
+  // core keeps the two from drifting: a type added to one list and not the
+  // other would silently blank the filter panel's badges.
+  return !!type && isFilterablePropertyType(type);
 }
 
 /** Per-dimension counts in the vocabulary the filter UI looks up by. */
