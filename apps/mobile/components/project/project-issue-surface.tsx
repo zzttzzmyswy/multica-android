@@ -53,6 +53,7 @@ import {
   SurfaceEmptyState,
 } from "@/components/issue/issue-surface-chrome";
 import { projectIssuesOptions } from "@/data/queries/projects";
+import { issueRowNarrowing } from "@/lib/issue-row-narrowing";
 import { readIssueRows } from "@/data/queries/issue-list-cache";
 import { hasMoreIssues, issueListTotal } from "@/lib/issue-pagination";
 import { useDrainIssuePages } from "@/lib/use-drain-issue-pages";
@@ -374,7 +375,25 @@ export function ProjectIssueSurface({
     appliedViewIdRef.current = null;
   }, [containerKey]);
 
-  const listQuery = useInfiniteQuery(projectIssuesOptions(wsId, projectId));
+  // The ROW window (MYS-2066). This surface used to send NO window at all and
+  // filter purely client-side, which is only equivalent while a project fits in
+  // one page — measured on the deployment, four of twelve projects hold more
+  // than 100 issues (432 at the top). 「显示子任务」 off therefore hid the
+  // sub-issues the loaded page happened to contain, not all of them.
+  //
+  // `filterState` is passed whole: it is a structural superset of the narrowing
+  // input, and it already carries `workingOnly: false` (this surface's rows
+  // ignore the toggle, matching web), so reading the switches off it keeps the
+  // rows and the counts on ONE definition rather than two literals that can
+  // drift. `runningIssueIds` is not needed — the switch is off by construction.
+  const rowWindow = useMemo(
+    () => issueRowNarrowing(filterState, undefined),
+    [filterState],
+  );
+
+  const listQuery = useInfiniteQuery(
+    projectIssuesOptions(wsId, projectId, rowWindow),
+  );
   const {
     data: listData,
     isLoading,

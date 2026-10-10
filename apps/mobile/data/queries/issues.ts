@@ -75,7 +75,15 @@ export const issueListOptions = (
 /** True when the window bag holds at least one active dimension. Every
  *  field is a filter array, a date band, or a sort pair; `sort_by:
  *  "position"` with no direction is the manual default and does NOT count
- *  as a window — it round-trips the same rows as an empty bag. */
+ *  as a window — it round-trips the same rows as an empty bag.
+ *
+ *  The two server-side row narrowings (MYS-2066) belong here for the same
+ *  reason every other dimension does: they change which rows the request
+ *  returns, so a window carrying one must not share a key with the plain
+ *  list. `ids` counts as active even when EMPTY — an empty restriction is
+ *  not the unrestricted window, and keying the two together would make
+ *  「智能体工作中」 on-with-nobody-running overwrite the plain list's cache
+ *  entry with an empty page. */
 function hasWindow(window: IssueListWindowParams): boolean {
   if (
     // Table quick search. Without this the search would still be SENT (the
@@ -94,7 +102,10 @@ function hasWindow(window: IssueListWindowParams): boolean {
     (window.properties && Object.keys(window.properties).length > 0) ||
     window.date_field ||
     window.date_start ||
-    window.date_end
+    window.date_end ||
+    // Presence, not length — see the doc comment.
+    window.ids != null ||
+    window.top_level_only === true
   ) {
     return true;
   }

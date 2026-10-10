@@ -84,6 +84,7 @@ import {
 import { useClearFiltersOnWorkspaceChange } from "@/lib/use-clear-filters-on-workspace-change";
 import { useDebouncedTableSearch } from "@/lib/use-debounced-table-search";
 import { useBoardHiddenColumns } from "@/lib/use-board-hidden-columns";
+import { issueRowNarrowing } from "@/lib/issue-row-narrowing";
 import {
   countWorkingOnly,
   myIssueTableScope,
@@ -352,7 +353,10 @@ export default function MyIssues() {
   const debouncedTableSearch = useDebouncedTableSearch(tableSearch);
 
   // Server window (scope filter from `filter`, grid dimensions from the
-  // shared slice mapped through buildIssueWindow).
+  // shared slice mapped through buildIssueWindow). This is the PLAIN window:
+  // it stays free of the two narrowing switches below so the chip and the
+  // counts that read it keep a window that does not move when
+  // 「智能体工作中」 is clicked.
   const window = useMemo(
     () =>
       buildIssueWindow({
@@ -373,15 +377,34 @@ export default function MyIssues() {
     [filterState, sortBy, sortDirection, debouncedTableSearch],
   );
 
+  // The ROW window — the plain window plus the two dimensions that used to be
+  // client-only (MYS-2066). 「智能体工作中」 and 「显示子任务」 off now narrow the
+  // SERVER window, so this list answers about the complete result set instead
+  // of whichever page loaded. Emitted only while active, and `ids` even when
+  // EMPTY — see `lib/issue-row-narrowing.ts` for both rules.
+  //
+  // Every scope leg below takes this one, so the scatter-gather union stays
+  // internally consistent: the three legs must describe the same restriction
+  // or the merge would union differently-narrowed windows.
+  const rowWindow = useMemo(
+    () => ({
+      ...window,
+      ...issueRowNarrowing({ workingOnly, showSubIssues }, runningIssueIds),
+    }),
+    [window, workingOnly, showSubIssues, runningIssueIds],
+  );
+
   // Group headers count the complete result set (server group descriptors),
   // not just the loaded window. The `all` tab is one union query server-side,
   // unlike the list API's scatter-gather.
   //
-  // The count window carries the working dimension the LIST window must not:
-  // the rows narrow by the client predicate (`applyIssueFilters` over
-  // `runningIssueIds`), so a count built from the plain window answered about
-  // a different set (MYS-2017). `workingOnly` is the switch the predicate
-  // reads, so the two cannot disagree about when the dimension applies.
+  // The count window carries the working dimension in the COUNT channel's
+  // spelling (`working_issue_ids`): the Table group/facet endpoints name it
+  // differently from `GET /api/issues`'s `ids`, and the two transports have
+  // separate type contracts. It reads the PLAIN window and adds that one
+  // dimension, so neither window ever carries both spellings. `workingOnly` is
+  // the same switch the rows read, so the two cannot disagree about when the
+  // dimension applies (MYS-2017).
   const countWindow = useMemo(
     () =>
       withWorkingCountDimension(
@@ -427,8 +450,8 @@ export default function MyIssues() {
   // scope is a single relation param.
   const listQuery = useInfiniteQuery({
     ...(scope === "all"
-      ? myIssuesAllOptions(wsId, userId, window)
-      : myIssueListOptions(wsId, scope, filter, window)),
+      ? myIssuesAllOptions(wsId, userId, rowWindow)
+      : myIssueListOptions(wsId, scope, filter, rowWindow)),
     // Every scope keys off the session user, `all` included — its three legs
     // are all "…= me" predicates.
     enabled: !!wsId && !!userId,

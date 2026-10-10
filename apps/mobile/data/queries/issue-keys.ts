@@ -53,7 +53,35 @@ export function issueParamsKey(params: object): string {
 }
 
 /** The additional window params the mobile issue lists pass through to
- *  `GET /api/issues` — every filter/sort dimension the view stores expose. */
+ *  `GET /api/issues` — every filter/sort dimension the view stores expose.
+ *
+ *  `ids` and `top_level_only` are the two dimensions the ROW window carries
+ *  that the count window reads about (MYS-2066). Both are row-level narrowings
+ *  web sends on the very query that feeds its list rows
+ *  (`use-issue-surface-controller.ts:441-444`), and both were previously
+ *  client-only predicates on mobile — so the list filtered the loaded page
+ *  while web filtered the complete result set:
+ *
+ *   - `ids` — 「智能体工作中」 (web `working_issue_ids`). Sending it is what
+ *     makes the switch mean "issues an agent is working on" rather than
+ *     "…among the first 100 rows", which measured empty on every workspace
+ *     whose running issues are not the newest.
+ *   - `top_level_only` — 「显示子任务」 off (web `include_sub_issues: false`).
+ *     The server's equivalent of the same predicate.
+ *
+ *  Both are carried ONLY while active, and that is a query-IDENTITY rule, not
+ *  a size optimisation:
+ *
+ *   - `ids` carries a set that moves second-to-second. Web gates it the same
+ *     way (`agentRunningFilter ? {…} : {}`), so a task starting cannot re-key
+ *     a list whose rows cannot change while the switch is off.
+ *   - `top_level_only` has a default-on switch, so emitting it in the default
+ *     state would put a key on every list for no narrowing.
+ *
+ *  An explicit EMPTY `ids` list is NOT the same as omitting it: presence means
+ *  "restrict to these", and empty means nothing matches — the truthful answer
+ *  when the switch is on and no agent is running. See `lib/issue-row-narrowing.ts`
+ *  for the builder and the `undefined`-vs-empty rule. */
 export type IssueListWindowParams = Pick<
   ListIssuesParams,
   | "q"
@@ -71,26 +99,29 @@ export type IssueListWindowParams = Pick<
   | "date_end"
   | "sort_by"
   | "sort_direction"
+  | "ids"
+  | "top_level_only"
 >;
 
 /** The window the server COUNT channels read — the list window plus the one
  *  dimension only they carry.
  *
- *  `working_issue_ids` is deliberately absent from `IssueListWindowParams`.
- *  That type is spread verbatim into `GET /api/issues` AND into the list cache
- *  key (`issueKeys.listFiltered`), and the running-issue set moves
- *  second-to-second: a task starting would refetch (and re-key) every list on
- *  screen for rows the client predicate had already narrowed. Keeping the two
- *  window shapes separate makes that a TYPE error rather than a strip helper
- *  someone can forget at one call site.
+ *  `working_issue_ids` is the COUNT channel's spelling of the row window's
+ *  `ids`: the Table query spec names it `working_issue_ids`
+ *  (`IssueTableFilters`, packages/core/types/api.ts:269-271), where the list
+ *  API names the same restriction `ids`. Both helpings are kept because they
+ *  are different transports with different type contracts — and because
+ *  `lib/issue-table-group-counts.ts` must project a count window onto a spec.
+ *
+ *  Note what is NO LONGER true here: this type used to be the only place a
+ *  working dimension could live, with `IssueListWindowParams` deliberately
+ *  free of it. MYS-2066 changed that on purpose — the ROW window now carries
+ *  the same restriction (as `ids`), because narrowing only the counts left the
+ *  list itself showing a page-scoped answer. See `IssueListWindowParams`.
  *
  *  The count endpoints (`POST /api/issues/table/groups` and `/facets`) have no
  *  list semantics to disturb: their query is a spec, not a page, so the extra
- *  dimension only narrows the number they return.
- *
- *  See `IssueTableQuerySpec.filters.working_issue_ids`
- *  (packages/core/types/api.ts:269-271) for the server contract, and
- *  `lib/issue-table-group-counts.ts` for the builder. */
+ *  dimension only narrows the number they return. */
 export type IssueCountWindowParams = IssueListWindowParams & {
   /** Hard-restrict the counted set to these issue ids. An explicit EMPTY list
    *  is meaningful and counts nothing (server: `FALSE`), which is the truthful

@@ -80,6 +80,12 @@ function myWindowSuffix(window: IssueListWindowParams): string {
     window.date_field ||
     window.date_start ||
     window.date_end ||
+    // The two server-side row narrowings (MYS-2066). Same reason as they are
+    // in `hasWindow` (./issues.ts): they change which rows come back, so they
+    // must reach the key — and `ids` counts as active even when EMPTY, since
+    // an empty restriction is a different window from the unrestricted one.
+    window.ids != null ||
+    window.top_level_only === true ||
     (window.sort_by &&
       (window.sort_by !== "position" || window.sort_direction === "desc"));
   if (!active || Object.keys(window).length === 0) return "";
