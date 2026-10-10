@@ -80,7 +80,7 @@ export function AgentsWorkingChip({
       accessibilityRole="button"
       accessibilityState={{ selected: value }}
       accessibilityLabel={label}
-      accessibilityHint={t("issue.agentsWorkingHint")}
+      accessibilityHint={t("issue.agentsWorkingToggleHint")}
       className={cn(
         "flex-row items-center gap-1.5 rounded-md border px-2 py-1.5",
         appearance.variant === "brand" && "border-brand bg-brand",

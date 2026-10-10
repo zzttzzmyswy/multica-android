@@ -73,7 +73,7 @@ export function SubIssuesWorkingChip({
         onPress={() => setRosterOpen(true)}
         accessibilityRole="button"
         accessibilityLabel={label}
-        accessibilityHint={t("issue.agentsWorkingHint")}
+        accessibilityHint={t("issue.agentsWorkingRosterHint")}
         className="shrink-0 flex-row items-center gap-1.5 rounded-full bg-muted/60 px-2 py-0.5"
       >
         <AvatarStack
