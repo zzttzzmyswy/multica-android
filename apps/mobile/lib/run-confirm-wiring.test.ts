@@ -108,11 +108,80 @@ describe("the dialog is shared, not duplicated", () => {
     expect(code(DIALOG)).not.toContain("useIssueTriggerPreview");
   });
 
-  it("keeps the note box usable on the first frame — no disabled-until-loaded state", () => {
+  it("keeps the note box usable on the first frame — never disabled by a pending request", () => {
     const dialog = code(DIALOG);
-    // The only thing that may disable the note box is an in-flight write.
     expect(dialog).toMatch(/maxLength=\{MAX_HANDOFF_NOTE\}/);
+    // Since iteration 230 the box may also be disabled by the handoff gate (the
+    // target runtime is positively too old to read the note). What must NOT
+    // come back is the pre-MUL-5010 shape: the box grayed out because a request
+    // had not answered yet. So the disable expression is pinned by name rather
+    // than merely forbidden from containing "ready"/"preview".
+    expect(dialog).toMatch(/editable=\{!busy && !noteDisabled\}/);
     expect(dialog).not.toMatch(/disabled=\{!?\s*(ready|resolved|preview)/);
+    expect(dialog).not.toMatch(/editable=\{[^}]*preview/);
+  });
+});
+
+/**
+ * The handoff soft gate (iteration 230) — web `RunConfirmModal`'s
+ * `noteDisabled` (`packages/views/modals/run-confirm.tsx:100-131`).
+ *
+ * `lib/run-confirm.test.ts` proves the verdict logic; none of it reaches a user
+ * unless BOTH dialog hosts compute it and pass it down, and unless the write
+ * path refuses the note as well as graying the box. Those are the three joints
+ * asserted here, each paired with its negative so a partial edit cannot pass.
+ */
+describe("the handoff note gate is wired at both hosts and on the write path", () => {
+  it("both hosts compute the verdict from the warm caches and pass it down", () => {
+    for (const file of [PICKER, BATCH_BAR]) {
+      expect(code(file), `${file} lacks the verdict call`).toContain(
+        "handoffNoteDisabled(",
+      );
+      expect(code(file), `${file} lacks handoffVerdict`).toContain(
+        "handoffVerdict(",
+      );
+      expect(code(file), `${file} does not pass noteDisabled`).toMatch(
+        /noteDisabled=\{noteDisabled\}/,
+      );
+    }
+  });
+
+  it("resolves from cached lists, never from a new round-trip", () => {
+    // The dialog must fire no request on open (MUL-5010). The verdict therefore
+    // reads agent / runtime / squad lists via useQuery, which hit the shared
+    // cache, and must NOT call the trigger-preview endpoint.
+    for (const file of [PICKER, BATCH_BAR]) {
+      const src = code(file);
+      expect(src).toContain("agentListOptions(");
+      expect(src).toContain("runtimeListOptions(");
+      expect(src).toContain("squadListOptions(");
+      expect(src, `${file} asks the server for the verdict`).not.toContain(
+        "previewIssueTrigger",
+      );
+    }
+  });
+
+  it("the dialog renders the warning line only for a confident 'too old'", () => {
+    const dialog = code(DIALOG);
+    expect(dialog).toContain('t("runConfirm.noteUnsupported")');
+    // The warning sits behind the gate, so a usable box shows no line about a
+    // runtime it never determined to be old.
+    expect(dialog).toMatch(/\{noteDisabled \? \(/);
+    expect(dialog).toMatch(/\) : null\}/);
+  });
+
+  it("both write paths drop the note when it cannot be read", () => {
+    // Graying the input is not enough: the text the user already typed is still
+    // in state, so each payload build must be told about the gate.
+    expect(code(PICKER)).toMatch(
+      /assignConfirmPayload\(assignTarget, false, note, noteDisabled\)/,
+    );
+    expect(code(PICKER)).toMatch(
+      /assignConfirmPayload\(assignTarget, true, note, noteDisabled\)/,
+    );
+    expect(code(BATCH_BAR)).toMatch(
+      /assignConfirmPayload\(assignTarget, suppressRun, note, noteDisabled\)/,
+    );
   });
 });
 

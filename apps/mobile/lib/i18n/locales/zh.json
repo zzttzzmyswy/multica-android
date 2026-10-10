@@ -2571,6 +2571,7 @@
   "runConfirm.dontStart": "暂不开始",
   "runConfirm.noteLabel": "交接说明（可选）",
   "runConfirm.notePlaceholder": "交代一句——范围、重点、或别碰什么……",
+  "runConfirm.noteUnsupported": "对方的运行时版本较旧，这条交接说明可能读不到。",
   "runConfirm.titleAssign": "确认指派？",
   "runs.active": "进行中",
   "runs.agentRuns": "智能体运行记录",

@@ -2571,6 +2571,7 @@
   "runConfirm.dontStart": "Don't start yet",
   "runConfirm.noteLabel": "Handoff note (optional)",
   "runConfirm.notePlaceholder": "Tell them what matters — scope, focus, or what to avoid…",
+  "runConfirm.noteUnsupported": "Their runtime is too old to receive this handoff note; it may not be read.",
   "runConfirm.titleAssign": "Confirm assignment?",
   "runs.active": "Active",
   "runs.agentRuns": "Agent Runs",
