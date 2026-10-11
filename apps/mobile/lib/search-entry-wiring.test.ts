@@ -196,6 +196,100 @@ describe("the entry builds its URL only through the shared helper", () => {
   });
 });
 
+// ── Iteration 229: the ratchet's own blind spot ───────────────────────────
+// The suites above discover entry owners by looking for a `headerRight`
+// literal, because in this app the native Stack header is where a screen
+// declares one. Five screens have NO native header at all: they run under
+// `(tabs)/_layout.tsx` with `headerShown: false` and draw their own in-body
+// `<Header>` instead (the tab roots — a native header there would double up
+// with the tab bar chrome). Each mounts the shared entry inside that body
+// header's `right=` slot, and none of them contains the string `headerRight`.
+//
+// Measured on the previous round's tree: that whole family sat outside every
+// assertion in this file. Deleting the `<HeaderSearchGroup>` from any one of
+// them left all 25 assertions green — a reachability ratchet that cannot see
+// the five most-visited screens in the app.
+//
+// The discovery rule below is therefore the OTHER wiring shape, not a list of
+// known files: a screen that renders `<Header` owns its own header, so it must
+// compose the entry. Derived from the source, so a new tab root that draws one
+// fails here until it carries the entry (or is excluded with a reason).
+describe("screens that draw their own header carry the entry too", () => {
+  const files = routeFiles();
+
+  /**
+   * Self-drawn headers with no entry, each with the reason it is allowed to be
+   * absent. Empty today, and it should stay that way: search is not
+   * permission-gated (web shows its `SearchTrigger` to every member), so no
+   * permission argument can land a screen here. The map exists so a future
+   * exclusion has to be argued in review rather than deleted from an
+   * assertion.
+   */
+  const EXCLUDED: Record<string, string> = {};
+
+  /** Screens whose JSX renders the shared `<Header>` component themselves. */
+  const bodyHeaderOwners = files.filter((rel) => {
+    const src = code(rel);
+    if (!/<Header\b/.test(src)) return false;
+    return !Object.keys(EXCLUDED).some((suffix) => rel.endsWith(suffix));
+  });
+
+  it("discovers exactly the expected family", () => {
+    // An exact list, for the same reason the `headerRight` owner list is one:
+    // a screen appearing here is a screen that owns a header, and the
+    // per-screen assertion below then applies to it.
+    expect(
+      bodyHeaderOwners.map((r) => r.replace(`${WORKSPACE_DIR}/`, "")).sort(),
+    ).toEqual([
+      "(tabs)/chat.tsx",
+      "(tabs)/inbox.tsx",
+      "(tabs)/my-issues.tsx",
+      "(tabs)/pins.tsx",
+      "(tabs)/projects.tsx",
+    ]);
+  });
+
+  for (const rel of bodyHeaderOwners) {
+    it(`${rel} composes the shared entry in its body header`, () => {
+      const src = code(rel);
+      // The JSX USAGE, not the import — a file that imports the component and
+      // then renders its own bare actions has the same defect as one that never
+      // imported it. Two shapes count, because the two are equivalent here:
+      //   - the shared group wrapping the screen's own actions
+      //     (`<HeaderSearchGroup><ChatSessionActions /></HeaderSearchGroup>`),
+      //     which is the preferred form;
+      //   - the bare button beside them, for a screen whose actions are already
+      //     grouped.
+      // The inbox and my-issues tabs reach the entry through `HeaderActions`,
+      // which renders `<HeaderSearchButton />` inside itself — so the
+      // composition is asserted transitively for those (see the next case)
+      // rather than by inlining a second entry beside it.
+      const composesDirectly = /<HeaderSearch(Group|Button)\b/.test(src);
+      const composesThroughActions = /<HeaderActions\s*\/>/.test(src);
+      expect(
+        composesDirectly || composesThroughActions,
+        `${rel} draws a header with no search entry`,
+      ).toBe(true);
+    });
+  }
+
+  it("the action cluster those two tabs share does carry the entry", () => {
+    // `HeaderActions` is where inbox / my-issues mount search. Asserting the
+    // per-screen case above through it is only sound while the cluster itself
+    // renders the shared button — otherwise those two screens would pass on a
+    // component that had quietly dropped the entry, which is exactly the
+    // "imported but not rendered" hole this file exists to close.
+    const actions = code("components/ui/app-header-actions.tsx");
+    expect(actions).toMatch(/<HeaderSearchButton\b/);
+  });
+
+  it("gives every exclusion a reason", () => {
+    for (const [suffix, why] of Object.entries(EXCLUDED)) {
+      expect(why.length, `${suffix} needs a reason`).toBeGreaterThan(10);
+    }
+  });
+});
+
 // ── Iteration 228: Recent depth ───────────────────────────────────────────
 // The "same data, different answer on each platform" half of this round. Web
 // stores 20 recents (`MAX_RECENT_ISSUES`) and renders all 20; mobile stored 10

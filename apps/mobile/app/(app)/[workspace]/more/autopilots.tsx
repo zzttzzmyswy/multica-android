@@ -17,6 +17,21 @@
  * assignee / created-by / mode columns; mobile collapses those into the
  * detail page so the list reads as a phone card list — which is exactly why
  * the filter sheet, not the row, is where those dimensions are read.
+ *
+ * Row actions + batch selection (iteration 229, web parity with
+ * `autopilot-list-actions.tsx`): each row carries a kebab (pause / resume /
+ * delete) and the header enters a selection mode whose bar pauses, resumes or
+ * deletes the whole selection. Before this the only way to change an
+ * autopilot's status from the list was to open its detail page.
+ *
+ * Two more intentional divergences, both from the narrow screen rather than a
+ * change of intent:
+ *   - Web's column-visibility switch is NOT ported. It is a `@2xl`-breakpoint
+ *     desktop-grid affordance — web hides the whole grid below that width — and
+ *     a phone has no columns to hide. The one column worth reading on a phone,
+ *     "last run", moves into the row's own second line instead.
+ *   - Web's menu carries "Open in new tab"; a phone has no tabs and the row tap
+ *     already opens the autopilot.
  */
 import { useCallback, useMemo, useState } from "react";
 import {
@@ -38,12 +53,25 @@ import { HeaderSearchGroup } from "@/components/ui/header-search-button";
 import { MultiSelectSheet } from "@/components/agent/multi-select-sheet";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { WorkspaceWakeupsTable } from "@/components/autopilot/workspace-wakeups-table";
+import { AutopilotRowMenu } from "@/components/autopilot/autopilot-row-menu";
+import { AutopilotBatchBar } from "@/components/autopilot/autopilot-batch-bar";
+import { DeleteAutopilotsDialog } from "@/components/autopilot/delete-autopilots-dialog";
 import { autopilotListOptions } from "@/data/queries/autopilots";
+import { useDeleteAutopilot, useUpdateAutopilot } from "@/data/mutations/autopilots";
 import { agentListOptions } from "@/data/queries/agents";
 import { squadListOptions } from "@/data/queries/squads";
 import { memberListOptions } from "@/data/queries/members";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { formatDateTime } from "@/lib/autopilot-format";
+import { useTimeAgo } from "@/lib/time-ago";
+import {
+  autopilotStatusPlan,
+  canWriteAutopilot,
+  lastRunCell,
+  runStatusLabel,
+  showTriggerDash,
+} from "@/lib/autopilot-list-actions";
+import { toggleId, toggleSelectAllVisible } from "@/lib/skill-batch";
 import {
   AUTOPILOT_TEMPLATES,
   type AutopilotTemplate,
@@ -242,6 +270,107 @@ export default function AutopilotsPage() {
   const narrowed = countActiveAutopilotFilterDimensions(filters) > 0;
   const showEmpty = !isLoading && !error && autopilots.length === 0;
 
+  // ── Row actions + batch selection (MYS-2096) ────────────────────────────
+  // Web's list carries a per-row kebab and a batch toolbar; mobile had neither,
+  // so pausing one autopilot meant opening its detail page. Both write paths
+  // live HERE so the kebab, the toolbar and (via the same hooks) the detail
+  // page share one optimistic implementation — web's split exactly, where
+  // `useSetStatus` is defined once and called by both `AutopilotRowActions` and
+  // `AutopilotBatchToolbar`.
+  const updateAutopilot = useUpdateAutopilot();
+  const deleteAutopilot = useDeleteAutopilot();
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  // One dialog for both entry points (web's `DeleteAutopilotsDialog`), holding
+  // the rows it was opened for — a single row from a kebab, N from the bar —
+  // plus whether it was the batch entry point (see `openDelete`).
+  const [pendingDelete, setPendingDelete] = useState<{
+    rows: Autopilot[];
+    batch: boolean;
+  } | null>(null);
+
+  const visibleIds = useMemo(() => rows.map((r) => r.id), [rows]);
+  // The selection is intersected with the VISIBLE rows, so a row that left the
+  // list (refetch, delete, a filter the user just applied) can never ride along
+  // into a batch write. Same rule as the skills list.
+  const selectedRows = useMemo(
+    () => rows.filter((r) => selectedIds.has(r.id)),
+    [rows, selectedIds],
+  );
+  const allVisibleSelected =
+    visibleIds.length > 0 &&
+    visibleIds.every((id) => selectedIds.has(id));
+
+  const enterSelection = useCallback((id: string) => {
+    setSelectionMode(true);
+    setSelectedIds(new Set([id]));
+  }, []);
+
+  const exitSelection = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  }, []);
+
+  const toggleRow = useCallback((id: string) => {
+    setSelectedIds((prev) => toggleId(prev, id));
+  }, []);
+
+  const selectAll = useCallback(() => {
+    setSelectedIds((prev) => toggleSelectAllVisible(visibleIds, prev));
+  }, [visibleIds]);
+
+  /** Pause / resume one row from its kebab. Failures surface through
+   *  `useUpdateAutopilot`'s own write-failure alert (the optimistic flip is
+   *  rolled back too), so no per-call handler here — that would double-report. */
+  const setRowStatus = useCallback(
+    (row: Autopilot, status: "active" | "paused") => {
+      updateAutopilot.mutate({ id: row.id, status });
+    },
+    [updateAutopilot],
+  );
+
+  /** Batch pause / resume. Only the rows that are not already in the target
+   *  status are written — web's `useSetStatus` `continue` rule (`:107`) — so
+   *  pausing a mixed selection costs one request per active row, not one per
+   *  selected row. */
+  const setSelectionStatus = useCallback(
+    (status: "active" | "paused") => {
+      for (const row of autopilotStatusPlan(selectedRows, status)) {
+        updateAutopilot.mutate({ id: row.id, status });
+      }
+      exitSelection();
+    },
+    [selectedRows, updateAutopilot, exitSelection],
+  );
+
+  /** Open the shared confirm for one row (the kebab) or for the whole selection
+   *  (the toolbar). `batch` is what decides whether the confirm also clears the
+   *  selection: web passes `onDeleted` from the toolbar only
+   *  (`autopilot-list-actions.tsx:279` vs `:203`), because a kebab-deleted row
+   *  has nothing to do with whatever else happens to be selected. */
+  const openDelete = useCallback(
+    (rows: Autopilot[], batch: boolean) => {
+      setPendingDelete({ rows, batch });
+    },
+    [],
+  );
+
+  /** Runs the dialog's loop. Sequential, as web's is: the confirm dialog stays
+   *  up until the batch settles, and the copy promises a specific count. */
+  const confirmDelete = useCallback(async () => {
+    const pending = pendingDelete;
+    for (const row of pending?.rows ?? []) {
+      await deleteAutopilot.mutateAsync(row.id).catch(() => {
+        // Already reported by the hook's write-failure title; the dialog closes
+        // regardless so the user is never stranded behind a failed row.
+      });
+    }
+    // Only a batch delete ends the selection mode — see `openDelete`.
+    if (pending?.batch) exitSelection();
+  }, [pendingDelete, deleteAutopilot, exitSelection]);
+
   /** Polymorphic actor label — agents, squads and members share one id space
    *  only through the `type:id` filter value, so resolution is by type. */
   const actorName = useCallback(
@@ -270,6 +399,21 @@ export default function AutopilotsPage() {
     }
     return (
       <HeaderSearchGroup>
+        {/* Selection toggle, as web's header checkbox cell provides. It sits
+            BEFORE the add button, so the create action keeps its position and
+            the strip does not reflow when the mode flips. */}
+        <IconButton
+          name={selectionMode ? "close" : "checkbox-outline"}
+          onPress={() => {
+            if (selectionMode) exitSelection();
+            else setSelectionMode(true);
+          }}
+          accessibilityLabel={
+            selectionMode
+              ? t("autopilots.list.exitSelection")
+              : t("autopilots.list.enterSelection")
+          }
+        />
         <IconButton
           name="add"
           onPress={() => router.push(`/${wsSlug}/more/autopilots/new`)}
@@ -277,7 +421,7 @@ export default function AutopilotsPage() {
         />
       </HeaderSearchGroup>
     );
-  }, [wsSlug, t, tab]);
+  }, [wsSlug, t, tab, selectionMode, exitSelection]);
 
   return (
     <>
@@ -424,14 +568,31 @@ export default function AutopilotsPage() {
             data={rows}
             keyExtractor={(item) => item.id}
             ItemSeparatorComponent={() => <View className="h-px bg-border ml-4" />}
-            contentContainerClassName="pb-6"
+            contentContainerStyle={{
+              // Room for the floating batch bar so the last row stays tappable.
+              paddingBottom: selectionMode && selectedRows.length > 0 ? 132 : 24,
+            }}
             renderItem={({ item }) => (
               <AutopilotRow
                 autopilot={item}
+                selectionMode={selectionMode}
+                selected={selectedIds.has(item.id)}
                 onPress={() => {
-                  if (wsSlug)
+                  // In selection mode a row tap toggles, exactly as the skills
+                  // list does — navigating away mid-selection would lose the
+                  // batch the user is assembling.
+                  if (selectionMode) toggleRow(item.id);
+                  else if (wsSlug)
                     router.push(`/${wsSlug}/more/autopilots/${item.id}`);
                 }}
+                onLongPress={() => enterSelection(item.id)}
+                onPressCheckbox={() => {
+                  if (selectionMode) toggleRow(item.id);
+                  else enterSelection(item.id);
+                }}
+                onStatusChange={setRowStatus}
+                onDelete={(row) => openDelete([row], false)}
+                canWrite={canWriteAutopilot(item)}
               />
             )}
             refreshing={isRefetching}
@@ -446,9 +607,26 @@ export default function AutopilotsPage() {
               </View>
             }
           />
+          {selectionMode ? (
+            <AutopilotBatchBar
+              rows={selectedRows}
+              allVisibleSelected={allVisibleSelected}
+              onToggleSelectAll={selectAll}
+              onExit={exitSelection}
+              onStatusChange={setSelectionStatus}
+              onDelete={() => openDelete([...selectedRows], true)}
+            />
+          ) : null}
         </>
       )}
       </View>
+      {/* Shared by the kebab and the batch bar, as web's dialog is. */}
+      <DeleteAutopilotsDialog
+        rows={pendingDelete?.rows ?? []}
+        visible={pendingDelete !== null}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={confirmDelete}
+      />
       <AutopilotFilterSheet
         visible={filterOpen}
         onClose={() => setFilterOpen(false)}
@@ -755,21 +933,65 @@ function AutopilotFilterSheet({
 
 function AutopilotRow({
   autopilot,
+  selectionMode,
+  selected,
   onPress,
+  onLongPress,
+  onPressCheckbox,
+  onStatusChange,
+  onDelete,
+  canWrite,
 }: {
   autopilot: Autopilot;
+  selectionMode: boolean;
+  selected: boolean;
   onPress: () => void;
+  onLongPress: () => void;
+  onPressCheckbox: () => void;
+  onStatusChange: (row: Autopilot, status: "active" | "paused") => void;
+  onDelete: (row: Autopilot) => void;
+  /** Web hides the kebab outright for a member without write; passed in so the
+   *  row does not re-derive it from a different rule than the helper's. */
+  canWrite: boolean;
 }) {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const theme = THEME[colorScheme];
+  const muted = theme.mutedForeground;
+  const timeAgo = useTimeAgo();
   const pill = statusPill(autopilot.status);
   const kinds = autopilot.trigger_kinds ?? [];
+  const lastRun = lastRunCell(autopilot, timeAgo);
 
   return (
-    <Pressable onPress={onPress} className="active:bg-secondary px-4 py-3">
+    <Pressable
+      onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={300}
+      className={
+        selected ? "px-4 py-3 bg-secondary/60" : "px-4 py-3 active:bg-secondary"
+      }
+    >
       <View className="flex-row items-center gap-2">
-        <Ionicons name="flash" size={16} color={muted} />
+        {selectionMode ? (
+          <Pressable
+            onPress={onPressCheckbox}
+            hitSlop={8}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: selected }}
+            accessibilityLabel={t("autopilots.list.selectOne", {
+              name: autopilot.title,
+            })}
+          >
+            <Ionicons
+              name={selected ? "checkbox" : "square-outline"}
+              size={20}
+              color={selected ? theme.primary : muted}
+            />
+          </Pressable>
+        ) : (
+          <Ionicons name="flash" size={16} color={muted} />
+        )}
         <Text
           className="flex-1 text-body font-medium text-foreground"
           numberOfLines={1}
@@ -786,11 +1008,32 @@ function AutopilotRow({
             {pill.label.startsWith("autopilots.") ? t(pill.label) : pill.label}
           </Text>
         </View>
+        {/* Web hides the kebab entirely for a member without write. In
+            selection mode it gives way to the checkbox — a row carries one
+            trailing control, and picking is what the mode is for. */}
+        {!selectionMode && canWrite ? (
+          <AutopilotRowMenu
+            autopilot={autopilot}
+            onStatusChange={onStatusChange}
+            onDelete={onDelete}
+          />
+        ) : null}
       </View>
-      <View className="flex-row items-center gap-2 mt-1.5 ml-6">
-        {kinds.length === 0 ? (
-          <Text className="text-caption text-muted-foreground/60">—</Text>
-        ) : (
+      <View
+        className={cn(
+          // `flex-wrap` matters now that last-run joined this line: a row with
+          // two trigger kinds plus both times is wider than a 411dp screen, and
+          // without wrapping the next-run time clips off the edge silently.
+          "flex-row flex-wrap items-center gap-x-2 gap-y-0.5 mt-1.5",
+          // The checkbox replaces the flash glyph, which is narrower than the
+          // 20pt box — the indent follows whichever leads the row.
+          selectionMode ? "ml-7" : "ml-6",
+        )}
+      >
+        {/* Trigger slot. Three states, because this line is a single run of
+            items with no column headers to tell two dashes apart — see
+            `showTriggerDash`. */}
+        {kinds.length > 0 ? (
           kinds.map((kind) => {
             const label = triggerLabel(kind, t);
             return (
@@ -806,6 +1049,53 @@ function AutopilotRow({
               </View>
             );
           })
+        ) : showTriggerDash(kinds, lastRun) ? (
+          <Text className="text-caption text-muted-foreground/60">—</Text>
+        ) : null}
+        {/* Last run — web's `LastRunCell` (autopilots-page.tsx:343). The data
+            was already on every list object (`last_run_at` / `last_run_status`)
+            and went unrendered, so this adds no request. Web hides the whole
+            cell below `@2xl` and offers a column switch instead; a phone has no
+            columns to toggle, so the fact moves into the row's second line,
+            where the next-run time already sits.
+
+            Web states the status twice: the dot's colour, and a `title`
+            tooltip naming it. A colour is not information a screen reader (or
+            a colour-blind reader) can use, so the a11y label carries web's
+            tooltip text — the dot itself is decorative.
+
+            `accessible` + `accessibilityRole="text"` is what makes that label
+            reach uiautomator with no child strings: a bare `View` with a label
+            emits no node of its own, so the label would be silently dropped
+            (the row's own accessible Pressable swallows descendant text, which
+            is why the dot and the relative time appear nowhere else either). */}
+        {lastRun.kind === "absent" ? (
+          <View
+            accessible
+            accessibilityRole="text"
+            accessibilityLabel={t("autopilots.list.noLastRun")}
+            className="flex-row items-center gap-1"
+          >
+            <Text className="text-caption text-muted-foreground/60">—</Text>
+          </View>
+        ) : (
+          <View
+            accessible
+            accessibilityRole="text"
+            className="flex-row items-center gap-1"
+            accessibilityLabel={t("autopilots.list.runStatusAria", {
+              status: runStatusLabel(autopilot.last_run_status, t),
+            })}
+          >
+            <View
+              className={cn("size-1.5 rounded-full", lastRun.dotClass)}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            />
+            <Text className="text-caption text-muted-foreground tabular-nums">
+              {lastRun.label}
+            </Text>
+          </View>
         )}
         {autopilot.next_run_at ? (
           <View className="flex-row items-center gap-1">
