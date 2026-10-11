@@ -1,13 +1,20 @@
 /**
- * Agent Runs sheet — presented as a formSheet by the parent Stack. Two
- * sections: Active (queued/dispatched/running, created_at desc) and Past
- * (completed_at desc, status rank as tiebreaker). Empty
- * sections hide entirely.
+ * Agent Runs sheet — presented as a formSheet by the parent Stack. The issue's
+ * spend strip and (behind a tap) its run timeline, then Active
+ * (queued/dispatched/running, created_at desc) and Past (completed_at desc,
+ * status rank as tiebreaker). Empty sections hide entirely.
  *
  * Both entry points (the in-card AgentActivityRow and the Stack-header
  * AgentHeaderBadge) now `router.push("/[workspace]/issue/[id]/runs")` —
  * the legacy `useRunsSheetStore` is gone since the route system is the
  * single source of truth for what's open.
+ *
+ * The timeline (MYS-2084) answers what the two lists cannot: which runs spent
+ * the issue's money, when, and which agent did the work. It is built ONCE here
+ * and handed to both the strip and the full chart, so the strip's end reading,
+ * the chart's curve and the stat row are one projection and cannot disagree.
+ * Every figure is priced through the same `summarizeTaskUsage` the header chip
+ * and the breakdown dialog use — one cost formula in the product.
  *
  * Rows are collapsible in both sections: past (terminal) runs expand to an
  * inline execution-log panel (`RunLog`), and active runs expand to the same
@@ -22,6 +29,10 @@ import { useQuery } from "@tanstack/react-query";
 import type { AgentTask } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { RunRow } from "@/components/issue/run-row";
+import {
+  RunSpendStrip,
+  RunTimelinePanel,
+} from "@/components/issue/run-timeline-panel";
 import { UsageBreakdownDialog } from "@/components/issue/usage-breakdown-dialog";
 import {
   issueActiveTasksOptions,
@@ -36,6 +47,8 @@ import {
   summarizeTaskUsageAcross,
   type TaskUsageSummary,
 } from "@/lib/task-usage";
+import { collectUnmappedModels } from "@/lib/runtime-usage";
+import { buildRunTimeline, timelineUsageRows } from "@/lib/issue-run-timeline";
 import { useCustomPricingStore } from "@/lib/custom-pricing-store";
 
 const PAST_STATUS_ORDER: Record<AgentTask["status"], number> = {
@@ -62,6 +75,7 @@ export default function IssueRunsRoute() {
   // issue detail Stack, so this is not a new request in practice.
   const { data: issue } = useQuery(issueDetailOptions(wsId, id));
   const [breakdownOpen, setBreakdownOpen] = useState(false);
+  const [timelineOpen, setTimelineOpen] = useState(false);
 
   const active = useMemo(
     () =>
@@ -85,18 +99,34 @@ export default function IssueRunsRoute() {
     });
   }, [allTasks]);
 
-  // Issue-level usage total, mirroring web's IssueUsageTotal on the
-  // execution-log header (execution-log-section.tsx): null when NO run has
-  // recorded usage → header chip hides entirely.
-  //
-  // `pricings` is a dependency, not a read: estimateCost pulls custom rates
-  // imperatively out of the zustand store, so without the subscription this
-  // total would keep showing a pre-override price until the task query
-  // happened to refetch (web execution-log-section.tsx:247 does the same).
+  // `pricings` is never read, it is a dependency: `estimateCost` pulls custom
+  // rates imperatively out of the zustand store, so without the subscription
+  // every priced figure here — the strip, the chart, the chip — would keep
+  // showing a pre-override price until the task query happened to refetch (web
+  // execution-log-section.tsx:247 does the same).
   const pricings = useCustomPricingStore((s) => s.pricings);
+
+  // Issue-level usage total, mirroring web's IssueUsageTotal on the
+  // execution-log header: null when NO run has recorded usage → chip hides.
   const usageTotal = useMemo(
     () => summarizeTaskUsageAcross(allTasks.map((task) => task.usage)),
     [allTasks, pricings],
+  );
+
+  // ONE timeline for the whole sheet. Active runs stretch to "now"; the clock
+  // is read when the task list changes or the timeline is toggled, not on a
+  // ticker — the bars move by minutes, and the rows below run their own live
+  // timer. `nowMs` rides along so the strip's "Today" / "Now" labels are the
+  // same instant the bars were laid out against.
+  const { timeline, nowMs } = useMemo(() => {
+    const at = Date.now();
+    return { timeline: buildRunTimeline(allTasks, at), nowMs: at };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `pricings` re-prices; `timelineOpen` re-reads the clock
+  }, [allTasks, pricings, timelineOpen]);
+  const unmapped = useMemo(
+    () => collectUnmappedModels(timelineUsageRows(timeline.runs)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `pricings` changes which models are priced
+    [timeline, pricings],
   );
 
   return (
@@ -110,9 +140,57 @@ export default function IssueRunsRoute() {
             <UsageTotalChip total={usageTotal} onPress={() => setBreakdownOpen(true)} />
           ) : null}
         </View>
+        {/* The spend strip sits in the scroll body below so it lines up with
+            the rest of the sheet, not in this fixed header. */}
       </View>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View className="px-4 gap-3 pb-4">
+          {/* The strip is the always-visible answer to "was this expensive,
+              and when"; the full chart behind the toggle is the follow-up
+              ("which run, which agent"). Web puts the same strip in its
+              execution-log sidebar with the same relationship to its dialog.
+              The strip is itself the affordance, so the separate button below
+              only appears when there is no strip — i.e. when nothing was
+              priced and the strip renders nothing. Two controls for one
+              action would just split the tap target. */}
+          <RunSpendStrip
+            timeline={timeline}
+            nowMs={nowMs}
+            onOpen={() => setTimelineOpen(true)}
+          />
+          {timelineOpen && timeline.runs.length > 0 ? (
+            <>
+              <View className="flex-row items-center justify-between">
+                <Text className="text-micro font-medium uppercase tracking-wider text-muted-foreground">
+                  {t("runsTimeline.title")}
+                </Text>
+                <Pressable
+                  onPress={() => setTimelineOpen(false)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("runs.collapseTimeline")}
+                  hitSlop={8}
+                  className="rounded-md px-2 py-0.5 active:opacity-70"
+                >
+                  <Text className="text-caption text-muted-foreground">
+                    {t("runs.collapseTimeline")}
+                  </Text>
+                </Pressable>
+              </View>
+              <RunTimelinePanel timeline={timeline} unmapped={unmapped} />
+            </>
+          ) : null}
+          {timeline.runs.length > 0 && !timelineOpen && timeline.pricedCount === 0 ? (
+            <Pressable
+              onPress={() => setTimelineOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel={t("runsTimeline.openFull")}
+              className="flex-row items-center justify-center gap-1.5 rounded-md border border-border py-2 active:opacity-70"
+            >
+              <Text className="text-caption font-medium text-foreground">
+                {t("runsTimeline.openFull")}
+              </Text>
+            </Pressable>
+          ) : null}
           {active.length > 0 ? (
             <Section title={t("runs.active")}>
               {active.map((task) => (
