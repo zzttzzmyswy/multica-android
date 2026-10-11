@@ -84,10 +84,14 @@ export function AutopilotBatchBar({
           <Pressable
             onPress={onToggleSelectAll}
             className="flex-row items-center gap-1 py-1 px-1"
+            // Not `batch.selectAll`: the header's selection-mode toggle carries
+            // the near-identical "选择自动化 / Select automations", and two
+            // controls whose labels differ by one word sit inches apart. This
+            // one says what it acts on — the visible rows.
             accessibilityLabel={
               allVisibleSelected
                 ? t("autopilots.actions.clear_selection")
-                : t("batch.selectAll")
+                : t("batch.selectAllVisible")
             }
           >
             <Ionicons
@@ -98,7 +102,7 @@ export function AutopilotBatchBar({
             <Text className="text-body text-muted-foreground">
               {allVisibleSelected
                 ? t("autopilots.actions.clear_selection")
-                : t("batch.selectAll")}
+                : t("batch.selectAllVisible")}
             </Text>
           </Pressable>
         </View>

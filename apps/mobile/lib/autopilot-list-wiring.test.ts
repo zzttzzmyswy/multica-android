@@ -165,6 +165,19 @@ describe("one delete dialog serves both entry points", () => {
     const dialog = code(DELETE_DIALOG);
     expect(dialog).toMatch(/rows\.length === 1/);
   });
+
+  it("clears the selection only for the batch entry point", () => {
+    // Web passes the dialog's `onDeleted` from the toolbar alone
+    // (`autopilot-list-actions.tsx:279`) and not from the kebab (`:203`): a
+    // row deleted from its own menu has nothing to do with whatever else
+    // happens to be selected, and dropping the selection there would throw
+    // away a batch the user was still assembling.
+    const src = code(LIST);
+    expect(src).toMatch(/openDelete\(\[row\], false\)/);
+    expect(src).toMatch(/openDelete\(\[\.\.\.selectedRows\], true\)/);
+    // …and the flag is what gates the clear, not an unconditional call.
+    expect(src).toMatch(/if \(pending\?\.batch\) exitSelection\(\);/);
+  });
 });
 
 describe("every key the new surface renders exists in both locales", () => {

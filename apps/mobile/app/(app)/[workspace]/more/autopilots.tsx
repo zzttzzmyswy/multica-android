@@ -284,8 +284,12 @@ export default function AutopilotsPage() {
     () => new Set(),
   );
   // One dialog for both entry points (web's `DeleteAutopilotsDialog`), holding
-  // the rows it was opened for — a single row from a kebab, N from the bar.
-  const [deleteRows, setDeleteRows] = useState<Autopilot[] | null>(null);
+  // the rows it was opened for — a single row from a kebab, N from the bar —
+  // plus whether it was the batch entry point (see `openDelete`).
+  const [pendingDelete, setPendingDelete] = useState<{
+    rows: Autopilot[];
+    batch: boolean;
+  } | null>(null);
 
   const visibleIds = useMemo(() => rows.map((r) => r.id), [rows]);
   // The selection is intersected with the VISIBLE rows, so a row that left the
@@ -341,17 +345,31 @@ export default function AutopilotsPage() {
     [selectedRows, updateAutopilot, exitSelection],
   );
 
+  /** Open the shared confirm for one row (the kebab) or for the whole selection
+   *  (the toolbar). `batch` is what decides whether the confirm also clears the
+   *  selection: web passes `onDeleted` from the toolbar only
+   *  (`autopilot-list-actions.tsx:279` vs `:203`), because a kebab-deleted row
+   *  has nothing to do with whatever else happens to be selected. */
+  const openDelete = useCallback(
+    (rows: Autopilot[], batch: boolean) => {
+      setPendingDelete({ rows, batch });
+    },
+    [],
+  );
+
   /** Runs the dialog's loop. Sequential, as web's is: the confirm dialog stays
    *  up until the batch settles, and the copy promises a specific count. */
   const confirmDelete = useCallback(async () => {
-    for (const row of deleteRows ?? []) {
+    const pending = pendingDelete;
+    for (const row of pending?.rows ?? []) {
       await deleteAutopilot.mutateAsync(row.id).catch(() => {
         // Already reported by the hook's write-failure title; the dialog closes
         // regardless so the user is never stranded behind a failed row.
       });
     }
-    exitSelection();
-  }, [deleteRows, deleteAutopilot, exitSelection]);
+    // Only a batch delete ends the selection mode — see `openDelete`.
+    if (pending?.batch) exitSelection();
+  }, [pendingDelete, deleteAutopilot, exitSelection]);
 
   /** Polymorphic actor label — agents, squads and members share one id space
    *  only through the `type:id` filter value, so resolution is by type. */
@@ -573,7 +591,7 @@ export default function AutopilotsPage() {
                   else enterSelection(item.id);
                 }}
                 onStatusChange={setRowStatus}
-                onDelete={(row) => setDeleteRows([row])}
+                onDelete={(row) => openDelete([row], false)}
                 canWrite={canWriteAutopilot(item)}
               />
             )}
@@ -596,7 +614,7 @@ export default function AutopilotsPage() {
               onToggleSelectAll={selectAll}
               onExit={exitSelection}
               onStatusChange={setSelectionStatus}
-              onDelete={() => setDeleteRows([...selectedRows])}
+              onDelete={() => openDelete([...selectedRows], true)}
             />
           ) : null}
         </>
@@ -604,9 +622,9 @@ export default function AutopilotsPage() {
       </View>
       {/* Shared by the kebab and the batch bar, as web's dialog is. */}
       <DeleteAutopilotsDialog
-        rows={deleteRows ?? []}
-        visible={deleteRows !== null}
-        onClose={() => setDeleteRows(null)}
+        rows={pendingDelete?.rows ?? []}
+        visible={pendingDelete !== null}
+        onClose={() => setPendingDelete(null)}
         onConfirm={confirmDelete}
       />
       <AutopilotFilterSheet
@@ -1039,19 +1057,41 @@ function AutopilotRow({
             and went unrendered, so this adds no request. Web hides the whole
             cell below `@2xl` and offers a column switch instead; a phone has no
             columns to toggle, so the fact moves into the row's second line,
-            where the next-run time already sits. */}
+            where the next-run time already sits.
+
+            Web states the status twice: the dot's colour, and a `title`
+            tooltip naming it. A colour is not information a screen reader (or
+            a colour-blind reader) can use, so the a11y label carries web's
+            tooltip text — the dot itself is decorative.
+
+            `accessible` + `accessibilityRole="text"` is what makes that label
+            reach uiautomator with no child strings: a bare `View` with a label
+            emits no node of its own, so the label would be silently dropped
+            (the row's own accessible Pressable swallows descendant text, which
+            is why the dot and the relative time appear nowhere else either). */}
         {lastRun.kind === "absent" ? (
-          <View className="flex-row items-center gap-1">
+          <View
+            accessible
+            accessibilityRole="text"
+            accessibilityLabel={t("autopilots.list.noLastRun")}
+            className="flex-row items-center gap-1"
+          >
             <Text className="text-caption text-muted-foreground/60">—</Text>
           </View>
         ) : (
           <View
+            accessible
+            accessibilityRole="text"
             className="flex-row items-center gap-1"
             accessibilityLabel={t("autopilots.list.runStatusAria", {
               status: runStatusLabel(autopilot.last_run_status, t),
             })}
           >
-            <View className={cn("size-1.5 rounded-full", lastRun.dotClass)} />
+            <View
+              className={cn("size-1.5 rounded-full", lastRun.dotClass)}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            />
             <Text className="text-caption text-muted-foreground tabular-nums">
               {lastRun.label}
             </Text>
