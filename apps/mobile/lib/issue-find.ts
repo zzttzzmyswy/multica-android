@@ -24,8 +24,58 @@
  *   | MYS-2016 |       23 |  72,905  |  2,799  ( 3.8%)            |
  *
  * So the two clients answered different questions about the same issue. This
- * module closes that: the searchable text is **each comment's full body**,
- * replies included.
+ * module closes that: the searchable container is the issue's **title, its
+ * description, and every comment body**, replies included.
+ *
+ * ## The searchable container
+ *
+ * Web's container is the issue page's whole scroll root — title, description,
+ * every comment and every activity (`issue-detail.tsx:2625`). Mobile's is the
+ * three parts of that root which carry prose, in the reader's top-to-bottom
+ * order:
+ *
+ *   1. the **title** — one block, read as the literal string the header draws;
+ *   2. the **description** — through the SAME `extractSearchBlocks` the
+ *      comments use: one markdown dialect, one block rule;
+ *   3. the **timeline** — every comment body, replies included.
+ *
+ * The title is deliberately NOT run through the lexer. The header renders it
+ * as plain text (`issue-header-card.tsx` → `<Text>{issue.title}</Text>`), so a
+ * title carrying `**` or `_` shows those characters; lexing would delete them
+ * and leave the haystack disagreeing with the screen.
+ *
+ * Before this round the container was the timeline alone, and the gap was
+ * measured on this deployment:
+ *
+ *   | issue    | description | timeline | description's share |
+ *   |----------|-------------|----------|---------------------|
+ *   | MYS-1893 |       5,510 |   72,421 |  7.1%               |
+ *   | MYS-2007 |       1,322 |       30 | 97.8%               |
+ *
+ * MYS-2007 is the shape that matters: an issue whose prose is almost entirely
+ * in its description and whose single comment is a stub. Its description holds
+ * `preview26` and `Explorer`; MYS-1893's holds `qemu_arm64_linux_min` and
+ * `window_scene_board`, and neither appears in any of its 49 comments. Those
+ * are words the reader can see on the phone that find reported as "no
+ * matches".
+ *
+ * ## Two kinds of jump target
+ *
+ * A match lands either in a comment or in the header, and the two navigate
+ * differently: a comment is a row of the list, the header is the top of it. So
+ * a match carries a `targetId` that is either a real comment id or one of the
+ * two header sentinels (`FIND_TARGET_TITLE` / `FIND_TARGET_DESCRIPTION`).
+ * `TimelineList` resolves a sentinel to a scroll to offset 0 plus a flash on
+ * that header block; a comment id keeps the existing row lookup, which already
+ * reaches inside replies.
+ *
+ * The sentinels are string constants rather than a second channel because the
+ * existing one is a single `string | undefined` prop with a nonce, and a hit in
+ * the description has to travel the same path a hit in a comment does —
+ * including the nonce that makes stepping onto the same target twice re-fire
+ * the scroll. `highlightCommentId` / `highlightNonce` (inbox deep links) are
+ * untouched, and a sentinel cannot collide with the comment ids that channel
+ * carries: those are uuids.
  *
  * ## Matching semantics, ported from web
  *
@@ -45,7 +95,8 @@
  *   reader perceives one continuous run of text, so a query spanning a bold
  *   run matches here where web would miss it. Block granularity is the
  *   coarsest unit that still keeps every reported match landable: each one
- *   belongs to exactly one comment, which is what the jump target needs.
+ *   belongs to exactly one target (a comment, or the header), which is what
+ *   the jump needs.
  *   Mobile is therefore strictly *more* permissive inside a block and
  *   identical across blocks — never less able to find something.
  * - **Empty / whitespace-only query matches nothing.** Web returns early on
@@ -70,23 +121,13 @@
  *   would point at something the reader cannot see.
  * - **Images.** Guarded on the alt text, which the renderer does not draw as
  *   text — a match there would be unfindable on screen.
- *
- * ## Known boundary: the title and description are not searched
- *
- * Web's search container is the whole scroll root — the issue title, its
- * description, every comment and every activity (`issue-detail.tsx:2625`). This
- * module searches **comment bodies only**, which is the input contract the
- * round was specified with (`TimelineEntry[]`, and every acceptance fixture is
- * a comment). The boundary is real and worth stating: a phrase that appears
- * only in the issue's description is findable on web and not here.
- *
- * It was left out deliberately rather than overlooked. Closing the comment half
- * first is the measurable part — replies alone are 43% / 63% of the text on the
- * long issues this round was justified with, and none of it was reachable at
- * all. The description half needs a second kind of jump target (the header has
- * no comment id, so it would scroll to offset 0 — a different code path in
- * `TimelineList`), and folding two target kinds into one round is how the
- * "one mechanism, two meanings" bugs in this file's callers started.
+ * - **The custom-property / metadata / sub-issue / PR rows in the header.**
+ *   They render text the reader can see, and web's scroll-root walk reaches
+ *   them. Mobile does not index them: each is a separate query the screen may
+ *   not have loaded, and a hit inside a loading section would be counted and
+ *   then be unlandable. The title and description are the two header blocks
+ *   that are already on the `Issue` object, which is why they are the two this
+ *   round closes.
  *
  * PURE — no React, no i18n, no native imports. Runs in the Node vitest lane.
  */
@@ -95,24 +136,56 @@ import type { TimelineEntry } from "@multica/core/types";
 import { isDeletedComment } from "./comment-deletion";
 import { stripHtml } from "./markdown/preprocess";
 
-/** One occurrence of the query inside one comment's searchable text. */
+/**
+ * Sentinels for the two header blocks, which have no comment id.
+ *
+ * A match inside the description or the title has to name *something* for the
+ * scroll channel to carry, and `TimelineList` needs to tell those two apart: a
+ * description hit scrolls to the description (not merely to offset 0, which on
+ * a long issue can leave it below the fold if the header is taller than the
+ * viewport), and both flash their own block rather than a comment card.
+ *
+ * Dunder-wrapped for the same reason `DIVIDER_ID` is: they cannot collide with
+ * a comment id, which is a uuid. `FIND_TARGET_TITLE` exists even though a title
+ * hit is always above a description hit, so the two stay distinguishable — the
+ * flash has to land on the block the match is actually in.
+ */
+export const FIND_TARGET_TITLE = "__issue_title__";
+export const FIND_TARGET_DESCRIPTION = "__issue_description__";
+
+/** One occurrence of the query inside one searchable block's text. */
 export interface FindMatch {
-  /** Id of the comment the match lives in — the jump/highlight target. */
-  commentId: string;
   /**
-   * 0-based offset of the match within the comment's own searchable text.
-   * Offsets from different comments are therefore not comparable; they are
-   * only meaningful together with `commentId`.
+   * Where the jump/highlight should land: a real comment id (root **or**
+   * reply), or one of the two header sentinels above.
+   */
+  targetId: string;
+  /**
+   * 0-based offset of the match within its own block's searchable text.
+   * Offsets from different blocks are therefore not comparable; they are only
+   * meaningful together with `targetId`.
    */
   start: number;
   /** Exclusive end offset, so `end - start === needle.length`. */
   end: number;
 }
 
-/** A comment's flattened searchable text plus the match offsets inside it. */
+/** One block's flattened searchable text plus the target it belongs to. */
 interface Searchable {
-  commentId: string;
+  targetId: string;
   text: string;
+}
+
+/**
+ * The issue fields find indexes besides the timeline.
+ *
+ * A structural subset rather than `Issue`: this module stays free of the
+ * `@multica/core` runtime and of every field it does not read, and a caller in
+ * the Node test lane can pass a two-key literal.
+ */
+export interface FindHeader {
+  title: string;
+  description: string | null;
 }
 
 /**
@@ -355,31 +428,64 @@ function tableRows(token: {
 }
 
 /**
- * Every comment entry's searchable text, in timeline order.
+ * Every searchable block on the issue page, in top-to-bottom reading order:
+ * title → description → timeline.
  *
  * Kept separate from `findInTimeline` so a caller that recomputes on every
- * keystroke can build the haystack once per timeline change and re-run only the
+ * keystroke can build the haystack once per content change and re-run only the
  * (cheap) scan — the same split as web, whose host passes a `contentKey` and
  * whose hook re-walks the DOM only when it changes.
+ *
+ * `header` is optional so the timeline-only input this module shipped with
+ * still works; a caller that omits it gets exactly the previous behaviour.
  */
 export function collectSearchables(
   entries: readonly TimelineEntry[] | undefined,
+  header?: FindHeader | undefined,
 ): Searchable[] {
-  if (!entries) return [];
   const out: Searchable[] = [];
-  for (const entry of entries) {
+
+  // The title is one block of plain text. NOT lexed: the header draws the raw
+  // string (`issue-header-card.tsx`), so `**` in a title is four visible
+  // characters, and running it through markdown would delete them and let a
+  // query for `**` "match" text that is not on screen. A title is a single
+  // line, so it cannot straddle a block boundary either way.
+  const title = header?.title;
+  if (title && title.trim().length > 0) {
+    out.push({ targetId: FIND_TARGET_TITLE, text: title });
+  }
+
+  // The description is markdown and goes through the SAME extractor as a
+  // comment — one dialect, one block rule. A second, simpler splitter for the
+  // description is the failure this module already documented: it disagrees
+  // with the renderer on inline code vs emphasis and invents matches.
+  //
+  // Each block becomes its own entry so all of them share the one target
+  // (`FIND_TARGET_DESCRIPTION`): the scroll target is the description as a
+  // whole, and an offset within a block is not comparable across blocks.
+  for (const text of extractSearchBlocks(header?.description ?? undefined)) {
+    if (text.length === 0) continue;
+    out.push({ targetId: FIND_TARGET_DESCRIPTION, text });
+  }
+
+  for (const entry of entries ?? []) {
     if (entry.type !== "comment") continue;
     if (isDeletedComment(entry)) continue;
+    // Joined into ONE entry per comment, not one per block: a hit inside a
+    // comment is addressed by comment id alone, so its blocks gain nothing
+    // from separate entries — and `findCounter`'s total is unaffected either
+    // way, since the match scan is per-occurrence.
     const text = extractSearchBlocks(entry.content).join("\n");
     if (text.length === 0) continue;
-    out.push({ commentId: entry.id, text });
+    out.push({ targetId: entry.id, text });
   }
   return out;
 }
 
 /**
- * Every case-insensitive occurrence of `query` across the timeline, in timeline
- * order and, within one comment, in reading order.
+ * Every case-insensitive occurrence of `query` across the page, in reading
+ * order: title, description, then the timeline; within one block, left to
+ * right.
  *
  * Returns `[]` for an empty or whitespace-only query. The whitespace test is
  * the stricter of web's two guards: web bails on `!needle` (so `" "` does
@@ -395,11 +501,11 @@ export function findInTimeline(
   if (needle.length === 0 || query.trim().length === 0) return [];
 
   const matches: FindMatch[] = [];
-  for (const { commentId, text } of searchables) {
+  for (const { targetId, text } of searchables) {
     const haystack = text.toLowerCase();
     let index = haystack.indexOf(needle);
     while (index !== -1) {
-      matches.push({ commentId, start: index, end: index + needle.length });
+      matches.push({ targetId, start: index, end: index + needle.length });
       // Advance by the needle's length, not by one: overlapping occurrences are
       // not separate hits. Web's walk does the same
       // (`indexOf(needle, index + needle.length)`), so "aa" in "aaa" counts
@@ -470,15 +576,21 @@ export function stepMatch(
 }
 
 /**
- * The comment id a given match should scroll to and flash.
+ * The jump/highlight target a given match should scroll to and flash.
  *
  * Its own function because it is the single place the two halves meet: the
- * match knows which comment it belongs to, and the timeline's existing
- * highlight channel (`highlightCommentId` / `highlightNonce`, see
- * `components/issue/timeline-list.tsx`) is keyed by comment id. A reply id
+ * match knows where it lives, and the timeline's existing highlight channel
+ * (`highlightCommentId` / `highlightNonce`, see
+ * `components/issue/timeline-list.tsx`) is keyed by a target id. A reply id
  * works there too — `CommentCard` highlights the matching reply inline — so a
  * hit inside a reply lands on the reply itself, not merely on its thread root.
+ *
+ * Since this round the return value may also be one of the two header
+ * sentinels; `TimelineList` is what gives those their meaning (scroll to the
+ * header, flash that block). Everything already consuming a comment id keeps
+ * working unchanged, because a sentinel only appears when the caller passed a
+ * header in.
  */
 export function matchTarget(match: FindMatch | undefined): string | undefined {
-  return match?.commentId;
+  return match?.targetId;
 }

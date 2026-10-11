@@ -25,13 +25,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, View } from "react-native";
 import { router } from "expo-router";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withSequence,
-  withTiming,
-} from "react-native-reanimated";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { Reaction, TimelineEntry } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
@@ -44,6 +37,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Markdown } from "@/lib/markdown";
 import { LongPressView } from "@/components/ui/long-press-view";
 import { CommentAttachmentList } from "@/components/issue/comment-attachment-list";
+import { HighlightOverlay } from "@/components/issue/highlight-overlay";
 import {
   discardFailedComment,
   useCreateComment,
@@ -523,67 +517,27 @@ function ResolvedIndicator({
 }
 
 /**
- * Animated highlight overlay for a root comment bubble. Sits absolute-
- * positioned over the parent <View className="rounded-2xl">, no pointer
- * capture (long-press still works through it). Border + background wash
- * — equivalent to web's `ring-2 ring-brand/50 bg-brand/5`.
- *
- * Reflow note: animating `borderWidth` would push children every frame,
- * so we keep it constant at 2 and animate `opacity` 0→1→0. Same trick
- * for the wash. Single shared value, one animated style.
+ * The root bubble's flash. Border + wash — web's `ring-2 ring-brand/50
+ * bg-brand/5`. The animation itself lives in `HighlightOverlay`; this is only
+ * the root's chrome.
  */
 function RootHighlightOverlay({ active }: { active: boolean }) {
-  const progress = useSharedValue(0);
-
-  useEffect(() => {
-    if (!active) return;
-    // 700ms fade-in → 1800ms hold → 700ms fade-out. Matches web's
-    // `transition-colors duration-700` + `setTimeout(2500)` timing.
-    progress.value = withSequence(
-      withTiming(1, { duration: 700 }),
-      withDelay(1800, withTiming(0, { duration: 700 })),
-    );
-  }, [active, progress]);
-
-  const style = useAnimatedStyle(() => ({ opacity: progress.value }));
-
-  // Brand colour comes from the `brand` token; alpha via NativeWind `/50`
-  // syntax mirrors web's `ring-brand/50 bg-brand/5`. Only opacity is
-  // animated — the borderColor / backgroundColor stay constant, so
-  // className is safe here (animating those channels via className isn't).
   return (
-    <Animated.View
-      pointerEvents="none"
+    <HighlightOverlay
+      active={active}
       className="absolute inset-0 rounded-2xl border-2 border-brand/50 bg-brand/5"
-      style={style}
     />
   );
 }
 
 /**
- * Animated wash overlay for a reply row. Same timing as root, but no
- * border — mirrors web's reply branch which applies only `bg-brand/5`
+ * A reply row's flash. Same timing as the root, no border — mirrors web's reply
+ * branch, which applies only `bg-brand/5`
  * (packages/views/issues/components/comment-card.tsx:682).
  */
 function ReplyHighlightOverlay({ active }: { active: boolean }) {
-  const progress = useSharedValue(0);
-
-  useEffect(() => {
-    if (!active) return;
-    progress.value = withSequence(
-      withTiming(1, { duration: 700 }),
-      withDelay(1800, withTiming(0, { duration: 700 })),
-    );
-  }, [active, progress]);
-
-  const style = useAnimatedStyle(() => ({ opacity: progress.value }));
-
   return (
-    <Animated.View
-      pointerEvents="none"
-      className="absolute inset-0 bg-brand/5"
-      style={style}
-    />
+    <HighlightOverlay active={active} className="absolute inset-0 bg-brand/5" />
   );
 }
 

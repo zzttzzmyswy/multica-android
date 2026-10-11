@@ -120,17 +120,30 @@ export default function IssueDetail() {
   });
   const children = useQuery(issueChildrenOptions(wsId, id));
 
-  // In-page find, derived from the timeline read. The searchable set is
-  // rebuilt only when the timeline changes — a keystroke re-runs the (cheap)
-  // scan, not the markdown walk. Same split as web, whose host passes a
-  // `contentKey` and whose hook re-walks the DOM only when it changes.
+  // In-page find, derived from the issue read. The searchable set is rebuilt
+  // only when the issue record or the timeline changes — a keystroke re-runs
+  // the (cheap) scan, not the markdown walk. Same split as web, whose host
+  // passes a `contentKey` and whose hook re-walks the DOM only when it changes.
   //
-  // Every comment body is indexed, replies included, and no network request is
-  // added: `issueTimelineOptions` already returns the whole timeline in one
-  // shot (see `data/queries/issues.ts`).
+  // The container is web's: title → description → timeline. Title and
+  // description are already on the `issue` object (`issueDetailOptions`), so
+  // indexing them adds no request; comments still come from the timeline read
+  // the screen already makes. Together they are the whole of what this screen
+  // renders as prose — see the module docblock for what is deliberately out
+  // (activity rows, the sidebar sections).
+  //
+  // Read off `detail.data` rather than the `issue` alias further down: this
+  // memo runs before that `const` is initialised, so touching it here would be
+  // a temporal-dead-zone throw on the first render.
+  const headerTitle = detail.data?.title ?? "";
+  const headerDescription = detail.data?.description ?? null;
   const searchables = useMemo(
-    () => collectSearchables(timeline.data),
-    [timeline.data],
+    () =>
+      collectSearchables(timeline.data, {
+        title: headerTitle,
+        description: headerDescription,
+      }),
+    [timeline.data, headerTitle, headerDescription],
   );
   const matches = useMemo(
     () => findInTimeline(searchables, findQuery),

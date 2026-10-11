@@ -29,6 +29,8 @@ import {
   extractSearchBlocks,
   findCounter,
   findInTimeline,
+  FIND_TARGET_DESCRIPTION,
+  FIND_TARGET_TITLE,
   matchTarget,
   stepMatch,
 } from "./issue-find";
@@ -73,7 +75,7 @@ describe("searchable text is the full comment body", () => {
 
     const found = hits([comment("c1", body)], "needle_at_the_end");
     expect(found).toHaveLength(1);
-    expect(found[0]!.commentId).toBe("c1");
+    expect(found[0]!.targetId).toBe("c1");
   });
 
   it("searches inside replies, which the navigator never indexes", () => {
@@ -82,7 +84,7 @@ describe("searchable text is the full comment body", () => {
       comment("reply", "a reply carrying the PHRASE", { parent_id: "root" }),
     ];
     const found = hits(entries, "phrase");
-    expect(found.map((m) => m.commentId)).toEqual(["reply"]);
+    expect(found.map((m) => m.targetId)).toEqual(["reply"]);
   });
 
   it("reads markdown source as the words the reader sees", () => {
@@ -308,7 +310,7 @@ describe("what is not searchable", () => {
       comment("here", "visible WORDS"),
     ];
     const found = hits(entries, "words");
-    expect(found.map((m) => m.commentId)).toEqual(["here"]);
+    expect(found.map((m) => m.targetId)).toEqual(["here"]);
   });
 
   it("ignores a comment whose body is empty", () => {
@@ -320,20 +322,17 @@ describe("what is not searchable", () => {
     expect(collectSearchables(undefined)).toEqual([]);
   });
 
-  it("indexes comments only, not the issue title or description", () => {
-    // A recorded boundary, not an oversight: web's container is the whole
-    // scroll root (title + description + timeline), this module's input is the
-    // timeline. Every acceptance fixture for this round is a comment, and a
-    // title/description hit would need a second jump target kind (the header
-    // has no comment id). Pinned so the difference is a decision on record
-    // rather than something a later round has to rediscover.
+  it("indexes header blocks only when the caller passes them in", () => {
+    // The timeline-only input this module shipped with still behaves exactly as
+    // it did: nothing the caller omits can be found. That matters because
+    // `collectSearchables(entries)` is the shape the previous round's callers
+    // and tests use, and widening the container must not silently change what
+    // an un-updated caller searches.
     const entries = [
       activity("a1"),
       comment("c1", "only the comment body is indexed"),
     ];
     expect(hits(entries, "only the comment body")).toHaveLength(1);
-    // Anything the caller does not pass in cannot be found — the description
-    // lives on the `Issue`, which this module never sees.
     expect(collectSearchables(entries)).toHaveLength(1);
   });
 });
@@ -344,12 +343,170 @@ describe("match order", () => {
       comment("first", "hit one, hit two"),
       comment("second", "hit three"),
     ];
-    expect(hits(entries, "hit").map((m) => m.commentId)).toEqual([
+    expect(hits(entries, "hit").map((m) => m.targetId)).toEqual([
       "first",
       "first",
       "second",
     ]);
     expect(hits(entries, "hit").map((m) => m.start)).toEqual([0, 9, 0]);
+  });
+});
+
+describe("the header is part of the container (title + description)", () => {
+  // The gap this round closes, stated as the acceptance fixtures do: a word
+  // that is plainly readable on the phone but appears only in the description.
+  // The numbers below are measured against this deployment:
+  //   MYS-1893 — 49 comments, 72,421 searchable characters, and
+  //              `qemu_arm64_linux_min` in NONE of them; it is in the
+  //              description.
+  //   MYS-2007 — 1 comment, 30 searchable characters; `preview26` is in the
+  //              description and the title.
+  const withHeader = (
+    entries: readonly TimelineEntry[],
+    title: string,
+    description: string | null,
+    q: string,
+  ) => findInTimeline(collectSearchables(entries, { title, description }), q);
+
+  it("finds a word that appears only in the description", () => {
+    // The exact shape of MYS-1893: a busy timeline that does not contain it.
+    const entries = Array.from({ length: 49 }, (_, i) =>
+      comment(`c${i}`, `comment ${i} about the build`),
+    );
+    const description = "产品配置 `vendor/ohemu/qemu_arm64_linux_min/config.json`";
+    expect(withHeader(entries, "迭代 I11", description, "qemu_arm64_linux_min")).toHaveLength(1);
+    // And it was genuinely unreachable before: the timeline alone has no hit.
+    expect(findInTimeline(collectSearchables(entries), "qemu_arm64_linux_min")).toEqual([]);
+  });
+
+  it("finds a word that appears only in the title", () => {
+    // MYS-2007's case — `preview26` is in its title.
+    const found = withHeader(
+      [comment("c1", "stub")],
+      "G4：Windows preview26 集中实机验收（Explorer / 多屏 DPI）",
+      null,
+      "preview26",
+    );
+    expect(found).toHaveLength(1);
+    expect(matchTarget(found[0])).toBe(FIND_TARGET_TITLE);
+  });
+
+  it("targets the description block, not a comment", () => {
+    const found = withHeader([], "t", "the DESCRIPTION body", "description");
+    expect(found).toHaveLength(1);
+    expect(matchTarget(found[0])).toBe(FIND_TARGET_DESCRIPTION);
+  });
+
+  it("never mistakes a header sentinel for a comment id", () => {
+    // The sentinels travel the same string channel a comment id does, so they
+    // must not be mistakable for one.
+    expect(FIND_TARGET_TITLE).not.toBe(FIND_TARGET_DESCRIPTION);
+    for (const s of [FIND_TARGET_TITLE, FIND_TARGET_DESCRIPTION]) {
+      expect(s.startsWith("__")).toBe(true);
+    }
+  });
+
+  it("reads the description through the same markdown walk as a comment", () => {
+    // The rule this pins: the description must NOT get its own simpler
+    // splitter. A naive one strips `_` as an emphasis marker across the whole
+    // line and would report `LOGICALDISPLAYNODE` in text that really reads
+    // `LOGICAL_DISPLAY_NODE` inside backticks — a fabricated fixture.
+    const description = "配置 `LOGICAL_DISPLAY_NODE` 与 `window_scene_board` 部件";
+    expect(withHeader([], "t", description, "LOGICAL_DISPLAY_NODE")).toHaveLength(1);
+    expect(withHeader([], "t", description, "LOGICALDISPLAYNODE")).toEqual([]);
+    // Same call the comment path makes, so the two cannot drift.
+    expect(collectSearchables([], { title: "", description })).toEqual(
+      extractSearchBlocks(description).map((text) => ({
+        targetId: FIND_TARGET_DESCRIPTION,
+        text,
+      })),
+    );
+  });
+
+  it("keeps the description's code fences out, like a comment's", () => {
+    const description = ["prose", "", "```sh", "build.sh --gn-args secret_flag", "```"].join("\n");
+    expect(withHeader([], "t", description, "secret_flag")).toEqual([]);
+    expect(withHeader([], "t", description, "prose")).toHaveLength(1);
+  });
+
+  it("does not lex the title, which the header draws verbatim", () => {
+    // `issue-header-card.tsx` renders `<Text>{issue.title}</Text>`, so these
+    // characters are on screen. Lexing would delete them and answer a query
+    // for `**` with "no matches" on a title that plainly shows `**`.
+    const title = "fix **urgent** _now_";
+    // `**` opens and closes, so it is two occurrences — found as two literal
+    // hits rather than erased as one emphasis pair.
+    expect(withHeader([], title, null, "**")).toHaveLength(2);
+    expect(withHeader([], title, null, "_now_")).toHaveLength(1);
+    expect(withHeader([], title, null, "fix **urgent** _now_")).toHaveLength(1);
+  });
+
+  it("puts title before description before comments — the reading order", () => {
+    const found = withHeader(
+      [comment("c1", "HIT in a comment")],
+      "a HIT in the title",
+      "a HIT in the description",
+      "hit",
+    );
+    expect(found.map((m) => m.targetId)).toEqual([
+      FIND_TARGET_TITLE,
+      FIND_TARGET_DESCRIPTION,
+      "c1",
+    ]);
+  });
+
+  it("ignores an absent, empty or whitespace-only title and description", () => {
+    const entries = [comment("c1", "body")];
+    expect(collectSearchables(entries, { title: "", description: null })).toHaveLength(1);
+    expect(collectSearchables(entries, { title: "   ", description: "  \n " })).toHaveLength(1);
+    expect(collectSearchables(entries)).toHaveLength(1);
+  });
+
+  it("counts description hits in the total, and steps through them", () => {
+    // The counter and the stepper read the same array, so a description hit
+    // that inflated one without the other would print `n/m` disagreeing with
+    // how many steps it takes to walk every match. This walks the real cycle.
+    const matches = withHeader(
+      [comment("c1", "hit here")],
+      "hit title",
+      "hit description",
+      "hit",
+    );
+    expect(matches).toHaveLength(3);
+    const seen: number[] = [];
+    let i = -1;
+    for (let step = 0; step < matches.length; step++) {
+      i = stepMatch(i, matches.length, 1);
+      seen.push(i);
+    }
+    expect(seen).toEqual([0, 1, 2]);
+    expect(findCounter("hit", matches.length, i)).toEqual({
+      kind: "count",
+      current: 3,
+      total: 3,
+    });
+    // Every step has a target to land on — no match is counted that find
+    // cannot then scroll to.
+    expect(matches.map((m) => matchTarget(m))).toEqual([
+      FIND_TARGET_TITLE,
+      FIND_TARGET_DESCRIPTION,
+      "c1",
+    ]);
+  });
+
+  it("does not regress the comment half that already worked", () => {
+    // `SetScreenClientBuffer` is the fixture the previous round's device
+    // acceptance used; it lives in a comment. Widening the container must not
+    // change how it is found or where it lands.
+    const entries = [comment("root", "the SetScreenClientBuffer path")];
+    const found = withHeader(
+      entries,
+      "unrelated title",
+      "unrelated description",
+      "SetScreenClientBuffer",
+    );
+    expect(found).toHaveLength(1);
+    expect(matchTarget(found[0])).toBe("root");
   });
 });
 
@@ -434,7 +591,7 @@ describe("stepMatch — prev/next with wrap-around", () => {
 
 describe("matchTarget", () => {
   it("names the comment the match lives in", () => {
-    expect(matchTarget({ commentId: "c9", start: 0, end: 1 })).toBe("c9");
+    expect(matchTarget({ targetId: "c9", start: 0, end: 1 })).toBe("c9");
   });
 
   it("has no target without a match", () => {
