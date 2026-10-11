@@ -416,7 +416,11 @@ describe("remote-directory four-state wiring", () => {
     //     (the agent's own access list, a value store), where there is no read
     //     to fail.
     const DIRECTORY_CALLERS = [
-      "components/skill/skill-batch-bar.tsx",
+      // The skill add-to-agent sheet moved out of the batch bar in iteration
+      // 230 so the list's row kebab and the batch bar could share it; the
+      // directory read moved with it, and the bar now reaches the sheet —
+      // and therefore its `state`/`onRetry` — through that component.
+      "components/skill/add-to-agents-sheet.tsx",
       "components/agent/agent-access-picker.tsx",
       "components/agent/agent-skills-section.tsx",
       "components/agent/builder-config-panel.tsx",

@@ -3207,6 +3207,8 @@
   "skills.batch.exitSelection": "Exit selection",
   "skills.batch.partial": "{{owned}} of {{total}} already added",
   "skills.batch.selectOne": "Select {{name}}",
+  "skills.actions.delete": "Delete",
+  "skills.actions.row_menu": "Actions",
   "skills.create.back": "Back",
   "skills.create.method.manualDesc": "Start from a blank SKILL.md and write your own instructions.",
   "skills.create.method.manualTitle": "Create manually",

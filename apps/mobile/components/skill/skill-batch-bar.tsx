@@ -19,29 +19,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQuery } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import type { Agent, SkillSummary } from "@multica/core/types";
+import type { SkillSummary } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
-import { ActorAvatar } from "@/components/ui/actor-avatar";
-import { MultiSelectSheet } from "@/components/agent/multi-select-sheet";
-import { agentListOptions } from "@/data/queries/agents";
+import { AddToAgentsSheet } from "@/components/skill/add-to-agents-sheet";
 import {
-  useBatchAddSkillsToAgents,
   useBatchDeleteSkills,
 } from "@/data/mutations/skills";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useAuthStore } from "@/data/auth-store";
 import { canEditSkill } from "@/lib/skill-guards";
-import { catalogRead } from "@/lib/catalog-read";
 import { useSkillRole } from "@/lib/use-skill-role";
-import {
-  batchOutcomeMessage,
-  missingSkillIds,
-  planSkillAttach,
-  toggleId,
-} from "@/lib/skill-batch";
+import { batchOutcomeMessage, type BatchOutcome } from "@/lib/skill-batch";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
@@ -81,15 +71,9 @@ export function SkillBatchBar({
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
 
-  const agentsRead = catalogRead(useQuery(agentListOptions(wsId)));
-  const agents = agentsRead.items;
   const batchDelete = useBatchDeleteSkills();
-  const batchAttach = useBatchAddSkillsToAgents();
 
   const [addOpen, setAddOpen] = useState(false);
-  const [agentSelection, setAgentSelection] = useState<ReadonlySet<string>>(
-    new Set(),
-  );
   const [toast, setToast] = useState<Toast | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -111,80 +95,29 @@ export function SkillBatchBar({
   );
   const selectedIdSet = useMemo(() => new Set(skillIds), [skillIds]);
   const count = skillIds.length;
-  const busy = batchDelete.isPending || batchAttach.isPending;
+  // The attach write lives in the shared sheet now, so this bar's own busy
+  // state only has to account for its delete. The sheet disables itself while
+  // its attach is pending.
+  const busy = batchDelete.isPending;
   const allDeletable = selectedSkills.every((skill) =>
     canEditSkill(skill, { userId, role }),
   );
   const allVisibleSelected =
     visibleIds.length > 0 && visibleIds.every((id) => selectedIdSet.has(id));
 
-  /**
-   * "My agents" / "Other agents" buckets, minus the targets that already hold
-   * every selected skill (nothing to send — the attach endpoint is additive,
-   * so those rows are a no-op rather than an error). A partial overlap stays
-   * selectable and says how much of the selection is already there.
-   */
-  const agentGroups = useMemo(() => {
-    const active = agents.filter((a) => !a.archived_at);
-    const isAdmin = role === "owner" || role === "admin";
-    const mine = active.filter(
-      (a) => a.owner_id !== null && a.owner_id === userId,
-    );
-    const others = isAdmin
-      ? active.filter((a) => a.owner_id === null || a.owner_id !== userId)
-      : [];
-    const toRow = (agent: Agent) => {
-      const owned = count - missingSkillIds(agent, skillIds).length;
-      return {
-        key: agent.id,
-        title: agent.name,
-        subtitle: owned > 0 ? t("skills.batch.partial", { owned, total: count }) : undefined,
-      };
-    };
-    return [
-      {
-        label: t("skills.usedBy.mine"),
-        rows: mine
-          .filter((a) => missingSkillIds(a, skillIds).length > 0)
-          .map(toRow),
-      },
-      {
-        label: t("skills.usedBy.others"),
-        rows: others
-          .filter((a) => missingSkillIds(a, skillIds).length > 0)
-          .map(toRow),
-      },
-    ];
-  }, [agents, role, userId, skillIds, count, t]);
-
-  const handleAddToAgents = () => {
-    const plan = planSkillAttach(agents, [...agentSelection], skillIds);
-    setAddOpen(false);
-    setAgentSelection(new Set());
-    if (plan.length === 0) return;
-    batchAttach.mutate(plan, {
-      onSuccess: (outcome) => {
-        const message = batchOutcomeMessage(outcome, {
-          success: (done) =>
-            done === 1
-              ? t("skills.batch.addedOne")
-              : t("skills.batch.addedCount", { count: done }),
-          failure: (done, failed, first) =>
-            t("skills.batch.addPartial", { done, failed, message: first }),
-        });
-        showToast(
-          outcome.failures.length === 0 ? "success" : "error",
-          message ?? t("skills.usedBy.addFailed"),
-        );
-      },
-      onError: (err) =>
-        showToast(
-          "error",
-          err instanceof Error && err.message
-            ? err.message
-            : t("skills.usedBy.addFailed"),
-        ),
+  const handleAddResult = (outcome: BatchOutcome) => {
+    const message = batchOutcomeMessage(outcome, {
+      success: (done) =>
+        done === 1
+          ? t("skills.batch.addedOne")
+          : t("skills.batch.addedCount", { count: done }),
+      failure: (done, failed, first) =>
+        t("skills.batch.addPartial", { done, failed, message: first }),
     });
+    showToast(
+      outcome.failures.length === 0 ? "success" : "error",
+      message ?? t("skills.usedBy.addFailed"),
+    );
   };
 
   const runDelete = () => {
@@ -345,19 +278,19 @@ export function SkillBatchBar({
         </View>
       </View>
 
-      <MultiSelectSheet
+      <AddToAgentsSheet
         visible={addOpen}
-        title={t("skills.usedBy.addTitle")}
-        groups={agentGroups}
-        state={agentsRead.state}
-        onRetry={agentsRead.retry}
-        searchPlaceholder={t("skills.usedBy.searchPlaceholder")}
-        selectedKeys={agentSelection}
-        emptyText={t("skills.usedBy.noAgents")}
-        noMatchText={t("skills.usedBy.noMatch")}
-        leading={(row) => <ActorAvatar type="agent" id={row.key} size={28} />}
-        onToggle={(key) => setAgentSelection(toggleId(agentSelection, key))}
-        onClose={handleAddToAgents}
+        skills={selectedSkills}
+        onClose={() => setAddOpen(false)}
+        onResult={handleAddResult}
+        onError={(err) =>
+          showToast(
+            "error",
+            err instanceof Error && err.message
+              ? err.message
+              : t("skills.usedBy.addFailed"),
+          )
+        }
       />
     </>
   );
