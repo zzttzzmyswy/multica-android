@@ -10,7 +10,7 @@
  * Stack.Screen with title "Issue". We override that here once the data
  * lands so the navigation bar shows `MUL-123` (Linear-style).
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -53,6 +53,15 @@ import { useViewedIssuesStore } from "@/data/viewed-issues-store";
 import { useCommentSelectStore } from "@/data/comment-select-store";
 import { useReplyTargetStore } from "@/data/stores/reply-target-store";
 import { ThreadNavSheet } from "@/components/issue/thread-nav-sheet";
+import { FindBar } from "@/components/issue/find-bar";
+import {
+  collectSearchables,
+  findCounter,
+  findInTimeline,
+  matchTarget,
+  stepMatch,
+  type FindMatch,
+} from "@/lib/issue-find";
 import { resolveCatalogState } from "@/lib/catalog-state";
 import { useTranslation } from "@/lib/i18n/react";
 
@@ -90,6 +99,15 @@ export default function IssueDetail() {
     setJumpTarget({ id: threadId, nonce: String(Date.now()) });
   }, []);
 
+  // ── In-page find (web's Cmd/Ctrl+F) ───────────────────────────────────
+  // State lives here rather than in a hook so the search itself stays a pure
+  // function (`lib/issue-find.ts`) that the Node vitest lane can pin, and so
+  // the header button and the bar share one owner. The match set is derived
+  // from the timeline query further down — see `searchables` there.
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState("");
+  const [activeMatch, setActiveMatch] = useState(-1);
+
   const detail = useQuery(issueDetailOptions(wsId, id));
   const timeline = useQuery(issueTimelineOptions(wsId, id));
   // Thread navigator's read state. `timeline.data === []` cannot tell "still
@@ -101,6 +119,89 @@ export default function IssueDetail() {
     isError: timeline.isError,
   });
   const children = useQuery(issueChildrenOptions(wsId, id));
+
+  // In-page find, derived from the timeline read. The searchable set is
+  // rebuilt only when the timeline changes — a keystroke re-runs the (cheap)
+  // scan, not the markdown walk. Same split as web, whose host passes a
+  // `contentKey` and whose hook re-walks the DOM only when it changes.
+  //
+  // Every comment body is indexed, replies included, and no network request is
+  // added: `issueTimelineOptions` already returns the whole timeline in one
+  // shot (see `data/queries/issues.ts`).
+  const searchables = useMemo(
+    () => collectSearchables(timeline.data),
+    [timeline.data],
+  );
+  const matches = useMemo(
+    () => findInTimeline(searchables, findQuery),
+    [searchables, findQuery],
+  );
+  const counter = findCounter(findQuery, matches.length, activeMatch);
+
+  // Scroll-and-flash is driven ONLY by a user navigation (typing, or pressing
+  // an arrow) — never by the match set changing underneath. Web is explicit
+  // about this (`use-in-page-find.ts`: "Scroll only when the query changed —
+  // never yank the view while content mutates underneath a fixed active
+  // match"), and it matters here too: a comment arriving over the websocket
+  // recomputes `matches`, which an effect keyed on the active match would turn
+  // into a scroll away from whatever the reader was looking at.
+  //
+  // The nonce is a counter, not a timestamp: two steps inside the same
+  // millisecond are possible with a fast tap and would otherwise be an
+  // identical prop change that never re-fires.
+  const stepNonceRef = useRef(0);
+  const [findStep, setFindStep] = useState<{ id: string; nonce: string } | null>(
+    null,
+  );
+  // `list` is passed in rather than read from `matches` so a query edit can
+  // navigate into the NEW match set in the same tick, before React has
+  // re-rendered with it.
+  const applyFindTarget = useCallback(
+    (list: readonly FindMatch[], index: number) => {
+      const target = matchTarget(list[index]);
+      if (!target) {
+        setFindStep(null);
+        return;
+      }
+      stepNonceRef.current += 1;
+      setFindStep({ id: target, nonce: String(stepNonceRef.current) });
+    },
+    [],
+  );
+
+  const closeFind = useCallback(() => {
+    setFindOpen(false);
+    setFindQuery("");
+    setActiveMatch(-1);
+    setFindStep(null);
+  }, []);
+  const stepFind = useCallback(
+    (direction: 1 | -1) => {
+      const next = stepMatch(activeMatch, matches.length, direction);
+      setActiveMatch(next);
+      applyFindTarget(matches, next);
+    },
+    [activeMatch, matches, applyFindTarget],
+  );
+  // Editing the query restarts navigation at the first hit, like web's
+  // `recompute(resetActive: true)`.
+  const onFindQueryChange = useCallback(
+    (value: string) => {
+      setFindQuery(value);
+      const next = findInTimeline(searchables, value);
+      setActiveMatch(next.length > 0 ? 0 : -1);
+      applyFindTarget(next, 0);
+    },
+    [searchables, applyFindTarget],
+  );
+  // Leaving the issue drops the bar, so coming back starts clean — and a stale
+  // highlight or counter cannot outlive the screen. The route reuses this
+  // component when it swaps to another issue, so the `id` change is the event
+  // that matters; web closes find on the same signal. (On mount every setter
+  // receives its own initial value, so React bails out and no render happens.)
+  useEffect(() => {
+    closeFind();
+  }, [id, closeFind]);
 
   // Subscribe to per-issue WS events: status/priority/assignee/label
   // changes, comments, activity, reactions, agent task progress.
@@ -312,6 +413,17 @@ export default function IssueDetail() {
                     onPress={() => setThreadNavOpen(true)}
                     accessibilityLabel={t("threadNav.open")}
                   />
+                  {/* In-page find — web's Cmd/Ctrl+F. Placed next to the
+                   *  thread navigator because the two are complements, not
+                   *  duplicates: the navigator jumps to a THREAD by its root
+                   *  comment's preview, while find searches every comment's
+                   *  full body. Neither replaces the other, so this must not
+                   *  displace the navigator's button. */}
+                  <IconButton
+                    name="search-outline"
+                    onPress={() => setFindOpen(true)}
+                    accessibilityLabel={t("detail.find.placeholder")}
+                  />
                   {/* Inbox-origin archive toggle. Archive (main view) vs
                    *  Unarchive (archived view), mirroring web's inbox detail
                    *  panel; hidden for every other entry point into the issue.
@@ -374,9 +486,26 @@ export default function IssueDetail() {
             highlightNonce={h}
             jumpToThreadId={jumpTarget?.id}
             jumpNonce={jumpTarget?.nonce}
+            findTargetId={findStep?.id}
+            findNonce={findStep?.nonce}
             subIssues={children.data}
             wsSlug={wsSlug}
           />
+          {/* In-page find bar. Floats over the timeline so the reader keeps
+              seeing the document it is scrolling — a sheet would cover the
+              very comments it navigates. Rendered only while open, so the
+              input's `autoFocus` fires on every open. */}
+          {findOpen ? (
+            <FindBar
+              value={findQuery}
+              onChange={onFindQueryChange}
+              counter={counter}
+              canStep={matches.length > 0}
+              onPrevious={() => stepFind(-1)}
+              onNext={() => stepFind(1)}
+              onClose={closeFind}
+            />
+          ) : null}
           {/* Multi-select on the sub-issue rows (long-press) raises the
               shared batch bar here, where it can span the screen — the
               children section lives inside the timeline's scroll content and

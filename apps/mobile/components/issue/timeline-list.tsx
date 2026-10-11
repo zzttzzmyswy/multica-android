@@ -151,6 +151,17 @@ interface Props {
   jumpToThreadId?: string;
   /** Per-jump nonce — re-picking the same thread re-fires the scroll. */
   jumpNonce?: string;
+  /** In-page find target — a comment id from `lib/issue-find.ts`, which may be
+   *  a ROOT **or a reply**. Lands like a navigator jump (scroll to the owning
+   *  row) but resolves through replies too: a reply is not its own row in the
+   *  mobile flat list, so matching only `row.entry.id` would leave every hit
+   *  inside a reply with no scroll target — and replies are precisely the half
+   *  of the timeline find exists to reach. */
+  findTargetId?: string;
+  /** Per-step nonce. Stepping onto the same comment twice (a query edited back
+   *  to a previous one, or two hits inside one comment) must re-fire the
+   *  scroll and re-flash, so the target alone cannot be the trigger. */
+  findNonce?: string;
 }
 
 /** How long the flash stays "claimed" before we let a new highlight take
@@ -183,6 +194,8 @@ export function TimelineList({
   highlightNonce,
   jumpToThreadId,
   jumpNonce,
+  findTargetId,
+  findNonce,
 }: Props) {
   const { t } = useTranslation();
   // Top-level selection subscription gates the outer "tap-outside-to-dismiss"
@@ -427,6 +440,52 @@ export function TimelineList({
     const fade = setTimeout(() => setHighlightedId(null), JUMP_HIGHLIGHT_HOLD_MS);
     return () => clearTimeout(fade);
   }, [jumpToThreadId, jumpNonce, dataWithDivider]);
+
+  // ── In-page find step ─────────────────────────────────────────────────
+  // Stepping through find hits reuses the SAME `highlightedId` channel the
+  // deep-link and the navigator jump use — one "this is the row you asked for"
+  // affordance, not three.
+  //
+  // The lookup goes through replies as well as top-level rows. Replies live
+  // inside their parent's `CommentCard` rather than in `dataWithDivider`, so
+  // resolving only `row.entry.id` would find nothing for a hit inside a reply —
+  // i.e. for exactly the matches that motivated this feature. `CommentCard`
+  // already highlights a child reply when `highlightedCommentId` names it
+  // (`reply.id === highlightedCommentId`), so scrolling to the OWNING row is
+  // all that is needed for the flash to land on the right line.
+  //
+  // Hold time matches a navigator jump rather than the 5s inbox hold: find
+  // lands the row in view immediately and the reader may step again at any
+  // moment, so the flash only has to confirm which row it was.
+  const lastFindRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!findTargetId || dataWithDivider.length === 0) return;
+    const stamp = `${findTargetId}:${findNonce ?? ""}`;
+    if (lastFindRef.current === stamp) return;
+
+    const index = dataWithDivider.findIndex(
+      (row) =>
+        row.entry.id === findTargetId ||
+        row.replies.some((reply) => reply.id === findTargetId),
+    );
+    // The stamp is committed only once the row resolves. Committing it first
+    // (as the navigator effect below does) would burn the one shot on a render
+    // where the target's row is not in `data` yet, and the scroll could then
+    // never fire — the stamp would already match on the render that does have
+    // it. Re-running `findIndex` on later renders is free; a lost jump is not.
+    if (index < 0) return;
+    lastFindRef.current = stamp;
+
+    // Swallowed for the same reason the navigator's is: a rejection means
+    // FlashList has not measured the index yet — the row is on screen either
+    // way, and the flash below still marks it.
+    listRef.current
+      ?.scrollToIndex({ index, animated: true, viewPosition: 0 })
+      .catch(() => {});
+    setHighlightedId(findTargetId);
+    const fade = setTimeout(() => setHighlightedId(null), JUMP_HIGHLIGHT_HOLD_MS);
+    return () => clearTimeout(fade);
+  }, [findTargetId, findNonce, dataWithDivider]);
 
   // Mark "scrolled past" once the divider row leaves the viewport — used
   // by the unmount effect below to decide whether to bump last-viewed.

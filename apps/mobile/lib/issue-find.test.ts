@@ -1,0 +1,443 @@
+/**
+ * Unit tests for the issue timeline's in-page find (`lib/issue-find.ts`).
+ *
+ * The behaviours pinned here are the ones that carry product meaning — each is
+ * tied to the web hook it ports (`packages/views/issues/hooks/use-in-page-find.ts`)
+ * or to the acceptance criteria on MYS-2090, not to a convenient local shape:
+ *
+ *   - **The searchable text is the FULL body.** This is the whole point of the
+ *     round: the pre-existing thread navigator searches the first 240
+ *     characters of root comments only (`lib/thread-nav.ts`), which reaches
+ *     10.6% / 3.8% of the text on this deployment's long issues and nothing at
+ *     all inside replies.
+ *   - **Replies are searchable.** A hit inside a reply is the case the
+ *     navigator structurally cannot answer.
+ *   - **Case-insensitive.** Web lowercases both sides.
+ *   - **A match never straddles a block boundary**, but it *does* span inline
+ *     elements inside one block — a documented, one-directional divergence
+ *     from web, whose text-node walk stops at a bold run.
+ *   - **Code fences are not prose.** Mirrors web's `SKIP_TAGS`.
+ *   - **Activity rows and tombstones contribute nothing**, so `matchCount`
+ *     counts only hits a reader can step through and see.
+ *   - **`n/m` is 1-based and never exceeds `m`**, and the empty state is the
+ *     no-matches phrase rather than `0/0`.
+ */
+import { describe, expect, it } from "vitest";
+import type { TimelineEntry } from "@multica/core/types";
+import {
+  collectSearchables,
+  extractSearchBlocks,
+  findCounter,
+  findInTimeline,
+  matchTarget,
+  stepMatch,
+} from "./issue-find";
+
+function comment(
+  id: string,
+  content: string,
+  partial: Partial<TimelineEntry> = {},
+): TimelineEntry {
+  return {
+    type: "comment",
+    id,
+    actor_type: "member",
+    actor_id: "u1",
+    created_at: "2026-01-01T00:00:00Z",
+    content,
+    ...partial,
+  };
+}
+
+function activity(id: string, action = "status_changed"): TimelineEntry {
+  return {
+    type: "activity",
+    id,
+    actor_type: "member",
+    actor_id: "u1",
+    created_at: "2026-01-01T00:00:00Z",
+    action,
+  };
+}
+
+const hits = (entries: readonly TimelineEntry[], q: string) =>
+  findInTimeline(collectSearchables(entries), q);
+
+describe("searchable text is the full comment body", () => {
+  it("reaches text far past the thread navigator's 240-character preview", () => {
+    // 400 characters of filler, then the needle. The navigator truncates a
+    // root comment's preview at title 80 + body 160, so this word is invisible
+    // to it — and visible here.
+    const body = `${"filler ".repeat(57)}NEEDLE_AT_THE_END`;
+    expect(body.indexOf("NEEDLE_AT_THE_END")).toBeGreaterThan(240);
+
+    const found = hits([comment("c1", body)], "needle_at_the_end");
+    expect(found).toHaveLength(1);
+    expect(found[0]!.commentId).toBe("c1");
+  });
+
+  it("searches inside replies, which the navigator never indexes", () => {
+    const entries = [
+      comment("root", "the root comment"),
+      comment("reply", "a reply carrying the PHRASE", { parent_id: "root" }),
+    ];
+    const found = hits(entries, "phrase");
+    expect(found.map((m) => m.commentId)).toEqual(["reply"]);
+  });
+
+  it("reads markdown source as the words the reader sees", () => {
+    // Emphasis / links / inline code contribute their text; the URL does not.
+    const blocks = extractSearchBlocks(
+      "This is **bold** and `code` and [a label](https://example.com/hidden).",
+    );
+    const text = blocks.join("\n");
+    expect(text).toContain("bold");
+    expect(text).toContain("code");
+    expect(text).toContain("a label");
+    expect(text).not.toContain("example.com");
+  });
+
+  it("matches across a bold run — more permissive than web, by design", () => {
+    // Web's walk visits DOM text nodes, and a bold run is its own text node,
+    // so web does NOT match this. RN has no per-inline text nodes, and the
+    // reader perceives one run of text, so mobile matches. The divergence is
+    // one-directional: mobile only ever finds more, never less.
+    expect(hits([comment("c1", "keep **this** word")], "keep this word")).toHaveLength(
+      1,
+    );
+  });
+
+  it("keeps a link's label searchable but not its URL", () => {
+    expect(extractSearchBlocks("[docs](https://x.y/z)").join("")).toBe("docs");
+    expect(hits([comment("c1", "[docs](https://x.y/z)")], "x.y")).toEqual([]);
+  });
+
+  it("keeps identifiers inside inline code intact", () => {
+    // A real defect this pins: a probe that mirrored this module in Python
+    // stripped `_` as an emphasis marker across the whole line, so it reported
+    // the word `LOGICALDISPLAYNODE` in text that actually reads
+    // `LOGICAL_DISPLAY_NODE` inside backticks. The device then correctly found
+    // nothing, and the disagreement looked like an app bug. Underscores are
+    // emphasis only OUTSIDE code spans, and `marked` already knows which is
+    // which — so the underscores must survive.
+    expect(extractSearchBlocks("`LOGICAL_DISPLAY_NODE` 全是纯色")).toEqual([
+      "LOGICAL_DISPLAY_NODE 全是纯色",
+    ]);
+    expect(hits([comment("c1", "`LOGICAL_DISPLAY_NODE`")], "LOGICAL_DISPLAY_NODE")).toHaveLength(1);
+    expect(hits([comment("c1", "`LOGICAL_DISPLAY_NODE`")], "LOGICALDISPLAYNODE")).toEqual([]);
+  });
+
+  it("drops emphasis markers outside code spans", () => {
+    // The other half of the same rule: `_like this_` is emphasis, so the
+    // markers are not part of the text the reader sees.
+    expect(extractSearchBlocks("an _emphasised_ word")).toEqual([
+      "an emphasised word",
+    ]);
+  });
+
+  it("indexes table cells", () => {
+    const md = ["| head | other |", "| --- | --- |", "| CELL_A | CELL_B |"].join(
+      "\n",
+    );
+    const text = extractSearchBlocks(md).join("\n");
+    expect(text).toContain("CELL_A");
+    expect(text).toContain("CELL_B");
+  });
+
+  it("indexes list items, including a nested list", () => {
+    // `marked` hands a list item's inline content over inside a `text`
+    // container whose own `.text` is the RAW source. Reading that would put
+    // `**bold**` in the haystack — words the reader never sees — so the walk
+    // has to descend into the container instead.
+    expect(extractSearchBlocks("- item one\n- item two with **bold**")).toEqual([
+      "item one",
+      "item two with bold",
+    ]);
+    expect(extractSearchBlocks("1. ordered a\n   - nested x")).toEqual([
+      "ordered a",
+      "nested x",
+    ]);
+  });
+
+  it("never puts markdown syntax into the haystack", () => {
+    // The failure this guards: a container's `.text` is source, not rendered
+    // text, so a naive walk makes `**` or `#` searchable and reports hits
+    // that paint nothing on screen.
+    for (const md of [
+      "- item **bold** and `code`",
+      "# Title **bold**",
+      "> quoted **bold**",
+      "1. a _b_ c",
+    ]) {
+      const text = extractSearchBlocks(md).join("\n");
+      expect(text).not.toContain("*");
+      expect(text).not.toContain("#");
+      expect(text).not.toContain("`");
+      expect(text).not.toContain("_");
+    }
+  });
+
+  it("indexes a raw HTML block's inner text but not its tags", () => {
+    expect(extractSearchBlocks("<div>raw block</div>")).toEqual(["raw block"]);
+    expect(hits([comment("c1", "<div>raw block</div>")], "div")).toEqual([]);
+  });
+
+  it("decodes HTML entities so on-screen characters are searchable", () => {
+    // `marked` keeps `&amp;` verbatim in token text while the renderer draws
+    // `&`; without decoding, a query for the visible character misses.
+    expect(extractSearchBlocks("a &amp; b")).toEqual(["a & b"]);
+    expect(extractSearchBlocks("&lt;tag&gt;")).toEqual(["<tag>"]);
+    expect(extractSearchBlocks("&#65;&#x42;")).toEqual(["AB"]);
+    expect(hits([comment("c1", "a &amp; b")], "&")).toHaveLength(1);
+  });
+
+  it("treats a <br> as a block boundary, as two visible lines", () => {
+    expect(extractSearchBlocks("line one<br>line two")).toEqual([
+      "line one",
+      "line two",
+    ]);
+    expect(hits([comment("c1", "line one<br>line two")], "one line")).toEqual([]);
+  });
+
+  it("keeps a soft line break inside one block, as one paragraph", () => {
+    // A single newline is not a block boundary in markdown — it is one wrapped
+    // paragraph, so a query may span it. The newline stays IN the text rather
+    // than being collapsed to a space: web's haystack is the paragraph's DOM
+    // text node, which holds the same literal newline, so the two clients
+    // agree — including on the consequence pinned below.
+    expect(extractSearchBlocks("alpha\nbeta")).toEqual(["alpha\nbeta"]);
+    expect(hits([comment("c1", "alpha\nbeta")], "alpha\nbeta")).toHaveLength(1);
+  });
+
+  it("does not let a space match a soft line break — same as web", () => {
+    // Deliberate web parity, not an oversight: web searches the DOM text node
+    // (`node.nodeValue`), which keeps the source's newline, so a space-joined
+    // query misses there too. Collapsing whitespace here would make mobile
+    // answer differently from web for the same comment.
+    expect(hits([comment("c1", "alpha\nbeta")], "alpha beta")).toEqual([]);
+  });
+
+  it("does not index an image's alt text", () => {
+    expect(hits([comment("c1", "before ![alt text](i.png) after")], "alt")).toEqual(
+      [],
+    );
+  });
+
+  it("indexes an autolink, whose URL is also its label", () => {
+    // Unlike `[label](url)` — where the URL is invisible — an autolink draws
+    // the URL itself, so it is genuinely on screen.
+    expect(hits([comment("c1", "see <https://x.y/z> now")], "x.y")).toHaveLength(1);
+  });
+});
+
+describe("case-insensitivity and occurrence counting", () => {
+  it("matches regardless of case in either direction", () => {
+    const entries = [comment("c1", "Deploy the DEPLOYMENT")];
+    expect(hits(entries, "deploy")).toHaveLength(2);
+    expect(hits(entries, "DEPLOY")).toHaveLength(2);
+    expect(hits(entries, "DePlOy")).toHaveLength(2);
+  });
+
+  it("does not double-count overlapping occurrences", () => {
+    // Web advances by the needle's length, so "aa" in "aaa" is one hit.
+    const found = hits([comment("c1", "aaa")], "aa");
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({ start: 0, end: 2 });
+  });
+
+  it("reports offsets that slice the matched text back out", () => {
+    const body = "alpha beta GAMMA";
+    const [m] = hits([comment("c1", body)], "gamma");
+    expect(m).toBeDefined();
+    expect(body.slice(m!.start, m!.end)).toBe("GAMMA");
+  });
+
+  it("finds nothing for an empty or whitespace-only query", () => {
+    const entries = [comment("c1", "content")];
+    expect(hits(entries, "")).toEqual([]);
+    expect(hits(entries, "   ")).toEqual([]);
+    expect(hits(entries, "\n\t")).toEqual([]);
+  });
+});
+
+describe("a match never straddles a block boundary", () => {
+  it("does not join two paragraphs", () => {
+    // The reader sees two lines; web's one-text-node rule would not match
+    // across them either.
+    const md = "end of one\n\nstart of two";
+    expect(hits([comment("c1", md)], "one start")).toEqual([]);
+    expect(extractSearchBlocks(md)).toEqual(["end of one", "start of two"]);
+  });
+
+  it("does not join a paragraph to a following heading", () => {
+    const md = "alpha\n\n## beta";
+    expect(hits([comment("c1", md)], "alpha beta")).toEqual([]);
+  });
+
+  it("still matches inside a single block across inline elements", () => {
+    // `strong` / `em` are inline: the reader sees one run of text, and web's
+    // walk over text nodes inside one paragraph matches across them.
+    const found = hits([comment("c1", "keep **this** word")], "keep this word");
+    expect(found).toHaveLength(1);
+  });
+
+  it("does not join one list item to the next", () => {
+    const md = ["- first thing", "- second thing"].join("\n");
+    expect(hits([comment("c1", md)], "thing second")).toEqual([]);
+  });
+});
+
+describe("what is not searchable", () => {
+  it("skips fenced code blocks", () => {
+    const md = ["prose here", "", "```js", "const secret = 1;", "```"].join("\n");
+    expect(hits([comment("c1", md)], "secret")).toEqual([]);
+    // The surrounding prose still is.
+    expect(hits([comment("c1", md)], "prose")).toHaveLength(1);
+  });
+
+  it("counts no activity rows, which carry no body", () => {
+    const entries = [activity("a1"), comment("c1", "real text")];
+    expect(collectSearchables(entries)).toHaveLength(1);
+    expect(hits(entries, "status")).toEqual([]);
+    expect(hits(entries, "real")).toHaveLength(1);
+  });
+
+  it("skips deleted comments, which render no body", () => {
+    const entries = [
+      comment("gone", "tombstoned WORDS", { deleted_at: "2026-01-02T00:00:00Z" }),
+      comment("here", "visible WORDS"),
+    ];
+    const found = hits(entries, "words");
+    expect(found.map((m) => m.commentId)).toEqual(["here"]);
+  });
+
+  it("ignores a comment whose body is empty", () => {
+    expect(collectSearchables([comment("c1", "")])).toEqual([]);
+    expect(collectSearchables([comment("c2", "   \n\n  ")])).toEqual([]);
+  });
+
+  it("survives an undefined timeline", () => {
+    expect(collectSearchables(undefined)).toEqual([]);
+  });
+
+  it("indexes comments only, not the issue title or description", () => {
+    // A recorded boundary, not an oversight: web's container is the whole
+    // scroll root (title + description + timeline), this module's input is the
+    // timeline. Every acceptance fixture for this round is a comment, and a
+    // title/description hit would need a second jump target kind (the header
+    // has no comment id). Pinned so the difference is a decision on record
+    // rather than something a later round has to rediscover.
+    const entries = [
+      activity("a1"),
+      comment("c1", "only the comment body is indexed"),
+    ];
+    expect(hits(entries, "only the comment body")).toHaveLength(1);
+    // Anything the caller does not pass in cannot be found — the description
+    // lives on the `Issue`, which this module never sees.
+    expect(collectSearchables(entries)).toHaveLength(1);
+  });
+});
+
+describe("match order", () => {
+  it("walks timeline order, then reading order inside a comment", () => {
+    const entries = [
+      comment("first", "hit one, hit two"),
+      comment("second", "hit three"),
+    ];
+    expect(hits(entries, "hit").map((m) => m.commentId)).toEqual([
+      "first",
+      "first",
+      "second",
+    ]);
+    expect(hits(entries, "hit").map((m) => m.start)).toEqual([0, 9, 0]);
+  });
+});
+
+describe("findCounter — n/m and the empty state", () => {
+  it("shows nothing before a query is typed, not 0/0", () => {
+    expect(findCounter("", 0, -1)).toEqual({ kind: "none", current: 0, total: 0 });
+    expect(findCounter("   ", 0, -1)).toEqual({
+      kind: "none",
+      current: 0,
+      total: 0,
+    });
+  });
+
+  it("shows the no-matches phrase, never 1/0, when a query hits nothing", () => {
+    const counter = findCounter("zzz", 0, -1);
+    expect(counter.kind).toBe("no_matches");
+    expect(counter.total).toBe(0);
+  });
+
+  it("counts 1-based", () => {
+    expect(findCounter("a", 3, 0)).toEqual({ kind: "count", current: 1, total: 3 });
+    expect(findCounter("a", 3, 2)).toEqual({ kind: "count", current: 3, total: 3 });
+  });
+
+  it("never reports a current past the total", () => {
+    // A content change can shrink the match set under a stale index; the
+    // counter must not print 5/3.
+    const counter = findCounter("a", 3, 4);
+    expect(counter).toEqual({ kind: "count", current: 3, total: 3 });
+  });
+
+  it("clamps a negative active index up to the first match", () => {
+    expect(findCounter("a", 2, -1)).toEqual({ kind: "count", current: 1, total: 2 });
+  });
+
+  it("agrees with the real match count for a real query", () => {
+    const entries = [comment("c1", "x x x"), comment("c2", "x")];
+    const matches = hits(entries, "x");
+    expect(findCounter("x", matches.length, matches.length - 1)).toEqual({
+      kind: "count",
+      current: 4,
+      total: 4,
+    });
+  });
+});
+
+describe("stepMatch — prev/next with wrap-around", () => {
+  it("enters at the first match going forward", () => {
+    expect(stepMatch(-1, 3, 1)).toBe(0);
+  });
+
+  it("enters at the last match going backward", () => {
+    expect(stepMatch(-1, 3, -1)).toBe(2);
+  });
+
+  it("wraps forward off the end", () => {
+    expect(stepMatch(2, 3, 1)).toBe(0);
+  });
+
+  it("wraps backward off the start", () => {
+    expect(stepMatch(0, 3, -1)).toBe(2);
+  });
+
+  it("stays at -1 when there is nothing to step to", () => {
+    expect(stepMatch(-1, 0, 1)).toBe(-1);
+    expect(stepMatch(0, 0, -1)).toBe(-1);
+  });
+
+  it("walks every match exactly once over a full cycle", () => {
+    const n = 5;
+    const seen: number[] = [];
+    let i = -1;
+    for (let step = 0; step < n; step++) {
+      i = stepMatch(i, n, 1);
+      seen.push(i);
+    }
+    expect(seen).toEqual([0, 1, 2, 3, 4]);
+    // And the next step returns to the start.
+    expect(stepMatch(i, n, 1)).toBe(0);
+  });
+});
+
+describe("matchTarget", () => {
+  it("names the comment the match lives in", () => {
+    expect(matchTarget({ commentId: "c9", start: 0, end: 1 })).toBe("c9");
+  });
+
+  it("has no target without a match", () => {
+    expect(matchTarget(undefined)).toBeUndefined();
+  });
+});
