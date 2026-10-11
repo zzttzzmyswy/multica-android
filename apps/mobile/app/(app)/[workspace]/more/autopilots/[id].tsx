@@ -39,6 +39,7 @@ import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { IconButton } from "@/components/ui/icon-button";
+import { HeaderSearchGroup } from "@/components/ui/header-search-button";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { MultiSelectSheet } from "@/components/agent/multi-select-sheet";
 import { DeliveriesSection } from "@/components/autopilot/deliveries-section";
@@ -419,11 +420,13 @@ export default function AutopilotDetailPage() {
         options={{
           headerRight: canWrite
             ? () => (
-                <IconButton
-                  name="ellipsis-horizontal"
-                  onPress={onPressMore}
-                  accessibilityLabel={t("autopilots.detail.actions")}
-                />
+                <HeaderSearchGroup>
+                  <IconButton
+                    name="ellipsis-horizontal"
+                    onPress={onPressMore}
+                    accessibilityLabel={t("autopilots.detail.actions")}
+                  />
+                </HeaderSearchGroup>
               )
             : undefined,
         }}

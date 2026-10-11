@@ -24,6 +24,7 @@ import type { Issue } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
+import { HeaderSearchButton } from "@/components/ui/header-search-button";
 import { TimelineList } from "@/components/issue/timeline-list";
 import { BatchActionBar } from "@/components/issue/batch-action-bar";
 import { AgentHeaderBadge } from "@/components/issue/agent-header-badge";
@@ -416,11 +417,24 @@ export default function IssueDetail() {
           headerRight: issue
             ? () => (
                 <View className="flex-row items-center gap-2">
-                  {/* Thread navigator — leftmost of the header actions, the
-                   *  same position web gives it, because it navigates the
-                   *  document while everything to its right acts on the
-                   *  issue. Web hides it on mobile (its own comment says the
-                   *  panel "needs a sheet"); this button is that sheet. */}
+                  {/* Global search, carrying THIS issue's id so the panel can
+                   *  offer its four issue-scoped commands (web gates them on
+                   *  `currentIssueId`). Second in the group only to the
+                   *  thread navigator, and deliberately NOT adjacent to the
+                   *  in-page find button below: global search and web's
+                   *  Cmd/Ctrl+F are different actions, so the thread
+                   *  navigator sits between the two magnifiers.
+                   *
+                   *  This screen declares its own `headerRight`, which
+                   *  replaces the navigator default outright, so the entry
+                   *  has to be composed in here — see
+                   *  components/ui/header-search-button.tsx. */}
+                  <HeaderSearchButton issueId={id} />
+                  {/* Thread navigator — the same position web gives it,
+                   *  because it navigates the document while everything to
+                   *  its right acts on the issue. Web hides it on mobile (its
+                   *  own comment says the panel "needs a sheet"); this button
+                   *  is that sheet. */}
                   <IconButton
                     name="list-outline"
                     onPress={() => setThreadNavOpen(true)}

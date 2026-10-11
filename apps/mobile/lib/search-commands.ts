@@ -38,6 +38,10 @@ export interface SearchPage {
 export type SearchCommandKey =
   | "new-issue"
   | "new-project"
+  | "copy-issue-link"
+  | "copy-issue-identifier"
+  | "fold-all-comments"
+  | "unfold-all-comments"
   | "theme-light"
   | "theme-dark"
   | "theme-system";
@@ -109,24 +113,30 @@ export function buildSearchPages(): SearchPage[] {
 }
 
 /**
- * Web's `commands` memo (`search-command.tsx:324-460`), minus the branches
- * that mobile's search screen cannot reach.
+ * Web's `commands` memo (`search-command.tsx:324-460`).
  *
- * Web gates its four issue-scoped rows (`copy-issue-link` /
- * `copy-issue-identifier` / `fold-all-comments` / `unfold-all-comments`) on
- * `currentIssueId`, parsed out of a `/{slug}/issues/{id}` route. Mobile's
- * search screen is only reachable from the Inbox and My Issues headers
- * (`components/ui/app-header-actions.tsx` is mounted on those two tabs and
- * nowhere else), so that predicate is always false there and porting the four
- * rows would add four permanently-dead entries. They are deliberately left
- * out rather than stubbed; if search later gains a header on the issue
- * detail page, these four come back with the same `hasIssue` gate.
+ * The four issue-scoped rows (`copy-issue-link` / `copy-issue-identifier` /
+ * `fold-all-comments` / `unfold-all-comments`) used to be omitted here, with
+ * this reason recorded in their place: mobile's search screen was reachable
+ * only from the Inbox and My Issues headers, so web's `currentIssueId`
+ * predicate was always false and the rows would have been permanently dead.
  *
- * Not ported, same reasoning: web's `resolveClickIntent` (cmd+click opens a
- * result in a new tab) has no mobile analogue.
+ * That precondition is gone as of this round — search now has a header entry on
+ * every workspace screen, including the issue detail page — so the four rows
+ * come back exactly as web gates them. `hasIssue` / `issueIdentifier` are the
+ * caller's answer to what web derives from `pathname`; the screen resolves
+ * them from its own route params (see `lib/search-route.ts`).
+ *
+ * Not ported, same reasoning as before: web's `resolveClickIntent` (cmd+click
+ * opens a result in a new tab) has no mobile analogue.
  */
-export function buildSearchCommands(): SearchCommand[] {
-  return [
+export function buildSearchCommands({
+  issueIdentifier,
+}: {
+  /** The issue the panel was opened over, or null on every other screen. */
+  issueIdentifier?: string | null;
+} = {}): SearchCommand[] {
+  const commands: SearchCommand[] = [
     {
       key: "new-issue",
       label: translate("screen.newIssue"),
@@ -137,6 +147,41 @@ export function buildSearchCommands(): SearchCommand[] {
       label: translate("screen.newProject"),
       keywords: ["new", "project", "create", "add", "新建项目"],
     },
+  ];
+
+  // Web's gate is `currentIssueId && currentIssue` — both, because the
+  // identifier is what the two copy rows put on the clipboard. Mobile's
+  // equivalent is "the opener named an issue AND its detail has loaded", which
+  // the caller collapses into whether it can hand over an identifier.
+  if (issueIdentifier) {
+    const identifier = issueIdentifier.toLowerCase();
+    commands.push(
+      {
+        key: "copy-issue-link",
+        label: translate("search.commands.copyIssueLink"),
+        // Web's needles, plus the identifier so typing an issue key reaches the
+        // row for the issue the panel is open on.
+        keywords: ["copy", "link", "share", "url", identifier],
+      },
+      {
+        key: "copy-issue-identifier",
+        label: translate("search.commands.copyIdentifier", { identifier: issueIdentifier }),
+        keywords: ["copy", "id", "identifier", identifier],
+      },
+      {
+        key: "fold-all-comments",
+        label: translate("search.commands.foldAllComments"),
+        keywords: ["fold", "collapse", "comments", "收起", "折叠", "评论"],
+      },
+      {
+        key: "unfold-all-comments",
+        label: translate("search.commands.unfoldAllComments"),
+        keywords: ["unfold", "expand", "comments", "展开", "评论"],
+      },
+    );
+  }
+
+  commands.push(
     {
       key: "theme-light",
       label: translate("search.commands.switchToLight"),
@@ -155,7 +200,9 @@ export function buildSearchCommands(): SearchCommand[] {
       keywords: ["system", "theme", "appearance", "mode", "auto", "跟随系统"],
       theme: "system",
     },
-  ];
+  );
+
+  return commands;
 }
 
 /**

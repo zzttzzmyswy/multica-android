@@ -131,3 +131,69 @@ describe("comment collapse store", () => {
     });
   });
 });
+
+// ── Iteration 228: the fold-all / unfold-all pair ─────────────────────────
+// Web's command palette has driven these from outside the issue page since it
+// shipped; mobile had no control that reached them, so only `toggle` was
+// ported. The four issue-scoped search commands now include web's
+// fold/unfold-all rows, and these are the two methods behind them.
+describe("collapseAll / expandAll", () => {
+  it("collapseAll REPLACES the issue's folded set", () => {
+    const { toggle, collapseAll, isCollapsed } =
+      useCommentCollapseStore.getState();
+
+    // A pre-existing manual fold that is NOT in the new set must be dropped:
+    // fold-all means "exactly these rows are folded", not "these too".
+    toggle("ws-1", "issue-1", "manual");
+    collapseAll("ws-1", "issue-1", ["c1", "c2"]);
+
+    expect(isCollapsed("ws-1", "issue-1", "c1")).toBe(true);
+    expect(isCollapsed("ws-1", "issue-1", "c2")).toBe(true);
+    expect(isCollapsed("ws-1", "issue-1", "manual")).toBe(false);
+  });
+
+  it("collapseAll de-duplicates the ids it is given", () => {
+    // The source is a timeline that could repeat a root id; web spreads into
+    // a Set for the same reason.
+    useCommentCollapseStore.getState().collapseAll("ws-1", "issue-1", [
+      "c1",
+      "c1",
+      "c2",
+    ]);
+    expect(useCommentCollapseStore.getState().byWorkspace["ws-1"]).toEqual({
+      "issue-1": ["c1", "c2"],
+    });
+  });
+
+  it("collapseAll with no ids leaves no entry, like a full unfold", () => {
+    const { collapseAll, toggle } = useCommentCollapseStore.getState();
+    toggle("ws-1", "issue-1", "c1");
+    collapseAll("ws-1", "issue-1", []);
+    expect(useCommentCollapseStore.getState().byWorkspace["ws-1"]).toEqual({});
+  });
+
+  it("expandAll clears the issue's folds and nothing else", () => {
+    const { toggle, expandAll, isCollapsed } = useCommentCollapseStore.getState();
+    toggle("ws-1", "issue-1", "c1");
+    toggle("ws-1", "issue-2", "c2");
+
+    expandAll("ws-1", "issue-1");
+
+    expect(isCollapsed("ws-1", "issue-1", "c1")).toBe(false);
+    // The sibling issue keeps its fold, and so does the other workspace.
+    expect(isCollapsed("ws-1", "issue-2", "c2")).toBe(true);
+  });
+
+  it("persists the fold-all result to the workspace file", async () => {
+    useCommentCollapseStore.getState().collapseAll("ws-1", "issue-1", ["c1"]);
+    await new Promise((r) => setTimeout(r, 0));
+    const store = (fs as unknown as { __fsStore: Map<string, string> }).__fsStore;
+    expect(JSON.parse(store.get(fileFor("ws-1"))!)).toEqual({
+      "issue-1": ["c1"],
+    });
+
+    useCommentCollapseStore.getState().expandAll("ws-1", "issue-1");
+    await new Promise((r) => setTimeout(r, 0));
+    expect(JSON.parse(store.get(fileFor("ws-1"))!)).toEqual({});
+  });
+});

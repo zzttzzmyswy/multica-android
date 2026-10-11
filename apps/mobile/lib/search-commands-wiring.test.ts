@@ -38,7 +38,71 @@ describe("search panel wiring", () => {
 
   it("builds both action groups from the shared module", () => {
     expect(screen).toContain("filterSearchPages(buildSearchPages()");
-    expect(screen).toContain("filterSearchCommands(buildSearchCommands()");
+    // Iteration 228: the command group now takes the issue the panel was
+    // opened over, so the call carries an argument. Asserting the callee (not
+    // the exact argument text) keeps this from breaking on a later rename of
+    // the property while still failing if the group stops being built here.
+    expect(screen).toMatch(/filterSearchCommands\(\s*buildSearchCommands\(/);
+  });
+
+  it("gates the four issue-scoped commands on the opened issue", () => {
+    // The whole point of this round's second half: the rows appear only when
+    // the panel knows which issue it is over.
+    //
+    // The exact call text is asserted, not a loose pattern, because the way
+    // this gate fails is by acquiring a FALLBACK — `currentIssue?.identifier
+    // ?? someDefault` renders four dead entries on every screen while still
+    // "passing the identifier through". A `toMatch` on the prefix accepts
+    // that; this does not.
+    expect(screen).toContain(
+      "buildSearchCommands({ issueIdentifier: currentIssue?.identifier })",
+    );
+  });
+
+  it("reads that issue from its own route param, not from a global", () => {
+    // The panel is its own modal route, so the fact arrives as a param and is
+    // resolved through the issue detail query — the mobile counterpart of
+    // web's `currentIssueId && currentIssue` gate.
+    expect(screen).toContain("useLocalSearchParams<{ issueId?: string }>");
+    expect(screen).toMatch(/issueDetailOptions\(wsId,\s*issueId \?\? ""\)/);
+    expect(screen).toMatch(/enabled:\s*!!issueId/);
+  });
+
+  it("defines a handler for every issue-scoped command key", () => {
+    // A key with no `case` falls out of the switch and the row does nothing
+    // when tapped — invisible to the unit lane, which only sees the list.
+    for (const key of [
+      "copy-issue-link",
+      "copy-issue-identifier",
+      "fold-all-comments",
+      "unfold-all-comments",
+    ]) {
+      expect(screen).toContain(`case "${key}":`);
+    }
+  });
+
+  it("folds BOTH kinds of comment folding on fold/unfold-all", () => {
+    // Web's two rows drive the per-comment fold store AND the resolved-thread
+    // expand set. Wiring only the first leaves every resolved thread visibly
+    // expanded after "fold all comments" — half the command.
+    expect(screen).toMatch(/collapse\.collapseAll\(wsId, issueId, rootCommentIds\(entries\)\)/);
+    expect(screen).toMatch(/resolvedExpand\.collapseAll\(issueId\)/);
+    expect(screen).toMatch(/collapse\.expandAll\(wsId, issueId\)/);
+    expect(screen).toMatch(
+      /resolvedExpand\.expandAll\(\s*issueId,\s*resolvedThreadRootIds\(entries\),?\s*\)/,
+    );
+  });
+
+  it("gives the four issue-scoped keys a glyph too", () => {
+    const icons = screen.slice(screen.indexOf("const COMMAND_ICONS"));
+    for (const key of [
+      '"copy-issue-link"',
+      '"copy-issue-identifier"',
+      '"fold-all-comments"',
+      '"unfold-all-comments"',
+    ]) {
+      expect(icons).toContain(`${key}:`);
+    }
   });
 
   it("hands both groups to the row builder", () => {

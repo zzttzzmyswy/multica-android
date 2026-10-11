@@ -5,6 +5,7 @@
  */
 import { View } from "react-native";
 import { Header } from "@/components/ui/header";
+import { HeaderSearchGroup } from "@/components/ui/header-search-button";
 import { PinnedScreen } from "@/components/pin/pinned-screen";
 import { useTranslation } from "@/lib/i18n/react";
 
@@ -13,7 +14,10 @@ export default function PinnedTab() {
 
   return (
     <View className="flex-1 bg-background">
-      <Header title={t("nav.pinned")} />
+      <Header
+        title={t("nav.pinned")}
+        right={<HeaderSearchGroup />}
+      />
       <PinnedScreen />
     </View>
   );

@@ -93,8 +93,71 @@ describe("search pages", () => {
 describe("search commands", () => {
   beforeEach(() => setLocale("en"));
 
-  it("lists creation and theme commands, in web's order", () => {
+  it("lists creation and theme commands, in web's order, with no issue open", () => {
+    // No `issueIdentifier` → the four issue-scoped rows are absent, which is
+    // the state on every screen that is not an issue detail page.
     expect(buildSearchCommands().map((c) => c.key)).toEqual([
+      "new-issue",
+      "new-project",
+      "theme-light",
+      "theme-dark",
+      "theme-system",
+    ]);
+  });
+
+  it("puts web's four issue-scoped rows in web's position when an issue is open", () => {
+    // Web's order: the two creation rows, then the four issue rows, then the
+    // three theme rows (`search-command.tsx:350-460`). Order is the contract,
+    // not just membership — the rows sit between them for a reason.
+    expect(
+      buildSearchCommands({ issueIdentifier: "MUL-123" }).map((c) => c.key),
+    ).toEqual([
+      "new-issue",
+      "new-project",
+      "copy-issue-link",
+      "copy-issue-identifier",
+      "fold-all-comments",
+      "unfold-all-comments",
+      "theme-light",
+      "theme-dark",
+      "theme-system",
+    ]);
+  });
+
+  it("names the open issue in the identifier row, as web interpolates it", () => {
+    const [, , , identifierRow] = buildSearchCommands({
+      issueIdentifier: "MUL-123",
+    });
+    expect(identifierRow.key).toBe("copy-issue-identifier");
+    expect(identifierRow.label).toBe("Copy Identifier (MUL-123)");
+  });
+
+  it("reaches the issue rows by identifier, link/copy words and CJK", () => {
+    const commands = buildSearchCommands({ issueIdentifier: "MUL-123" });
+    const hit = (q: string) =>
+      filterSearchCommands(commands, q).map((c) => c.key);
+
+    // The issue's own key, in either case — web lowercases it into keywords.
+    expect(hit("mul-123")).toEqual(["copy-issue-link", "copy-issue-identifier"]);
+    expect(hit("MUL-123")).toEqual(["copy-issue-link", "copy-issue-identifier"]);
+    expect(hit("share")).toEqual(["copy-issue-link"]);
+    expect(hit("收起")).toEqual(["fold-all-comments"]);
+    expect(hit("展开")).toEqual(["unfold-all-comments"]);
+  });
+
+  it("treats an explicit null/empty identifier as no issue open", () => {
+    // The screen passes `currentIssue?.identifier`, which is `undefined` while
+    // the detail query is in flight and `null` never — but both must read as
+    // "no issue", or the rows would flash in before the identifier exists and
+    // render an empty "Copy Identifier ()".
+    expect(buildSearchCommands({ issueIdentifier: null }).map((c) => c.key)).toEqual([
+      "new-issue",
+      "new-project",
+      "theme-light",
+      "theme-dark",
+      "theme-system",
+    ]);
+    expect(buildSearchCommands({ issueIdentifier: "" }).map((c) => c.key)).toEqual([
       "new-issue",
       "new-project",
       "theme-light",
@@ -133,10 +196,15 @@ describe("search commands", () => {
     expect(hit("跟随系统")).toEqual(["theme-system"]);
   });
 
-  it("omits web's issue-scoped rows, which this screen cannot reach", () => {
-    // Mobile mounts the search header on Inbox and My Issues only, so web's
-    // `currentIssueId` predicate is always false here. Porting those four rows
-    // would ship four permanently-dead entries.
+  it("omits web's issue-scoped rows when no issue is open", () => {
+    // Iteration 205 recorded the opposite assertion here, with the reason:
+    // mobile's search screen was reachable only from Inbox and My Issues, so
+    // web's `currentIssueId` predicate was always false and the four rows were
+    // permanently dead. Iteration 228 removed that precondition (search now
+    // has a header entry on every workspace screen, the issue detail page
+    // included), so the rows are ported and the gate is now the thing worth
+    // pinning — see `search-commands.test.ts`'s "when an issue is open" case
+    // for the other side of it.
     const keys = buildSearchCommands().map((c) => c.key);
     expect(keys).not.toContain("copy-issue-link");
     expect(keys).not.toContain("copy-issue-identifier");

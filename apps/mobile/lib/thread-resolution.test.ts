@@ -11,7 +11,12 @@
  */
 import { describe, expect, it } from "vitest";
 import type { TimelineEntry } from "@multica/core/types";
-import { deriveThreadResolution, foldThreadReplies } from "./thread-resolution";
+import {
+  deriveThreadResolution,
+  foldThreadReplies,
+  resolvedThreadRootIds,
+  rootCommentIds,
+} from "./thread-resolution";
 
 function entry(
   id: string,
@@ -19,6 +24,23 @@ function entry(
 ): TimelineEntry {
   return {
     type: "comment",
+    id,
+    actor_type: "member",
+    actor_id: "u1",
+    created_at: "2026-01-01T00:00:00Z",
+    ...partial,
+  };
+}
+
+/** An activity row (not a comment) — `rootCommentIds` must skip these.
+ *  Activity entries carry no actor, so one is supplied to satisfy the type
+ *  even though every assertion that reads them ignores actors. */
+function activity(
+  id: string,
+  partial: Partial<TimelineEntry> = {},
+): TimelineEntry {
+  return {
+    type: "activity",
     id,
     actor_type: "member",
     actor_id: "u1",
@@ -120,5 +142,94 @@ describe("foldThreadReplies", () => {
     expect(
       foldThreadReplies(replies, { kind: "reply", resolutionId: "r1" }),
     ).toEqual([]);
+  });
+});
+
+// ── Iteration 228: the thread-root collections ────────────────────────────
+// Ports of web's `rootCommentIds` / `resolvedThreadRootIds`
+// (`packages/views/issues/components/thread-utils.ts`). Both feed the search
+// panel's fold/unfold-all-comments rows: `rootCommentIds` is the fold set,
+// `resolvedThreadRootIds` the expand set. Getting either wrong changes which
+// comments the commands act on, which no screen-level test would catch.
+describe("rootCommentIds", () => {
+  it("returns top-level comments only, in timeline order", () => {
+    const entries = [
+      entry("root-1"),
+      entry("reply-1", { parent_id: "root-1" }),
+      entry("root-2"),
+      entry("nested", { parent_id: "reply-1" }),
+    ];
+    expect(rootCommentIds(entries)).toEqual(["root-1", "root-2"]);
+  });
+
+  it("ignores activity rows", () => {
+    const entries = [
+      activity("a1"),
+      entry("root-1"),
+      activity("a2"),
+    ];
+    expect(rootCommentIds(entries)).toEqual(["root-1"]);
+  });
+
+  it("returns nothing for an empty timeline", () => {
+    expect(rootCommentIds([])).toEqual([]);
+  });
+});
+
+describe("resolvedThreadRootIds", () => {
+  it("includes a root resolved on itself", () => {
+    const entries = [
+      entry("root-1", { resolved_at: "2026-01-02T00:00:00Z" }),
+      entry("root-2"),
+    ];
+    expect(resolvedThreadRootIds(entries)).toEqual(["root-1"]);
+  });
+
+  it("includes a root whose REPLY carries the resolution", () => {
+    // "Resolve thread with comment" writes resolved_at on a reply; the thread
+    // is still resolved and must expand on unfold-all.
+    const entries = [
+      entry("root-1"),
+      entry("reply-1", { parent_id: "root-1", resolved_at: "2026-01-02T00:00:00Z" }),
+    ];
+    expect(resolvedThreadRootIds(entries)).toEqual(["root-1"]);
+  });
+
+  it("finds a resolution nested below another reply", () => {
+    const entries = [
+      entry("root-1"),
+      entry("reply-1", { parent_id: "root-1" }),
+      entry("reply-2", { parent_id: "reply-1", resolved_at: "2026-01-02T00:00:00Z" }),
+    ];
+    expect(resolvedThreadRootIds(entries)).toEqual(["root-1"]);
+  });
+
+  it("excludes unresolved roots", () => {
+    // Seeding an unresolved root into the expand set would keep it expanded
+    // through a later resolve (web's own note).
+    const entries = [
+      entry("root-1"),
+      entry("reply-1", { parent_id: "root-1" }),
+      entry("root-2", { resolved_at: "2026-01-02T00:00:00Z" }),
+    ];
+    expect(resolvedThreadRootIds(entries)).toEqual(["root-2"]);
+  });
+
+  it("never treats a reply as a root, even a resolved one", () => {
+    // An orphan reply (its parent not in the loaded timeline) is promoted to
+    // top-level by the renderer, but the store's units are threads — a reply
+    // id seeded there would fold nothing.
+    const entries = [
+      entry("orphan", { parent_id: "missing", resolved_at: "2026-01-02T00:00:00Z" }),
+    ];
+    expect(resolvedThreadRootIds(entries)).toEqual([]);
+  });
+
+  it("ignores activity rows even when they carry a resolved_at", () => {
+    const entries = [
+      activity("a1", { resolved_at: "2026-01-02T00:00:00Z" } as Partial<TimelineEntry>),
+      entry("root-1"),
+    ];
+    expect(resolvedThreadRootIds(entries)).toEqual([]);
   });
 });

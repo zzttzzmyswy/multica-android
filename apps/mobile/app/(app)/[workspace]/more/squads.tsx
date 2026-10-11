@@ -37,6 +37,7 @@ import type { Squad } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
+import { HeaderSearchGroup } from "@/components/ui/header-search-button";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { MultiSelectSheet } from "@/components/agent/multi-select-sheet";
 import { squadListOptions } from "@/data/queries/squads";
@@ -180,13 +181,17 @@ export default function SquadsPage() {
   const showScopeEmpty = loaded && totalCount > 0 && sorted.length === 0;
 
   const headerRight = useCallback(() => {
-    if (!wsSlug || !isAdmin) return null;
+    // The "+" is admin-only; search is not gated at all (web shows its trigger
+    // to every member), so a non-admin keeps the entry and loses only the "+".
+    if (!wsSlug || !isAdmin) return <HeaderSearchGroup />;
     return (
-      <IconButton
-        name="add"
-        onPress={() => router.push(`/${wsSlug}/more/squads/new`)}
-        accessibilityLabel={t("squads.new.title")}
-      />
+      <HeaderSearchGroup>
+        <IconButton
+          name="add"
+          onPress={() => router.push(`/${wsSlug}/more/squads/new`)}
+          accessibilityLabel={t("squads.new.title")}
+        />
+      </HeaderSearchGroup>
     );
   }, [wsSlug, isAdmin, t]);
 

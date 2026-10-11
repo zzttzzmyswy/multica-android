@@ -12,14 +12,17 @@
  *   - Viewing MUL-1 in workspace A shouldn't surface it in workspace B's
  *     chat — different agents, different context
  *
- * Capacity 10 per workspace: enough for "the last few things I looked
- * at" without overwhelming the suggestion list. We render at most 5 in
- * the chat suggestion bar; the extras buffer against the user opening a
- * couple of issues they don't end up referencing.
+ * Capacity 20 per workspace, matching web's `MAX_RECENT_ISSUES`
+ * (`packages/core/issues/stores/recent-issues-store.ts:7`). This is the bucket
+ * the search panel's Recent section renders (LIMIT 20 in
+ * `app/(app)/[workspace]/search.tsx`), and the chat composer's `@` suggestion
+ * bar renders the first 5 of it — so one store feeds both surfaces at web's
+ * depth, and the extras buffer against the user opening a couple of issues they
+ * don't end up referencing.
  */
 import { create } from "zustand";
 
-const CAPACITY = 10;
+const CAPACITY = 20;
 
 interface State {
   byWorkspace: Record<string, string[]>;

@@ -16,6 +16,7 @@ import { usePinsRealtime } from "@/data/realtime/use-pins-realtime";
 import { usePresenceRealtime } from "@/data/realtime/use-presence-realtime";
 import { useWorkspacePresencePrefetch } from "@/lib/use-workspace-presence-prefetch";
 import { ModalCloseButton } from "@/components/ui/modal-close-button";
+import { HeaderSearchButton } from "@/components/ui/header-search-button";
 import { ActorProfileSheet } from "@/components/actor/actor-profile-sheet";
 import { useNewIssueDraftWorkspace } from "@/data/stores/new-issue-draft-store";
 import { useNewProjectDraftResetOnWorkspaceChange } from "@/data/stores/new-project-draft-store";
@@ -153,7 +154,28 @@ export default function WorkspaceLayout() {
             per avatar would put ~77 modals in the tree; see
             data/stores/actor-profile-store.ts for the full reasoning. */}
         <ActorProfileSheet />
-        <Stack>
+        <Stack
+          // Global search entry, as the navigator's DEFAULT `headerRight`.
+          //
+          // This is the mobile counterpart of web hanging `SearchTrigger` +
+          // `SearchCommand` on one shared dashboard layout
+          // (`apps/web/app/[workspaceSlug]/(dashboard)/layout.tsx`): one
+          // declaration, every route under it covered. Before this, the entry
+          // existed on exactly two screens (Inbox / My Issues, via
+          // `components/ui/app-header-actions.tsx`) out of 113 workspace
+          // screens, so the panel was effectively unreachable.
+          //
+          // A navigator default — rather than repeating the button per screen
+          // — is what makes the coverage hold by construction. Screens that
+          // declare their own `headerRight` replace this one wholesale (React
+          // Navigation merges options key-by-key, see `useDescriptors.js`),
+          // so each of them composes `HeaderSearchGroup` instead of
+          // reimplementing the entry. The formSheet/modal routes need nothing:
+          // sheets are `headerShown: false`, and the modal composition forms
+          // (`new-issue`, `*/edit`, `project/new`) already declare their own
+          // commit button, which is deliberately the only header action there.
+          screenOptions={{ headerRight: () => <HeaderSearchButton /> }}
+        >
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen
           name="issue/[id]"
@@ -653,6 +675,13 @@ export default function WorkspaceLayout() {
             title: t("screen.search"),
             presentation: "modal",
             headerLeft: () => <ModalCloseButton />,
+            // Opt OUT of the navigator's default headerRight above: this
+            // screen IS the search panel, so the default would put a search
+            // button in its header that pushes the panel onto itself. The
+            // explicit `undefined` is what clears the default — React
+            // Navigation merges options with `Object.assign`, so an own
+            // `undefined` property overwrites the navigator-level one.
+            headerRight: undefined,
           }}
         />
       </Stack>

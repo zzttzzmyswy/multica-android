@@ -23,6 +23,7 @@ import type { IssueProperty } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
+import { HeaderSearchGroup } from "@/components/ui/header-search-button";
 import { Switch } from "@/components/ui/switch";
 import { propertyCatalogOptions } from "@/data/queries/properties";
 import { memberListOptions } from "@/data/queries/members";
@@ -69,14 +70,18 @@ export default function PropertiesPage() {
   );
 
   const headerRight = useCallback(() => {
-    if (!wsSlug || !canManage) return null;
+    // Same split as squads / mcp-servers: the "+" needs canManage, search
+    // never does.
+    if (!wsSlug || !canManage) return <HeaderSearchGroup />;
     return (
-      <IconButton
-        name="add"
-        disabled={activeCount >= MAX_ACTIVE_PROPERTIES}
-        onPress={() => router.push(`/${wsSlug}/more/properties/new`)}
-        accessibilityLabel={t("properties.newProperty")}
-      />
+      <HeaderSearchGroup>
+        <IconButton
+          name="add"
+          disabled={activeCount >= MAX_ACTIVE_PROPERTIES}
+          onPress={() => router.push(`/${wsSlug}/more/properties/new`)}
+          accessibilityLabel={t("properties.newProperty")}
+        />
+      </HeaderSearchGroup>
     );
   }, [wsSlug, canManage, activeCount, t]);
 
