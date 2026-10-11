@@ -22,14 +22,21 @@
  * gesture the issue lists use), and `SkillBatchBar` floats the batch actions
  * while anything is selected. Selection is session-local — web keeps it in
  * component state too, deliberately outside the persisted view store.
+ *
+ * Row actions (iteration 230, MYS-2097): each row gained the kebab web's
+ * `SkillRowActions` renders — add to agent / refresh / delete. Before this the
+ * row's only exit was `router.push` to the detail page, so refreshing one of
+ * this deployment's 18 GitHub-sourced skills meant opening it first. The items
+ * and their gates live in `lib/skill-row-actions.ts`; the writes live here so
+ * the kebab and the batch bar share them.
  */
 import { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, Pressable, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, router } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { create } from "zustand";
-import type { Agent, MemberWithUser } from "@multica/core/types";
+import type { Agent, MemberWithUser, SkillSummary } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
@@ -38,14 +45,17 @@ import { TextField } from "@/components/ui/text-field";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { AvatarStack } from "@/components/ui/avatar-stack";
 import { MultiSelectSheet } from "@/components/agent/multi-select-sheet";
+import { AddToAgentsSheet } from "@/components/skill/add-to-agents-sheet";
 import { SkillBatchBar } from "@/components/skill/skill-batch-bar";
+import { SkillRowMenu } from "@/components/skill/skill-row-menu";
 import { skillListOptions } from "@/data/queries/skills";
+import { useDeleteSkill, useRefreshSkill } from "@/data/mutations/skills";
 import { agentListOptions } from "@/data/queries/agents";
 import { memberListOptions } from "@/data/queries/members";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useAuthStore } from "@/data/auth-store";
 import { ORIGIN_LABEL_KEY, readOrigin } from "@/lib/skill-guards";
-import { toggleId, toggleSelectAllVisible } from "@/lib/skill-batch";
+import { toggleId, batchOutcomeMessage, toggleSelectAllVisible } from "@/lib/skill-batch";
 import {
   EMPTY_SKILL_FILTERS,
   SKILL_ORIGIN_TYPES,
@@ -152,6 +162,98 @@ export default function SkillsPage() {
   const narrowed =
     search.trim().length > 0 || countActiveSkillFilterDimensions(filters) > 0;
   const showEmpty = !isLoading && !error && skills.length === 0;
+
+  // ── Row actions (MYS-2097) ──────────────────────────────────────────────
+  // Web's list carries a per-row kebab (add to agent / refresh / delete);
+  // mobile's rows had no action at all, so refreshing one of this deployment's
+  // 18 GitHub-sourced skills meant opening it first. The writes live HERE so
+  // the kebab and the batch bar share one implementation — web's split exactly,
+  // where the dialogs are defined once and mounted by both `SkillRowActions`
+  // and `SkillBatchToolbar`.
+  const refreshSkill = useRefreshSkill();
+  const deleteSkill = useDeleteSkill();
+  // One row the shared add-to-agent sheet is open for, or `null`. The kebab is
+  // the only entry point on the list that adds (the batch bar owns its own), so
+  // this holds at most one row.
+  const [addTarget, setAddTarget] = useState<SkillSummary | null>(null);
+
+  /**
+   * The refresh confirm, worded exactly as the detail page's `handleRefresh` —
+   * the same `skills.detail.refreshConfirm*` keys, assembled the same way. The
+   * warning is the load-bearing half: refreshing overwrites SKILL.md and the
+   * whole file set from upstream, so local edits do not survive, and web says
+   * so in an amber callout (`refresh-skill-dialog.tsx`'s `dialog.warning`).
+   */
+  const handleRefresh = useCallback(
+    (row: SkillRow) => {
+      if (refreshSkill.isPending) return;
+      const skill = row.skill;
+      const origin = readOrigin(skill);
+      const source = t(ORIGIN_LABEL_KEY[origin.type]);
+      const body = t("skills.detail.refreshConfirmBody", {
+        name: skill.name,
+        source,
+      });
+      Alert.alert(
+        t("skills.detail.refreshConfirmTitle"),
+        `${body}\n\n${t("skills.detail.refreshConfirmWarning")}`,
+        [
+          { text: t("common.cancel"), style: "cancel" },
+          {
+            text: t("skills.detail.refresh"),
+            onPress: () =>
+              refreshSkill.mutate(skill.id, {
+                onSuccess: () =>
+                  Alert.alert(t("skills.detail.refreshSuccess", { source })),
+                onError: (err) =>
+                  Alert.alert(
+                    t("skills.detail.refreshFailed"),
+                    err instanceof Error
+                      ? err.message
+                      : t("common.unknownError"),
+                  ),
+              }),
+          },
+        ],
+      );
+    },
+    [refreshSkill, t],
+  );
+
+  /**
+   * The delete confirm. A single row reads as the singular sentence (web's
+   * `DeleteSkillsDialog` branches on `rows.length === 1` for exactly this
+   * reason), which is why the kebab and the batch bar's one-row case share
+   * `skills.deleteTitle` / `skills.deleteMessage` rather than the batch pair.
+   */
+  const handleDelete = useCallback(
+    (row: SkillRow) => {
+      if (deleteSkill.isPending) return;
+      const skill = row.skill;
+      Alert.alert(
+        t("skills.deleteTitle"),
+        t("skills.deleteMessage", { name: skill.name }),
+        [
+          { text: t("common.cancel"), style: "cancel" },
+          {
+            text: t("skills.delete"),
+            style: "destructive",
+            onPress: () =>
+              deleteSkill.mutate(skill.id, {
+                onError: (err) =>
+                  Alert.alert(
+                    t("skills.deleteFailed"),
+                    err instanceof Error
+                      ? err.message
+                      : t("common.unknownError"),
+                  ),
+              }),
+          },
+        ],
+      );
+    },
+    [deleteSkill, t],
+  );
 
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(
@@ -325,6 +427,9 @@ export default function SkillsPage() {
                     }
                   }}
                   onLongPress={() => enterSelection(item.skill.id)}
+                  onAddToAgent={() => setAddTarget(item.skill)}
+                  onRefresh={() => handleRefresh(item)}
+                  onDelete={() => handleDelete(item)}
                 />
               )}
               refreshing={isRefetching}
@@ -342,6 +447,35 @@ export default function SkillsPage() {
           />
         ) : null}
       </View>
+      {/* One row's add-to-agent sheet. Shares its implementation with the batch
+          bar (`AddToAgentsSheet`), so a single row and a whole selection attach
+          the same way; only the feedback channel differs (an Alert here, the
+          bar's in-bar toast there), which is why this one reports its own
+          outcome instead of leaving it to the bar. */}
+      <AddToAgentsSheet
+        visible={addTarget !== null}
+        skills={addTarget ? [addTarget] : []}
+        onClose={() => setAddTarget(null)}
+        onResult={(outcome) => {
+          const message = batchOutcomeMessage(outcome, {
+            success: (done) => t("skills.usedBy.addedMulti", { count: done }),
+            failure: (done, failed, first) =>
+              t("skills.batch.addPartial", { done, failed, message: first }),
+          });
+          Alert.alert(
+            outcome.failures.length === 0
+              ? t("skills.usedBy.add")
+              : t("skills.usedBy.addFailed"),
+            message ?? t("skills.usedBy.addFailed"),
+          );
+        }}
+        onError={(err) =>
+          Alert.alert(
+            t("skills.usedBy.addFailed"),
+            err instanceof Error ? err.message : t("common.unknownError"),
+          )
+        }
+      />
       <SkillFilterSheet
         visible={filterOpen}
         onClose={() => setFilterOpen(false)}
@@ -639,6 +773,9 @@ function SkillRowItem({
   onPressCheckbox,
   onPress,
   onLongPress,
+  onAddToAgent,
+  onRefresh,
+  onDelete,
 }: {
   row: SkillRow;
   selectionMode: boolean;
@@ -646,6 +783,9 @@ function SkillRowItem({
   onPressCheckbox: () => void;
   onPress: () => void;
   onLongPress: () => void;
+  onAddToAgent: () => void;
+  onRefresh: () => void;
+  onDelete: () => void;
 }) {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
@@ -730,6 +870,20 @@ function SkillRowItem({
         </View>
         {selectionMode ? null : (
           <Ionicons name="chevron-forward" size={14} color={muted} />
+        )}
+        {/* Row actions (MYS-2097). The trigger claims the touch responder, so
+            opening the sheet never falls through to the row's own onPress —
+            tapping elsewhere on the row still navigates. In selection mode the
+            kebab gives way to the checkbox: a row carries one trailing control,
+            and picking is what the mode is for (the same rule the autopilots
+            list follows). */}
+        {selectionMode ? null : (
+          <SkillRowMenu
+            row={row}
+            onAddToAgent={onAddToAgent}
+            onRefresh={onRefresh}
+            onDelete={onDelete}
+          />
         )}
       </View>
     </Pressable>

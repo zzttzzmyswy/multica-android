@@ -3207,6 +3207,8 @@
   "skills.batch.exitSelection": "退出多选",
   "skills.batch.partial": "已添加 {{owned}}/{{total}}",
   "skills.batch.selectOne": "选择 {{name}}",
+  "skills.actions.delete": "删除",
+  "skills.actions.row_menu": "操作",
   "skills.create.back": "返回",
   "skills.create.method.manualDesc": "从空白的 SKILL.md 开始，自己编写指令。",
   "skills.create.method.manualTitle": "手动创建",
