@@ -2652,6 +2652,7 @@
   "runs.usageDetail.total": "Total",
   "runs.usageTotal": "Token usage for this issue",
   "runsTimeline.chartAria": "Cumulative cost over time: {{cost}} across {{count}} runs",
+  "runsTimeline.clearScrub": "Clear the reading",
   "runsTimeline.countActive": "{{count}} active",
   "runsTimeline.countCancelled": "{{count}} cancelled",
   "runsTimeline.countFailed": "{{count}} failed",

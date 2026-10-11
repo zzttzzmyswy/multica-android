@@ -2652,6 +2652,7 @@
   "runs.usageDetail.total": "合计",
   "runs.usageTotal": "此任务的 token 用量",
   "runsTimeline.chartAria": "累计费用随时间的变化：{{count}} 次运行，共 {{cost}}",
+  "runsTimeline.clearScrub": "清除读数",
   "runsTimeline.countActive": "{{count}} 次进行中",
   "runsTimeline.countCancelled": "{{count}} 次取消",
   "runsTimeline.countFailed": "{{count}} 次失败",

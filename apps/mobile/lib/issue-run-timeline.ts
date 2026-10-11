@@ -340,6 +340,14 @@ export function idleSpanAround(
  * The cumulative cost as a step curve in a 1000×100 box, for an SVG stretched
  * over the plot with `preserveAspectRatio="none"`. Usage is written when a run
  * finishes, so the line rises at each run's end and holds flat between.
+ *
+ * `yMax <= 0` yields a flat baseline at the box's bottom rather than a path
+ * full of `NaN`. That is a real state, not a defensive branch: an issue whose
+ * runs all used models with no rate on file has runs with usage (so a curve is
+ * expected) and a total of exactly 0. Dividing by that zero produces `NaN`
+ * coordinates, and react-native-svg's native path parser throws on them —
+ * taking the whole app down (found on-device against MYS-1991, whose 8 runs are
+ * all priced 0 by unmapped models).
  */
 export function stepCurvePath(
   steps: readonly CumulativeStep[],
@@ -347,7 +355,8 @@ export function stepCurvePath(
   yMax: number,
 ): { line: string; area: string } {
   const x = (t: number) => (((t - d0) / (d1 - d0)) * 1000).toFixed(2);
-  const y = (cost: number) => ((1 - cost / yMax) * 100).toFixed(2);
+  const hasScale = Number.isFinite(yMax) && yMax > 0;
+  const y = (cost: number) => (hasScale ? (1 - cost / yMax) * 100 : 100).toFixed(2);
   let line = "M0,100";
   let prevY = "100.00";
   for (const step of steps) {

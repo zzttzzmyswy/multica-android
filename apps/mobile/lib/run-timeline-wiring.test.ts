@@ -92,6 +92,67 @@ describe("run timeline wiring", () => {
     expect(panel).not.toMatch(/run\.usage\?\.cost \?\? 0\)\}/);
   });
 
+  it("guards the zero-scale case that crashed the app on-device", () => {
+    // Found against MYS-1991: 8 runs, every one with a usage record, every
+    // model unpriced — so `pricedCount > 0` lets a curve through with a total
+    // of exactly 0. `stepCurvePath` must not divide by that (NaN coordinates
+    // make react-native-svg's native path parser throw), and the strip must not
+    // either. Both sites carry `hasScale`; this pins that neither loses it.
+    const lib = read("lib/issue-run-timeline.ts");
+    expect(lib).toMatch(/const hasScale = Number\.isFinite\(yMax\) && yMax > 0;/);
+    const panel = read(PANEL);
+    // Two scales: the strip's raw-total one and the chart's niceTicks one.
+    expect(panel.match(/const hasScale/g) ?? []).toHaveLength(2);
+    expect(panel).toContain("const yMax = timeline.totalCost / SPARK_HEADROOM;");
+  });
+
+  it("thins x-axis ticks to the phone's plot width", () => {
+    // Web asks timeTicks for 8 ticks in a ~1024px dialog. A phone's plot is
+    // ~270px, where 5 daily labels collided on-device (MYS-1893). The budget
+    // must scale with the measured width rather than being web's constant.
+    const panel = read(PANEL);
+    expect(panel).toContain("timeTicks(timeline.domain, tickBudget(plotWidth))");
+    expect(panel).toContain("const TICK_LABEL_PX");
+  });
+
+  it("claims a horizontal drag on the chart so the sheet does not eat it", () => {
+    // Plain onTouchStart/Move loses a horizontal drag to the enclosing
+    // ScrollView: the crosshair jumped once on touch-start and then stopped
+    // (observed on-device). The chart takes the responder for horizontal pans
+    // only, so a vertical swipe still scrolls the sheet past it.
+    const panel = read(PANEL);
+    expect(panel).toContain("PanResponder.create");
+    expect(panel).toMatch(
+      /onMoveShouldSetPanResponder: \(_e, g\) =>\s*Math\.abs\(g\.dx\) > Math\.abs\(g\.dy\)/,
+    );
+    expect(panel).not.toMatch(/onTouchStart=\{onTouch\}/);
+    // And the responder's own children must not swallow the gesture: the SVG
+    // overlay and every lane band sit under it.
+    expect(panel.match(/pointerEvents="none"/g) ?? []).toHaveLength(4);
+  });
+
+  it("reads the scrub position from pageX, not locationX", () => {
+    // `locationX` on this responder reports coordinates relative to whichever
+    // DESCENDANT was touched (the SVG overlay, a lane View), and the
+    // view-relative value only arrives on grant, not on move — which is why the
+    // crosshair did not track the finger on-device. `pageX` is the same number
+    // at every level, so one `measureInWindow` anchors it for good.
+    const panel = read(PANEL);
+    expect(panel).toContain("measureInWindow");
+    expect(panel).toMatch(/const scrubTo = \(pageX: number\) => \{\s*const x = pageX - plotLeftRef\.current;/);
+    expect(panel).not.toMatch(/scrubTo\(e\.nativeEvent\.locationX\)/);
+  });
+
+  it("keeps the scrub readout after the finger lifts", () => {
+    // The reader's hand covers the curve during the drag, so a readout that
+    // clears on touch-end is unreadable. It must be dismissed by an explicit
+    // tap (or by collapsing the timeline), not by the gesture finishing.
+    const panel = read(PANEL);
+    expect(panel).not.toContain("onTouchEnd");
+    expect(panel).toContain('onPress={() => setReadoutX(null)}');
+    expect(panel).toContain('t("runsTimeline.clearScrub")');
+  });
+
   it("subscribes to the custom-pricing store so a saved rate repaints", () => {
     // `estimateCost` reads the store imperatively; without this subscription a
     // rate saved on the runtime usage page would leave the curve on the old

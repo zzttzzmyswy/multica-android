@@ -28,8 +28,8 @@
  *    a row of the runs sheet's own shape, so the timeline reads as the same
  *    surface as the list above it.
  */
-import { useMemo, useRef, useState } from "react";
-import { Pressable, View, type GestureResponderEvent, type LayoutChangeEvent } from "react-native";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { PanResponder, Pressable, View, type LayoutChangeEvent } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import type { AgentTask } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
@@ -78,6 +78,21 @@ const LANE_GAP = 6;
 const LANE_LABEL_WIDTH = 92;
 /** Width reserved at the right for the y scale, where the curve ends. */
 const Y_AXIS_WIDTH = 46;
+/**
+ * Roughly how wide one x-axis label renders ("10月4日周日", "14:00"), including
+ * the gap the next one needs. Web can ask for 8 ticks because its dialog is
+ * ~1024px; a phone's plot is ~270px, where 5 daily labels printed on top of
+ * each other (found on-device against MYS-1893, whose 5-day span drew 5
+ * colliding labels). Ticks are thinned to whatever fits.
+ */
+const TICK_LABEL_PX = 62;
+const MIN_TICKS = 2;
+const MAX_TICKS = 8;
+
+function tickBudget(plotWidth: number): number {
+  if (!(plotWidth > 0)) return MAX_TICKS;
+  return Math.max(MIN_TICKS, Math.min(MAX_TICKS, Math.floor(plotWidth / TICK_LABEL_PX)));
+}
 
 /**
  * The timeline's chart, stats and day list.
@@ -162,7 +177,12 @@ export function RunSpendStrip({
     width,
   };
   const yMax = timeline.totalCost / SPARK_HEADROOM;
-  const yPct = (cost: number) => (1 - cost / yMax) * 100;
+  // A total of exactly 0 with priced runs is real: every run used a model with
+  // no rate on file. The curve then has no scale to draw against, so it pins to
+  // the baseline and the end dot sits at the bottom — `yPct` must not divide by
+  // zero, or the SVG path becomes `NaN` and the native parser throws.
+  const hasScale = yMax > 0;
+  const yPct = (cost: number) => (hasScale ? (1 - cost / yMax) * 100 : 100);
   const { line, area } = stepCurvePath(timeline.cumulative, timeline.domain, yMax);
   const dot = lastStepDot(timeline, plot);
 
@@ -333,15 +353,25 @@ export function RunTimelineChart({ timeline }: { timeline: RunTimeline }) {
   const [plotWidth, setPlotWidth] = useState(0);
   const [readoutX, setReadoutX] = useState<number | null>(null);
   const plotWidthRef = useRef(0);
+  /** The plot's left edge in window coordinates, for pageX → plot-x math. */
+  const plotLeftRef = useRef(0);
+  const readoutXRef = useRef<number | null>(null);
+  readoutXRef.current = readoutX;
+  const plotRef = useRef<View>(null);
 
   const pricing = timeline.pricedCount > 0;
   const plotHeight = pricing ? PLOT_HEIGHT : 0;
 
   const yTicks = niceTicks(timeline.totalCost);
   const yMax = yTicks[yTicks.length - 1] ?? 1;
-  const yPct = (cost: number) => (1 - cost / yMax) * 100;
+  // `niceTicks` returns [] for a non-positive max, so the `?? 1` above already
+  // keeps this finite — but the guard documents why the fallback must not be 0:
+  // a zero here puts `NaN` into every y coordinate and react-native-svg's
+  // native path parser throws on it.
+  const hasScale = yMax > 0;
+  const yPct = (cost: number) => (hasScale ? (1 - cost / yMax) * 100 : 100);
 
-  const ticks = timeTicks(timeline.domain);
+  const ticks = timeTicks(timeline.domain, tickBudget(plotWidth));
   const multiDay = isMultiDay(timeline.extent);
   const plot: ScrubPlot = {
     domain: timeline.domain,
@@ -383,10 +413,48 @@ export function RunTimelineChart({ timeline }: { timeline: RunTimeline }) {
   // Tapping anywhere on the plot moves the crosshair there; dragging keeps it
   // under the finger. `locationX` is relative to the plot, which is exactly
   // what the pixel→time math wants.
-  const onTouch = (event: GestureResponderEvent) => {
-    const x = event.nativeEvent.locationX;
+  //
+  // The reading is deliberately NOT cleared on touch-end: a phone drag covers
+  // the curve with the hand doing it, so the numbers have to survive the
+  // gesture to be readable at all — that is the whole reason this readout is a
+  // fixed row rather than web's floating card. It clears when the reader taps
+  // the readout row itself, or collapses the timeline.
+  //
+  // The gesture is claimed by a PanResponder rather than plain
+  // `onTouchStart/Move` because the chart lives inside the sheet's vertical
+  // ScrollView: without claiming the responder, a horizontal drag is delivered
+  // as a scroll and the crosshair only jumps once, on touch-start (observed
+  // on-device). Only a clearly horizontal movement claims it, so a vertical
+  // swipe still scrolls the sheet past the chart.
+  //
+  // The x is computed from `pageX` minus the plot's own window offset rather
+  // than read off `locationX`. `locationX` on this responder reports
+  // coordinates relative to whichever descendant was touched — the SVG overlay
+  // and the lane Views both sit under it — and the expected view-relative
+  // value only arrives on the grant event, not the moves. `pageX` is the same
+  // number at every level, so one measurement removes the whole class of bug.
+  const scrubTo = (pageX: number) => {
+    const x = pageX - plotLeftRef.current;
     setReadoutX(Math.min(Math.max(x, 0), plotWidthRef.current));
   };
+  const measurePlot = useCallback(() => {
+    plotRef.current?.measureInWindow((x, _y, w) => {
+      plotLeftRef.current = x;
+      plotWidthRef.current = w;
+      setPlotWidth(w);
+    });
+  }, []);
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_e, g) =>
+          Math.abs(g.dx) > Math.abs(g.dy) && Math.abs(g.dx) > 3,
+        onPanResponderGrant: (e) => scrubTo(e.nativeEvent.pageX),
+        onPanResponderMove: (e) => scrubTo(e.nativeEvent.pageX),
+      }),
+    [],
+  );
 
   return (
     <View
@@ -398,6 +466,42 @@ export function RunTimelineChart({ timeline }: { timeline: RunTimeline }) {
       })}
       className="gap-2 rounded-lg border border-border bg-card p-3"
     >
+      {/* Readout. Web floats this beside the crosshair; at phone width the card
+          would cover the curve it describes, so it gets its own row.
+          
+          It sits ABOVE the plot, not below: the chart card is taller than the
+          space a phone leaves under the stat row, so a readout at the bottom
+          rendered off-screen — the drag worked but its numbers could not be
+          read without scrolling the chart away (found on-device). Above the
+          legend it is always on screen exactly when the chart is.
+          
+          Tapping it clears the crosshair, which is the only way back to the
+          "drag to inspect" hint — the gesture itself must not clear it, because
+          the hand covers the curve while dragging (see `scrubTo`). */}
+      <Pressable
+        onPress={() => setReadoutX(null)}
+        disabled={readoutX == null}
+        accessibilityRole={readoutX != null ? "button" : undefined}
+        accessibilityLabel={readoutX != null ? t("runsTimeline.clearScrub") : undefined}
+        className="min-h-[38px] justify-center rounded-md bg-secondary/60 px-2 py-1.5"
+      >
+        {readout ? (
+          readout.run ? (
+            <RunReadout run={readout.run} />
+          ) : (
+            <IdleReadout
+              fromMs={readout.idle.fromMs}
+              toMs={readout.idle.toMs}
+              total={timeline.pricedCount > 0 ? readout.totalSoFar : null}
+            />
+          )
+        ) : (
+          <Text className="text-micro text-muted-foreground">
+            {pricing ? t("runsTimeline.scrubHint") : t("runsTimeline.sparklineNoUsage")}
+          </Text>
+        )}
+      </Pressable>
+
       {/* Legend */}
       <View className="flex-row flex-wrap items-center gap-x-4 gap-y-1">
         {pricing ? (
@@ -455,21 +559,18 @@ export function RunTimelineChart({ timeline }: { timeline: RunTimeline }) {
         </View>
 
         <View
+          ref={plotRef}
           className="min-w-0 flex-1"
-          onLayout={(e: LayoutChangeEvent) => {
-            const w = e.nativeEvent.layout.width;
-            plotWidthRef.current = w;
-            setPlotWidth(w);
-          }}
-          onTouchStart={onTouch}
-          onTouchMove={onTouch}
-          onTouchEnd={() => setReadoutX(null)}
+          onLayout={measurePlot}
+          onTouchStart={measurePlot}
+          {...panResponder.panHandlers}
         >
           {/* Gridlines run through the curve and the lanes alike. */}
           <View>
             {ticks.map((tick) => (
               <View
                 key={tick.t}
+                pointerEvents="none"
                 className="absolute top-0 bottom-0 w-px bg-border"
                 style={{ left: `${xPctAt(tick.t, plot)}%` }}
               />
@@ -480,6 +581,7 @@ export function RunTimelineChart({ timeline }: { timeline: RunTimeline }) {
                 {yTicks.map((v) => (
                   <View
                     key={v}
+                    pointerEvents="none"
                     className="absolute left-0 right-0 h-px bg-border"
                     style={{ top: `${yPct(v)}%` }}
                   />
@@ -490,6 +592,7 @@ export function RunTimelineChart({ timeline }: { timeline: RunTimeline }) {
                     height="100%"
                     viewBox="0 0 1000 100"
                     preserveAspectRatio="none"
+                    pointerEvents="none"
                     style={{ position: "absolute", left: 0, top: 0 }}
                   >
                     <Path d={area} fill={theme.chart1} fillOpacity={0.1} />
@@ -527,6 +630,7 @@ export function RunTimelineChart({ timeline }: { timeline: RunTimeline }) {
               {timeline.lanes.map((lane) => (
                 <View
                   key={lane.agentId}
+                  pointerEvents="none"
                   style={{ height: LANE_HEIGHT, marginBottom: LANE_GAP }}
                   className="justify-center"
                 >
@@ -625,26 +729,6 @@ export function RunTimelineChart({ timeline }: { timeline: RunTimeline }) {
         ) : null}
       </View>
 
-      {/* Readout. Web floats this beside the crosshair; at phone width the card
-          would cover the curve it describes, so it gets its own row and the
-          numbers hold still while the finger moves. */}
-      <View className="min-h-[38px] justify-center rounded-md bg-secondary/60 px-2 py-1.5">
-        {readout ? (
-          readout.run ? (
-            <RunReadout run={readout.run} />
-          ) : (
-            <IdleReadout
-              fromMs={readout.idle.fromMs}
-              toMs={readout.idle.toMs}
-              total={timeline.pricedCount > 0 ? readout.totalSoFar : null}
-            />
-          )
-        ) : (
-          <Text className="text-micro text-muted-foreground">
-            {pricing ? t("runsTimeline.scrubHint") : t("runsTimeline.sparklineNoUsage")}
-          </Text>
-        )}
-      </View>
     </View>
   );
 }

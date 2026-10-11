@@ -640,6 +640,68 @@ describe("stepCurvePath", () => {
     const { line } = stepCurvePath([], [0, 1000], 10);
     expect(line).toBe("M0,100 L1000,100.00");
   });
+
+  // Regression (MYS-2084, found on-device against MYS-1991). Its 8 runs ALL
+  // have usage records but each used a model with no rate on file, so `priced`
+  // is 8 while the total is exactly 0. Web's `pricedCount > 0` guard therefore
+  // lets a curve through with `yMax === 0`, and dividing by it wrote `NaN` into
+  // every y coordinate — which react-native-svg's native path parser rejects
+  // with a FATAL EXCEPTION, crashing the app on opening that issue's timeline.
+  // The web code has the same latent shape but never hits it, because it always
+  // passes `niceTicks`' last value (never 0) as `yMax`; the mobile strip scales
+  // by the raw total, so the guard belongs here.
+  it("REGRESSION: never emits NaN for a non-positive yMax", () => {
+    const steps = [
+      { t: 100, cost: 0 },
+      { t: 400, cost: 0 },
+      { t: 900, cost: 0 },
+    ];
+    for (const yMax of [0, -1, Number.NaN]) {
+      const { line, area } = stepCurvePath(steps, [0, 1000], yMax);
+      expect(line, `yMax=${yMax}`).not.toMatch(/NaN|Infinity/);
+      expect(area, `yMax=${yMax}`).not.toMatch(/NaN|Infinity/);
+      // A flat baseline, still a valid path.
+      expect(line, `yMax=${yMax}`).toBe(
+        "M0,100 L100.00,100.00 L100.00,100.00 L400.00,100.00 L400.00,100.00 L900.00,100.00 L900.00,100.00 L1000,100.00",
+      );
+    }
+  });
+
+  it("REGRESSION: a timeline priced entirely by unmapped models is all-zero but well-formed", () => {
+    // The exact shape MYS-1991 produces on this deployment.
+    const unpricedModel = (outputTokens: number): TaskUsage[] => [
+      {
+        provider: "codex",
+        model: "gpt-6.1-sol", // not in the rate table, and no cost_usd_ticks
+        input_tokens: 0,
+        output_tokens: outputTokens,
+        cache_read_tokens: 0,
+        cache_write_tokens: 0,
+      },
+    ];
+    const timeline = buildRunTimeline(
+      [
+        makeTask({ id: "a", usage: unpricedModel(1_000_000) }),
+        makeTask({
+          id: "b",
+          started_at: "2026-09-24T11:00:00",
+          completed_at: "2026-09-24T11:20:00",
+          usage: unpricedModel(500_000),
+        }),
+      ],
+      NOW,
+    );
+    // Runs have usage, so they are "priced" — and every one of them costs 0.
+    expect(timeline.pricedCount).toBe(2);
+    expect(timeline.totalCost).toBe(0);
+    expect(niceTicks(timeline.totalCost)).toEqual([]);
+    // The strip scales by the raw total, which is where the crash came from.
+    const { line } = stepCurvePath(timeline.cumulative, timeline.domain, timeline.totalCost / 0.9);
+    expect(line).not.toMatch(/NaN|Infinity/);
+    // And the lanes still say who ran when, which is the only signal left.
+    expect(timeline.lanes).toHaveLength(1);
+    expect(timeline.lanes[0]!.runs).toHaveLength(2);
+  });
 });
 
 describe("niceTicks", () => {
