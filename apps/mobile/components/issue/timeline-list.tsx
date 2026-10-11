@@ -118,6 +118,11 @@ import { THEME } from "@/lib/theme";
 import { useCommentSelectStore } from "@/data/comment-select-store";
 import { useTranslation } from "@/lib/i18n/react";
 import {
+  FIND_TARGET_DESCRIPTION,
+  FIND_TARGET_TITLE,
+} from "@/lib/issue-find";
+import { HighlightOverlay } from "./highlight-overlay";
+import {
   isNearBottom,
   AT_BOTTOM_SLACK_PX,
   nextFabVisibility,
@@ -151,12 +156,19 @@ interface Props {
   jumpToThreadId?: string;
   /** Per-jump nonce — re-picking the same thread re-fires the scroll. */
   jumpNonce?: string;
-  /** In-page find target — a comment id from `lib/issue-find.ts`, which may be
-   *  a ROOT **or a reply**. Lands like a navigator jump (scroll to the owning
-   *  row) but resolves through replies too: a reply is not its own row in the
-   *  mobile flat list, so matching only `row.entry.id` would leave every hit
-   *  inside a reply with no scroll target — and replies are precisely the half
-   *  of the timeline find exists to reach. */
+  /** In-page find target, from `lib/issue-find.ts`. Either a comment id —
+   *  which may be a ROOT **or a reply** — or one of the two header sentinels
+   *  (`FIND_TARGET_TITLE` / `FIND_TARGET_DESCRIPTION`).
+   *
+   *  A comment lands like a navigator jump (scroll to the owning row) and
+   *  resolves through replies too: a reply is not its own row in the mobile
+   *  flat list, so matching only `row.entry.id` would leave every hit inside a
+   *  reply with no scroll target — and replies are precisely the half of the
+   *  timeline find exists to reach.
+   *
+   *  A sentinel lands on the header block instead. That is a different scroll
+   *  (an offset, not a row index) and a different flash surface, which is why
+   *  the two are told apart here rather than both being fed to `scrollToIndex`. */
   findTargetId?: string;
   /** Per-step nonce. Stepping onto the same comment twice (a query edited back
    *  to a previous one, or two hits inside one comment) must re-fire the
@@ -181,6 +193,16 @@ const JUMP_HIGHLIGHT_HOLD_MS = 2000;
  *  FlatList data. Picked because it can never collide with a real comment
  *  / activity uuid. */
 const DIVIDER_ID = "__divider__";
+
+/** Whether a find target names one of the two header blocks rather than a
+ *  comment. Every other target is a comment id. */
+function isHeaderFindTarget(id: string): boolean {
+  return id === FIND_TARGET_TITLE || id === FIND_TARGET_DESCRIPTION;
+}
+
+/** Breathing room above the description when find scrolls to it, so the
+ *  matched line does not sit flush against the top edge under the nav bar. */
+const HEADER_FIND_PAD = 12;
 
 export function TimelineList({
   issue,
@@ -263,6 +285,13 @@ export function TimelineList({
   );
 
   const listRef = useRef<FlashListRef<TimelineRow>>(null);
+  // Where the header's two flashable blocks sit inside the scroll content, as
+  // measured by the description wrapper's own `onLayout`. Only the description
+  // needs this: the title is at offset 0, but the header card above the
+  // description grows and shrinks with its attribute chips, custom properties
+  // and agent-activity row, so its offset is not a constant. A ref, not state:
+  // measuring must not re-render the list, and nothing renders from the value.
+  const measuredHeaderTopsRef = useRef({ description: 0 });
   // Gates single-shot per (commentId, nonce) tuple. Re-tap from inbox
   // bumps the nonce → ref no longer matches → effect re-fires.
   const lastStampRef = useRef<string | null>(null);
@@ -458,11 +487,42 @@ export function TimelineList({
   // lands the row in view immediately and the reader may step again at any
   // moment, so the flash only has to confirm which row it was.
   const lastFindRef = useRef<string | null>(null);
+  // A find hit in the title or the description is not a row, so it cannot go
+  // through `scrollToIndex`: the header is `ListHeaderComponent`, above index
+  // 0, and scrolling row 0 into view would push the very block holding the
+  // match off the top of the screen. Those two get an offset scroll instead,
+  // and their own flash surface (`findHeaderFlash`) rather than
+  // `highlightedId` — which is a COMMENT-id channel, and a sentinel pushed
+  // through it would reach every `CommentCard` as a target that matches
+  // nothing.
+  const [findHeaderFlash, setFindHeaderFlash] = useState<string | null>(null);
   useEffect(() => {
-    if (!findTargetId || dataWithDivider.length === 0) return;
+    if (!findTargetId) return;
     const stamp = `${findTargetId}:${findNonce ?? ""}`;
     if (lastFindRef.current === stamp) return;
 
+    if (isHeaderFindTarget(findTargetId)) {
+      // Deliberately NOT gated on `dataWithDivider.length`: the header exists
+      // whether or not the issue has comments, and an issue whose description
+      // is its only prose (the case this round exists for) must still land.
+      lastFindRef.current = stamp;
+      // The title sits at the very top, so 0 is exact. The description sits
+      // below the header card, whose height varies with the attribute chips
+      // and any custom properties, so its offset is the value `onLayout`
+      // measured. Unmeasured (0) degrades to the top of the list, where the
+      // description is still on screen on any phone — the header card is far
+      // shorter than a viewport.
+      const offset =
+        findTargetId === FIND_TARGET_DESCRIPTION
+          ? Math.max(0, measuredHeaderTopsRef.current.description - HEADER_FIND_PAD)
+          : 0;
+      listRef.current?.scrollToOffset({ offset, animated: true });
+      setFindHeaderFlash(findTargetId);
+      const fade = setTimeout(() => setFindHeaderFlash(null), JUMP_HIGHLIGHT_HOLD_MS);
+      return () => clearTimeout(fade);
+    }
+
+    if (dataWithDivider.length === 0) return;
     const index = dataWithDivider.findIndex(
       (row) =>
         row.entry.id === findTargetId ||
@@ -552,8 +612,36 @@ export function TimelineList({
 
   const ListHeader = (
     <View>
-      <IssueHeaderCard issue={issue} />
-      <IssueDescription issueId={issue.id} description={issue.description} />
+      {/* Find indexes the title (it is the first thing the page renders), so
+       *  the header card takes a flag for it. The flash lives inside that card
+       *  around the title line rather than here around the whole card: the card
+       *  also holds the attribute chips, the agent-activity row and the custom
+       *  properties, and washing all of them would claim the match is
+       *  somewhere it is not. */}
+      <IssueHeaderCard
+        issue={issue}
+        titleHighlighted={findHeaderFlash === FIND_TARGET_TITLE}
+      />
+      {/* Wrapped so `onLayout` can report where the description actually sits:
+       *  a find hit in it has to scroll there, and the header card above grows
+       *  and shrinks with its chips, so the offset is not a constant. The
+       *  wrapper is layout-transparent — no padding, margin or background — so
+       *  it changes nothing about how the header draws. */}
+      <View
+        onLayout={(e) => {
+          measuredHeaderTopsRef.current.description = e.nativeEvent.layout.y;
+        }}
+      >
+        <IssueDescription issueId={issue.id} description={issue.description} />
+        {/* Flashed when an in-page find step lands in the description. Covers
+         *  the whole block rather than the matched line: the markdown renderer
+         *  exposes no per-block layout, so there is nothing to address more
+         *  finely — the same trade-off web takes with its all-matches tint. */}
+        <HighlightOverlay
+          active={findHeaderFlash === FIND_TARGET_DESCRIPTION}
+          className="absolute inset-0 rounded-lg border-2 border-brand/50 bg-brand/5"
+        />
+      </View>
       <IssueReactionRow issue={issue} />
       {/* Parent block (MYS-493) — renders null when the issue has no
           parent, so it doesn't crowd the header in the common case. */}

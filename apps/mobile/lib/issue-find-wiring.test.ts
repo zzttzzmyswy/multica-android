@@ -25,7 +25,9 @@
  *   6. `TimelineList` consumes the target, and resolves it through REPLIES as
  *      well as top-level rows — a hit inside a reply is the case this whole
  *      feature exists for, and replies are not rows in the mobile flat list;
- *   7. both nonce guards exist, so the scroll effect can re-fire.
+ *   7. a hit in the header lands on the header (an offset scroll, its own
+ *      flash), not on row 0 through `scrollToIndex`;
+ *   8. both nonce guards exist, so the scroll effect can re-fire.
  *
  * Removing any single link turns this red.
  */
@@ -67,14 +69,24 @@ describe("in-page find wiring", () => {
     expect(src).toMatch(/findOpen \?\s*\(\s*<FindBar/);
   });
 
-  it("searches the full timeline through the pure helpers", () => {
+  it("searches the full page: title + description + timeline", () => {
     const src = code(ISSUE_SCREEN);
-    // The haystack comes from the timeline the screen already reads — no new
-    // request, and nothing preview-shaped.
-    expect(src).toMatch(/collectSearchables\(\s*timeline\.data\s*\)/);
+    // The haystack comes from the issue and the timeline the screen already
+    // reads — no new request, and nothing preview-shaped.
+    expect(src).toMatch(/collectSearchables\(\s*timeline\.data,\s*\{/);
+    expect(src).toMatch(/title: headerTitle/);
+    expect(src).toMatch(/description: headerDescription/);
     expect(src).toMatch(/findInTimeline\(searchables, findQuery\)/);
     expect(src).toContain("findCounter(");
     expect(src).not.toMatch(/commentPreview|PREVIEW_BODY_MAX|PREVIEW_TITLE_MAX/);
+  });
+
+  it("reads the header off the issue object, without a second request", () => {
+    const src = code(ISSUE_SCREEN);
+    // Title and description already ride on `issueDetailOptions`' result, so
+    // indexing them must not introduce another query.
+    expect(src).toMatch(/detail\.data\?\.title/);
+    expect(src).toMatch(/detail\.data\?\.description/);
   });
 
   it("turns an active match into a fresh jump, nonce included", () => {
@@ -88,6 +100,22 @@ describe("in-page find wiring", () => {
     expect(src).toMatch(
       /setFindStep\(\{\s*id: target,\s*nonce: String\(stepNonceRef\.current\)\s*\}\)/,
     );
+  });
+
+  it("counts every match the reader can step to, header hits included", () => {
+    const src = code(ISSUE_SCREEN);
+    // The counter and the stepper must read the SAME list. Filtering the
+    // header's hits out of the total (or out of the array the stepper walks)
+    // would print `n/m` that disagrees with how many steps it takes to reach
+    // the last match — the reader steps past `m` and the bar still says `m`.
+    // Pinned at the call site, not just in the pure helper: the helper is
+    // correct for whatever count it is handed.
+    expect(src).toMatch(/findCounter\(findQuery, matches\.length, activeMatch\)/);
+    // One array feeds both `stepFind` and `applyFindTarget`, and it is the
+    // unfiltered match set.
+    expect(src).toMatch(/const matches = useMemo\(\s*\(\) => findInTimeline\(searchables, findQuery\)/);
+    expect(src).toMatch(/stepMatch\(activeMatch, matches\.length, direction\)/);
+    expect(src).toMatch(/applyFindTarget\(matches, next\)/);
   });
 
   it("drives the scroll from user navigation, not from the match set", () => {
@@ -117,10 +145,49 @@ describe("in-page find wiring", () => {
     expect(src).toMatch(/lastFindRef/);
   });
 
-  it("flashes the target through the existing highlight channel", () => {
+  it("lands a header hit on the header, not on row 0", () => {
     const src = code(TIMELINE);
-    // One "this is the row you asked for" affordance, not a second mechanism.
+    // A hit in the description is above index 0 (the header is
+    // `ListHeaderComponent`), so resolving it through `scrollToIndex` would
+    // push the matched block off the top of the screen.
+    expect(src).toMatch(/isHeaderFindTarget/);
+    expect(src).toMatch(/scrollToOffset\(\{\s*offset,\s*animated:\s*true\s*\}\)/);
+    // The description's offset is measured, not assumed: the header card above
+    // it grows and shrinks with its chips.
+    expect(src).toMatch(/measuredHeaderTopsRef\.current\.description/);
+    expect(src).toMatch(/onLayout=/);
+  });
+
+  it("has its own flash for the header, which is not a comment id channel", () => {
+    const src = code(TIMELINE);
+    // `highlightedId` is consumed as a comment id by every `CommentCard`, so a
+    // sentinel pushed through it would reach each card as a target matching
+    // nothing.
+    expect(src).toMatch(/findHeaderFlash/);
+    // Compared against the SENTINELS, not a local `"title"` / `"description"`
+    // string: the state holds `findTargetId`, and a mismatched literal would
+    // leave the flash permanently dark while every other assertion still
+    // passed.
+    expect(src).toMatch(/titleHighlighted=\{findHeaderFlash === FIND_TARGET_TITLE\}/);
+    expect(src).toMatch(/findHeaderFlash === FIND_TARGET_DESCRIPTION/);
+    // The comment path is unchanged.
     expect(src).toMatch(/setHighlightedId\(findTargetId\)/);
+  });
+
+  it("flashes the header blocks through the one shared overlay", () => {
+    // Three surfaces flash (root comment, reply, header block). One
+    // implementation, so their timing cannot drift apart.
+    const overlay = code("components/issue/highlight-overlay.tsx");
+    expect(overlay).toContain("withSequence");
+    expect(overlay).toMatch(/withTiming\(1, \{ duration: 700 \}\)/);
+    expect(overlay).toMatch(/withDelay\(1800/);
+    for (const rel of [TIMELINE, "components/issue/comment-card.tsx"]) {
+      expect(code(rel)).toContain("HighlightOverlay");
+    }
+    // The header card owns the title's flash surface.
+    expect(code("components/issue/issue-header-card.tsx")).toMatch(
+      /titleHighlighted/,
+    );
   });
 
   it("has the bar render every control and the counter", () => {
