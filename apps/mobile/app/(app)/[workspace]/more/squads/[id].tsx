@@ -35,6 +35,7 @@ import { Text } from "@/components/ui/text";
 import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
+import { HeaderSearchGroup } from "@/components/ui/header-search-button";
 import { TextField } from "@/components/ui/text-field";
 import { AutosizeTextArea } from "@/components/ui/autosize-textarea";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
@@ -422,11 +423,13 @@ export default function SquadDetailPage() {
         options={{
           headerRight: squad
             ? () => (
-                <IconButton
-                  name="ellipsis-horizontal"
-                  onPress={onPressMore}
-                  accessibilityLabel={t("squads.detail.actions")}
-                />
+                <HeaderSearchGroup>
+                  <IconButton
+                    name="ellipsis-horizontal"
+                    onPress={onPressMore}
+                    accessibilityLabel={t("squads.detail.actions")}
+                  />
+                </HeaderSearchGroup>
               )
             : undefined,
         }}

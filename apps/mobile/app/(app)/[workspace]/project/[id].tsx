@@ -26,6 +26,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
+import { HeaderSearchGroup } from "@/components/ui/header-search-button";
 import { ProjectHeaderCard } from "@/components/project/project-header-card";
 import { ProjectPropertiesSection } from "@/components/project/project-properties-section";
 import { ProjectIssueSurface } from "@/components/project/project-issue-surface";
@@ -158,11 +159,13 @@ export default function ProjectDetail() {
           headerBackTitle: t("common.back"),
           headerRight: project
             ? () => (
-                <IconButton
-                  name="ellipsis-horizontal"
-                  onPress={onPressMore}
-                  accessibilityLabel={t("project.actions")}
-                />
+                <HeaderSearchGroup>
+                  <IconButton
+                    name="ellipsis-horizontal"
+                    onPress={onPressMore}
+                    accessibilityLabel={t("project.actions")}
+                  />
+                </HeaderSearchGroup>
               )
             : undefined,
         }}

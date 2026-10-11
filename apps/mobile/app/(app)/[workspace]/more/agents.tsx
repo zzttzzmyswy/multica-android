@@ -30,6 +30,7 @@ import { isAgentRuntimeBound, type AgentPresenceDetail } from "@multica/core/age
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
+import { HeaderSearchGroup } from "@/components/ui/header-search-button";
 import { TextField } from "@/components/ui/text-field";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { PresenceDot } from "@/components/ui/presence-dot";
@@ -465,6 +466,10 @@ export default function AgentsPage() {
   const headerRight = useCallback(() => {
     if (!wsSlug) return null;
     if (selectionMode) {
+      // Selection mode deliberately drops the search entry: it replaces the
+      // browse actions with the mode's own exit, and search would leave the
+      // mode (its panel is a different route) while the selection stayed
+      // behind. Same reasoning as the batch toolbar owning the screen.
       return (
         <Pressable
           onPress={() => {
@@ -480,18 +485,20 @@ export default function AgentsPage() {
       );
     }
     return (
-      <View className="flex-row items-center gap-3">
-        <IconButton
-          name="checkbox-outline"
-          onPress={() => setSelectionMode(true)}
-          accessibilityLabel={t("agents.batch.enterSelection")}
-        />
-        <IconButton
-          name="add"
-          onPress={() => router.push(`/${wsSlug}/more/agents/new`)}
-          accessibilityLabel={t("agents.createButton")}
-        />
-      </View>
+      <HeaderSearchGroup>
+        <View className="flex-row items-center gap-3">
+          <IconButton
+            name="checkbox-outline"
+            onPress={() => setSelectionMode(true)}
+            accessibilityLabel={t("agents.batch.enterSelection")}
+          />
+          <IconButton
+            name="add"
+            onPress={() => router.push(`/${wsSlug}/more/agents/new`)}
+            accessibilityLabel={t("agents.createButton")}
+          />
+        </View>
+      </HeaderSearchGroup>
     );
   }, [wsSlug, t, selectionMode]);
 

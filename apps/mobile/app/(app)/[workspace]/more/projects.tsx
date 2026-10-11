@@ -9,6 +9,7 @@ import { useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Stack } from "expo-router";
 import { IconButton } from "@/components/ui/icon-button";
+import { HeaderSearchGroup } from "@/components/ui/header-search-button";
 import { ProjectsScreen, useCreateProject } from "@/components/project/projects-screen";
 import { useTranslation } from "@/lib/i18n/react";
 
@@ -18,11 +19,13 @@ export default function ProjectsPage() {
 
   const headerRight = useCallback(() => {
     return (
-      <IconButton
-        name="add"
-        onPress={onCreate}
-        accessibilityLabel={t("projects.newProject")}
-      />
+      <HeaderSearchGroup>
+        <IconButton
+          name="add"
+          onPress={onCreate}
+          accessibilityLabel={t("projects.newProject")}
+        />
+      </HeaderSearchGroup>
     );
   }, [onCreate, t]);
 

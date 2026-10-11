@@ -6,6 +6,7 @@
  */
 import { View } from "react-native";
 import { Header } from "@/components/ui/header";
+import { HeaderSearchGroup } from "@/components/ui/header-search-button";
 import { IconButton } from "@/components/ui/icon-button";
 import {
   ProjectsScreen,
@@ -22,11 +23,13 @@ export default function ProjectsTab() {
       <Header
         title={t("nav.projects")}
         right={
-          <IconButton
-            name="add"
-            onPress={onCreate}
-            accessibilityLabel={t("projects.newProject")}
-          />
+          <HeaderSearchGroup>
+            <IconButton
+              name="add"
+              onPress={onCreate}
+              accessibilityLabel={t("projects.newProject")}
+            />
+          </HeaderSearchGroup>
         }
       />
       <ProjectsScreen onCreate={onCreate} />

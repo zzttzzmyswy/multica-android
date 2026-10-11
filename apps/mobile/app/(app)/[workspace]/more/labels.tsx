@@ -30,6 +30,7 @@ import type { Label } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
+import { HeaderSearchGroup } from "@/components/ui/header-search-button";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { labelScopeOptions } from "@/data/queries/labels";
 import { useWorkspaceStore } from "@/data/workspace-store";
@@ -76,13 +77,17 @@ export default function LabelsPage() {
   }, []);
 
   const headerRight = useCallback(() => {
-    if (!wsSlug) return null;
+    // Search is never permission- or data-gated (web shows its trigger to
+    // every member), so an unresolved slug drops only the "+", not the group.
+    if (!wsSlug) return <HeaderSearchGroup />;
     return (
-      <IconButton
-        name="add"
-        onPress={() => router.push(`/${wsSlug}/more/labels/new?scope=${scope}`)}
-        accessibilityLabel={t("labels.new.title")}
-      />
+      <HeaderSearchGroup>
+        <IconButton
+          name="add"
+          onPress={() => router.push(`/${wsSlug}/more/labels/new?scope=${scope}`)}
+          accessibilityLabel={t("labels.new.title")}
+        />
+      </HeaderSearchGroup>
     );
   }, [wsSlug, scope, t]);
 

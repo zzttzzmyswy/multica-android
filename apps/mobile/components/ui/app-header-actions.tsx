@@ -2,6 +2,14 @@
  * Header utility buttons shared across primary tabs (Inbox / My Issues).
  * Provides two global actions on the right: search and create-issue.
  *
+ * These two tabs draw their own in-body `<Header>`, so the navigator's default
+ * `headerRight` (the search entry every push screen gets — see
+ * `components/ui/header-search-button.tsx`) does not reach them; this is where
+ * they compose the same entry instead. Only the create-issue button is
+ * specific to this component now — the search half is the shared
+ * `HeaderSearchButton`, so there is exactly one implementation of that action
+ * in the app.
+ *
  * The workspace menu (global nav, workspace switcher, settings) is reached
  * via the "More" tab in the bottom bar.
  *
@@ -17,6 +25,7 @@
 import { View } from "react-native";
 import { router } from "expo-router";
 import { IconButton } from "@/components/ui/icon-button";
+import { HeaderSearchButton } from "@/components/ui/header-search-button";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useNewIssueDraftStore, draftHasContent } from "@/data/stores/new-issue-draft-store";
 import { useTranslation } from "@/lib/i18n/react";
@@ -29,20 +38,13 @@ export function HeaderActions() {
   // re-render, because the method itself is stable.
   const hasDraft = useNewIssueDraftStore((s) => draftHasContent(s));
 
-  const onSearch = () => {
-    if (slug) router.push(`/${slug}/search`);
-  };
   const onCreate = () => {
     if (slug) router.push(`/${slug}/new-issue`);
   };
 
   return (
     <>
-      <IconButton
-        name="search"
-        onPress={onSearch}
-        accessibilityLabel={t("a11y.search")}
-      />
+      <HeaderSearchButton />
       <View>
         <IconButton
           name="add"

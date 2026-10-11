@@ -64,6 +64,10 @@ import {
   useIsCommentCollapsed,
   useToggleCommentCollapsed,
 } from "@/data/stores/comment-collapse-store";
+import {
+  selectExpandedResolved,
+  useResolvedExpandStore,
+} from "@/data/stores/resolved-expand-store";
 import { commentPreview } from "@/lib/comment-collapse";
 import { isDeletedComment } from "@/lib/comment-deletion";
 import {
@@ -132,7 +136,20 @@ export function CommentCard({
         : null,
     [replies, replyResolutionId],
   );
-  const [expanded, setExpanded] = useState(false);
+  // Expanded state for a resolved thread. Store-backed since this round — see
+  // `data/stores/resolved-expand-store.ts` for why it moved out of `useState`
+  // (search's fold/unfold-all-comments rows must be able to drive it from
+  // outside this screen). Same per-session lifetime as before: not persisted,
+  // so a reload folds every resolved thread back to its bar.
+  const expandedResolved = useResolvedExpandStore(
+    selectExpandedResolved(issueId),
+  );
+  const setResolvedExpanded = useResolvedExpandStore((s) => s.setExpanded);
+  const expanded = expandedResolved.has(entry.id);
+  const setExpanded = useCallback(
+    (next: boolean) => setResolvedExpanded(issueId, entry.id, next),
+    [setResolvedExpanded, issueId, entry.id],
+  );
   // Per-comment fold (iteration 179, G20). The state lives here — not inside
   // `CommentBody` — because folding a root has to hide its replies as well,
   // and the replies are rendered by this component. Replies themselves are
@@ -193,6 +210,7 @@ export function CommentCard({
     rootFolded,
     toggleFolded,
     issueId,
+    setExpanded,
   ]);
 
   if (rootResolved && !expanded) {

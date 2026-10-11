@@ -30,6 +30,7 @@ import type { QuickAction } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
+import { HeaderSearchGroup } from "@/components/ui/header-search-button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -154,13 +155,17 @@ export default function QuickActionsPage() {
     !isLoading && !error && sorted.length > 0 && filtered.length === 0;
 
   const headerRight = useCallback(() => {
-    if (!canManage || !wsSlug) return null;
+    // Same split as squads / mcp-servers: the "+" needs canManage, search
+    // never does.
+    if (!canManage || !wsSlug) return <HeaderSearchGroup />;
     return (
-      <IconButton
-        name="add"
-        onPress={() => router.push(`/${wsSlug}/more/settings/quick-actions/new`)}
-        accessibilityLabel={t("quickActions.add")}
-      />
+      <HeaderSearchGroup>
+        <IconButton
+          name="add"
+          onPress={() => router.push(`/${wsSlug}/more/settings/quick-actions/new`)}
+          accessibilityLabel={t("quickActions.add")}
+        />
+      </HeaderSearchGroup>
     );
   }, [canManage, wsSlug, t]);
 

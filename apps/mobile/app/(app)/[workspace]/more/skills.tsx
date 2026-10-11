@@ -33,6 +33,7 @@ import type { Agent, MemberWithUser } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
+import { HeaderSearchGroup } from "@/components/ui/header-search-button";
 import { TextField } from "@/components/ui/text-field";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { AvatarStack } from "@/components/ui/avatar-stack";
@@ -184,27 +185,32 @@ export default function SkillsPage() {
   }, [visibleIds]);
 
   const headerRight = useCallback(() => {
-    if (!wsSlug) return null;
+    // Search survives every state here, including selection mode: unlike the
+    // agents list this one keeps its "add" action while selecting, so the
+    // strip is not a mode of its own.
+    if (!wsSlug) return <HeaderSearchGroup />;
     return (
-      <View className="flex-row items-center">
-        <IconButton
-          name={selectionMode ? "close" : "checkbox-outline"}
-          onPress={() => {
-            if (selectionMode) exitSelection();
-            else setSelectionMode(true);
-          }}
-          accessibilityLabel={
-            selectionMode
-              ? t("skills.batch.exitSelection")
-              : t("skills.batch.enterSelection")
-          }
-        />
-        <IconButton
-          name="add"
-          onPress={() => router.push(`/${wsSlug}/more/skills/new`)}
-          accessibilityLabel={t("skills.createButton")}
-        />
-      </View>
+      <HeaderSearchGroup>
+        <View className="flex-row items-center gap-2">
+          <IconButton
+            name={selectionMode ? "close" : "checkbox-outline"}
+            onPress={() => {
+              if (selectionMode) exitSelection();
+              else setSelectionMode(true);
+            }}
+            accessibilityLabel={
+              selectionMode
+                ? t("skills.batch.exitSelection")
+                : t("skills.batch.enterSelection")
+            }
+          />
+          <IconButton
+            name="add"
+            onPress={() => router.push(`/${wsSlug}/more/skills/new`)}
+            accessibilityLabel={t("skills.createButton")}
+          />
+        </View>
+      </HeaderSearchGroup>
     );
   }, [wsSlug, t, selectionMode, exitSelection]);
 

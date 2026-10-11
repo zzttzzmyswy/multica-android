@@ -25,6 +25,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   KeyboardAvoidingView,
   Pressable,
@@ -33,8 +34,10 @@ import {
   type ListRenderItem,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useQueries, useQuery } from "@tanstack/react-query";
-import { router } from "expo-router";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { router, useLocalSearchParams } from "expo-router";
+import * as Clipboard from "expo-clipboard";
+import * as Haptics from "expo-haptics";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type {
   Issue,
@@ -49,14 +52,21 @@ import { ProjectIcon } from "@/components/ui/project-icon";
 import { ProjectStatusIcon } from "@/components/ui/project-status-icon";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { api } from "@/data/api";
+import { getWebBaseUrl } from "@/data/server-config";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import {
   selectViewedIssueIds,
   useViewedIssuesStore,
 } from "@/data/viewed-issues-store";
-import { issueDetailOptions } from "@/data/queries/issues";
+import { issueDetailOptions, issueTimelineOptions } from "@/data/queries/issues";
 import { memberListOptions } from "@/data/queries/members";
 import { useIssueStatuses } from "@/data/queries/issue-statuses";
+import { useCommentCollapseStore } from "@/data/stores/comment-collapse-store";
+import { useResolvedExpandStore } from "@/data/stores/resolved-expand-store";
+import {
+  resolvedThreadRootIds,
+  rootCommentIds,
+} from "@/lib/thread-resolution";
 import { projectStatusLabel } from "@/lib/project-status";
 import { buildSearchRows, type RowItem } from "@/lib/search-rows";
 import {
@@ -79,7 +89,14 @@ import { THEME } from "@/lib/theme";
 const DEBOUNCE_MS = 300;
 const ISSUE_LIMIT = 20;
 const PROJECT_LIMIT = 10;
-const RECENT_LIMIT = 5;
+/**
+ * How many of the stored recents to render. Web renders the whole
+ * `MAX_RECENT_ISSUES` bucket (20) — this matches it, and the store's capacity
+ * (`data/viewed-issues-store.ts` CAPACITY) is 20 for the same reason. It used
+ * to be 5 against a capacity of 10, so a phone in an 11-project workspace
+ * answered "what was I just looking at?" with a third of what web showed.
+ */
+const RECENT_LIMIT = 20;
 
 // =====================================================
 // HighlightText — mobile port of web's HighlightText
@@ -400,6 +417,15 @@ const PAGE_ICONS: Record<SearchPageKey, keyof typeof Ionicons.glyphMap> = {
 const COMMAND_ICONS: Record<SearchCommandKey, keyof typeof Ionicons.glyphMap> = {
   "new-issue": "add-circle-outline",
   "new-project": "add-circle-outline",
+  // Web pairs these four with Link2 / Copy / ListChevronsDownUp /
+  // ListChevronsUpDown (lucide). Ionicons has no chevron-pair glyph, so the
+  // fold pair uses the single chevron that points the way each row acts —
+  // the same direction convention the folded comment header already uses
+  // (`comment-card.tsx`: chevron-forward when folded, chevron-down when open).
+  "copy-issue-link": "link-outline",
+  "copy-issue-identifier": "copy-outline",
+  "fold-all-comments": "chevron-collapse-outline",
+  "unfold-all-comments": "chevron-expand-outline",
   "theme-light": "sunny-outline",
   "theme-dark": "moon-outline",
   "theme-system": "phone-portrait-outline",
@@ -448,6 +474,11 @@ const EMPTY_RESULTS: SearchResultsState = { issues: [], projects: [] };
 export default function SearchModal() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const slug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
+  // Which issue this panel was opened over, if any. Travels as a route param
+  // because the panel is its own modal route and cannot read it off the
+  // pathname the way web's portal does — see `lib/search-route.ts`.
+  const { issueId } = useLocalSearchParams<{ issueId?: string }>();
+  const queryClient = useQueryClient();
   const {
     colorScheme,
     preference: themePreference,
@@ -576,6 +607,17 @@ export default function SearchModal() {
     [PAGE_PATHS, navigate, slug],
   );
 
+  // The issue this panel was opened over. Web derives `currentIssueId` from
+  // the route and gates its four issue-scoped commands on it AND on the issue
+  // detail having loaded (the identifier is what the copy rows put on the
+  // clipboard). Same two conditions here: the param names the issue, and this
+  // query supplies the identifier. Off an issue page the param is absent, the
+  // query stays disabled, and the four rows never appear.
+  const { data: currentIssue = null } = useQuery({
+    ...issueDetailOptions(wsId, issueId ?? ""),
+    enabled: !!issueId,
+  });
+
   /**
    * Web's command handlers all end in `setOpen(false)` — including the theme
    * switches, where the whole app repainting is the confirmation and leaving
@@ -593,6 +635,73 @@ export default function SearchModal() {
         case "new-project":
           if (slug) navigate(`/${slug}/project/new`);
           break;
+        case "copy-issue-link": {
+          if (!currentIssue || !slug) break;
+          // Web copies `getShareableUrl(paths.issueDetail(identifier))` — the
+          // identifier form, so a pasted link says which issue it points at.
+          // The web origin comes from the same helper the issue page's own
+          // "copy link" uses, so the two can never disagree.
+          const base = getWebBaseUrl();
+          if (!base) break;
+          const url = `${base}/${slug}/issues/${encodeURIComponent(currentIssue.identifier)}`;
+          void Clipboard.setStringAsync(url).then((ok) => {
+            if (ok) {
+              Alert.alert(t("search.toast.linkCopied"));
+              void Haptics.notificationAsync(
+                Haptics.NotificationFeedbackType.Success,
+              ).catch(() => {});
+            }
+          });
+          router.back();
+          break;
+        }
+        case "copy-issue-identifier": {
+          if (!currentIssue) break;
+          const identifier = currentIssue.identifier;
+          void Clipboard.setStringAsync(identifier).then((ok) => {
+            if (ok) {
+              Alert.alert(t("search.toast.copiedIdentifier", { identifier }));
+              void Haptics.notificationAsync(
+                Haptics.NotificationFeedbackType.Success,
+              ).catch(() => {});
+            }
+          });
+          router.back();
+          break;
+        }
+        case "fold-all-comments":
+        case "unfold-all-comments": {
+          if (!issueId || !wsId) break;
+          const fold = key === "fold-all-comments";
+          // The timeline is already cached whenever the issue page has
+          // rendered, so `ensureQueryData` only fetches on a cold cache — web
+          // does exactly this. If it still cannot load, there are no comments
+          // on screen to fold and the action is a no-op, which matches what
+          // the reader can see.
+          void queryClient
+            .ensureQueryData(issueTimelineOptions(wsId, issueId))
+            .then((entries) => {
+              const collapse = useCommentCollapseStore.getState();
+              const resolvedExpand = useResolvedExpandStore.getState();
+              if (fold) {
+                // Fold BOTH kinds of folding, as web does: the per-comment
+                // fold store and the resolved-thread expand set. Doing only
+                // the first would leave every resolved thread still showing
+                // its expanded body, i.e. "fold all" that visibly did not.
+                collapse.collapseAll(wsId, issueId, rootCommentIds(entries));
+                resolvedExpand.collapseAll(issueId);
+              } else {
+                collapse.expandAll(wsId, issueId);
+                resolvedExpand.expandAll(
+                  issueId,
+                  resolvedThreadRootIds(entries),
+                );
+              }
+            })
+            .catch(() => {});
+          router.back();
+          break;
+        }
         case "theme-light":
           setPreference("light");
           router.back();
@@ -607,7 +716,7 @@ export default function SearchModal() {
           break;
       }
     },
-    [navigate, setPreference, slug],
+    [currentIssue, navigate, queryClient, setPreference, slug, issueId, wsId, t],
   );
 
   const trimmedQuery = query.trim();
@@ -624,8 +733,12 @@ export default function SearchModal() {
     [query],
   );
   const commands = useMemo(
-    () => filterSearchCommands(buildSearchCommands(), query),
-    [query],
+    () =>
+      filterSearchCommands(
+        buildSearchCommands({ issueIdentifier: currentIssue?.identifier }),
+        query,
+      ),
+    [query, currentIssue],
   );
 
   const hasResults =

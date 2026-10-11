@@ -28,6 +28,7 @@ import type { WorkspaceMcpServer } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
+import { HeaderSearchGroup } from "@/components/ui/header-search-button";
 import { workspaceMcpServersOptions } from "@/data/queries/mcp";
 import { memberListOptions } from "@/data/queries/members";
 import { useDeleteWorkspaceMcpServer } from "@/data/mutations/mcp";
@@ -80,13 +81,16 @@ export default function McpServersPage() {
   );
 
   const headerRight = useCallback(() => {
-    if (!wsSlug || !canManage) return null;
+    // Same split as squads: the "+" needs canManage, search never does.
+    if (!wsSlug || !canManage) return <HeaderSearchGroup />;
     return (
-      <IconButton
-        name="add"
-        onPress={() => router.push(`/${wsSlug}/more/mcp-servers/new`)}
-        accessibilityLabel={t("mcp.addServer")}
-      />
+      <HeaderSearchGroup>
+        <IconButton
+          name="add"
+          onPress={() => router.push(`/${wsSlug}/more/mcp-servers/new`)}
+          accessibilityLabel={t("mcp.addServer")}
+        />
+      </HeaderSearchGroup>
     );
   }, [wsSlug, canManage, t]);
 

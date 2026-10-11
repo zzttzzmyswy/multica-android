@@ -104,6 +104,7 @@ import { didPendingTaskFinish, isPendingTaskActive } from "@/lib/chat-task-polli
 import { useAgentPresence } from "@/lib/use-agent-presence";
 import { queueEditDraftText } from "@/lib/chat-queue";
 import { Header } from "@/components/ui/header";
+import { HeaderSearchGroup } from "@/components/ui/header-search-button";
 import { ChatTitleButton } from "@/components/chat/chat-title-button";
 import { ChatSessionActions } from "@/components/chat/chat-session-actions";
 import { useChatSessionActions } from "@/components/chat/session-actions";
@@ -714,11 +715,13 @@ export default function ChatTab() {
           />
         }
         right={
-          <ChatSessionActions
-            showMore={!!activeSession}
-            onMorePress={handleSessionMenu}
-            onNewPress={handleNewChat}
-          />
+          <HeaderSearchGroup>
+            <ChatSessionActions
+              showMore={!!activeSession}
+              onMorePress={handleSessionMenu}
+              onNewPress={handleNewChat}
+            />
+          </HeaderSearchGroup>
         }
       />
       {availability === "none" ? (

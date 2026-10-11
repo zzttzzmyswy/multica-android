@@ -24,6 +24,7 @@ import type { AgentRuntime } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
+import { HeaderSearchGroup } from "@/components/ui/header-search-button";
 import { runtimeListOptions } from "@/data/queries/runtimes";
 import { runtimeProfileListOptions } from "@/data/queries/runtime-profiles";
 import { agentListOptions } from "@/data/queries/agents";
@@ -131,11 +132,13 @@ export default function RuntimesPage() {
 
   const headerRight = useCallback(() => {
     return (
-      <IconButton
-        name="add"
-        onPress={openSupplySheet}
-        accessibilityLabel={t("runtimes.actions.connect")}
-      />
+      <HeaderSearchGroup>
+        <IconButton
+          name="add"
+          onPress={openSupplySheet}
+          accessibilityLabel={t("runtimes.actions.connect")}
+        />
+      </HeaderSearchGroup>
     );
   }, [openSupplySheet, t]);
 

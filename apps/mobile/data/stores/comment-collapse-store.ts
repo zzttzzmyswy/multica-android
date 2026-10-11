@@ -14,9 +14,12 @@
  * FILE by workspace instead, so a comment id from one workspace can never
  * fold a row in another even if the ids were to collide.
  *
- * Only `isCollapsed` / `toggle` are ported. Web also exposes `collapseAll` /
- * `expandAll`, driven by its "collapse resolved thread" bar; mobile has no
- * such control, and adding one would be a new surface rather than parity.
+ * Only `isCollapsed` / `toggle` were ported at first. Web also exposes
+ * `collapseAll` / `expandAll`, driven by its command palette's fold/unfold-all
+ * rows, and mobile had no control that reached them. This round adds both,
+ * because the same two rows now exist here (`lib/search-commands.ts`) — the
+ * search panel has a header entry on the issue detail page, so those commands
+ * are reachable instead of dead.
  */
 import { useEffect } from "react";
 import { create } from "zustand";
@@ -36,6 +39,10 @@ interface CommentCollapseState {
   hydrate: (wsId: string) => Promise<void>;
   isCollapsed: (wsId: string, issueId: string, commentId: string) => boolean;
   toggle: (wsId: string, issueId: string, commentId: string) => void;
+  /** Replace the issue's folded set with `commentIds` (fold-all). */
+  collapseAll: (wsId: string, issueId: string, commentIds: readonly string[]) => void;
+  /** Clear the issue's folded set (unfold-all). */
+  expandAll: (wsId: string, issueId: string) => void;
 }
 
 /** Serialize file writes so a burst of folds can't interleave. */
@@ -92,6 +99,34 @@ export const useCommentCollapseStore = create<CommentCollapseState>((set, get) =
       const next = { ...current };
       if (nextList.length === 0) delete next[issueId];
       else next[issueId] = nextList;
+      persist(wsId, next);
+      return { byWorkspace: { ...s.byWorkspace, [wsId]: next } };
+    }),
+
+  // Web's `collapseAll` (packages/core/issues/stores/comment-collapse-store.ts):
+  // the folded set is REPLACED, not merged — a fold-all means "exactly these
+  // rows are folded". An empty id list therefore clears the issue's entry, so
+  // an issue with no comments keeps no state (same rule as a full unfold).
+  // Ids are de-duplicated because the caller's source is a timeline that could
+  // repeat one.
+  collapseAll: (wsId, issueId, commentIds) =>
+    set((s) => {
+      const current = s.byWorkspace[wsId] ?? {};
+      const next = { ...current };
+      const unique = [...new Set(commentIds)];
+      if (unique.length === 0) delete next[issueId];
+      else next[issueId] = unique;
+      persist(wsId, next);
+      return { byWorkspace: { ...s.byWorkspace, [wsId]: next } };
+    }),
+
+  // Web's `expandAll`: drop the issue's entry outright.
+  expandAll: (wsId, issueId) =>
+    set((s) => {
+      const current = s.byWorkspace[wsId] ?? {};
+      if (!(issueId in current)) return s;
+      const next = { ...current };
+      delete next[issueId];
       persist(wsId, next);
       return { byWorkspace: { ...s.byWorkspace, [wsId]: next } };
     }),

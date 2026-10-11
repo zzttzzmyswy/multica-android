@@ -34,6 +34,7 @@ import type { Autopilot } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
+import { HeaderSearchGroup } from "@/components/ui/header-search-button";
 import { MultiSelectSheet } from "@/components/agent/multi-select-sheet";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { WorkspaceWakeupsTable } from "@/components/autopilot/workspace-wakeups-table";
@@ -258,19 +259,23 @@ export default function AutopilotsPage() {
     // autopilot, 任务唤醒 adds a wakeup, and the two land on different routes.
     if (tab === "wakeups") {
       return (
-        <IconButton
-          name="add"
-          onPress={() => setWakeupCreateOpen(true)}
-          accessibilityLabel={t("autopilots.wakeups.create")}
-        />
+        <HeaderSearchGroup>
+          <IconButton
+            name="add"
+            onPress={() => setWakeupCreateOpen(true)}
+            accessibilityLabel={t("autopilots.wakeups.create")}
+          />
+        </HeaderSearchGroup>
       );
     }
     return (
-      <IconButton
-        name="add"
-        onPress={() => router.push(`/${wsSlug}/more/autopilots/new`)}
-        accessibilityLabel={t("autopilots.new.title")}
-      />
+      <HeaderSearchGroup>
+        <IconButton
+          name="add"
+          onPress={() => router.push(`/${wsSlug}/more/autopilots/new`)}
+          accessibilityLabel={t("autopilots.new.title")}
+        />
+      </HeaderSearchGroup>
     );
   }, [wsSlug, t, tab]);
 

@@ -42,6 +42,16 @@ describe("search i18n", () => {
     "search.commands.switchToLight": "切换到浅色主题",
     "search.commands.switchToDark": "切换到深色主题",
     "search.commands.useSystemTheme": "跟随系统主题",
+    // Iteration 228 — the four issue-scoped commands and their two toasts,
+    // taken from web's own zh-Hans bundle (packages/views/locales/zh-Hans/
+    // search.json) so the two bundles cannot drift on strings the user sees
+    // on both platforms.
+    "search.commands.copyIssueLink": "复制任务链接",
+    "search.commands.copyIdentifier": "复制标识符（{{identifier}}）",
+    "search.commands.foldAllComments": "收起全部评论",
+    "search.commands.unfoldAllComments": "展开全部评论",
+    "search.toast.linkCopied": "已复制链接",
+    "search.toast.copiedIdentifier": "已复制 {{identifier}}",
   };
 
   it("resolves every key in both locales with a real zh translation", () => {
