@@ -124,6 +124,12 @@ import {
   resolveSessionAgent,
 } from "@/lib/chat-session-agent";
 import { chatProjectContextUnsupported } from "@/lib/chat-project-context";
+import { canCustomizeConversationStarters } from "@multica/core/agents";
+import {
+  FOCUS_CONVERSATION_STARTERS,
+  canEditAgentOnMobile,
+} from "@/lib/conversation-starters-mobile";
+import { serverConfigOptions } from "@/data/queries/config";
 import { useTranslation } from "@/lib/i18n/react";
 
 export default function ChatTab() {
@@ -320,6 +326,36 @@ export default function ChatTab() {
     }
     return availableAgents[0] ?? null;
   }, [selectedAgentId, availableAgents, activeSession, agents]);
+
+  // Conversation starters (MUL-6629): whether THIS viewer gets offered a way
+  // to edit the active agent's suggestions. Three independent reasons to stay
+  // silent, all owned by `canCustomizeConversationStarters` — no agent or an
+  // archived one, a backend that does not persist starters, or a viewer who
+  // may not edit this agent. The config read fails closed, so an older server
+  // simply never grows the affordance.
+  const { data: serverConfig } = useQuery(serverConfigOptions());
+  const canCustomizeStarters = canCustomizeConversationStarters(currentAgent, {
+    conversationStartersSupported:
+      serverConfig?.agent_conversation_starters_supported === true,
+    canEditAgent: canEditAgentOnMobile({
+      agent: currentAgent,
+      currentUserId: userId,
+      currentRole: memberRole,
+    }),
+  });
+  const handleCustomizeStarters = useCallback(() => {
+    if (!currentAgent || !wsSlug) return;
+    router.push({
+      pathname: "/[workspace]/more/agents/[id]/edit",
+      params: {
+        workspace: wsSlug,
+        id: currentAgent.id,
+        // Lands the form ON the starters block rather than at the top of a
+        // long page — the whole point of the link is to reach that setting.
+        focus: FOCUS_CONVERSATION_STARTERS,
+      },
+    });
+  }, [currentAgent, wsSlug]);
 
   // Retired agent: the conversation is read-only history.
   const sessionAgentArchived = isAgentArchived(currentAgent);
@@ -734,9 +770,13 @@ export default function ChatTab() {
           messages={visibleMessages}
           loading={messagesLoading}
           hasSessions={sessions.length > 0}
+          agent={currentAgent}
           agentName={currentAgent?.name}
           sessionTitle={activeSession?.title}
           onPickPrompt={handlePickPrompt}
+          onCustomizeStarters={
+            canCustomizeStarters ? handleCustomizeStarters : null
+          }
           onQuickAction={handleQuickAction}
           quickActionsDisabled={sending || disabled}
           pendingTask={pendingTask}

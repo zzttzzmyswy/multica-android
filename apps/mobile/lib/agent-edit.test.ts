@@ -6,6 +6,7 @@ const draft = (overrides: Partial<AgentDraft> = {}): AgentDraft => ({
   name: "Fast Codex",
   description: "Ships quickly",
   instructions: "Be quick",
+  conversationStarters: [],
   avatarUrl: null,
   runtimeId: "runtime-1",
   model: "gpt-5.6-sol",

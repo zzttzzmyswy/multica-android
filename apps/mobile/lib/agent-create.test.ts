@@ -12,6 +12,7 @@ const EMPTY_DRAFT: AgentDraft = {
   name: "",
   description: "",
   instructions: "",
+  conversationStarters: [],
   avatarUrl: null,
   runtimeId: "",
   model: "",

@@ -7,34 +7,62 @@
  *   - first-time (the workspace has never started a chat) → educate. Tell
  *     the user what chat is for; don't surface starter prompts yet, they
  *     presume context the user doesn't have.
- *   - returning (at least one prior session exists) → starter prompts.
- *     Three taps, three common workflows; tapping prefills the composer
- *     draft so the user can edit before sending.
+ *   - returning (at least one prior session exists) → the agent's starter
+ *     prompts.
  *
- * Copy mirrors the web `chat.json` namespace 1:1. Mobile doesn't have
- * i18n yet so the strings are inlined in English — when mobile adopts
- * i18n the lookup keys (`empty_state.first_time_title` etc.) are already
- * established on the web side, so the migration is a literal
- * key-by-key swap.
+ * WHOSE prompts those are is the whole point (MUL-6629): they come from the
+ * SELECTED AGENT's `conversation_starters` when its author configured any, and
+ * from the localized defaults only when it did not. Until this iteration the
+ * screen rendered the same three hard-coded strings for every agent, so on any
+ * agent that HAD been configured the phone showed buttons nobody wrote —
+ * plausible-looking ones, which is worse than an obviously empty state.
+ * `selectConversationStarters` owns that decision; the agent editor's preview
+ * reads the same helper, so what an author sees there is what ships here.
+ *
+ * Tapping one prefills the composer draft so the user can edit before sending.
+ *
+ * The three defaults are the web `chat.json` `conversation_starters.*`
+ * sentences verbatim (`chat.starters.*` here), so a reader on either client is
+ * offered the same three suggestions in the same words. The surrounding
+ * empty-state copy keeps its own `empty_state.*` lineage from web.
  */
 import { View } from "react-native";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
+import { ConversationStarterList } from "@/components/chat/conversation-starter-list";
+import { selectConversationStarters } from "@multica/core/agents";
+import type { Agent } from "@multica/core/types";
+import { fallbackConversationStarters } from "@/lib/conversation-starters-mobile";
 import { useTranslation } from "@/lib/i18n/react";
 
-const STARTER_PROMPTS: { icon: string; textKey: string }[] = [
-  { icon: "📋", textKey: "chat.prompt1" },
-  { icon: "📝", textKey: "chat.prompt2" },
-  { icon: "💡", textKey: "chat.prompt3" },
-];
+/**
+ * Emoji per fallback row, keyed by the row's index. The configured rows carry
+ * no emoji: they are the author's own words and decorating them would be
+ * editorialising on their copy. The defaults are ours, so they get ours.
+ */
+const STARTER_ICONS = ["📋", "📝", "💡"];
 
 interface Props {
   hasSessions: boolean;
+  /** The agent this empty state belongs to. Null while none is resolved —
+   *  the defaults still render, since the composer is usable either way. */
+  agent?: Agent | null;
   agentName?: string;
   onPickPrompt: (text: string) => void;
+  /** Opens the agent editor on its starters, or null to hide the affordance.
+   *  The CONTAINER resolves this (chat screen reads the permission and the
+   *  backend capability), so this component stays presentational and a reader
+   *  never gets a row that leads somewhere they cannot write. */
+  onCustomizeStarters?: (() => void) | null;
 }
 
-export function ChatEmptyState({ hasSessions, agentName, onPickPrompt }: Props) {
+export function ChatEmptyState({
+  hasSessions,
+  agent = null,
+  agentName,
+  onPickPrompt,
+  onCustomizeStarters = null,
+}: Props) {
   const { t } = useTranslation();
 
   // First-time experience: educate before suggesting actions. Starter
@@ -69,6 +97,13 @@ export function ChatEmptyState({ hasSessions, agentName, onPickPrompt }: Props) 
   const title = agentName
     ? t("chat.welcomeAgent", { name: agentName })
     : t("chat.welcomeBack");
+  // The author's rows when they configured any, ours when they didn't. A
+  // half-filled stored row is filtered out by the resolver rather than
+  // rendered as a blank button — the same treatment web gives it.
+  const { starters, isFallback } = selectConversationStarters(
+    agent?.conversation_starters,
+    fallbackConversationStarters(t),
+  );
   return (
     <View className="flex-1 items-center justify-center px-6 py-8 gap-5">
       <View className="items-center gap-1">
@@ -79,25 +114,25 @@ export function ChatEmptyState({ hasSessions, agentName, onPickPrompt }: Props) 
           {t("chat.tryAsking")}
         </Text>
       </View>
-      <View className="w-full max-w-xs gap-2">
-        {STARTER_PROMPTS.map((p) => {
-          const promptText = t(p.textKey);
-          return (
-            <Button
-              key={p.textKey}
-              variant="outline"
-              onPress={() => onPickPrompt(promptText)}
-              className="h-auto justify-start px-3 py-2.5"
-              accessibilityLabel={promptText}
-            >
-              <Text className="text-body text-foreground">
-                <Text className="text-body">{p.icon}  </Text>
-                {promptText}
-              </Text>
-            </Button>
-          );
-        })}
+      <View className="w-full max-w-xs">
+        <ConversationStarterList
+          starters={starters}
+          icons={isFallback ? STARTER_ICONS : undefined}
+          onPick={onPickPrompt}
+        />
       </View>
+      {onCustomizeStarters ? (
+        <Button
+          variant="ghost"
+          onPress={onCustomizeStarters}
+          className="h-auto px-2 py-1"
+          accessibilityLabel={t("chat.customizeStarters")}
+        >
+          <Text className="text-caption text-muted-foreground">
+            {t("chat.customizeStarters")}
+          </Text>
+        </Button>
+      ) : null}
     </View>
   );
 }

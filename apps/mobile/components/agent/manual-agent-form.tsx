@@ -57,7 +57,9 @@ import {
   applyDraftRuntimeChange,
   buildCreateAgentRequest,
   buildUpdateAgentRequest,
+  conversationStartersWithinLimits,
   seedDraftFromAgent,
+  selectConversationStarters,
   type AgentDraft,
 } from "@multica/core/agents";
 import { runtimeDisplayLabel } from "@multica/core/runtimes";
@@ -70,12 +72,14 @@ import { AutosizeTextArea } from "@/components/ui/autosize-textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { AgentEmojiPickerSheet } from "@/components/agent/agent-emoji-picker-sheet";
+import { ConversationStartersEditor } from "@/components/agent/conversation-starters-editor";
 import { RuntimePickerSheet } from "@/components/agent/runtime-picker-sheet";
 import { ModelPickerSheet } from "@/components/agent/model-picker-sheet";
 import { MultiSelectSheet } from "@/components/agent/multi-select-sheet";
 import { agentCreateGate, classifyAgentCreateError, resolveDuplicateSeed, usableRuntimes } from "@/lib/agent-create";
 import { catalogRead } from "@/lib/catalog-read";
 import { agentEditGate } from "@/lib/agent-edit";
+import { fallbackConversationStarters } from "@/lib/conversation-starters-mobile";
 import { agentSquadJoin } from "@/lib/agent-squad-join";
 import { useAddSquadMember } from "@/data/mutations/squads";
 import {
@@ -91,6 +95,7 @@ import {
   useUpdateAgent,
 } from "@/data/mutations/agents";
 import { memberListOptions } from "@/data/queries/members";
+import { serverConfigOptions } from "@/data/queries/config";
 import { runtimeListOptions, runtimeModelsOptions } from "@/data/queries/runtimes";
 import { skillListOptions } from "@/data/queries/skills";
 import { useWorkspaceStore } from "@/data/workspace-store";
@@ -116,6 +121,7 @@ export function ManualAgentForm({
   agent,
   duplicateSource,
   squadId,
+  onFocusStartersLayout,
 }: {
   agent?: Agent | null;
   /** When set, the form starts in duplicate mode: the create draft is seeded
@@ -128,6 +134,12 @@ export function ManualAgentForm({
    *  new agent to the squad (best-effort — a failed join never fails the
    *  create; lib/agent-squad-join.ts). */
   squadId?: string | null;
+  /** The chat empty state's "customize starters" deep link (`?focus=...`).
+   *  Reports the starters block's offset within the scroll content ONCE, so
+   *  the host ScrollView can bring it into view. Web scrolls and flashes the
+   *  block for the same reason: the edit form is long, and landing at the top
+   *  of it means the reader has to hunt for the thing they asked to edit. */
+  onFocusStartersLayout?: (offsetY: number) => void;
 }) {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
@@ -279,6 +291,25 @@ export function ManualAgentForm({
   const updateAgent = useUpdateAgent(agent?.id ?? "");
   const setSkills = useSetAgentSkills(agent?.id ?? "");
   const addSquadMember = useAddSquadMember(squadId ?? "");
+
+  // Conversation starters (MUL-6629). The capability decides whether the
+  // editor renders at all; the preview resolves through the same helper the
+  // chat empty state uses, so an author previews exactly what ships.
+  const { data: serverConfig } = useQuery(serverConfigOptions());
+  const conversationStartersSupported =
+    serverConfig?.agent_conversation_starters_supported === true;
+  const startersPreview = useMemo(
+    () =>
+      selectConversationStarters(
+        draft.conversationStarters,
+        fallbackConversationStarters(t),
+      ),
+    [draft.conversationStarters, t],
+  );
+  const startersReady =
+    !conversationStartersSupported ||
+    conversationStartersWithinLimits(draft.conversationStarters);
+
   const gate = isEdit
     ? agentEditGate(draft)
     : agentCreateGate(draft, selectedRuntime, currentUserId);
@@ -290,6 +321,7 @@ export function ManualAgentForm({
     !gate.runtimeMissing &&
     !gate.accessInvalid &&
     !gate.descriptionOverLimit &&
+    startersReady &&
     nameError == null;
   const skillsChanged =
     isEdit && (draft.skillIds.size !== initialSkills.size || ![...draft.skillIds].every((id) => initialSkills.has(id)));
@@ -336,6 +368,11 @@ export function ManualAgentForm({
           t("agents.new.failedTitle"),
           t("agents.new.accessMembersRequired"),
         );
+      } else if (!startersReady) {
+        // A half-filled row is the one gate the inline hint cannot carry on
+        // its own: the offending field may be scrolled out of view, and the
+        // old behaviour (silently dropping the row) is what this replaces.
+        Alert.alert(t("agents.new.failedTitle"), t("agents.starters.incomplete"));
       }
       return;
     }
@@ -349,6 +386,9 @@ export function ManualAgentForm({
             draft,
             runtimeId: draft.runtimeId,
             includeAccess: canEditAccess,
+            // An older server drops the field; sending it there could only
+            // clear a list this build never showed the author.
+            includeConversationStarters: conversationStartersSupported,
           }),
         );
         if (skillsChanged) {
@@ -410,6 +450,10 @@ export function ManualAgentForm({
     duplicateSource,
     canEditAccess,
     skillsChanged,
+    // `startersReady` gates the save and the alert below picks the starters
+    // message when it is the reason we stopped.
+    startersReady,
+    conversationStartersSupported,
     wsSlug,
     squadId,
     createAgent,
@@ -524,6 +568,29 @@ export function ManualAgentForm({
           className="border border-border rounded-md px-3 py-2 min-h-[120px] font-mono text-body leading-6"
         />
       </View>
+
+      {/* Conversation starters (MUL-6629). Rendered only when the deployment
+          persists them — on an older server a save here would be dropped, so
+          the surface does not exist rather than existing and lying. */}
+      {conversationStartersSupported ? (
+        <View
+          onLayout={(event) => {
+            // Reported once per mount; the host decides whether a focus
+            // request is pending. Layout-only (no visual change), and absent
+            // when no callback is passed, so every other entry point into
+            // this form renders the identical tree.
+            onFocusStartersLayout?.(event.nativeEvent.layout.y);
+          }}
+        >
+          <ConversationStartersEditor
+            value={draft.conversationStarters}
+            onChange={(next) => set("conversationStarters", next)}
+            preview={startersPreview.starters}
+            previewIsFallback={startersPreview.isFallback}
+            disabled={isSubmitting}
+          />
+        </View>
+      ) : null}
 
       <View className="gap-1.5">
         <FieldLabel text={t("agents.new.skillsLabel")} />

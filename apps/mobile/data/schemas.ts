@@ -1211,6 +1211,11 @@ const AgentInvocationTargetSchema: z.ZodType<AgentInvocationTarget> = z
   })
   .loose();
 
+export const AgentConversationStarterSchema = z.object({
+  label: z.string().default(""),
+  prompt: z.string().default(""),
+});
+
 // Agent schema is loose on every enum / structural field — the agent table is
 // where new modes/visibilities/statuses get added most often. We need only id,
 // name, avatar_url, and a couple of flags for the assignee picker + chat
@@ -1223,6 +1228,13 @@ export const AgentSchema: z.ZodType<Agent> = z.object({
   name: z.string().default(""),
   description: z.string().default(""),
   instructions: z.string().default(""),
+  // Conversation starters (MUL-6629): the suggestions a new chat offers.
+  // Before this the field was simply not declared, so zod's object behaviour
+  // dropped it and EVERY agent looked unconfigured — the chat empty state then
+  // rendered the same three hard-coded prompts regardless of what its author
+  // had written. Defaults to `[]`, matching a server that has never had any
+  // set; `selectConversationStarters` owns the fallback decision.
+  conversation_starters: z.array(AgentConversationStarterSchema).default([]),
   avatar_url: z.string().nullable().default(null),
   runtime_mode: z.string().catch("daemon") as unknown as z.ZodType<
     Agent["runtime_mode"]
@@ -2659,6 +2671,7 @@ export interface AppConfigResponse {
   vcs_integration_available?: boolean;
   feature_flags?: Record<string, boolean>;
   comment_delete_keep_replies_supported?: boolean;
+  agent_conversation_starters_supported?: boolean;
   server_version?: string;
 }
 
@@ -2689,6 +2702,12 @@ export const AppConfigSchema = z
     // closed — see `lib/comment-deletion.ts`.
     comment_delete_keep_replies_supported:
       BooleanWithDefaultSchema(false).optional(),
+    // Deployment capability (MUL-6629): the server persists per-agent
+    // conversation starters and answers `conversation_starters` on reads.
+    // Fails closed — an older server that omits it gets no starter editor and
+    // no deep link into one, rather than a surface whose save is dropped.
+    agent_conversation_starters_supported:
+      BooleanWithDefaultSchema(false).optional(),
     server_version: z.string().optional(),
   })
   .loose();
@@ -2704,6 +2723,7 @@ export const EMPTY_APP_CONFIG: AppConfigResponse = {
   vcs_integration_available: false,
   feature_flags: {},
   comment_delete_keep_replies_supported: false,
+  agent_conversation_starters_supported: false,
 };
 
 // ── Feedback (iteration-100) ───────────────────────────────────────────────

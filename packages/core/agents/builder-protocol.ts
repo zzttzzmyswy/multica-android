@@ -1,5 +1,6 @@
 import type { RuntimeDevice, RuntimeModel } from "../types";
 import type { AgentDraft } from "./draft";
+import { normalizeConversationStarters } from "./conversation-starters";
 
 /**
  * Wire format between the Agent Creation Studio and the hidden builder agent.
@@ -22,6 +23,7 @@ export interface BuilderDraftPayload {
   name?: unknown;
   description?: unknown;
   instructions?: unknown;
+  conversation_starters?: unknown;
   model?: unknown;
   skill_ids?: unknown;
   permission_scope?: unknown;
@@ -130,6 +132,7 @@ export function encodeBuilderInput(
           name: draft.name,
           description: draft.description,
           instructions: draft.instructions,
+          conversation_starters: draft.conversationStarters,
           model: draft.model,
           skill_ids: [...draft.skillIds],
           permission_scope: draft.permissionScope,
@@ -244,6 +247,30 @@ export function mergeBuilderDraft(
       ? payload.model
       : current.model;
 
+  // The builder's reply is model-generated, so its starter array is untrusted
+  // input: rows that are not `{label, prompt}` string pairs are dropped, and
+  // the survivors are trimmed and capped by the same helper the form and the
+  // wire use. An array that yields nothing complete leaves the current list
+  // alone rather than clearing it — "the model sent garbage" is not the same
+  // statement as "the user wants no suggestions", and only the latter should
+  // ever empty the field.
+  const startCandidates = Array.isArray(payload.conversation_starters)
+    ? payload.conversation_starters.filter(
+        (item): item is { label: string; prompt: string } =>
+          !!item &&
+          typeof item === "object" &&
+          typeof (item as { label?: unknown }).label === "string" &&
+          typeof (item as { prompt?: unknown }).prompt === "string",
+      )
+    : null;
+  const builderStarters = startCandidates
+    ? normalizeConversationStarters(startCandidates)
+    : [];
+  const conversationStarters =
+    startCandidates && builderStarters.length > 0
+      ? builderStarters
+      : current.conversationStarters;
+
   return {
     ...current,
     name: typeof payload.name === "string" ? payload.name : current.name,
@@ -255,6 +282,7 @@ export function mergeBuilderDraft(
       typeof payload.instructions === "string"
         ? payload.instructions
         : current.instructions,
+    conversationStarters,
     model,
     // The builder can move the model, which invalidates whatever thinking /
     // speed the user picked for the previous one. It never sets these two

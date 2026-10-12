@@ -10,6 +10,7 @@ const draft = (): AgentDraft => ({
   name: "Release manager",
   description: "Ships carefully",
   instructions: "# Role\nShip.",
+  conversationStarters: [{ label: "Ship it", prompt: "Cut the release." }],
   avatarUrl: "🚀",
   runtimeId: "runtime-1",
   model: "gpt-5.6-sol",
