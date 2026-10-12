@@ -27,9 +27,19 @@
  * the iteration-27 scope; the server remains the real gate for who may
  * create (any member may create server-side, but mobile keeps the surface
  * admin-facing per MYS-304).
+ *
+ * Row actions (iteration 231, MYS-2102): each manageable row gained the kebab
+ * web's `SquadRowActions` renders — archive. The gate is web's per-row rule
+ * (`isWorkspaceAdmin || squad.creator_id === currentUser.id`, MUL-4223), NOT a
+ * screen-level `isAdmin`: this deployment's single squad was created by the
+ * workspace owner so the two coincide today, which is exactly why the
+ * distinction has to be written down. The items live in
+ * `lib/squad-row-actions.ts`; the write lives here so the kebab and the detail
+ * page share `useDeleteSquad`, and both confirm through the same
+ * `squads.archive.*` copy web's `ArchiveSquadDialog` uses.
  */
 import { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, ScrollView, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, Pressable, ScrollView, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, router } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -40,7 +50,9 @@ import { IconButton } from "@/components/ui/icon-button";
 import { HeaderSearchGroup } from "@/components/ui/header-search-button";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { MultiSelectSheet } from "@/components/agent/multi-select-sheet";
+import { SquadRowMenu } from "@/components/squad/squad-row-menu";
 import { squadListOptions } from "@/data/queries/squads";
+import { useDeleteSquad } from "@/data/mutations/squads";
 import { memberListOptions } from "@/data/queries/members";
 import { agentListAllOptions } from "@/data/queries/agents";
 import { useWorkspaceStore } from "@/data/workspace-store";
@@ -104,6 +116,68 @@ export default function SquadsPage() {
   const currentMember = members.data?.find((m) => m.user_id === user?.id);
   const isAdmin =
     currentMember?.role === "owner" || currentMember?.role === "admin";
+
+  // ── Row actions (iteration 231, MYS-2102) ────────────────────────────────
+  // The archive write lives HERE so the kebab and the detail page share one
+  // mutation and one confirm — web's split exactly, where `ArchiveSquadDialog`
+  // is defined once and mounted by both `SquadRowActions` and the detail page's
+  // inspector. No restore: the server has no un-archive endpoint.
+  const deleteSquad = useDeleteSquad();
+
+  const openDetail = useCallback(
+    (squad: Squad) => {
+      if (wsSlug) router.push(`/${wsSlug}/more/squads/${squad.id}`);
+    },
+    [wsSlug],
+  );
+
+  const handleArchive = useCallback(
+    (row: Squad) => {
+      if (deleteSquad.isPending) return;
+      // Web's `archive_dialog.*` verbatim — title, the routing-transfer
+      // description, and the literal "this can't be undone". The description is
+      // the load-bearing half: archiving moves this squad's issues to its
+      // leader, and there is no way back.
+      Alert.alert(
+        t("squads.archive.title"),
+        t("squads.archive.description", { name: row.name }),
+        [
+          { text: t("squads.archive.cancel"), style: "cancel" },
+          {
+            text: t("squads.archive.confirm"),
+            style: "destructive",
+            onPress: () =>
+              deleteSquad.mutate(row.id, {
+                // Web toasts `archive_dialog.success` on completion, so this
+                // round surfaces it — the one success alert among this round's
+                // four surfaces. The three siblings let the row's vanishing
+                // speak, which is enough for a delete: the row was the whole
+                // subject. Archive is the case where it is not — the server
+                // also reassigns every issue this squad held to its leader (and
+                // repoints its autopilots), none of which is visible from the
+                // list, so "it worked" is worth stating explicitly for an
+                // irreversible action with off-screen effects. The copy does
+                // not itself explain the reassignment — the confirm's
+                // description does, before the fact, which is where it belongs.
+                //
+                // Web additionally renders an `archiving` pending state; a
+                // native Alert cannot, and `deleteSquad.isPending` above
+                // already blocks a double submit.
+                onSuccess: () => Alert.alert(t("squads.archive.success")),
+                onError: (err) =>
+                  Alert.alert(
+                    t("squads.detail.archiveFailed"),
+                    err instanceof Error
+                      ? err.message
+                      : t("common.unknownError"),
+                  ),
+              }),
+          },
+        ],
+      );
+    },
+    [deleteSquad, t],
+  );
 
   const [scope, setScope] = useState<SquadsScope>("mine");
   const [filterOpen, setFilterOpen] = useState(false);
@@ -315,9 +389,10 @@ export default function SquadsPage() {
                   <SquadRow
                     squad={item}
                     leaderName={getName("agent", item.leader_id)}
-                    onPress={() => {
-                      if (wsSlug) router.push(`/${wsSlug}/more/squads/${item.id}`);
-                    }}
+                    currentRole={currentMember?.role}
+                    currentUserId={user?.id}
+                    onPress={() => openDetail(item)}
+                    onArchive={() => handleArchive(item)}
                   />
                 )}
                 refreshing={isRefetching}
@@ -650,11 +725,20 @@ function SquadFilterSheet({
 function SquadRow({
   squad,
   leaderName,
+  currentRole,
+  currentUserId,
   onPress,
+  onArchive,
 }: {
   squad: Squad;
   leaderName: string;
+  /** Role of the current user's own workspace membership row — the admin half
+   *  of web's per-row gate. */
+  currentRole: "owner" | "admin" | "member" | null | undefined;
+  /** Current user's User UUID — the creator half (MUL-4223). */
+  currentUserId: string | null | undefined;
   onPress: () => void;
+  onArchive: () => void;
 }) {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
@@ -707,6 +791,19 @@ function SquadRow({
         {!archived ? (
           <Ionicons name="chevron-forward" size={14} color={muted} />
         ) : null}
+        {/* Row actions (MYS-2102). Web renders this cell's menu only when
+            `isWorkspaceAdmin || squad.creator_id === currentUser.id`
+            (`squads-page.tsx:1020-1022`) — a per-ROW gate, not the
+            screen-level `isAdmin` the header "+" uses, which is why a member's
+            own squads get a kebab and nobody else's do. The trigger claims the
+            touch responder, so opening the sheet never falls through to the
+            row's own onPress. */}
+        <SquadRowMenu
+          squad={squad}
+          currentRole={currentRole}
+          currentUserId={currentUserId}
+          onArchive={onArchive}
+        />
       </View>
     </Pressable>
   );

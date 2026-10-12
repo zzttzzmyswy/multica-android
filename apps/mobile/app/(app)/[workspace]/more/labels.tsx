@@ -14,10 +14,18 @@
  * Pull-to-refresh + friendly empty/loading/error states, matching the
  * squads/members pages. The "+" header action opens the create form bound to
  * the scope on screen.
+ *
+ * Row actions (iteration 231, MYS-2102): each row gained the kebab web's row
+ * menu renders — edit / delete — so renaming or deleting one of this
+ * deployment's three labels no longer means opening it first. The items live in
+ * `lib/label-row-actions.ts` (which records why this surface, unlike the
+ * properties tab, has NO permission gate); the writes live here so the kebab
+ * and the edit form share them.
  */
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   TextInput,
@@ -32,13 +40,16 @@ import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { HeaderSearchGroup } from "@/components/ui/header-search-button";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import { LabelRowMenu } from "@/components/label/label-row-menu";
 import { labelScopeOptions } from "@/data/queries/labels";
+import { useDeleteLabel } from "@/data/mutations/labels";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import {
   filterLabels,
+  labelScopeOf,
   LABEL_SCOPES,
   type LabelScope,
 } from "@/lib/labels-display";
@@ -68,6 +79,66 @@ export default function LabelsPage() {
   const scopeLabel = t(`labels.scope.${scope}`);
   const searching = query.trim().length > 0;
   const showEmpty = !isLoading && !error && visible.length === 0;
+
+  // ── Row actions (iteration 231, MYS-2102) ────────────────────────────────
+  // The delete write lives HERE, not in the menu: the edit form deletes through
+  // this same mutation, so the kebab and the form share one implementation and
+  // one failure copy — web's split, where `DeleteLabelDialog` is defined once
+  // and mounted by both entry points.
+  const deleteLabel = useDeleteLabel();
+
+  /**
+   * The edit route's push, extracted so the kebab and the row tap cannot drift
+   * onto different URLs. `scope` is irrelevant here — `labels/[id].tsx` looks
+   * the label up in BOTH catalogs — but the row tap already carried only the id.
+   */
+  const openEdit = useCallback(
+    (label: Label) => {
+      if (wsSlug) router.push(`/${wsSlug}/more/labels/${label.id}`);
+    },
+    [wsSlug],
+  );
+
+  /**
+   * The delete confirm, worded exactly as the edit form's own delete row —
+   * the same `labels.deleteTitle` / `labels.deleteMessage` keys, including the
+   * `{{count}}` of resources the label is attached to. That count is the
+   * load-bearing half: deletion drops every issue and skill assignment
+   * atomically, so the sentence says so.
+   */
+  const handleDelete = useCallback(
+    (row: Label) => {
+      if (deleteLabel.isPending) return;
+      Alert.alert(
+        t("labels.deleteTitle"),
+        t("labels.deleteMessage", {
+          name: row.name,
+          count: row.usage_count ?? 0,
+        }),
+        [
+          { text: t("common.cancel"), style: "cancel" },
+          {
+            text: t("labels.delete"),
+            style: "destructive",
+            onPress: () =>
+              deleteLabel.mutate(
+                { id: row.id, resource_type: labelScopeOf(row) },
+                {
+                  onError: (err) =>
+                    Alert.alert(
+                      t("labels.deleteFailed"),
+                      err instanceof Error
+                        ? err.message
+                        : t("common.unknownError"),
+                    ),
+                },
+              ),
+          },
+        ],
+      );
+    },
+    [deleteLabel, t],
+  );
 
   const changeScope = useCallback((next: LabelScope) => {
     setScope(next);
@@ -177,9 +248,9 @@ export default function LabelsPage() {
             renderItem={({ item }) => (
               <LabelRow
                 label={item}
-                onPress={() => {
-                  if (wsSlug) router.push(`/${wsSlug}/more/labels/${item.id}`);
-                }}
+                onPress={() => openEdit(item)}
+                onEdit={() => openEdit(item)}
+                onDelete={() => handleDelete(item)}
               />
             )}
             refreshing={isRefetching}
@@ -194,9 +265,13 @@ export default function LabelsPage() {
 function LabelRow({
   label,
   onPress,
+  onEdit,
+  onDelete,
 }: {
   label: Label;
   onPress: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
 }) {
   const { colorScheme } = useColorScheme();
   const muted = THEME[colorScheme].mutedForeground;
@@ -230,6 +305,12 @@ function LabelRow({
           </View>
         ) : null}
         <Ionicons name="chevron-forward" size={14} color={muted} />
+        {/* Row actions (MYS-2102). The trigger claims the touch responder, so
+            opening the sheet never falls through to the row's own onPress —
+            tapping elsewhere on the row still navigates. Web renders this
+            unconditionally: labels are workspace vocabulary any member curates,
+            and `labels-tab.tsx` carries no `canManage` at all. */}
+        <LabelRowMenu label={label} onEdit={onEdit} onDelete={onDelete} />
       </View>
     </Pressable>
   );
