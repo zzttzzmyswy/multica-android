@@ -63,6 +63,9 @@ import {
   stepMatch,
   type FindMatch,
 } from "@/lib/issue-find";
+import { activityBlockIndex } from "@/lib/activity-search";
+import { useActorLookup } from "@/data/use-actor-name";
+import { useStatusLabel } from "@/lib/status-options";
 import { resolveCatalogState } from "@/lib/catalog-state";
 import { useTranslation } from "@/lib/i18n/react";
 
@@ -128,23 +131,53 @@ export default function IssueDetail() {
   //
   // The container is web's: title → description → timeline. Title and
   // description are already on the `issue` object (`issueDetailOptions`), so
-  // indexing them adds no request; comments still come from the timeline read
-  // the screen already makes. Together they are the whole of what this screen
-  // renders as prose — see the module docblock for what is deliberately out
-  // (activity rows, the sidebar sections).
+  // indexing them adds no request; comments and activity rows both come from
+  // the timeline read the screen already makes. Together they are the whole of
+  // what this screen renders as text — see the module docblock for what is
+  // deliberately out (the sidebar sections, an activity row's ×N chip and
+  // timestamp).
   //
   // Read off `detail.data` rather than the `issue` alias further down: this
   // memo runs before that `const` is initialised, so touching it here would be
   // a temporal-dead-zone throw on the first render.
   const headerTitle = detail.data?.title ?? "";
   const headerDescription = detail.data?.description ?? null;
+
+  // Activity rows are indexed by the text they DRAW, through the same helper
+  // the row renders from (`lib/activity-search.ts`), so "searched text == drawn
+  // text" cannot drift. Two things make this correct rather than merely cheap:
+  // the helper coalesces internally, so a merged-away entry contributes no
+  // target the list cannot scroll to; and it needs no new request, because the
+  // timeline is already here.
+  //
+  // Both resolvers are memoised at their source: `useActorLookup`'s `getName`
+  // is a `useCallback` on its lookup maps, and `useStatusLabel`'s resolver is a
+  // `useCallback` on the (now memoised) status catalog. That matters — this
+  // memo must rebuild when the workspace member / agent / status lists land, or
+  // the haystack would keep the pre-load "Unknown" fallbacks the rows have
+  // since replaced. The cast is the same one `ActivityRow` makes: the timeline
+  // wire type is a plain string, while the lookup is keyed by the three actor
+  // kinds it knows.
+  const { getName } = useActorLookup();
+  const resolveActorName = useCallback(
+    (type: string | null | undefined, id: string | null | undefined) =>
+      getName(type as "member" | "agent" | "squad" | null | undefined, id),
+    [getName],
+  );
+  const statusLabel = useStatusLabel(wsId);
+  const activityBlocks = useMemo(
+    () => activityBlockIndex(timeline.data, { resolveActorName, statusLabel }),
+    [timeline.data, resolveActorName, statusLabel],
+  );
+
   const searchables = useMemo(
     () =>
-      collectSearchables(timeline.data, {
-        title: headerTitle,
-        description: headerDescription,
-      }),
-    [timeline.data, headerTitle, headerDescription],
+      collectSearchables(
+        timeline.data,
+        { title: headerTitle, description: headerDescription },
+        activityBlocks,
+      ),
+    [timeline.data, headerTitle, headerDescription, activityBlocks],
   );
   const matches = useMemo(
     () => findInTimeline(searchables, findQuery),

@@ -30,12 +30,13 @@ import { Text } from "@/components/ui/text";
 import { StatusIcon } from "@/components/ui/status-icon";
 import { PriorityIcon } from "@/components/ui/priority-icon";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
-import { formatActivity } from "@/lib/format-activity";
+import { activityRowText } from "@/lib/activity-search";
 import { useStatusLabel } from "@/lib/status-options";
 import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { useTimeAgo } from "@/lib/time-ago";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useColorScheme } from "@/lib/use-color-scheme";
+import { HighlightOverlay } from "./highlight-overlay";
 import { THEME } from "@/lib/theme";
 
 function CalendarGlyph({
@@ -117,7 +118,20 @@ function LeadIcon({
   );
 }
 
-export function ActivityRow({ entry }: { entry: TimelineEntry }) {
+export function ActivityRow({
+  entry,
+  highlighted = false,
+}: {
+  entry: TimelineEntry;
+  /** True while an in-page find step is landing on this row. The flash is the
+   *  same affordance the comment rows use, so a reader stepping onto an
+   *  activity sees where they landed rather than having to guess.
+   *
+   *  Until MYS-2109 this row had no highlight prop at all — activities were not
+   *  a find target, so there was nothing to flash. Now that they are, the row
+   *  takes the same bit `CommentCard` does. */
+  highlighted?: boolean;
+}) {
   const { getName } = useActorLookup();
   const { colorScheme } = useColorScheme();
   const timeAgo = useTimeAgo();
@@ -128,39 +142,68 @@ export function ActivityRow({ entry }: { entry: TimelineEntry }) {
     id: string | null | undefined,
   ): string =>
     getName(type as "member" | "agent" | null | undefined, id);
-  const actorName = resolveName(entry.actor_type, entry.actor_id);
-  const verb = formatActivity(entry, resolveName, statusLabel);
+  // The text comes from `lib/activity-search.ts` — the SAME call in-page find's
+  // index makes. Rendering and searching must not be able to drift: if this row
+  // drew its own sentence, find would report words that are not on screen (or
+  // miss ones that are), which is the entire class of bug this row is now part
+  // of. See that module for what is deliberately left out (the ×N chip and the
+  // timestamp).
+  const { actor: actorName, verb } = activityRowText(entry, {
+    resolveActorName: resolveName,
+    statusLabel,
+  });
   const showCoalesceBadge =
     (entry.coalesced_count ?? 1) > 1 &&
     entry.action !== "task_completed" &&
     entry.action !== "task_failed";
 
   return (
-    <View className="flex-row items-center px-4 gap-2">
-      <View className="w-4 items-center justify-center shrink-0">
-        <LeadIcon entry={entry} mutedFg={mutedFg} />
-      </View>
-      <Text
-        className="text-caption text-muted-foreground flex-1"
-        numberOfLines={1}
-      >
-        <Text className="text-caption text-muted-foreground font-medium">
-          {actorName}
-        </Text>
-        {verb ? (
-          <Text className="text-caption text-muted-foreground"> {verb}</Text>
-        ) : null}
-      </Text>
-      {showCoalesceBadge ? (
-        <View className="bg-muted rounded px-1.5 py-0.5 shrink-0">
-          <Text className="text-caption font-medium text-muted-foreground tabular-nums">
-            ×{entry.coalesced_count}
+    <View className="px-4">
+      <View className="rounded-lg">
+        <View className="flex-row items-center gap-2">
+          <View className="w-4 items-center justify-center shrink-0">
+            <LeadIcon entry={entry} mutedFg={mutedFg} />
+          </View>
+          <Text
+            className="text-caption text-muted-foreground flex-1"
+            numberOfLines={1}
+          >
+            <Text className="text-caption text-muted-foreground font-medium">
+              {actorName}
+            </Text>
+            {verb ? (
+              <Text className="text-caption text-muted-foreground"> {verb}</Text>
+            ) : null}
+          </Text>
+          {showCoalesceBadge ? (
+            <View className="bg-muted rounded px-1.5 py-0.5 shrink-0">
+              <Text className="text-caption font-medium text-muted-foreground tabular-nums">
+                ×{entry.coalesced_count}
+              </Text>
+            </View>
+          ) : null}
+          <Text className="text-caption text-muted-foreground shrink-0">
+            {timeAgo(entry.created_at)}
           </Text>
         </View>
-      ) : null}
-      <Text className="text-caption text-muted-foreground shrink-0">
-        {timeAgo(entry.created_at)}
-      </Text>
+        {/* Same overlay and same timing as a comment row (see
+         *  `HighlightOverlay`): one "this is the row you asked for" affordance
+         *  across all three find targets, not a fourth look. */}
+        <ActivityHighlightOverlay active={highlighted} />
+      </View>
     </View>
+  );
+}
+
+/** The activity row's flash. Wash only, no border — closest to the reply row's
+ *  chrome, and for the same reason: an activity is a quiet caption line, and a
+ *  brand border around a one-line caption would shout louder than the content
+ *  it marks. */
+function ActivityHighlightOverlay({ active }: { active: boolean }) {
+  return (
+    <HighlightOverlay
+      active={active}
+      className="absolute inset-0 rounded-lg bg-brand/10"
+    />
   );
 }

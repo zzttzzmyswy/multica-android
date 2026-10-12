@@ -297,7 +297,14 @@ describe("what is not searchable", () => {
     expect(hits([comment("c1", md)], "prose")).toHaveLength(1);
   });
 
-  it("counts no activity rows, which carry no body", () => {
+  it("counts no activity rows when the caller supplies no activity index", () => {
+    // MYS-2109 turned activities INTO a searchable surface, but only through the
+    // index the caller passes in (`lib/activity-search.ts`). A caller that does
+    // not build one gets exactly the previous behaviour — same contract as the
+    // absent `header`: nothing the caller omits can be found. That is what keeps
+    // the timeline-only input this module shipped with honest, and it is why the
+    // activity half is a separate, explicit argument rather than something
+    // `collectSearchables` reaches for on its own.
     const entries = [activity("a1"), comment("c1", "real text")];
     expect(collectSearchables(entries)).toHaveLength(1);
     expect(hits(entries, "status")).toEqual([]);
@@ -507,6 +514,137 @@ describe("the header is part of the container (title + description)", () => {
     );
     expect(found).toHaveLength(1);
     expect(matchTarget(found[0])).toBe("root");
+  });
+});
+
+describe("activity rows are part of the container (MYS-2109)", () => {
+  // The gap this round closes, in the shape the probe measured on the real
+  // deployment: on 39 of 40 sampled issues a status word appears ONLY inside an
+  // activity row, so find answered "no matches" for a word the reader could
+  // plainly read.
+  //
+  // NOTE the fixture text, because it is the detail the round turned on: the row
+  // draws the **localized label** (`In Progress`), never the wire key
+  // (`in_progress`). Searching `in_progress` finds nothing on screen in either
+  // client — the phrase to search is the label, in the reader's locale. See the
+  // pin at the bottom of this block.
+  //
+  // The index is built by `lib/activity-search.ts`, which needs i18n; passing it
+  // in keeps this module — and this Node lane — free of that dependency, which
+  // is why every fixture below hands over a literal map.
+  const RUN = ["Ada", "changed status: Todo → In Progress"];
+  const withActivities = (
+    entries: readonly TimelineEntry[],
+    blocks: Record<string, string[]>,
+    q: string,
+  ) => findInTimeline(collectSearchables(entries, undefined, new Map(Object.entries(blocks))), q);
+
+  it("finds a word that lives only in an activity row", () => {
+    const entries = [
+      activity("a1", "status_changed"),
+      comment("c1", "a comment that never mentions it"),
+    ];
+    // Before this round: 0 hits, while the row drew the word on screen.
+    expect(hits(entries, "In Progress")).toEqual([]);
+    expect(withActivities(entries, { a1: RUN }, "In Progress")).toHaveLength(1);
+  });
+
+  it("targets the activity row's own id, the same channel a comment uses", () => {
+    const found = withActivities([activity("a1")], { a1: RUN }, "In Progress");
+    expect(found).toHaveLength(1);
+    expect(matchTarget(found[0])).toBe("a1");
+  });
+
+  it("indexes the label, not the wire key — the raw key is on no screen", () => {
+    // Pins the distinction above so a future fixture cannot quietly reintroduce
+    // the mistake: `in_progress` is what the SERVER stores and what the status
+    // filter offers, but the row draws `In Progress`. Indexing the key instead
+    // of the label would report matches for text nobody can see.
+    const entries = [activity("a1", "status_changed")];
+    expect(withActivities(entries, { a1: RUN }, "in_progress")).toEqual([]);
+    expect(withActivities(entries, { a1: RUN }, "In Progress")).toHaveLength(1);
+  });
+
+  it("keeps the two text runs in separate blocks, so a query cannot straddle them", () => {
+    // Web draws the actor name and the verb as two sibling <span>s, so its
+    // text-node walk cannot match across that boundary. One joined string would
+    // make mobile MORE permissive than the browser it ports.
+    const blocks = { a1: RUN };
+    expect(withActivities([activity("a1")], blocks, "Ada changed")).toEqual([]);
+    // Each run on its own is found.
+    expect(withActivities([activity("a1")], blocks, "Ada")).toHaveLength(1);
+    expect(withActivities([activity("a1")], blocks, "changed status")).toHaveLength(1);
+  });
+
+  it("walks the timeline in reading order, comments and activities interleaved", () => {
+    const entries = [
+      activity("a1", "created"),
+      comment("c1", "a HIT in a comment"),
+      activity("a2", "status_changed"),
+    ];
+    const found = withActivities(
+      entries,
+      { a1: ["Ada", "a HIT in an activity"], a2: ["Ada", "a HIT in another"] },
+      "a hit",
+    );
+    expect(found.map((m) => m.targetId)).toEqual(["a1", "c1", "a2"]);
+  });
+
+  it("counts every activity hit in the total, and every one has a target", () => {
+    // The counter and the stepper read the same array; a hit counted but not
+    // landable would make `n/m` disagree with how many steps it takes to walk
+    // the matches — the invariant the old exclusion cited and this round keeps.
+    const matches = withActivities(
+      [activity("a1"), activity("a2")],
+      { a1: ["Ada", "hit one"], a2: ["Ada", "hit two"] },
+      "hit",
+    );
+    expect(matches).toHaveLength(2);
+    expect(matches.map((m) => matchTarget(m))).toEqual(["a1", "a2"]);
+    expect(findCounter("hit", matches.length, 1)).toEqual({
+      kind: "count",
+      current: 2,
+      total: 2,
+    });
+  });
+
+  it("ignores an activity the index does not name (a merged-away row)", () => {
+    // Coalescing keeps one row per merged run. A raw entry that renders nothing
+    // must contribute nothing: counting it would promise a step to a row that
+    // does not exist, and the scroll effect would refuse to move.
+    const entries = [activity("merged-away"), activity("survives")];
+    const found = withActivities(entries, { survives: RUN }, "In Progress");
+    expect(found.map((m) => m.targetId)).toEqual(["survives"]);
+  });
+
+  it("skips an empty block rather than counting a blank match", () => {
+    const found = withActivities([activity("a1")], { a1: ["Ada", ""] }, "ada");
+    expect(found).toHaveLength(1);
+    // An empty query still matches nothing, even with an empty block present.
+    expect(withActivities([activity("a1")], { a1: [""] }, "")).toEqual([]);
+  });
+
+  it("does not regress the comment and header halves", () => {
+    // Widening the timeline must not change how anything already searchable is
+    // found or where it lands.
+    const entries = [comment("root", "the SetScreenClientBuffer path")];
+    const found = findInTimeline(
+      collectSearchables(
+        entries,
+        { title: "a title", description: "a description" },
+        new Map([["a1", RUN]]),
+      ),
+      "SetScreenClientBuffer",
+    );
+    expect(found).toHaveLength(1);
+    expect(matchTarget(found[0])).toBe("root");
+  });
+
+  it("stays timeline-only when the caller passes neither header nor index", () => {
+    // The contract this module shipped with, and the one its oldest callers
+    // still use: nothing the caller omits can be found.
+    expect(collectSearchables([activity("a1"), comment("c1", "body")])).toHaveLength(1);
+    expect(collectSearchables([activity("a1")])).toEqual([]);
   });
 });
 

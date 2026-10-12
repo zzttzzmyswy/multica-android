@@ -8,6 +8,7 @@
  * same shape — and surfaces consume the resolved `IssueStatusCatalog` from
  * `useIssueStatuses`.
  */
+import { useMemo } from "react";
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import type { ListIssueStatusesResponse } from "@multica/core/types";
 import { api } from "@/data/api";
@@ -44,14 +45,30 @@ export function issueStatusListOptions(wsId: string | null) {
  * The resolved workspace status catalog. Unloaded/errored states are folded
  * into the catalog's defensive fallbacks — built-in keys always resolve — so
  * surfaces can render with no extra branching.
+ *
+ * MEMOIZED, and that is load-bearing rather than an optimisation. The catalog
+ * carries closures (`entryOf`, `labelOf`, `categoryOf`), so an unmemoized
+ * rebuild hands out a NEW function identity on every render. Anything that
+ * depends on those closures then also rebuilds every render: `useStatusLabel`'s
+ * `useCallback([t, entryOf])` is the one that matters here, because
+ * `lib/issue-find.ts`'s haystack is memoized on the status-label resolver — an
+ * unstable one would re-run the markdown walk on every keystroke, which is
+ * exactly what that memo exists to prevent ("a keystroke re-runs the cheap
+ * scan, not the markdown walk"). The deps below are the values the catalog is
+ * actually built from, so it changes exactly when its content does.
  */
 export function useIssueStatuses(wsId?: string | null): IssueStatusCatalog {
   const storeWsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const resolvedWsId = wsId ?? storeWsId;
   const query = useQuery(issueStatusListOptions(resolvedWsId));
-  return buildIssueStatusCatalog(query.data, {
-    isPending: query.isPending,
-    isError: query.isError,
-    retry: query.refetch,
-  });
+  const { data, isPending, isError, refetch } = query;
+  return useMemo(
+    () =>
+      buildIssueStatusCatalog(data, {
+        isPending,
+        isError,
+        retry: refetch,
+      }),
+    [data, isPending, isError, refetch],
+  );
 }

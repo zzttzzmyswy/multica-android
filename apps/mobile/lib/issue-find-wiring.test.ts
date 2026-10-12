@@ -206,4 +206,85 @@ describe("in-page find wiring", () => {
     // reports a kind rather than a raw pair.
     expect(src).toContain("counter.kind");
   });
+
+  // ── Activity rows (MYS-2109) ────────────────────────────────────────────
+  // The ratchet matters most here. `lib/activity-search.ts` can be perfect and
+  // its tests all green while an activity row stays unfindable, because the
+  // feature only exists once FOUR links are in place: the screen builds the
+  // index, the index reaches `collectSearchables`, the row renders from the same
+  // helper, and the row accepts the highlight. Each is asserted below, so
+  // deleting any one turns this red.
+
+  it("builds the activity index from the timeline the screen already reads", () => {
+    const src = code(ISSUE_SCREEN);
+    // No new request: the timeline query is the only input.
+    expect(src).toMatch(/activityBlockIndex\(timeline\.data,/);
+    expect(src).toContain("activityBlockIndex");
+  });
+
+  it("feeds the activity index into the find haystack", () => {
+    const src = code(ISSUE_SCREEN);
+    // The index must reach `collectSearchables` as its third argument. A helper
+    // that exists but is never handed over is a released feature that does not
+    // exist — the exact failure this file was written for.
+    expect(src).toMatch(
+      /collectSearchables\(\s*timeline\.data,\s*\{[^}]*\},\s*activityBlocks,?\s*\)/,
+    );
+    // And the memo must depend on it, or a late-arriving actor/status list would
+    // leave the haystack holding the pre-load "Unknown" fallbacks.
+    expect(src).toMatch(/\[timeline\.data, headerTitle, headerDescription, activityBlocks\]/);
+  });
+
+  it("resolves activity text through memoised actor and status lookups", () => {
+    const src = code(ISSUE_SCREEN);
+    // Unstable resolvers would rebuild the haystack — and re-run the markdown
+    // walk — on every keystroke, which is precisely what the searchables memo
+    // exists to avoid.
+    expect(src).toContain("useActorLookup()");
+    expect(src).toContain("useStatusLabel(wsId)");
+  });
+
+  it("renders activity rows from the same helper find indexes", () => {
+    // The one-implementation rule. If the row assembled its own sentence, find
+    // could report words that are not on screen (or miss ones that are) — the
+    // bug class this whole round is inside of.
+    //
+    // Asserted as the CALL, not as the identifier: an `import { activityRowText }`
+    // that nothing invokes still satisfies a bare `toContain`, and this project
+    // has already shipped a correct helper with no consumer once. Mutation
+    // testing caught exactly that hole in an earlier draft of this test.
+    const row = code("components/issue/activity-row.tsx");
+    expect(row).toMatch(/activityRowText\(entry,\s*\{/);
+    // The row must read BOTH runs off it, or it is not drawing what find indexes.
+    expect(row).toMatch(/const \{ actor: actorName, verb \} = activityRowText\(/);
+    // …and must NOT reach for the formatter directly, which is how a second
+    // producer would reappear.
+    expect(row).not.toContain("formatActivity");
+  });
+
+  it("lets an activity row carry the find highlight", () => {
+    const timeline = code(TIMELINE);
+    // An activity is a find target now, so it needs the same landing affordance
+    // a comment row has. Without the prop the jump would scroll correctly and
+    // then mark nothing, leaving the reader to guess which row they landed on.
+    expect(timeline).toMatch(
+      /<ActivityRow entry=\{item\.entry\} highlighted=\{highlightedId === item\.entry\.id\}/,
+    );
+    const row = code("components/issue/activity-row.tsx");
+    expect(row).toContain("HighlightOverlay");
+    // One shared overlay implementation across all the flashing surfaces, so
+    // their timing cannot drift apart.
+    expect(row).toMatch(/highlighted\?: boolean/);
+  });
+
+  it("keeps activities out of the header's flash channel", () => {
+    // An activity id is a real uuid and travels `highlightedId`; only the title
+    // and description are sentinels. A regression that routed an activity
+    // through `findHeaderFlash` would make the header flash for a row hit.
+    const timeline = code(TIMELINE);
+    expect(timeline).toMatch(/isHeaderFindTarget\(findTargetId\)/);
+    // The row lookup still resolves the target against `row.entry.id`, which is
+    // what makes an activity id work with no special case.
+    expect(timeline).toMatch(/row\.entry\.id === findTargetId/);
+  });
 });
