@@ -7,10 +7,18 @@
  * option chips (6 + overflow), usage count and updated date; tapping a row
  * pushes the edit form where rename / re-option / archive / restore live
  * (`PropertyForm`). Search + "Show archived" mirror web's table filters.
+ *
+ * Row actions (iteration 231, MYS-2102): each row gained the kebab web's row
+ * menu renders — edit / archive, with archive flipping to restore on an
+ * archived row. The items and the owner/admin gate live in
+ * `lib/property-row-actions.ts`; the write lives here so the kebab and the edit
+ * form share `useUpdateProperty`, and so both word the archive confirm
+ * identically.
  */
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   TextInput,
@@ -25,10 +33,15 @@ import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { HeaderSearchGroup } from "@/components/ui/header-search-button";
 import { Switch } from "@/components/ui/switch";
+import { PropertyRowMenu } from "@/components/property/property-row-menu";
 import { propertyCatalogOptions } from "@/data/queries/properties";
+import { useUpdateProperty } from "@/data/mutations/properties";
 import { memberListOptions } from "@/data/queries/members";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useAuthStore } from "@/data/auth-store";
+import {
+  canManageProperties,
+} from "@/lib/property-row-actions";
 import {
   filterPropertyCatalog,
   MAX_ACTIVE_PROPERTIES,
@@ -57,8 +70,84 @@ export default function PropertiesPage() {
   );
   const members = useQuery(memberListOptions(wsId));
   const currentMember = members.data?.find((m) => m.user_id === user?.id);
-  const canManage =
-    currentMember?.role === "owner" || currentMember?.role === "admin";
+  // Web's `canManage` (`properties-tab.tsx:123`) — kept in the shared helper so
+  // the screen and the row menu read one rule instead of two copies of
+  // `role === "owner" || role === "admin"`.
+  const canManage = canManageProperties(currentMember?.role);
+
+  // ── Row actions (iteration 231, MYS-2102) ────────────────────────────────
+  // The archive/restore write lives HERE for the same reason the delete on the
+  // labels list does: the edit form toggles through this same mutation, so the
+  // kebab and the form cannot drift on what archiving does.
+  const updateProperty = useUpdateProperty();
+
+  const openEdit = useCallback(
+    (property: IssueProperty) => {
+      if (wsSlug) router.push(`/${wsSlug}/more/properties/${property.id}`);
+    },
+    [wsSlug],
+  );
+
+  /**
+   * The archive confirm, worded exactly as the edit form's own toggle — the
+   * same `properties.archiveTitle` / `properties.archiveMessage` keys. Web
+   * routes archive through `pendingArchive` for exactly this reason; restore
+   * below does not, matching web's asymmetry (restore is recoverable in one
+   * more tap, archive is what the dialog exists to make deliberate).
+   */
+  const handleArchive = useCallback(
+    (row: IssueProperty) => {
+      if (updateProperty.isPending) return;
+      Alert.alert(
+        t("properties.archiveTitle"),
+        t("properties.archiveMessage", { name: row.name }),
+        [
+          { text: t("common.cancel"), style: "cancel" },
+          {
+            text: t("properties.archive"),
+            style: "destructive",
+            onPress: () =>
+              updateProperty.mutate(
+                { id: row.id, archived: true },
+                {
+                  onError: (err) =>
+                    Alert.alert(
+                      t("properties.saveFailed"),
+                      err instanceof Error
+                        ? err.message
+                        : t("common.unknownError"),
+                    ),
+                },
+              ),
+          },
+        ],
+      );
+    },
+    [updateProperty, t],
+  );
+
+  /**
+   * Restore writes straight through, as web does. The edit form confirms it,
+   * which is a deliberate difference from this side: on the form the toggle
+   * sits among other fields and a stray tap costs more, whereas here the user
+   * picked "Restore" out of a menu they opened on that exact row.
+   */
+  const handleRestore = useCallback(
+    (row: IssueProperty) => {
+      if (updateProperty.isPending) return;
+      updateProperty.mutate(
+        { id: row.id, archived: false },
+        {
+          onError: (err) =>
+            Alert.alert(
+              t("properties.saveFailed"),
+              err instanceof Error ? err.message : t("common.unknownError"),
+            ),
+        },
+      );
+    },
+    [updateProperty, t],
+  );
 
   const { visible, activeCount } = useMemo(
     () =>
@@ -159,10 +248,11 @@ export default function PropertiesPage() {
             renderItem={({ item }) => (
               <PropertyRow
                 property={item}
-                onPress={() => {
-                  if (wsSlug)
-                    router.push(`/${wsSlug}/more/properties/${item.id}`);
-                }}
+                canManage={canManage}
+                onPress={() => openEdit(item)}
+                onEdit={() => openEdit(item)}
+                onArchive={() => handleArchive(item)}
+                onRestore={() => handleRestore(item)}
               />
             )}
             refreshing={isRefetching}
@@ -235,10 +325,20 @@ function PropertiesToolbar({
 
 function PropertyRow({
   property,
+  canManage,
   onPress,
+  onEdit,
+  onArchive,
+  onRestore,
 }: {
   property: IssueProperty;
+  /** Web's `canManage` — the kebab renders only for owner/admin, with no
+   *  disabled placeholder (`properties-tab.tsx:260,313`). */
+  canManage: boolean;
   onPress: () => void;
+  onEdit: () => void;
+  onArchive: () => void;
+  onRestore: () => void;
 }) {
   const { colorScheme } = useColorScheme();
   const { t } = useTranslation();
@@ -321,6 +421,16 @@ function PropertyRow({
           </Text>
         </View>
         <Ionicons name="chevron-forward" size={14} color={muted} />
+        {/* Row actions (MYS-2102). Owner/admin only — web renders an empty
+            `<span />` for everyone else rather than a disabled trigger, and the
+            toolbar above already carries the matching `adminHint`. */}
+        <PropertyRowMenu
+          property={property}
+          canManage={canManage}
+          onEdit={onEdit}
+          onArchive={onArchive}
+          onRestore={onRestore}
+        />
       </View>
     </Pressable>
   );

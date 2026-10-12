@@ -11,8 +11,15 @@
  * member detail screen keyed by member id. The server remains the
  * authoritative permission gate — `canManage` only decides what the UI
  * shows, mirroring member detail's guard parity.
+ *
+ * Row actions (iteration 231, MYS-2102): each manageable row gained the kebab
+ * web's `MemberRow` renders — change role / remove. Both writes already lived
+ * on the member detail screen; what was missing was this entry point. The gates
+ * are NOT re-derived here: `lib/member-row-actions.ts` layers web's `showMenu`
+ * and role-submenu filtering on top of the same `lib/member-guards.ts` the
+ * detail screen uses, so the two surfaces cannot disagree about the last owner.
  */
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -30,10 +37,14 @@ import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
+import { MemberRowMenu } from "@/components/member/member-row-menu";
 import { memberListOptions, invitationListOptions } from "@/data/queries/members";
+import { workspaceListOptions } from "@/data/queries/workspaces";
 import {
   useInviteMember,
+  useRemoveMember,
   useRevokeInvitation,
+  useUpdateMemberRole,
 } from "@/data/mutations/members";
 import { useAuthStore } from "@/data/auth-store";
 import { useCurrentMemberRole } from "@/data/use-current-member-role";
@@ -88,6 +99,80 @@ export default function MembersPage() {
 
   const { role } = useCurrentMemberRole();
   const canManage = canManageRole(role);
+  // The workspace's display name, for the remove confirm's sentence. Same read
+  // the detail page makes (a workspace is only listed to its own members); the
+  // fallback is the key `invite/[id].tsx` already uses for the same gap.
+  const workspaces = useQuery(workspaceListOptions());
+  const workspaceName =
+    workspaces.data?.find((w) => w.id === wsId)?.name ??
+    t("invite.fallbackWorkspaceName");
+
+  // ── Row actions (iteration 231, MYS-2102) ────────────────────────────────
+  // Both writes live HERE, not in the menu, so the kebab and the member detail
+  // screen share one mutation pair and one set of failure titles. `ownerCount`
+  // feeds the last-owner guard the same way the detail page computes it — web
+  // counts `members.filter(m => m.role === "owner").length` (members-tab:255).
+  const updateMemberRole = useUpdateMemberRole();
+  const removeMember = useRemoveMember();
+  const ownerCount = useMemo(
+    () => (rawMembers ?? []).filter((m) => m.role === "owner").length,
+    [rawMembers],
+  );
+
+  /** Role change, worded and alerted exactly as the detail page's sheet. */
+  const onRoleChange = useCallback(
+    (row: MemberWithUser, nextRole: MemberRole) => {
+      updateMemberRole.mutate(
+        { memberId: row.id, role: nextRole },
+        {
+          onSuccess: () => Alert.alert(t("members.detail.roleUpdated")),
+          onError: (err) =>
+            Alert.alert(
+              t("members.detail.roleUpdateFailed"),
+              err instanceof Error ? err.message : t("common.unknownError"),
+            ),
+        },
+      );
+    },
+    [updateMemberRole, t],
+  );
+
+  /**
+   * Remove confirm — the same `members.detail.remove*` copy and the same
+   * mutation the detail screen uses. Unlike that screen there is nowhere to
+   * navigate back to, and the row disappearing IS the feedback (the mutation
+   * invalidates the members list), so success raises no alert — the detail page
+   * pops instead.
+   */
+  const onRemoveMember = useCallback(
+    (row: MemberWithUser) => {
+      Alert.alert(
+        t("members.detail.removeTitle", { name: row.name }),
+        t("members.detail.removeMessage", {
+          name: row.name,
+          workspace: workspaceName,
+        }),
+        [
+          { text: t("common.cancel"), style: "cancel" },
+          {
+            text: t("members.detail.removeAction"),
+            style: "destructive",
+            onPress: () =>
+              removeMember.mutate(row.id, {
+                onError: (err) =>
+                  Alert.alert(
+                    t("members.detail.removeFailed"),
+                    err instanceof Error
+                      ? err.message
+                      : t("common.unknownError"),
+                  ),
+              }),
+          },
+        ],
+      );
+    },
+    [removeMember, t, workspaceName],
+  );
 
   const [inviteVisible, setInviteVisible] = useState(false);
 
@@ -224,9 +309,14 @@ export default function MembersPage() {
                 <View key={member.id} className={cn(idx > 0 && "border-t border-border")}>
                   <MemberRow
                     member={member}
+                    currentUserId={user?.id}
+                    currentRole={role}
+                    ownerCount={ownerCount}
                     onPress={() => {
                       if (wsSlug) router.push(`/${wsSlug}/more/members/${member.id}`);
                     }}
+                    onRoleChange={onRoleChange}
+                    onRemove={onRemoveMember}
                   />
                 </View>
               ))}
@@ -269,10 +359,21 @@ function InviteEntry({ onPress }: { onPress: () => void }) {
 
 function MemberRow({
   member,
+  currentUserId,
+  currentRole,
+  ownerCount,
   onPress,
+  onRoleChange,
+  onRemove,
 }: {
   member: MemberWithUser;
+  currentUserId: string | null | undefined;
+  currentRole: MemberRole | null | undefined;
+  /** Owners in the workspace — the last-owner demote guard reads this. */
+  ownerCount: number;
   onPress: () => void;
+  onRoleChange: (row: MemberWithUser, role: MemberRole) => void;
+  onRemove: (row: MemberWithUser) => void;
 }) {
   const { t } = useTranslation();
   const timeAgo = useTimeAgo();
@@ -315,6 +416,18 @@ function MemberRow({
           ) : null}
         </View>
         <Ionicons name="chevron-forward" size={14} color={muted} />
+        {/* Row actions (MYS-2102). Web hides the trigger entirely when neither
+            role-edit nor remove is permitted (`showMenu`), and from your own
+            row. The trigger claims the touch responder, so opening the sheet
+            never falls through to the row's own onPress. */}
+        <MemberRowMenu
+          member={member}
+          currentRole={currentRole}
+          currentUserId={currentUserId}
+          ownerCount={ownerCount}
+          onRoleChange={onRoleChange}
+          onRemove={onRemove}
+        />
       </View>
     </Pressable>
   );
