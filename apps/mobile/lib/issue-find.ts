@@ -105,8 +105,8 @@
  * A match lands either in a comment, in an activity row, or in the header, and
  * the first two navigate identically (both are rows of the list) while the
  * header does not: it is `ListHeaderComponent`, above index 0. So a match
- * carries a `targetId` that is either a real entry id or one of the two header
- * sentinels (`FIND_TARGET_TITLE` / `FIND_TARGET_DESCRIPTION`). `TimelineList`
+ * carries a `targetId` that is either a real entry id or one of the header
+ * sentinels (`FIND_TARGET_TITLE` / `findDescriptionTarget(i)`). `TimelineList`
  * resolves a sentinel to a scroll to the header offset plus a flash on that
  * header block; an entry id keeps the existing row lookup, which already
  * reaches inside replies.
@@ -118,6 +118,52 @@
  * the scroll. `highlightCommentId` / `highlightNonce` (inbox deep links) are
  * untouched, and a sentinel cannot collide with the entry ids that channel
  * carries: those are uuids.
+ *
+ * ## Landing inside a long description (MYS-2112)
+ *
+ * Naming the description as ONE target was never enough to land a hit in it,
+ * and on this deployment that is the common case rather than an edge: measured
+ * over 100 live descriptions, **28% contain a markdown table**, tables are
+ * **8.3% of all description text**, and the offset from a description's start to
+ * its last table row has a **median of 1,939 characters** — more than one
+ * screen. So the landing target is the description's *rendered segment*, not the
+ * description: each block is tagged with the segment index it came from, and
+ * `TimelineList` scrolls using that segment's own measured rectangle.
+ *
+ * Measured on the fixture (MYS-2077, description 5,591 chars, its last table at
+ * character 4,632, token `sophgo-SQM2270` occurring once): the matched row sits
+ * **1,987dp** below the description top, while a viewport is ~700dp. That is the
+ * bug — find reports `1/1` and the reader sees the description's first line.
+ * The number comes from a scroll-chained device sweep whose every step was
+ * accepted only when its measured delta was plausible (see the round's
+ * `measure-true.py`); a `contentY = 2862 + 1.138 × charOffset` fit over 13
+ * located blocks has R² 0.958, and the token's own position is confirmed by the
+ * two measured blocks bracketing it.
+ *
+ * The two aligned facts that make the segment tag sound, each measured over the
+ * same 100 descriptions: splitting the description and lexing each segment
+ * yields the **identical** block list as lexing it whole (**100/100**), so no
+ * count, hit or step changes; and `splitMarkdown`'s type sequence is identical
+ * for the raw description and the preprocessed one the renderer actually splits
+ * (**100/100**), so the index is the one the renderer measures geometry for.
+ *
+ * | what was measured (100 live descriptions)  | value        |
+ * |--------------------------------------------|--------------|
+ * | descriptions containing a table            | **28 / 100** |
+ * | table rows / characters                    | 447 / 26,232 |
+ * | tables as a share of description text      | **8.32%**    |
+ * | offset to last table row: median / p90     | 1,939 / 3,363 chars |
+ * | descriptions rendering as ONE segment      | 87 / 100     |
+ * | tables living in segment 0                 | 57 / 69      |
+ *
+ * The last two rows are why the landing is segment-anchored rather than
+ * per-block: the renderer draws a whole prose island as ONE native text view
+ * (md4c → `StaticLayout`) and exposes no per-block geometry to JS, so a segment
+ * rectangle is the finest geometry that is MEASURED rather than guessed. Inside
+ * a segment the landing falls back to the block's character share and CENTRES
+ * the result, which is what makes that share's error survivable — measured on
+ * the fixture at 12 points of a segment (~240dp), far beyond what a few pixels
+ * of top padding could absorb. See `descriptionFindOffset` for the numbers.
  *
  * ## Matching semantics, ported from web
  *
@@ -200,6 +246,7 @@ import { marked } from "marked";
 import type { TimelineEntry } from "@multica/core/types";
 import { isDeletedComment } from "./comment-deletion";
 import { stripHtml } from "./markdown/preprocess";
+import { splitMarkdown } from "./markdown/split-markdown";
 
 /**
  * Sentinels for the two header blocks, which have no comment id.
@@ -218,12 +265,54 @@ import { stripHtml } from "./markdown/preprocess";
 export const FIND_TARGET_TITLE = "__issue_title__";
 export const FIND_TARGET_DESCRIPTION = "__issue_description__";
 
+/**
+ * The target of the description's `index`-th RENDERED segment.
+ *
+ * Segment 0 keeps the bare `FIND_TARGET_DESCRIPTION`, so every existing caller,
+ * assertion and consumer of that constant keeps its exact meaning: "the first
+ * block of the description". Later segments get a `:<index>` suffix.
+ *
+ * Why the description needs more than one target at all (MYS-2112): the
+ * description is rendered as a LIST of segments (`splitMarkdown`), each its own
+ * React child with its own measured geometry, and a hit in the 4th segment
+ * cannot be landed by an offset computed against the description as a whole
+ * (see `descriptionFindOffset`). Naming the segment is what lets the landing use
+ * a MEASURED position instead of an extrapolation across blocks the match has
+ * nothing to do with.
+ *
+ * The `:<index>` suffix is still a sentinel rather than a comment id — the
+ * channel stays the one `string | undefined` prop it always was, and a uuid can
+ * never look like this.
+ */
+export function findDescriptionTarget(index: number): string {
+  return index === 0 ? FIND_TARGET_DESCRIPTION : `${FIND_TARGET_DESCRIPTION}:${index}`;
+}
+
+/** Whether `id` names the description at all (any segment). */
+export function isDescriptionFindTarget(id: string): boolean {
+  return id === FIND_TARGET_DESCRIPTION || id.startsWith(`${FIND_TARGET_DESCRIPTION}:`);
+}
+
+/**
+ * The segment index a description target names, or 0 for the bare sentinel.
+ *
+ * Callers must gate on `isDescriptionFindTarget` first: this answers `0` for
+ * anything that is not a description target, which is the useful default for
+ * "the description as a whole" but indistinguishable from segment 0.
+ */
+export function descriptionTargetIndex(id: string): number {
+  const suffix = id.slice(FIND_TARGET_DESCRIPTION.length);
+  if (suffix === "") return 0;
+  const parsed = Number.parseInt(suffix.slice(1), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
 /** One occurrence of the query inside one searchable block's text. */
 export interface FindMatch {
   /**
    * Where the jump/highlight should land: a real timeline entry id (a comment
-   * — root **or** reply — or an activity row), or one of the two header
-   * sentinels above.
+   * — root **or** reply — or an activity row), or one of the header sentinels
+   * above (`FIND_TARGET_TITLE` / `findDescriptionTarget(i)`).
    *
    * An activity row needs no special case anywhere downstream: it is a row of
    * the list, so its id travels the same `highlightedId` / `scrollToIndex`
@@ -238,12 +327,28 @@ export interface FindMatch {
   start: number;
   /** Exclusive end offset, so `end - start === needle.length`. */
   end: number;
+  /**
+   * Where the match sits inside its TARGET's own span, as `0 ≤ fraction ≤ 1`.
+   * Present only for a description-segment hit, which is the one target long
+   * enough that landing at its top can leave the match off screen.
+   *
+   * A MODEL, not a measurement — see `descriptionFindOffset` for what it is
+   * worth and why it is measured against the segment rather than assumed.
+   * Absent for every other target, where the whole row IS the landing.
+   */
+  fraction?: number;
 }
 
 /** One block's flattened searchable text plus the target it belongs to. */
 interface Searchable {
   targetId: string;
   text: string;
+  /** Searchable-text length in the target's span that precedes this block.
+   *  Only set for a description segment — see `fraction` on `FindMatch`. */
+  fractionBase?: number;
+  /** The target's total searchable-text length. Only set for a description
+   *  segment. */
+  fractionSpan?: number;
 }
 
 /**
@@ -541,12 +646,51 @@ export function collectSearchables(
   // description is the failure this module already documented: it disagrees
   // with the renderer on inline code vs emphasis and invents matches.
   //
-  // Each block becomes its own entry so all of them share the one target
-  // (`FIND_TARGET_DESCRIPTION`): the scroll target is the description as a
-  // whole, and an offset within a block is not comparable across blocks.
-  for (const text of extractSearchBlocks(header?.description ?? undefined)) {
-    if (text.length === 0) continue;
-    out.push({ targetId: FIND_TARGET_DESCRIPTION, text });
+  // The description is walked **segment by segment**, with each block tagged by
+  // the RENDERED SEGMENT it came from (`findDescriptionTarget`). Two facts make
+  // that sound rather than merely convenient, and both were measured over this
+  // deployment's 100 descriptions:
+  //
+  //   1. splitting first and lexing each piece yields exactly the same block
+  //      list as lexing the whole document (100/100), so the haystack — and
+  //      therefore every count, hit and step — is unchanged by this; and
+  //   2. `splitMarkdown`'s type sequence is identical for the raw description and
+  //      for the preprocessed one the renderer splits (100/100), so the index
+  //      this tags a block with is the index the renderer reports geometry for.
+  //
+  // What the tag buys: a hit in segment 4 can land using segment 4's MEASURED
+  // rectangle instead of an offset extrapolated across the code fences and
+  // tables before it (see `descriptionFindOffset`).
+  const description = header?.description;
+  if (description) {
+    const segments = splitMarkdown(description);
+    for (let index = 0; index < segments.length; index++) {
+      const segment = segments[index]!;
+      // A non-prose segment (a fence, an image, block math) holds nothing
+      // `extractSearchBlocks` would return — the splitter only routes prose
+      // here, and the extractor drops fences and images itself. Skipping them
+      // is what keeps this list identical to the whole-document walk.
+      if (segment.type !== "prose") continue;
+      const blocks = extractSearchBlocks(segment.content);
+      // The denominator for a block's `fraction`: the segment's own searchable
+      // text, not the raw source. Everything in this module counts characters
+      // of SEARCHABLE text, so a fraction taken against raw markdown would be
+      // measuring a different string than the one find matched in — and the
+      // raw source includes syntax the reader never sees.
+      const span = blocks.reduce((n, text) => n + text.length, 0);
+      let elapsed = 0;
+      for (const text of blocks) {
+        if (text.length > 0) {
+          out.push({
+            targetId: findDescriptionTarget(index),
+            text,
+            fractionBase: elapsed,
+            fractionSpan: span,
+          });
+        }
+        elapsed += text.length;
+      }
+    }
   }
 
   // The timeline, in its own order: a comment contributes its body, an
@@ -598,11 +742,23 @@ export function findInTimeline(
   if (needle.length === 0 || query.trim().length === 0) return [];
 
   const matches: FindMatch[] = [];
-  for (const { targetId, text } of searchables) {
+  for (const { targetId, text, fractionBase, fractionSpan } of searchables) {
     const haystack = text.toLowerCase();
     let index = haystack.indexOf(needle);
     while (index !== -1) {
-      matches.push({ targetId, start: index, end: index + needle.length });
+      // Where in its target this occurrence sits. Only a description segment
+      // carries the span, because only there is the target long enough for
+      // "land at the top" to leave the match off screen.
+      const fraction =
+        fractionSpan && fractionSpan > 0
+          ? (fractionBase! + index) / fractionSpan
+          : undefined;
+      matches.push({
+        targetId,
+        start: index,
+        end: index + needle.length,
+        ...(fraction === undefined ? {} : { fraction }),
+      });
       // Advance by the needle's length, not by one: overlapping occurrences are
       // not separate hits. Web's walk does the same
       // (`indexOf(needle, index + needle.length)`), so "aa" in "aaa" counts
@@ -670,6 +826,90 @@ export function stepMatch(
   if (matchCount === 0) return -1;
   if (activeIndex < 0) return direction === 1 ? 0 : matchCount - 1;
   return (activeIndex + direction + matchCount) % matchCount;
+}
+
+/**
+ * Where to scroll for a match inside a description segment.
+ *
+ * Inputs, all in the scroll content's own coordinates except the last:
+ *
+ *   - `segmentTop` / `segmentHeight` — the segment's rectangle as MEASURED by
+ *     its own `onLayout` (`Markdown.onSegmentLayout`), not modelled;
+ *   - `fraction` — where inside the segment the match sits; and
+ *   - `viewportHeight` — the visible height of the scroll container, from its
+ *     own `onLayout`.
+ *
+ * ## The rule, and where it comes from
+ *
+ * Web's `scrollRangeIntoView` (`use-in-page-find.ts:86-102`) computes
+ * `offsetWithin - clientHeight/2 + rectHeight/2` — it CENTRES the match — and it
+ * does nothing at all when the match is already inside the comfortable band
+ * (`pad = 80`: not above `top + pad`, not below `bottom - pad`). This function
+ * does the centring half; the band test belongs to the caller, which is the only
+ * place that knows whether the match is already on screen.
+ *
+ *     offset = segmentTop + fraction * segmentHeight - viewportHeight / 2
+ *
+ * ## Why centring, and not "place the match just below the top edge"
+ *
+ * `fraction` is a MODEL, and centring is what makes its error survivable.
+ * Placing the match `pad` below the top edge gives it only `pad` of slack, so
+ * any model error larger than `pad` pushes the match off screen — the bug this
+ * round exists to fix, reintroduced with more machinery around it.
+ *
+ * That is not hypothetical. The first cut of this function subtracted a 12dp
+ * pad, and the DEVICE rejected it: on the fixture (MYS-2077) the token's
+ * modelled fraction inside its segment is 0.800 while the text that actually
+ * rendered at the resulting scroll position sits at 0.920 — a **12-point**
+ * error. A searchable block is not a rendered line: one markdown table ROW is a
+ * single drawn line but contributes one block per CELL, so it consumes several
+ * times the vertical share its character count suggests. 12% of that segment is
+ * ~240dp, which against a 12dp pad left the match ~240dp above the viewport;
+ * against `viewportHeight / 2` (~350dp) the same error still lands on screen.
+ *
+ * Centring therefore buys half a viewport of tolerance instead of a few pixels,
+ * and it is what web does with the same intent. The cost is one web also
+ * accepts: for a match very near the document start the target offset goes
+ * negative and clamps to 0, so the match sits lower than centre — visible,
+ * which is the requirement, rather than centred, which is a nicety.
+ *
+ * `viewportHeight <= 0` (the list has not laid out yet) falls back to no pad, so
+ * the match lands at its segment's top — reachable only before the first layout
+ * pass, and still strictly better than the description top.
+ *
+ * `fraction` is clamped, not trusted: it is derived from a model, and a value
+ * outside [0,1] would otherwise scroll to a nonsense offset. The clamp is
+ * directional — an over-large fraction pins to the segment's BOTTOM and a
+ * negative one to its top — so a bad number still lands inside the segment that
+ * holds the match. `NaN` is the exception: it has no direction, so it falls back
+ * to the segment's top rather than propagating into the offset (`Math.min` over a
+ * `NaN` would poison the whole result and scroll to `NaN`).
+ *
+ * `segmentHeight <= 0` (a segment that has not laid out yet) falls back to
+ * `segmentTop` alone: the top of the segment is still the right neighbourhood,
+ * and it degrades to a position strictly better than today's description top.
+ */
+export function descriptionFindOffset({
+  segmentTop,
+  segmentHeight,
+  fraction,
+  viewportHeight,
+}: {
+  segmentTop: number;
+  segmentHeight: number;
+  fraction: number | undefined;
+  /** The scroll container's visible height, from its `onLayout`. `0` before it
+   *  has laid out — see above. */
+  viewportHeight: number;
+}): number {
+  const raw = fraction ?? 0;
+  const safeFraction = Number.isNaN(raw) ? 0 : Math.min(Math.max(raw, 0), 1);
+  const height = Number.isFinite(segmentHeight) ? Math.max(0, segmentHeight) : 0;
+  const within = height > 0 ? safeFraction * height : 0;
+  const viewport = Number.isFinite(viewportHeight)
+    ? Math.max(0, viewportHeight)
+    : 0;
+  return Math.max(0, segmentTop + within - viewport / 2);
 }
 
 /**

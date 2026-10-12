@@ -98,8 +98,13 @@ describe("in-page find wiring", () => {
     // pins the advancing counter, not merely the presence of a `nonce` key.
     expect(src).toMatch(/stepNonceRef\.current \+= 1/);
     expect(src).toMatch(
-      /setFindStep\(\{\s*id: target,\s*nonce: String\(stepNonceRef\.current\)\s*\}\)/,
+      /setFindStep\(\{\s*id: target,\s*nonce: String\(stepNonceRef\.current\),/,
     );
+    // The landing fraction must travel WITH the step (MYS-2112). Reading it
+    // from the live `matches` array at scroll time instead would let a step
+    // land using a DIFFERENT hit's fraction the moment the match set changed
+    // underneath — a websocket comment is enough to renumber it.
+    expect(src).toMatch(/fraction: match\?\.fraction/);
   });
 
   it("counts every match the reader can step to, header hits included", () => {
@@ -169,7 +174,11 @@ describe("in-page find wiring", () => {
     // leave the flash permanently dark while every other assertion still
     // passed.
     expect(src).toMatch(/titleHighlighted=\{findHeaderFlash === FIND_TARGET_TITLE\}/);
-    expect(src).toMatch(/findHeaderFlash === FIND_TARGET_DESCRIPTION/);
+    // The description's flash is tested through `isDescriptionFindTarget`, not
+    // an equality against the bare sentinel: since MYS-2112 a description
+    // target names a SEGMENT, so an equality check would leave every hit past
+    // the description's first segment flashing nothing at all.
+    expect(src).toMatch(/isDescriptionFindTarget\(findHeaderFlash\)/);
     // The comment path is unchanged.
     expect(src).toMatch(/setHighlightedId\(findTargetId\)/);
   });
@@ -286,5 +295,139 @@ describe("in-page find wiring", () => {
     // The row lookup still resolves the target against `row.entry.id`, which is
     // what makes an activity id work with no special case.
     expect(timeline).toMatch(/row\.entry\.id === findTargetId/);
+  });
+
+  // ── Landing inside a long description (MYS-2112) ────────────────────────
+  // Measured on this deployment: 28% of descriptions contain a table, tables are
+  // 8.32% of all description text, and the distance from a description's start
+  // to its last table row has a median of 1,939 characters — more than a screen.
+  // The fixture (MYS-2077) puts the matched row 1,987dp below the description
+  // top against a ~700dp viewport, so landing on the description's top reported
+  // `1/1` and showed the reader the wrong part of the page.
+  //
+  // The landing is only real once FOUR links exist, and each is asserted — the
+  // same reason the activity-row block above exists: a correct
+  // `descriptionFindOffset` that nothing calls is a released feature that does
+  // not exist.
+  //
+  //   1. `Markdown` measures each rendered segment;
+  //   2. `IssueDescription` forwards those measurements;
+  //   3. `TimelineList` stores them and feeds them to the offset;
+  //   4. the screen carries the match's fraction alongside its target.
+
+  it("measures each rendered segment and reports it", () => {
+    const md = code("lib/markdown/markdown.tsx");
+    // The measurement is on a wrapper the component owns. Asserted as the
+    // onLayout WIRING, not as the identifier: an `onSegmentLayout` prop that is
+    // declared but never called from a layout pass measures nothing.
+    expect(md).toMatch(/onLayout=\{measure\(index\)\}/);
+    expect(md).toMatch(/nativeEvent\.layout\.y/);
+    expect(md).toMatch(/nativeEvent\.layout\.height/);
+    // A segment's rectangle is reported per segment, so the index has to travel
+    // with it — a bare `{top,height}` could not say WHICH segment it describes.
+    expect(md).toMatch(/index,/);
+  });
+
+  it("does not wrap segments for callers that asked for no measurement", () => {
+    // Every other <Markdown> surface (comment bodies, chat bubbles, run logs)
+    // must keep exactly the tree it had. A wrapper rendered unconditionally
+    // would add a Yoga node — and a `gap-3` spacing participant — everywhere.
+    const md = code("lib/markdown/markdown.tsx");
+    expect(md).toMatch(/onSegmentLayout \? \(/);
+  });
+
+  it("forwards segment geometry from the description block", () => {
+    const desc = code("components/issue/issue-description.tsx");
+    expect(desc).toMatch(/onSegmentLayout/);
+    // The callback must reach `Markdown` through the prop, not be computed and
+    // dropped.
+    expect(desc).toMatch(/onSegmentLayout=\{onSegmentLayout\}/);
+  });
+
+  it("stores the measured rectangles and lands the jump on the segment", () => {
+    const timeline = code(TIMELINE);
+    // The ref exists and is written from the callback, storing the rect AS
+    // REPORTED — wrapper-relative. The read side adds the description's offset;
+    // adding it here as well double-counts it, which is a bug this round
+    // shipped and the device caught (a 213dp overshoot, exactly
+    // `measuredHeaderTopsRef.current.description`, which pushed the matched row
+    // just past the viewport's bottom edge). Pinned as the ABSENCE of that sum
+    // on the write side, because a diff between "stores + adds" and "stores" is
+    // one token wide and reads as equivalent.
+    expect(timeline).toMatch(/measuredSegmentRectsRef/);
+    expect(timeline).toMatch(
+      /measuredSegmentRectsRef\.current\.set\(report\.index, \{\s*top: report\.top,/,
+    );
+    expect(timeline).not.toMatch(
+      /current\.set\(report\.index, \{\s*top:\s*measuredHeaderTopsRef/,
+    );
+    // And it is READ by the landing — a measurement that only accumulates is
+    // the dead-helper failure this file exists to catch.
+    expect(timeline).toMatch(/measuredSegmentRectsRef\.current\.get\(/);
+    // The landing goes through the tested pure helper rather than re-deriving
+    // the arithmetic inline, where it would escape the clamp tests.
+    expect(timeline).toMatch(/descriptionFindOffset\(\{/);
+    // Which segment to look up comes from the target, through the helper that
+    // owns that parsing.
+    expect(timeline).toMatch(/descriptionTargetIndex\(findTargetId\)/);
+    // The block's own offset is ADDED at read time — exactly once, on this side.
+    expect(timeline).toMatch(
+      /measuredHeaderTopsRef\.current\.description \+ segmentTop\.top/,
+    );
+    // Centring is fed the container's measured height, not a constant pad: the
+    // top-pad variant is what the device rejected.
+    expect(timeline).toMatch(/viewportHeight: viewportHeightRef\.current/);
+    expect(timeline).toMatch(/viewportHeightRef\.current =/);
+  });
+
+  it("carries the match's fraction from the screen into the timeline", () => {
+    const screen = code(ISSUE_SCREEN);
+    const timeline = code(TIMELINE);
+    expect(screen).toMatch(/findFraction=\{findStep\?\.fraction\}/);
+    expect(timeline).toMatch(/findFraction/);
+    // The prop must reach the offset computation, not merely be declared.
+    expect(timeline).toMatch(/fraction: findFraction/);
+  });
+
+  it("flashes the segment rather than the whole description", () => {
+    const timeline = code(TIMELINE);
+    // The overlay's rectangle is computed from the measured segment, so the
+    // wash marks the block the match is in.
+    expect(timeline).toMatch(/descriptionFlashRect/);
+    expect(timeline).toMatch(/style=\{descriptionFlashRect\}/);
+    // `inset-0` (the whole-block wash) must be GONE: with a segment rectangle
+    // driving the position, an `inset-0` class would fight it and win.
+    expect(timeline).not.toMatch(/absolute inset-0 rounded-lg border-2 border-brand/);
+  });
+
+  it("degrades to the previous behaviour when geometry is missing", () => {
+    const timeline = code(TIMELINE);
+    // A segment that has not laid out falls back to the description's own
+    // measured top, which is what shipped before this round — so a slow first
+    // layout can never land the reader somewhere worse than v0.6.67 did.
+    //
+    // Asserted as the FALLBACK EXPRESSION, not as the two halves separately:
+    // both the segment lookup and the description top are present in the file
+    // for other reasons (the flash rectangle reads the lookup; the fallback
+    // reads the description top), so asserting them independently let a version
+    // that always used the description top still pass. Pinning `?.top ??` is
+    // what makes the measured segment the primary source and the description
+    // top the fallback, rather than the other way round.
+    expect(timeline).toMatch(
+      /segmentTop:\s*segmentTop === undefined\s*\?\s*Math\.max\(0, measuredHeaderTopsRef\.current\.description\)/,
+    );
+    expect(timeline).toMatch(/segmentHeight:\s*segmentTop\?\.height \?\? 0/);
+  });
+
+  it("routes a per-segment description target to the header path", () => {
+    // The routing predicate has to recognise a SEGMENTED description target,
+    // not just the bare sentinel. With an equality check against
+    // `FIND_TARGET_DESCRIPTION`, every hit past the description's first segment
+    // would fall through to the comment lookup, find no row, and never scroll —
+    // the exact class of silent dead-end this round exists to remove.
+    const timeline = code(TIMELINE);
+    expect(timeline).toMatch(
+      /isHeaderFindTarget[\s\S]{0,120}?isDescriptionFindTarget\(id\)/,
+    );
   });
 });

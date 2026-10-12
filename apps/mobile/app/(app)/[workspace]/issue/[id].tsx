@@ -197,21 +197,32 @@ export default function IssueDetail() {
   // millisecond are possible with a fast tap and would otherwise be an
   // identical prop change that never re-fires.
   const stepNonceRef = useRef(0);
-  const [findStep, setFindStep] = useState<{ id: string; nonce: string } | null>(
-    null,
-  );
+  const [findStep, setFindStep] = useState<{
+    id: string;
+    nonce: string;
+    /** Where inside the target the match sits, for a description segment
+     *  (MYS-2112). Travels WITH the step rather than being looked up later, so
+     *  the landing can never use the fraction of a different hit than the one
+     *  the nonce names — the two are read from the same match in one go. */
+    fraction?: number;
+  } | null>(null);
   // `list` is passed in rather than read from `matches` so a query edit can
   // navigate into the NEW match set in the same tick, before React has
   // re-rendered with it.
   const applyFindTarget = useCallback(
     (list: readonly FindMatch[], index: number) => {
-      const target = matchTarget(list[index]);
+      const match = list[index];
+      const target = matchTarget(match);
       if (!target) {
         setFindStep(null);
         return;
       }
       stepNonceRef.current += 1;
-      setFindStep({ id: target, nonce: String(stepNonceRef.current) });
+      setFindStep({
+        id: target,
+        nonce: String(stepNonceRef.current),
+        fraction: match?.fraction,
+      });
     },
     [],
   );
@@ -548,6 +559,7 @@ export default function IssueDetail() {
             jumpNonce={jumpTarget?.nonce}
             findTargetId={findStep?.id}
             findNonce={findStep?.nonce}
+            findFraction={findStep?.fraction}
             subIssues={children.data}
             wsSlug={wsSlug}
           />
