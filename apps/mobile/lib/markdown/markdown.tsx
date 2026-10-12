@@ -53,6 +53,7 @@ import {
   rebaseDownloadUrl,
 } from "@/lib/attachment-download";
 import { preprocessMobileMarkdown, stripHtml } from "./preprocess";
+import { useResolvedIssueIdentifiers } from "@/lib/use-issue-identifier-mentions";
 import { useMarkdownStyle } from "./markdown-style";
 import { splitMarkdown } from "./split-markdown";
 import { richFenceKind } from "@/lib/rich-content/blocks";
@@ -130,6 +131,17 @@ export function Markdown({
 }: Props) {
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const { t } = useTranslation();
+  // Bare issue identifiers the author typed (`MYS-2109`) become tappable links
+  // to the issue they name, aligned with web's `autolinkIssueIdentifiers`.
+  // Resolved here, in the READ-ONLY renderer, and never in an editable field:
+  // a rewrite in the write path would put an identifier-shaped id into the
+  // stored markdown.
+  //
+  // Note this runs for every `<Markdown>` surface (issue description, comment
+  // bodies, run logs, chat messages). The lookup is per distinct identifier and
+  // cached for 5 minutes, so a body that cites the same round repeatedly costs
+  // one request. See the hook for the measured volume.
+  const resolvedIdentifiers = useResolvedIssueIdentifiers(content);
   const baseStyle = useMarkdownStyle();
   const markdownStyle = useMemo(
     () =>
@@ -155,9 +167,10 @@ export function Markdown({
     const processed = preprocessMobileMarkdown(content, {
       appOrigin: getWebBaseUrl() || getDisplayBaseUrl(),
       currentSlug: wsSlug,
+      resolvedIdentifiers,
     });
     return splitMarkdown(processed);
-  }, [content, wsSlug]);
+  }, [content, wsSlug, resolvedIdentifiers]);
 
   const onLinkPress = useCallback(
     ({ url }: { url: string }) => {

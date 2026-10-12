@@ -26,6 +26,10 @@ import {
   isIssueIdentifier,
   parseUnfurlableEntityLink,
 } from "@/lib/entity-link";
+import {
+  preprocessIssueIdentifiers,
+  type ResolvedIdentifiers,
+} from "./issue-identifiers";
 
 // File-card line matcher, kept in sync with web's parser in
 // `packages/ui/markdown/file-cards.ts` (NEW_FILE_CARD_RE + FILE_CARD_URL_PATTERN):
@@ -139,11 +143,12 @@ export function stripHtml(input: string): string {
  * workspace, because a chip resolves its title against the workspace the
  * viewer is in.
  *
- * The id form is restricted to UUIDs. `mention://issue/MUL-123` would route
- * to the issue detail page, which resolves a UUID only, so an identifier link
- * is left as an ordinary link rather than turned into a dead in-app jump.
- * (Web resolves identifiers against the workspace first; mobile has no such
- * lookup in the render path.)
+ * The id form is restricted to UUIDs here. `mention://issue/MUL-123` would
+ * route to the issue detail page, which keys its reads and its realtime
+ * subscription on the UUID, so an identifier link is left as an ordinary link
+ * rather than turned into a jump that stops updating. Identifiers written as
+ * bare prose are handled by the separate pass above, which resolves them to a
+ * UUID before rewriting.
  */
 const MD_LINK_RE = /(?<!!)\[([^\]]*)\]\((https?:\/\/[^)\s]+|\/[^)\s]+)\)/g;
 
@@ -238,13 +243,33 @@ export function preprocessMobileMarkdown(
     appOrigin?: string | null;
     /** The workspace the reader is in, for the cross-workspace guard. */
     currentSlug?: string | null;
+    /** Bare issue identifiers the caller has CONFIRMED name a real issue in
+     *  this workspace, mapped to their UUIDs. Only these are rewritten into
+     *  mention links; anything absent stays the plain text the author typed.
+     *
+     *  Omitted (or empty) turns the pass off entirely — which is what the
+     *  EDITABLE paths must do. Rewriting there would put an identifier-shaped
+     *  id into the stored markdown, so the write path deliberately never
+     *  supplies this (web opens the same pass for the readonly renderer only,
+     *  `rich-content.tsx:523`). */
+    resolvedIdentifiers?: ResolvedIdentifiers | null;
   },
 ): string {
   if (!input) return "";
+  // Ordering mirrors web's `preprocessMarkdown` (step 2 identifiers, step 3
+  // links): identifiers run first so the entity-link and file-card passes see
+  // the rewritten spans as existing markdown links and skip them.
+  const withIdentifiers = options?.resolvedIdentifiers
+    ? preprocessIssueIdentifiers(
+        preprocessMentionShortcodes(input),
+        options.resolvedIdentifiers,
+      )
+    : preprocessMentionShortcodes(input);
+
   return preprocessTaskListStrikethrough(
     preprocessFileCards(
       preprocessEntityLinks(
-        preprocessMentionShortcodes(input),
+        withIdentifiers,
         options?.appOrigin ?? null,
         options?.currentSlug ?? null,
       ),

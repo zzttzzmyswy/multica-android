@@ -9,6 +9,7 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type { Issue } from "@multica/core/types";
 import { api } from "@/data/api";
+import { isIssueIdentifier } from "@/lib/markdown/issue-identifiers";
 import {
   ISSUE_PAGE_SIZE,
   makeIssuePage,
@@ -190,6 +191,69 @@ export const issueDetailOptions = (wsId: string | null, id: string) =>
     queryFn: ({ signal }) => api.getIssue(id, { signal }),
     enabled: !!wsId && !!id,
   });
+
+/**
+ * Resolve a bare issue identifier (`MYS-2109`) to the issue it names, or
+ * `null` when this workspace has no such issue.
+ *
+ * Backs the read-only identifier autolink (`lib/markdown/issue-identifiers.ts`):
+ * the preprocessor may only rewrite an identifier it has CONFIRMED, because the
+ * server 404s one that names nothing and an unconfirmed rewrite would turn an
+ * innocuous string into a link to an error page.
+ *
+ * `enabled` gates on the workspace's own prefix as well as the identifier
+ * shape, mirroring web's `useResolveIssueIdentifier`. The prefix gate is not
+ * cosmetic: classifying every identifier occurrence across 40 live issues of
+ * this deployment found `MYS-` at 340 of 380, with the remainder being part
+ * numbers (`MT62F4G32D8DV-4`), other products' keys (`UTF-8`, `UDP-1`) and
+ * other workspaces' issues — all strings the server can never resolve here.
+ *
+ * Fetches through `api.getIssue` rather than `api.searchIssues`: search pages
+ * a title/description/comment index and can therefore miss an exact identifier
+ * whose row falls outside the returned window, whereas the detail endpoint
+ * resolves the identifier directly. Both were measured against this deployment
+ * — the detail endpoint is also the smaller response (median 7.3 KB against
+ * 17.1 KB for `limit=10`, since search returns full issue bodies).
+ */
+export const issueIdentifierOptions = (
+  wsId: string | null,
+  identifier: string,
+  issuePrefix: string | null | undefined,
+) =>
+  queryOptions({
+    queryKey: issueKeys.identifier(wsId, identifier),
+    queryFn: async ({ signal }) => {
+      try {
+        return await api.getIssue(identifier, { signal });
+      } catch {
+        // A 404 is the ANSWER here, not a failure: "this workspace has no such
+        // issue". Resolving to `null` lets the caller render the identifier as
+        // plain text, which is the correct end state. Rethrowing would instead
+        // park the query in `error` and, under the global `retry: 1`, spend a
+        // second request on every genuinely-absent identifier.
+        return null;
+      }
+    },
+    enabled:
+      !!wsId && isIssueIdentifier(identifier) && prefixMatches(identifier, issuePrefix),
+    // An identifier→issue mapping is effectively immutable; the same identifier
+    // recurs across many comments, and staleTime keeps that to one request.
+    staleTime: 5 * 60_000,
+  });
+
+/**
+ * Whether `identifier`'s prefix can name an issue in a workspace whose
+ * `issue_prefix` is `prefix`. An unknown prefix (workspace still loading) does
+ * NOT gate anything out — the lookup itself is then the authority, matching
+ * web's fall-through.
+ */
+function prefixMatches(
+  identifier: string,
+  prefix: string | null | undefined,
+): boolean {
+  if (!prefix) return true;
+  return identifier.toUpperCase().startsWith(`${prefix.toUpperCase()}-`);
+}
 
 /**
  * Single query over the full issue timeline (ASC, oldest first). Mirrors

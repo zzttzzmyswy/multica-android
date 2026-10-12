@@ -55,11 +55,13 @@ const UUID_RE =
 /** Bare issue identifier (`MUL-123`). Mirrors `@multica/ui/markdown`'s
  *  `isIssueIdentifier` — a UUID never matches (lowercase hex, four dashes), so
  *  the two shapes are unambiguous. Duplicated rather than imported: the ui
- *  package is not on mobile's import surface. */
-const ISSUE_IDENTIFIER_RE = /^[A-Z][A-Z0-9]*-\d+$/;
+ *  package is not on mobile's import surface. Exported so the markdown
+ *  identifier pass re-exports this one definition instead of minting a third
+ *  copy of the pattern. */
+export const ISSUE_IDENTIFIER_PATTERN = /^[A-Z][A-Z0-9]*-\d+$/;
 
 export function isIssueIdentifier(value: string): boolean {
-  return ISSUE_IDENTIFIER_RE.test(value);
+  return ISSUE_IDENTIFIER_PATTERN.test(value);
 }
 
 /** A project is only ever addressed by UUID; an issue also has the identifier

@@ -458,6 +458,9 @@ importers:
       katex:
         specifier: 0.16.11
         version: 0.16.11
+      linkify-it:
+        specifier: ^5.0.0
+        version: 5.0.0
       marked:
         specifier: ^18.0.3
         version: 18.0.3
@@ -537,6 +540,9 @@ importers:
       '@babel/core':
         specifier: ^7.25.0
         version: 7.29.0
+      '@types/linkify-it':
+        specifier: ^5.0.0
+        version: 5.0.0
       '@types/react':
         specifier: ^19.2.0
         version: 19.2.14
