@@ -17,6 +17,7 @@ const draft = (): AgentDraft => ({
   name: "Old name",
   description: "Old description",
   instructions: "Old instructions",
+  conversationStarters: [],
   avatarUrl: null,
   runtimeId: "runtime-1",
   model: "model-1",
@@ -357,5 +358,129 @@ describe("buildUpdateAgentRequest", () => {
     expect(request.permission_mode).toBeUndefined();
     expect(request.invocation_targets).toBeUndefined();
     expect(request.name).toBe("Old name");
+  });
+});
+
+// Conversation starters (MUL-6629). Create and update take OPPOSITE rules for
+// an empty list, and that asymmetry is the whole point: create omits the field
+// (an untouched field means "none configured"), while update must send the
+// empty array, since on UPDATE an omitted field preserves the saved value and
+// the author would otherwise be unable to delete their last row.
+describe("agent conversation starters on the wire", () => {
+  const starters = [
+    { label: "Review a PR", prompt: "Review the open pull request." },
+  ];
+
+  it("copies starters into a duplicate and the create request", () => {
+    const duplicate = buildDuplicateDraft(
+      sourceAgent({ conversation_starters: starters }),
+      {
+        runtimes: [CODEX_RUNTIME],
+        currentUserId: "user-1",
+        fallbackRuntimeId: "runtime-2",
+        nameSuffix: " (Copy)",
+      },
+    );
+
+    expect(duplicate.conversationStarters).toEqual(starters);
+    expect(
+      buildCreateAgentRequest({ draft: duplicate, runtimeId: "runtime-1" })
+        .conversation_starters,
+    ).toEqual(starters);
+  });
+
+  it("trims both halves before submission", () => {
+    const request = buildCreateAgentRequest({
+      draft: {
+        ...draft(),
+        conversationStarters: [
+          { label: "  Plan a release  ", prompt: "  Plan the next release.  " },
+        ],
+      },
+      runtimeId: "runtime-1",
+    });
+
+    expect(request.conversation_starters).toEqual([
+      { label: "Plan a release", prompt: "Plan the next release." },
+    ]);
+  });
+
+  it("omits the field on create when there are no starters", () => {
+    const request = buildCreateAgentRequest({
+      draft: draft(),
+      runtimeId: "runtime-1",
+    });
+
+    expect(request).not.toHaveProperty("conversation_starters");
+  });
+
+  it("drops a half-filled row on create instead of sending a blank button", () => {
+    const request = buildCreateAgentRequest({
+      draft: {
+        ...draft(),
+        conversationStarters: [
+          { label: "Complete", prompt: "This one is fine." },
+          { label: "Half", prompt: "  " },
+        ],
+      },
+      runtimeId: "runtime-1",
+    });
+
+    expect(request.conversation_starters).toEqual([
+      { label: "Complete", prompt: "This one is fine." },
+    ]);
+  });
+
+  it("sends the empty array on update so removing every row is expressible", () => {
+    const request = buildUpdateAgentRequest({
+      draft: { ...draft(), conversationStarters: [] },
+      runtimeId: "runtime-1",
+    });
+
+    expect(request.conversation_starters).toEqual([]);
+  });
+
+  it("normalizes the rows on update too", () => {
+    const request = buildUpdateAgentRequest({
+      draft: {
+        ...draft(),
+        conversationStarters: [
+          { label: "  Trim me  ", prompt: "  And me.  " },
+        ],
+      },
+      runtimeId: "runtime-1",
+    });
+
+    expect(request.conversation_starters).toEqual([
+      { label: "Trim me", prompt: "And me." },
+    ]);
+  });
+
+  it("leaves the field out entirely when the deployment does not persist starters", () => {
+    const request = buildUpdateAgentRequest({
+      draft: { ...draft(), conversationStarters: starters },
+      runtimeId: "runtime-1",
+      includeConversationStarters: false,
+    });
+
+    expect(request).not.toHaveProperty("conversation_starters");
+  });
+
+  it("seeds the edit form from the agent WITHOUT filtering incomplete rows", () => {
+    // The reader side filters; the editor must not, or opening the form would
+    // silently delete a row the author was part-way through writing.
+    const stored = [
+      { label: "Complete", prompt: "Fine as stored." },
+      { label: "In progress", prompt: "" },
+    ];
+    expect(
+      seedDraftFromAgent(sourceAgent({ conversation_starters: stored }))
+        .conversationStarters,
+    ).toEqual(stored);
+  });
+
+  it("seeds an empty list for an agent the server has never carried the field on", () => {
+    const seeded = seedDraftFromAgent(sourceAgent());
+    expect(seeded.conversationStarters).toEqual([]);
   });
 });

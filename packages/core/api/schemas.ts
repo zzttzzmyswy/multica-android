@@ -564,6 +564,11 @@ export interface AppConfigResponse {
    * their direct parent, and `DELETE /api/comments/:id/keep-replies` exists.
    * Older servers delete the replies too, so absent must read as false. */
   comment_delete_keep_replies_supported?: boolean;
+  /** Whether this deployment persists an agent's conversation starters
+   * (MUL-6629). Absent/false means the agent editor must render no starter
+   * surface at all and no chat may deep-link to one, since a save there would
+   * be dropped. */
+  agent_conversation_starters_supported?: boolean;
   server_version?: string;
 }
 
@@ -762,6 +767,8 @@ export const AppConfigSchema = z.object({
   feature_flags: FeatureFlagsSchema,
   comment_delete_keep_replies_supported:
     BooleanWithDefaultSchema(false).optional(),
+  agent_conversation_starters_supported:
+    BooleanWithDefaultSchema(false).optional(),
   server_version: OptionalStringSchema,
 }).loose();
 
@@ -776,6 +783,7 @@ export const EMPTY_APP_CONFIG: AppConfigResponse = {
   vcs_integration_available: false,
   feature_flags: {},
   comment_delete_keep_replies_supported: false,
+  agent_conversation_starters_supported: false,
 };
 
 // Preference keys may grow over time, so keep both the key and value spaces

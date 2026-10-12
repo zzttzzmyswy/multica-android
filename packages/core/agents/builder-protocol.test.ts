@@ -13,6 +13,7 @@ const draft = (): AgentDraft => ({
   name: "Old name",
   description: "Old description",
   instructions: "Old instructions",
+  conversationStarters: [],
   avatarUrl: null,
   runtimeId: "runtime-1",
   model: "model-1",
@@ -254,5 +255,103 @@ Return findings."}</agent_draft>`;
       thinkingLevel: "",
       serviceTier: "",
     });
+  });
+});
+
+// Conversation starters through the builder (MUL-6629). The inbound array is
+// model-generated, so it is untrusted: only complete {label, prompt} string
+// pairs survive, and an array that yields nothing usable must NOT wipe a list
+// the user already had — "the model replied with nonsense" is not the same
+// statement as "the user wants no suggestions".
+describe("agent builder conversation starters", () => {
+  const VALID_SKILLS = new Set(["skill-1"]);
+  const VALID_MEMBERS = new Set<string>();
+
+  function apply(payload: unknown, current = draft()): AgentDraft {
+    return mergeBuilderDraft(
+      current,
+      payload as never,
+      VALID_SKILLS,
+      VALID_MEMBERS,
+      null,
+    );
+  }
+
+  it("adopts complete rows the builder proposes", () => {
+    const next = apply({
+      conversation_starters: [
+        { label: "Review a PR", prompt: "Review the open pull request." },
+      ],
+    });
+
+    expect(next.conversationStarters).toEqual([
+      { label: "Review a PR", prompt: "Review the open pull request." },
+    ]);
+  });
+
+  it("trims and caps what the builder proposes", () => {
+    const next = apply({
+      conversation_starters: [
+        { label: "  A  ", prompt: "  Do A.  " },
+        { label: "B", prompt: "Do B." },
+        { label: "C", prompt: "Do C." },
+        { label: "D", prompt: "Do D." },
+      ],
+    });
+
+    expect(next.conversationStarters).toEqual([
+      { label: "A", prompt: "Do A." },
+      { label: "B", prompt: "Do B." },
+      { label: "C", prompt: "Do C." },
+    ]);
+  });
+
+  it("keeps the current list when the builder sends garbage", () => {
+    const current = {
+      ...draft(),
+      conversationStarters: [{ label: "Mine", prompt: "Keep me." }],
+    };
+
+    for (const payload of [
+      { conversation_starters: "not an array" },
+      { conversation_starters: [{ label: "No prompt" }] },
+      { conversation_starters: [{ label: "", prompt: "" }] },
+      { conversation_starters: [{ label: 7, prompt: "typed wrong" }] },
+      { conversation_starters: [{ label: "   ", prompt: "blank label" }] },
+    ]) {
+      expect(apply(payload, current).conversationStarters).toEqual([
+        { label: "Mine", prompt: "Keep me." },
+      ]);
+    }
+  });
+
+  it("preserves the current list when the reply never mentions starters", () => {
+    const current = {
+      ...draft(),
+      conversationStarters: [{ label: "Mine", prompt: "Keep me." }],
+    };
+
+    expect(apply({ name: "Renamed" }, current).conversationStarters).toEqual([
+      { label: "Mine", prompt: "Keep me." },
+    ]);
+  });
+
+  it("re-states the current starters in the outbound envelope", () => {
+    const envelope = encodeBuilderInput(
+      "add two starters",
+      {
+        ...draft(),
+        conversationStarters: [{ label: "Mine", prompt: "Keep me." }],
+      },
+      [],
+      [],
+      null,
+      null,
+    );
+
+    const payload = JSON.parse(envelope.replace("MULTICA_AGENT_BUILDER_INPUT\n", ""));
+    expect(payload.current_draft.conversation_starters).toEqual([
+      { label: "Mine", prompt: "Keep me." },
+    ]);
   });
 });

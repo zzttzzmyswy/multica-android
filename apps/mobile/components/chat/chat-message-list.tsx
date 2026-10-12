@@ -53,6 +53,7 @@ import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useQuery } from "@tanstack/react-query";
 import type {
+  Agent,
   ChatMessage,
   ChatPendingTask,
   ChatQuickAction,
@@ -100,6 +101,13 @@ interface Props {
   hasSessions: boolean;
   /** Currently picked / inherited agent's display name. */
   agentName?: string;
+  /** The agent the empty state belongs to. Its `conversation_starters` decide
+   *  which suggestions the empty state shows (MUL-6629). */
+  agent?: Agent | null;
+  /** Opens the agent editor on its conversation starters, or null/absent to
+   *  hide the affordance. Resolved by the parent, which holds the permission
+   *  and the backend-capability reads. */
+  onCustomizeStarters?: (() => void) | null;
   /** Current session's title — recorded into the download manager's history
    *  as the source name for attachments downloaded from this list. */
   sessionTitle?: string;
@@ -146,6 +154,8 @@ export const ChatMessageList = memo(function ChatMessageList({
   loading,
   hasSessions,
   agentName,
+  agent = null,
+  onCustomizeStarters = null,
   sessionTitle,
   onPickPrompt,
   onQuickAction,
@@ -312,8 +322,10 @@ export const ChatMessageList = memo(function ChatMessageList({
     return (
       <ChatEmptyState
         hasSessions={hasSessions}
+        agent={agent}
         agentName={agentName}
         onPickPrompt={onPickPrompt}
+        onCustomizeStarters={onCustomizeStarters}
       />
     );
   }

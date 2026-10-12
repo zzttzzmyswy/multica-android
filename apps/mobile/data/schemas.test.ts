@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { AppConfigSchema, ChatLastMessageSchema, ChatMessageSchema } from "@/data/schemas";
+import {
+  AgentSchema,
+  AppConfigSchema,
+  ChatLastMessageSchema,
+  ChatMessageSchema,
+} from "@/data/schemas";
 import { commentDeleteKeepsReplies } from "@/lib/comment-deletion";
 
 /**
@@ -128,5 +133,55 @@ describe("AppConfigSchema comment-delete capability (iteration 210)", () => {
     const parsed = AppConfigSchema.parse(older);
     expect(parsed.comment_delete_keep_replies_supported).toBe(false);
     expect(commentDeleteKeepsReplies(parsed)).toBe(false);
+  });
+});
+
+describe("conversation-starters wire shapes (MUL-6629)", () => {
+  it("parses an agent's configured starters instead of discarding them", () => {
+    // The field was previously absent from AgentSchema, so zod dropped it and
+    // every agent looked unconfigured — the chat empty state then rendered its
+    // hard-coded three regardless of what the author had saved.
+    const parsed = AgentSchema.parse({
+      id: "agent-1",
+      conversation_starters: [
+        { label: "Review a PR", prompt: "Review the open pull request." },
+      ],
+    });
+
+    expect(parsed.conversation_starters).toEqual([
+      { label: "Review a PR", prompt: "Review the open pull request." },
+    ]);
+  });
+
+  it("defaults to an empty list on an agent that has none", () => {
+    expect(AgentSchema.parse({ id: "agent-1" }).conversation_starters).toEqual([]);
+    expect(
+      AgentSchema.parse({ id: "agent-1", conversation_starters: [] })
+        .conversation_starters,
+    ).toEqual([]);
+  });
+
+  it("keeps a half-filled row as stored, for the editor to repair", () => {
+    // The reader-side filter is the resolver's job. The schema must not join
+    // in: dropping the row here would make the author's work unrecoverable.
+    const parsed = AgentSchema.parse({
+      id: "agent-1",
+      conversation_starters: [{ label: "In progress", prompt: "" }],
+    });
+
+    expect(parsed.conversation_starters).toEqual([
+      { label: "In progress", prompt: "" },
+    ]);
+  });
+
+  it("coerces a malformed row's missing halves to empty strings", () => {
+    const parsed = AgentSchema.parse({
+      id: "agent-1",
+      conversation_starters: [{ label: "Only a label" }],
+    });
+
+    expect(parsed.conversation_starters).toEqual([
+      { label: "Only a label", prompt: "" },
+    ]);
   });
 });

@@ -1,6 +1,7 @@
 import { isRuntimeUsableForUser } from "../runtimes/access";
 import type {
   Agent,
+  AgentConversationStarter,
   AgentInvocationTargetInput,
   AgentPermissionScope,
   CreateAgentRequest,
@@ -12,6 +13,7 @@ import {
   AGENT_MAX_CONCURRENT_TASKS_MAX,
   AGENT_MAX_CONCURRENT_TASKS_MIN,
 } from "./constants";
+import { normalizeConversationStarters } from "./conversation-starters";
 
 // Declared with the other agent wire types so `StoredAgentDraft` can name it
 // without types/ having to import from agents/.
@@ -26,6 +28,9 @@ export interface AgentDraft {
   name: string;
   description: string;
   instructions: string;
+  /** The suggestions a new chat with this agent offers (MUL-6629). Empty
+   *  means the client renders its own localized fallbacks. */
+  conversationStarters: AgentConversationStarter[];
   avatarUrl: string | null;
   runtimeId: string;
   model: string;
@@ -44,6 +49,7 @@ export const EMPTY_AGENT_DRAFT: AgentDraft = {
   name: "",
   description: "",
   instructions: "",
+  conversationStarters: [],
   avatarUrl: null,
   runtimeId: "",
   model: "",
@@ -187,6 +193,9 @@ export function buildDuplicateDraft(
     name: `${source.name}${options.nameSuffix}`,
     description: source.description ?? "",
     instructions: source.instructions ?? "",
+    conversationStarters: (source.conversation_starters ?? []).map((item) => ({
+      ...item,
+    })),
     avatarUrl: source.avatar_url ?? null,
     runtimeId: keepsRuntime
       ? (source.runtime_id as string)
@@ -213,10 +222,17 @@ export function buildCreateAgentRequest(options: {
   duplicateSource?: Agent | null;
 }): CreateAgentRequest {
   const { draft, runtimeId, template, duplicateSource } = options;
+  const starters = normalizeConversationStarters(draft.conversationStarters);
   const request: CreateAgentRequest = {
     name: draft.name.trim(),
     description: draft.description.trim(),
     instructions: draft.instructions.trim() || undefined,
+    // Omitted when empty, exactly like the execution overrides below: the
+    // server's own default for an unset field is "none configured", and
+    // sending `[]` would claim the author had explicitly cleared a list they
+    // never opened. Only ever the complete, trimmed, capped rows — the same
+    // normalization the update path uses.
+    ...(starters.length > 0 ? { conversation_starters: starters } : {}),
     avatar_url: draft.avatarUrl ?? undefined,
     runtime_id: runtimeId,
     model: draft.model.trim() || undefined,
@@ -259,6 +275,13 @@ export function seedDraftFromAgent(agent: Agent): AgentDraft {
     name: agent.name,
     description: agent.description ?? "",
     instructions: agent.instructions ?? "",
+    // Read WITHOUT the complete-row filter the reader side applies: the edit
+    // form must show an author the rows as stored, half-filled ones included,
+    // so they can finish or remove them. Filtering here would silently delete
+    // a row the moment the form opens.
+    conversationStarters: (agent.conversation_starters ?? []).map((item) => ({
+      ...item,
+    })),
     avatarUrl: agent.avatar_url ?? null,
     runtimeId: agent.runtime_id ?? "",
     model: agent.model ?? "",
@@ -283,13 +306,26 @@ export function seedDraftFromAgent(agent: Agent): AgentDraft {
  * Access fields are owner-only writes server-side (403 for a real change from
  * a non-owner). Pass `includeAccess: false` when the caller is not the agent
  * owner so a read-only admin edit doesn't resubmit grants they may not touch.
+ *
+ * `conversation_starters` follows the execution-override rule, not the
+ * omit-when-empty rule create uses: on UPDATE an empty array is the ONLY way to
+ * say "the author removed every row", and omitting it would leave the old list
+ * in place forever. Pass `includeConversationStarters: false` when the
+ * deployment does not persist starters at all — there the field must not be
+ * sent, since nothing on the page can have edited it.
  */
 export function buildUpdateAgentRequest(options: {
   draft: AgentDraft;
   runtimeId: string;
   includeAccess?: boolean;
+  includeConversationStarters?: boolean;
 }): UpdateAgentRequest {
-  const { draft, runtimeId, includeAccess = true } = options;
+  const {
+    draft,
+    runtimeId,
+    includeAccess = true,
+    includeConversationStarters = true,
+  } = options;
   const request: UpdateAgentRequest = {
     name: draft.name.trim(),
     description: draft.description.trim(),
@@ -299,6 +335,11 @@ export function buildUpdateAgentRequest(options: {
     thinking_level: draft.thinkingLevel.trim(),
     service_tier: draft.serviceTier.trim(),
   };
+  if (includeConversationStarters) {
+    request.conversation_starters = normalizeConversationStarters(
+      draft.conversationStarters,
+    );
+  }
   if (runtimeId) request.runtime_id = runtimeId;
   if (includeAccess) {
     request.permission_mode =

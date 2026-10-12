@@ -474,6 +474,10 @@ export interface Agent {
   /** Read-only product half of a system agent's prompt, served from the
    *  backend binary. Absent for ordinary agents. */
   system_instructions?: string;
+  /** The suggestions a new chat with this agent offers before the first user
+   *  message (MUL-6629). Absent or empty means the client shows its own
+   *  localized fallbacks — see `selectConversationStarters`. */
+  conversation_starters?: AgentConversationStarter[];
   avatar_url: string | null;
   runtime_mode: AgentRuntimeMode;
   runtime_config: Record<string, unknown>;
@@ -578,6 +582,13 @@ export interface Agent {
   archived_by: string | null;
 }
 
+export interface AgentConversationStarter {
+  /** Short chip label shown in the empty state. */
+  label: string;
+  /** Full editable text copied into the composer when selected. */
+  prompt: string;
+}
+
 export interface DisabledRuntimeSkill {
   runtime_id: string;
   provider: string;
@@ -615,6 +626,7 @@ export interface CreateAgentRequest {
   name: string;
   description?: string;
   instructions?: string;
+  conversation_starters?: AgentConversationStarter[];
   avatar_url?: string;
   runtime_id: string;
   runtime_config?: Record<string, unknown>;
@@ -667,6 +679,9 @@ export interface StoredAgentDraft {
   name: string;
   description: string;
   instructions: string;
+  /** The in-progress starter list. Persisted with the rest of the draft so a
+   *  reopened studio conversation shows the rows the user was editing. */
+  conversation_starters: AgentConversationStarter[];
   avatar_url: string | null;
   model: string;
   thinking_level: string;
@@ -709,6 +724,7 @@ export interface UpdateAgentRequest {
   name?: string;
   description?: string;
   instructions?: string;
+  conversation_starters?: AgentConversationStarter[];
   avatar_url?: string;
   runtime_id?: string;
   runtime_config?: Record<string, unknown>;
