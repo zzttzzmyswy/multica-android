@@ -196,3 +196,75 @@ describe("preprocessMobileMarkdown — bare entity URLs (R1, the common case)", 
     expect(preprocessMobileMarkdown(`see ${url}`, opts)).toBe(`see ${url}`);
   });
 });
+
+/**
+ * The bare-identifier pass, exercised where it is wired (inside
+ * `preprocessMobileMarkdown`) rather than only as a pure function — the ORDER
+ * against the entity-link and file-card passes is part of the contract.
+ */
+describe("preprocessMobileMarkdown — bare issue identifiers", () => {
+  const ID = "01a12e65-9ed5-7e40-a2f1-363fdea817bc";
+  const resolved = new Map([["MYS-2109", ID]]);
+  const opts = { resolvedIdentifiers: resolved };
+
+  it("rewrites a confirmed identifier into a mention link", () => {
+    expect(preprocessMobileMarkdown("fixed in MYS-2109 today", opts)).toBe(
+      `fixed in [MYS-2109](mention://issue/${ID}) today`,
+    );
+  });
+
+  it("leaves an unconfirmed identifier exactly as the author typed it", () => {
+    // The server 404s an identifier that names no issue, so an unconfirmed
+    // rewrite would turn innocuous text into a link to an error page.
+    const md = "see MYS-99999 for details";
+    expect(preprocessMobileMarkdown(md, opts)).toBe(md);
+  });
+
+  it("is OFF unless the caller supplies the resolved set (the editable stance)", () => {
+    // Editable paths must never rewrite: the stored markdown would gain an
+    // identifier-shaped mention id. Web keeps the same pass off for Tiptap.
+    const md = "fixed in MYS-2109 today";
+    expect(preprocessMobileMarkdown(md)).toBe(md);
+    expect(preprocessMobileMarkdown(md, { resolvedIdentifiers: null })).toBe(md);
+    expect(
+      preprocessMobileMarkdown(md, { resolvedIdentifiers: new Map() }),
+    ).toBe(md);
+  });
+
+  it("does not rewrite inside a code fence", () => {
+    const md = "```\nMYS-2109\n```";
+    expect(preprocessMobileMarkdown(md, opts)).toBe(md);
+  });
+
+  it("does not rewrite inside inline code", () => {
+    const md = "run `MYS-2109` now";
+    expect(preprocessMobileMarkdown(md, opts)).toBe(md);
+  });
+
+  it("rewrites identifiers even without an appOrigin (no link pass needed)", () => {
+    // The identifier pass is independent of `appOrigin`: it produces a
+    // `mention://` link directly, so it works before any server config lands.
+    expect(preprocessMobileMarkdown("see MYS-2109", opts)).toBe(
+      `see [MYS-2109](mention://issue/${ID})`,
+    );
+  });
+
+  it("keeps an identifier inside a same-deployment URL unlinked", () => {
+    // The URL pass may or may not unfurl this link; either way the identifier
+    // inside it must not be rewritten into a nested link.
+    const md = "see https://mu.zztweb.top/acme/issues/MUL-123 now";
+    const out = preprocessMobileMarkdown(md, opts);
+    expect(out).not.toContain("mention://issue/MUL-123");
+  });
+
+  it("does not double-rewrite an identifier that is already a mention link", () => {
+    const md = `see [MYS-2109](mention://issue/${ID})`;
+    expect(preprocessMobileMarkdown(md, opts)).toBe(md);
+  });
+
+  it("runs before the file-card pass, so a card line is untouched", () => {
+    const md = `!file[a.pdf](/api/attachments/${ID}/download)`;
+    const out = preprocessMobileMarkdown(md, opts);
+    expect(out).toContain("[📎 a.pdf]");
+  });
+});

@@ -156,6 +156,12 @@ export const issueKeys = {
   ) => [...issueKeys.actorAll(wsId), actorType, actorId, relation] as const,
   detail: (wsId: string | null, id: string) =>
     [...issueKeys.all(wsId), "detail", id] as const,
+  /** Resolve a bare issue identifier (e.g. "MYS-2109") to that issue. Mirrors
+   *  core's `issueKeys.identifier` so the two clients key the same fact the
+   *  same way. Keyed by the IDENTIFIER, not the uuid it resolves to: the
+   *  caller has only the identifier when it asks. */
+  identifier: (wsId: string | null, identifier: string) =>
+    [...issueKeys.all(wsId), "identifier", identifier] as const,
   timeline: (wsId: string | null, id: string) =>
     [...issueKeys.all(wsId), "timeline", id] as const,
   // Direct sub-issues (children) of a parent issue. Drives the sub-issue
