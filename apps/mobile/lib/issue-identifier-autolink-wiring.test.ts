@@ -85,8 +85,13 @@ describe("the resolver fetches exactly the candidates the rewriter can use", () 
   });
 
   it("maps identifier to UUID, not to a boolean", () => {
-    expect(src).toContain("result.data.id");
-    expect(src).toContain("Map<string, string>");
+    // The pairing lives in a pure module so the Node lane can test the rule;
+    // the hook only wires it to queries.
+    expect(src).toContain("serializeResolvedPairs");
+    expect(src).toContain("toResolvedMap");
+    const pairs = code("lib/issue-identifier-pairs.ts");
+    expect(pairs).toContain("Map<string, string>");
+    expect(pairs).toContain("issue.id");
   });
 
   it("keys the returned map on the resolved pairs, not on array identity", () => {

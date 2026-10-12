@@ -49,10 +49,13 @@ import { issueIdentifierOptions } from "@/data/queries/issues";
 import { workspaceListOptions } from "@/data/queries/workspaces";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { collectIssueIdentifiers } from "@/lib/markdown/issue-identifiers";
+import {
+  serializeResolvedPairs,
+  toResolvedMap,
+  type ResolvedIssueIdentifiers,
+} from "@/lib/issue-identifier-pairs";
 
-/** Identifier → issue UUID, for the identifiers that resolved to a real issue.
- *  Shaped for `preprocessIssueIdentifiers`' `ResolvedIdentifiers`. */
-export type ResolvedIssueIdentifiers = Map<string, string>;
+export type { ResolvedIssueIdentifiers };
 
 /**
  * Resolve every distinct bare issue identifier in `content`.
@@ -92,19 +95,10 @@ export function useResolvedIssueIdentifiers(
   // each render (cheap, and unavoidable since `results` is a fresh array), but
   // an unchanged string makes the memo below bail out. Same device as
   // `issueParamsKey` in `data/queries/issue-keys.ts`.
-  const pairsKey = JSON.stringify(
-    results.map((result, i) =>
-      result.data ? [identifiers[i], result.data.id] : null,
-    ),
+  const pairsKey = serializeResolvedPairs(
+    identifiers,
+    results.map((result) => result.data ?? null),
   );
 
-  return useMemo(
-    () =>
-      new Map(
-        (JSON.parse(pairsKey) as Array<[string, string] | null>).flatMap(
-          (pair) => (pair ? [pair] : []),
-        ),
-      ),
-    [pairsKey],
-  );
+  return useMemo(() => toResolvedMap(pairsKey), [pairsKey]);
 }
