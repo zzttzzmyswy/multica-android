@@ -38,6 +38,7 @@
  */
 import { useCallback, useMemo } from "react";
 import { Alert, Linking, View } from "react-native";
+import type { LayoutChangeEvent } from "react-native";
 import { router } from "expo-router";
 import { EnrichedMarkdownText } from "react-native-enriched-markdown";
 import type { Attachment } from "@multica/core/types";
@@ -120,6 +121,34 @@ interface Props {
   /** Where this markdown lives (issue / chat), recorded into the download
    *  manager's history for attachment links tapped inside the body. */
   downloadSource?: DownloadSource;
+  /**
+   * Reports each rendered segment's rectangle inside this component, so a
+   * caller can scroll to a position INSIDE the content rather than only to its
+   * top. Only the issue description passes it (MYS-2112): a find hit deep in a
+   * long description has to land on the segment that holds it, and the native
+   * renderer exposes no per-block geometry to JS — `onLayout` on each segment
+   * child is the one measured quantity available.
+   *
+   * Kept optional and side-effect-free so every other `<Markdown>` surface
+   * (comment bodies, chat bubbles, run logs) is byte-for-byte unchanged: with
+   * no callback there is no wrapper and no extra render.
+   *
+   * Reports `segmentTop` RELATIVE TO THIS COMPONENT, not to the caller's parent
+   * — the caller adds where the `<Markdown>` itself sits (see
+   * `IssueDescription`). Keeping them separate means this component needs no
+   * knowledge of the header's layout, which is what makes it reusable.
+   */
+  onSegmentLayout?: (report: MarkdownSegmentLayout) => void;
+}
+
+/** One segment's measured rectangle, as reported by `onSegmentLayout`. */
+export interface MarkdownSegmentLayout {
+  /** Index into the segment list `splitMarkdown` produced. */
+  index: number;
+  /** The segment's top, in px, relative to the `<Markdown>` component. */
+  top: number;
+  /** The segment's height, in px. `0` before it has laid out. */
+  height: number;
 }
 
 export function Markdown({
@@ -128,6 +157,7 @@ export function Markdown({
   selectable = true,
   compact = false,
   downloadSource,
+  onSegmentLayout,
 }: Props) {
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const { t } = useTranslation();
@@ -256,6 +286,37 @@ export function Markdown({
 
   if (segments.length === 0) return null;
 
+  // Measures a segment and hands its rectangle up. Only wired when a caller
+  // asked for it: with no `onSegmentLayout` the wrapper below is not rendered at
+  // all, so every other <Markdown> surface keeps exactly the tree it had.
+  //
+  // `onLayout` on a wrapper rather than on the segment itself because the
+  // segment is a third-party native component (`EnrichedMarkdownText`) whose
+  // props we do not own; a plain layout-transparent `View` costs one Yoga node
+  // and changes nothing about how the segment draws.
+  //
+  // The reported `top` is relative to this component's content box, which is
+  // what the outer `gap-3` View establishes. That is deliberate: the caller
+  // knows where <Markdown> sits, this component does not need to.
+  const measure = (index: number) =>
+    onSegmentLayout
+      ? (e: LayoutChangeEvent) =>
+          onSegmentLayout({
+            index,
+            top: e.nativeEvent.layout.y,
+            height: e.nativeEvent.layout.height,
+          })
+      : undefined;
+
+  const wrap = (index: number, node: React.ReactNode) =>
+    onSegmentLayout ? (
+      <View key={index} onLayout={measure(index)}>
+        {node}
+      </View>
+    ) : (
+      node
+    );
+
   return (
     // `gap-3` enforces 12px between every segment sibling (prose ↔ code,
     // code ↔ code, image ↔ anything). Going through gap instead of
@@ -267,7 +328,8 @@ export function Markdown({
       {segments.map((seg, i) => {
         switch (seg.type) {
           case "prose":
-            return (
+            return wrap(
+              i,
               <EnrichedMarkdownText
                 key={i}
                 flavor="github"
@@ -275,52 +337,47 @@ export function Markdown({
                 markdownStyle={markdownStyle}
                 onLinkPress={onLinkPress}
                 selectable={selectable}
-              />
+              />,
             );
           case "code": {
             const kind = richFenceKind(seg.lang);
             if (kind === "mermaid") {
-              return (
-                <MermaidBlock
-                  key={i}
-                  source={seg.code}
-                />
-              );
+              return wrap(i, <MermaidBlock key={i} source={seg.code} />);
             }
             if (kind === "html") {
-              return (
+              return wrap(
+                i,
                 <HtmlBlockPreview
                   key={i}
                   html={seg.code}
                   selectable={selectable}
-                />
+                />,
               );
             }
-            return (
+            return wrap(
+              i,
               <CodeBlock
                 key={i}
                 code={seg.code}
                 lang={seg.lang}
                 selectable={selectable}
-              />
+              />,
             );
           }
           case "math":
-            return (
-              <MathBlock
-                key={i}
-                expression={seg.code}
-                displayMode
-              />
+            return wrap(
+              i,
+              <MathBlock key={i} expression={seg.code} displayMode />,
             );
           case "image":
-            return (
+            return wrap(
+              i,
               <MarkdownImage
                 key={i}
                 uri={seg.uri}
                 alt={seg.alt}
                 attachments={attachments}
-              />
+              />,
             );
         }
       })}

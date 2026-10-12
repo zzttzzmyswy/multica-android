@@ -118,8 +118,10 @@ import { THEME } from "@/lib/theme";
 import { useCommentSelectStore } from "@/data/comment-select-store";
 import { useTranslation } from "@/lib/i18n/react";
 import {
-  FIND_TARGET_DESCRIPTION,
+  descriptionFindOffset,
+  descriptionTargetIndex,
   FIND_TARGET_TITLE,
+  isDescriptionFindTarget,
 } from "@/lib/issue-find";
 import { HighlightOverlay } from "./highlight-overlay";
 import {
@@ -157,8 +159,8 @@ interface Props {
   /** Per-jump nonce — re-picking the same thread re-fires the scroll. */
   jumpNonce?: string;
   /** In-page find target, from `lib/issue-find.ts`. Either a comment id —
-   *  which may be a ROOT **or a reply** — or one of the two header sentinels
-   *  (`FIND_TARGET_TITLE` / `FIND_TARGET_DESCRIPTION`).
+   *  which may be a ROOT **or a reply** — or one of the header sentinels
+   *  (`FIND_TARGET_TITLE` / `findDescriptionTarget(i)`).
    *
    *  A comment lands like a navigator jump (scroll to the owning row) and
    *  resolves through replies too: a reply is not its own row in the mobile
@@ -174,6 +176,15 @@ interface Props {
    *  to a previous one, or two hits inside one comment) must re-fire the
    *  scroll and re-flash, so the target alone cannot be the trigger. */
   findNonce?: string;
+  /** Where inside a description segment the match sits, `0 ≤ fraction ≤ 1`, as
+   *  computed by `lib/issue-find.ts` (MYS-2112). Only meaningful together with
+   *  a description `findTargetId`: it is what turns "the segment that holds the
+   *  match" into a position inside that segment.
+   *
+   *  Undefined for every other target, and also for a description target when
+   *  the caller had no fraction to give — in which case the landing degrades to
+   *  the segment's top, which is still strictly better than the description's. */
+  findFraction?: number;
 }
 
 /** How long the flash stays "claimed" before we let a new highlight take
@@ -195,14 +206,15 @@ const JUMP_HIGHLIGHT_HOLD_MS = 2000;
 const DIVIDER_ID = "__divider__";
 
 /** Whether a find target names one of the two header blocks rather than a
- *  comment. Every other target is a comment id. */
+ *  comment. Every other target is a comment id.
+ *
+ *  A description target is now per-SEGMENT (`findDescriptionTarget`), so the
+ *  test goes through `isDescriptionFindTarget` rather than comparing against
+ *  the bare sentinel — otherwise every hit past the description's first segment
+ *  would fall through to the comment path and find no row to scroll to. */
 function isHeaderFindTarget(id: string): boolean {
-  return id === FIND_TARGET_TITLE || id === FIND_TARGET_DESCRIPTION;
+  return id === FIND_TARGET_TITLE || isDescriptionFindTarget(id);
 }
-
-/** Breathing room above the description when find scrolls to it, so the
- *  matched line does not sit flush against the top edge under the nav bar. */
-const HEADER_FIND_PAD = 12;
 
 export function TimelineList({
   issue,
@@ -218,6 +230,7 @@ export function TimelineList({
   jumpNonce,
   findTargetId,
   findNonce,
+  findFraction,
 }: Props) {
   const { t } = useTranslation();
   // Top-level selection subscription gates the outer "tap-outside-to-dismiss"
@@ -292,6 +305,30 @@ export function TimelineList({
   // and agent-activity row, so its offset is not a constant. A ref, not state:
   // measuring must not re-render the list, and nothing renders from the value.
   const measuredHeaderTopsRef = useRef({ description: 0 });
+  // Each description segment's measured rectangle, WRAPPER-RELATIVE (exactly
+  // what `IssueDescription` reports), keyed by the segment index `splitMarkdown`
+  // assigned (MYS-2112). This is what lets a find hit deep in the description
+  // land on the segment holding it rather than on the description's top. A ref,
+  // not state: measuring must not re-render the list, and nothing renders from
+  // these values.
+  //
+  // The description's own offset is added when these are READ, never when they
+  // are written. Storing scroll-content coordinates instead would be wrong twice
+  // over: it double-counts that offset (a bug this round shipped and the device
+  // caught — a 213dp overshoot that pushed the match past the viewport edge),
+  // and it goes stale the moment the header card above resizes, since that moves
+  // every segment in the content without moving any of them inside the
+  // description, so no segment `onLayout` would fire to correct it. Reading
+  // through `measuredHeaderTopsRef` (which DOES re-fire on that change) keeps
+  // the landing and the flash consistent by construction.
+  const measuredSegmentRectsRef = useRef(
+    new Map<number, { top: number; height: number }>(),
+  );
+  // The scroll container's visible height, captured by `handleScroll`. Read by
+  // the description landing, which centres the match — see
+  // `descriptionFindOffset` for why centring rather than a top pad. `0` until
+  // the first scroll event, which the landing treats as "no pad".
+  const viewportHeightRef = useRef(0);
   // Gates single-shot per (commentId, nonce) tuple. Re-tap from inbox
   // bumps the nonce → ref no longer matches → effect re-fires.
   const lastStampRef = useRef<string | null>(null);
@@ -372,6 +409,12 @@ export function TimelineList({
   const handleScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+      // The visible height, kept for the find landing: centring a description
+      // hit needs it, and `onScroll` is the earliest point it is known without
+      // adding a second layout listener to the list. A ref, not state — nothing
+      // renders from it, and a scroll handler that set state per frame would be
+      // the churn the FAB logic above exists to avoid.
+      viewportHeightRef.current = layoutMeasurement.height;
       const metrics = {
         contentOffsetY: contentOffset.y,
         contentHeight: contentSize.height,
@@ -506,16 +549,42 @@ export function TimelineList({
       // whether or not the issue has comments, and an issue whose description
       // is its only prose (the case this round exists for) must still land.
       lastFindRef.current = stamp;
-      // The title sits at the very top, so 0 is exact. The description sits
-      // below the header card, whose height varies with the attribute chips
-      // and any custom properties, so its offset is the value `onLayout`
-      // measured. Unmeasured (0) degrades to the top of the list, where the
-      // description is still on screen on any phone — the header card is far
-      // shorter than a viewport.
+      // The title sits at the very top, so 0 is exact. A description hit sits
+      // below the header card, whose height varies with the attribute chips and
+      // any custom properties, so its offset is what `onLayout` measured.
+      //
+      // For the description the landing is the SEGMENT that holds the match
+      // (MYS-2112), not the description's top: the description renders as a
+      // list of segments, each measured by its own `onLayout`
+      // (`measuredSegmentRectsRef`), and a hit deep in the 4th segment is
+      // unreachable from the top — measured on MYS-2077, the matched row sits
+      // 1,987dp down against a ~700dp viewport. `descriptionFindOffset` then
+      // CENTRES the match inside that measured rectangle, which is what makes
+      // the modelled fraction's error survivable (it measured 12 points of a
+      // segment on the fixture — far more than a top pad could absorb). See that
+      // function's docblock for the numbers and for why web centres too.
+      //
+      // A segment whose rectangle is not measured yet degrades to the
+      // description's top — exactly the previous behaviour, so nothing that
+      // worked before can regress.
+      const segmentTop = isDescriptionFindTarget(findTargetId)
+        ? measuredSegmentRectsRef.current.get(descriptionTargetIndex(findTargetId))
+        : undefined;
       const offset =
-        findTargetId === FIND_TARGET_DESCRIPTION
-          ? Math.max(0, measuredHeaderTopsRef.current.description - HEADER_FIND_PAD)
-          : 0;
+        findTargetId === FIND_TARGET_TITLE
+          ? 0
+          : descriptionFindOffset({
+              segmentTop:
+                segmentTop === undefined
+                  ? Math.max(0, measuredHeaderTopsRef.current.description)
+                  : Math.max(
+                      0,
+                      measuredHeaderTopsRef.current.description + segmentTop.top,
+                    ),
+              segmentHeight: segmentTop?.height ?? 0,
+              fraction: findFraction,
+              viewportHeight: viewportHeightRef.current,
+            });
       listRef.current?.scrollToOffset({ offset, animated: true });
       setFindHeaderFlash(findTargetId);
       const fade = setTimeout(() => setFindHeaderFlash(null), JUMP_HIGHLIGHT_HOLD_MS);
@@ -545,7 +614,13 @@ export function TimelineList({
     setHighlightedId(findTargetId);
     const fade = setTimeout(() => setHighlightedId(null), JUMP_HIGHLIGHT_HOLD_MS);
     return () => clearTimeout(fade);
-  }, [findTargetId, findNonce, dataWithDivider]);
+    // `findFraction` is a dependency for closure correctness — the effect body
+    // reads it to compute the landing. It advances together with `findNonce`
+    // (the screen sets both from one match), so it can never cause a re-fire the
+    // stamp guard would not already have allowed: the guard is keyed on
+    // (targetId, nonce), and a fraction that changed under a fixed nonce would be
+    // a screen bug, not a reason to scroll.
+  }, [findTargetId, findNonce, findFraction, dataWithDivider]);
 
   // Mark "scrolled past" once the divider row leaves the viewport — used
   // by the unmount effect below to decide whether to bump last-viewed.
@@ -610,6 +685,28 @@ export function TimelineList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [issue.id]);
 
+  // The rectangle the description's flash should cover: the segment holding the
+  // active find hit, in the coordinate space of the description block's wrapper
+  // (which is what `absolute` inside that wrapper resolves against). The ref
+  // already stores wrapper-relative coordinates, so this is a direct read — the
+  // block's own offset is never added here.
+  //
+  // Zero when the target is the title, when the description is not being
+  // flashed, or when the segment has not been measured — and a zero-height
+  // overlay draws nothing, so no stale rectangle can linger over the block.
+  const descriptionFlashRect = useMemo(() => {
+    if (!findHeaderFlash || !isDescriptionFindTarget(findHeaderFlash)) {
+      return { top: 0, left: 0, right: 0, height: 0 };
+    }
+    const rect = measuredSegmentRectsRef.current.get(
+      descriptionTargetIndex(findHeaderFlash),
+    );
+    if (!rect || rect.height <= 0) {
+      return { top: 0, left: 0, right: 0, height: 0 };
+    }
+    return { top: rect.top, left: 0, right: 0, height: rect.height };
+  }, [findHeaderFlash]);
+
   const ListHeader = (
     <View>
       {/* Find indexes the title (it is the first thing the page renders), so
@@ -632,14 +729,50 @@ export function TimelineList({
           measuredHeaderTopsRef.current.description = e.nativeEvent.layout.y;
         }}
       >
-        <IssueDescription issueId={issue.id} description={issue.description} />
+        {/* Segment rectangles feed the description's find landing (MYS-2112):
+         *  a hit deep in a long description must land on the segment that holds
+         *  it, and each segment is the finest geometry the native renderer will
+         *  measure.
+         *
+         *  Stored WRAPPER-RELATIVE (`report.top` as measured), NOT converted to
+         *  scroll-content coordinates here. The landing adds the description's
+         *  own measured offset when it reads them, so baking it in on this side
+         *  as well double-counts it — which is a bug this round actually shipped
+         *  and the device caught: it scrolled 213dp (exactly
+         *  `measuredHeaderTopsRef.current.description`) too far, putting the
+         *  matched row just past the viewport's bottom edge. One conversion, on
+         *  the reading side, is what keeps it correct — and it needs to be there
+         *  anyway, because a description whose header above it resizes moves in
+         *  the content without any segment `onLayout` firing.
+         *
+         *  Written into a ref rather than state: this fires on every layout
+         *  pass (fonts loading, a table re-measuring) and nothing renders from
+         *  the values, so routing them through state would re-render the whole
+         *  timeline for a measurement only the next jump reads. */}
+        <IssueDescription
+          issueId={issue.id}
+          description={issue.description}
+          onSegmentLayout={(report) => {
+            measuredSegmentRectsRef.current.set(report.index, {
+              top: report.top,
+              height: report.height,
+            });
+          }}
+        />
         {/* Flashed when an in-page find step lands in the description. Covers
-         *  the whole block rather than the matched line: the markdown renderer
-         *  exposes no per-block layout, so there is nothing to address more
-         *  finely — the same trade-off web takes with its all-matches tint. */}
+         *  the SEGMENT that holds the match, not the whole block (MYS-2112): a
+         *  description-level wash would claim the match is somewhere it is
+         *  demonstrably not — the very confusion this round exists to remove.
+         *
+         *  Still coarser than the matched LINE, and deliberately so: the native
+         *  renderer exposes no line geometry, so a tighter mark would have to be
+         *  drawn from the same modelled `fraction` the scroll uses and would
+         *  point at the wrong line whenever the model is off — worse than
+         *  covering a whole segment, which is at least always true. */}
         <HighlightOverlay
-          active={findHeaderFlash === FIND_TARGET_DESCRIPTION}
-          className="absolute inset-0 rounded-lg border-2 border-brand/50 bg-brand/5"
+          active={findHeaderFlash !== null && isDescriptionFindTarget(findHeaderFlash)}
+          className="absolute rounded-lg border-2 border-brand/50 bg-brand/5"
+          style={descriptionFlashRect}
         />
       </View>
       <IssueReactionRow issue={issue} />
@@ -819,6 +952,14 @@ export function TimelineList({
               : "activity"
         }
         onScroll={handleScroll}
+        // The viewport height is needed the FIRST time find lands in the
+        // description, which can happen before any scroll event fires (typing a
+        // query scrolls nothing until the jump). `onLayout` on the list is where
+        // it is known that early; `handleScroll` keeps it current afterwards.
+        // A ref, so this fires without a re-render.
+        onLayout={(e) => {
+          viewportHeightRef.current = e.nativeEvent.layout.height;
+        }}
         // Any user-initiated scroll exits comment text-selection mode —
         // matches iMessage's behavior where scrolling implicitly commits /
         // dismisses the selection caret. Hooks both drag-start and the

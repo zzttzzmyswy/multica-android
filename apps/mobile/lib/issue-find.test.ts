@@ -26,11 +26,15 @@ import { describe, expect, it } from "vitest";
 import type { TimelineEntry } from "@multica/core/types";
 import {
   collectSearchables,
+  descriptionFindOffset,
+  descriptionTargetIndex,
   extractSearchBlocks,
   findCounter,
+  findDescriptionTarget,
   findInTimeline,
   FIND_TARGET_DESCRIPTION,
   FIND_TARGET_TITLE,
+  isDescriptionFindTarget,
   matchTarget,
   stepMatch,
 } from "./issue-find";
@@ -421,13 +425,13 @@ describe("the header is part of the container (title + description)", () => {
     const description = "配置 `LOGICAL_DISPLAY_NODE` 与 `window_scene_board` 部件";
     expect(withHeader([], "t", description, "LOGICAL_DISPLAY_NODE")).toHaveLength(1);
     expect(withHeader([], "t", description, "LOGICALDISPLAYNODE")).toEqual([]);
-    // Same call the comment path makes, so the two cannot drift.
-    expect(collectSearchables([], { title: "", description })).toEqual(
-      extractSearchBlocks(description).map((text) => ({
-        targetId: FIND_TARGET_DESCRIPTION,
-        text,
-      })),
-    );
+    // Same call the comment path makes, so the two cannot drift. The block list
+    // is compared on its TEXT, because since MYS-2112 each block also carries
+    // the rendered segment it came from plus that segment's fraction span — see
+    // the dedicated segment suite below, which pins those two fields.
+    expect(
+      collectSearchables([], { title: "", description }).map((s) => s.text),
+    ).toEqual(extractSearchBlocks(description));
   });
 
   it("keeps the description's code fences out, like a comment's", () => {
@@ -734,5 +738,353 @@ describe("matchTarget", () => {
 
   it("has no target without a match", () => {
     expect(matchTarget(undefined)).toBeUndefined();
+  });
+});
+
+/**
+ * The description's landing target (MYS-2112).
+ *
+ * Before this round every description block shared ONE target
+ * (`FIND_TARGET_DESCRIPTION`), so a hit in the description's 4th rendered
+ * segment was landed by scrolling to the description's top. Measured on this
+ * deployment, 28% of descriptions contain a table, tables are 8.32% of all
+ * description text, and the distance from a description's start to its last
+ * table row has a median of 1,939 characters — more than a screen. The device
+ * fixture (MYS-2077) put the matched row 1,987dp below the description top
+ * against a ~700dp viewport, with find reporting `1/1`.
+ *
+ * The fix names the rendered SEGMENT. What these tests pin:
+ *
+ *   - segment 0 keeps the bare sentinel, so every existing consumer keeps its
+ *     meaning ("the description's first block");
+ *   - the block list is UNCHANGED by segmenting — the same text, in the same
+ *     order, the same count (measured identical on 100/100 live descriptions);
+ *   - a block carries where it sits inside its segment, which is what turns
+ *     "the segment" into a position;
+ *   - the landing offset is computed from MEASURED geometry, and degrades to
+ *     the old behaviour rather than to nonsense when geometry is missing.
+ */
+describe("a description hit names the rendered segment it lives in", () => {
+  const header = (description: string) => ({ title: "", description });
+
+  it("keeps the bare sentinel for the first segment, so nothing downstream moves", () => {
+    // A single-segment description is the common case (87/100 measured), and it
+    // must keep producing exactly the target it always did.
+    const out = collectSearchables([], header("just one paragraph"));
+    expect(out.map((s) => s.targetId)).toEqual([FIND_TARGET_DESCRIPTION]);
+    expect(findDescriptionTarget(0)).toBe(FIND_TARGET_DESCRIPTION);
+  });
+
+  it("names later segments with their index", () => {
+    expect(findDescriptionTarget(1)).toBe(`${FIND_TARGET_DESCRIPTION}:1`);
+    expect(findDescriptionTarget(4)).toBe(`${FIND_TARGET_DESCRIPTION}:4`);
+    // Still a sentinel — it must never look like a comment uuid, which is the
+    // only other thing this channel carries.
+    expect(findDescriptionTarget(3).startsWith("__")).toBe(true);
+    expect(isDescriptionFindTarget(findDescriptionTarget(3))).toBe(true);
+    expect(descriptionTargetIndex(`${FIND_TARGET_DESCRIPTION}:3`)).toBe(3);
+    expect(descriptionTargetIndex(FIND_TARGET_DESCRIPTION)).toBe(0);
+    // A non-description target must be *rejected* by the predicate, not silently
+    // read as segment 0 — the two are indistinguishable through the index alone.
+    expect(isDescriptionFindTarget(FIND_TARGET_TITLE)).toBe(false);
+    expect(isDescriptionFindTarget("6f1e0a5c-1111-2222-3333-444455556666")).toBe(false);
+  });
+
+  it("tags a hit in the 4th segment with that segment, not the description", () => {
+    // The MYS-2077 shape: prose, a fence, a fence, then the prose holding the
+    // match. The old code answered `FIND_TARGET_DESCRIPTION` for the match,
+    // which is why the jump landed at the description's top.
+    const description = [
+      "opening prose",
+      "",
+      "```sh",
+      "fence one",
+      "```",
+      "",
+      "```sh",
+      "fence two",
+      "```",
+      "",
+      "closing prose with the needle",
+    ].join("\n");
+    const found = findInTimeline(collectSearchables([], header(description)), "needle");
+    expect(found).toHaveLength(1);
+    expect(matchTarget(found[0])).toBe(`${FIND_TARGET_DESCRIPTION}:3`);
+  });
+
+  it("does not change the block list — same text, same order, same count", () => {
+    // The load-bearing invariant: segmenting is a RELABELLING. If it reordered
+    // or dropped a block, every `n/m` and every step would shift. Measured
+    // identical over this deployment's 100 descriptions; pinned here on a shape
+    // that exercises prose / fence / table / list / heading together.
+    const description = [
+      "# heading",
+      "",
+      "para with `code`",
+      "",
+      "| a | b |",
+      "|---|---|",
+      "| c | d |",
+      "",
+      "- item one",
+      "- item two",
+      "",
+      "```sh",
+      "excluded_fence_text",
+      "```",
+      "",
+      "trailing para",
+    ].join("\n");
+    const whole = extractSearchBlocks(description);
+    const bySegment = collectSearchables([], header(description)).map((s) => s.text);
+    expect(bySegment).toEqual(whole);
+    // And the fence really is excluded, so this test cannot pass vacuously on
+    // two empty lists.
+    expect(whole.length).toBeGreaterThan(3);
+    expect(whole.join("\n")).not.toContain("excluded_fence_text");
+  });
+
+  it("reports where a block sits inside its segment, as a 0..1 fraction", () => {
+    // A description whose match is in the LAST block of its segment: the
+    // fraction must be near 1, which is what puts the match at the segment's
+    // bottom rather than its top.
+    const description = [
+      "first paragraph here",
+      "",
+      "second paragraph here",
+      "",
+      "third paragraph with needle",
+    ].join("\n");
+    const found = findInTimeline(collectSearchables([], header(description)), "needle");
+    expect(found).toHaveLength(1);
+    expect(found[0]!.fraction).toBeGreaterThan(0.6);
+    expect(found[0]!.fraction).toBeLessThanOrEqual(1);
+
+    // A match in the FIRST block sits near 0.
+    const first = findInTimeline(
+      collectSearchables([], header(description)),
+      "first paragraph",
+    );
+    expect(first[0]!.fraction).toBe(0);
+  });
+
+  it("puts a later hit strictly deeper than an earlier one in the same segment", () => {
+    // Ordering is the property that matters: the landing must move DOWN the
+    // segment as the match moves down the text, or stepping through hits would
+    // walk backwards.
+    const description = "alpha one\n\nbeta two\n\ngamma three\n\ndelta four";
+    const blocks = collectSearchables([], header(description));
+    const frac = (q: string) => findInTimeline(blocks, q)[0]!.fraction!;
+    expect(frac("alpha")).toBeLessThan(frac("beta"));
+    expect(frac("beta")).toBeLessThan(frac("gamma"));
+    expect(frac("gamma")).toBeLessThan(frac("delta"));
+  });
+
+  it("leaves every non-description target without a fraction", () => {
+    // A comment / activity / title hit lands on a ROW, where the whole row is
+    // the landing — a fraction there would be meaningless, and a stray one
+    // would make `descriptionFindOffset` act on a target it does not own.
+    const found = findInTimeline(
+      collectSearchables([comment("c1", "needle in a comment")], {
+        title: "needle in the title",
+        description: null,
+      }),
+      "needle",
+    );
+    expect(found).toHaveLength(2);
+    for (const m of found) expect(m.fraction).toBeUndefined();
+  });
+
+  it("counts and steps every segment's hits, exactly as before", () => {
+    // The counter and the stepper read the same array, and a hit in a later
+    // segment is still ONE match — the relabelling must not multiply or drop
+    // any. This walks the real cycle across segments.
+    const description = [
+      "hit number one",
+      "",
+      "```sh",
+      "fence",
+      "```",
+      "",
+      "hit number two",
+    ].join("\n");
+    const matches = findInTimeline(
+      collectSearchables([comment("c1", "hit number three")], header(description)),
+      "hit number",
+    );
+    expect(matches).toHaveLength(3);
+    expect(matches.map((m) => m.targetId)).toEqual([
+      FIND_TARGET_DESCRIPTION,
+      `${FIND_TARGET_DESCRIPTION}:2`,
+      "c1",
+    ]);
+    const seen: number[] = [];
+    let i = -1;
+    for (let step = 0; step < matches.length; step++) {
+      i = stepMatch(i, matches.length, 1);
+      seen.push(i);
+    }
+    expect(seen).toEqual([0, 1, 2]);
+    expect(findCounter("hit number", matches.length, i)).toEqual({
+      kind: "count",
+      current: 3,
+      total: 3,
+    });
+  });
+});
+
+/**
+ * `descriptionFindOffset` — the landing arithmetic.
+ *
+ * It is separated out and tested here because it is the one place a MODELLED
+ * number (the fraction) meets MEASURED ones (the segment rectangle, the
+ * viewport), and the failure modes are arithmetic rather than visual: a NaN or
+ * an out-of-range fraction would scroll to a nonsense offset, and a missing
+ * segment rectangle must degrade to the previous behaviour instead of to the top
+ * of the list.
+ *
+ * The CENTRING is the load-bearing part, and it was settled by the device rather
+ * than by taste: the first cut put the match 12dp below the top edge, and the
+ * fixture's modelled fraction was 12 points off the real rendered position, which
+ * pushed the match ~240dp ABOVE the viewport — the very bug this round fixes.
+ * Centring absorbs half a viewport of modelling error instead of 12px.
+ */
+describe("descriptionFindOffset", () => {
+  const VIEWPORT = 700;
+
+  it("centres the match inside its segment", () => {
+    // segmentTop 5000, height 2000, fraction 0.9 → the match is 1800 into the
+    // segment; centring it puts the viewport's middle there.
+    expect(
+      descriptionFindOffset({
+        segmentTop: 5000,
+        segmentHeight: 2000,
+        fraction: 0.9,
+        viewportHeight: VIEWPORT,
+      }),
+    ).toBe(5000 + 1800 - 350);
+    // Fraction 0 centres the segment's own top.
+    expect(
+      descriptionFindOffset({
+        segmentTop: 5000,
+        segmentHeight: 2000,
+        fraction: 0,
+        viewportHeight: VIEWPORT,
+      }),
+    ).toBe(5000 - 350);
+  });
+
+  it("moves the landing DOWN the segment as the fraction grows", () => {
+    // Monotonicity is what makes stepping through hits walk forward instead of
+    // jumping around.
+    const at = (fraction: number) =>
+      descriptionFindOffset({
+        segmentTop: 1000,
+        segmentHeight: 4000,
+        fraction,
+        viewportHeight: VIEWPORT,
+      });
+    expect(at(0)).toBeLessThan(at(0.25));
+    expect(at(0.25)).toBeLessThan(at(0.5));
+    expect(at(0.5)).toBeLessThan(at(0.75));
+    expect(at(0.75)).toBeLessThan(at(1));
+  });
+
+  it("absorbs the model's error — the reason for centring", () => {
+    // The measured fixture error: the model says 0.800, the rendered text sits
+    // at 0.920 of the segment. With centring the gap between the two landings is
+    // 0.12 * height = 240dp, and BOTH land the match inside a 700dp viewport,
+    // because each is centred. A top-edge pad of 12dp would put the true
+    // position 240dp above the viewport.
+    const height = 2000;
+    const modelled = descriptionFindOffset({
+      segmentTop: 3000,
+      segmentHeight: height,
+      fraction: 0.8,
+      viewportHeight: VIEWPORT,
+    });
+    const truth = descriptionFindOffset({
+      segmentTop: 3000,
+      segmentHeight: height,
+      fraction: 0.92,
+      viewportHeight: VIEWPORT,
+    });
+    // The offset the model computes, versus where the truth should have been:
+    // the truth's screen position under the model's offset is still on screen.
+    const truthOnScreenUnderModelledOffset =
+      3000 + 0.92 * height - modelled;
+    expect(truthOnScreenUnderModelledOffset).toBeGreaterThan(0);
+    expect(truthOnScreenUnderModelledOffset).toBeLessThan(VIEWPORT);
+    // And the two landings differ by exactly the error, so the tolerance is
+    // understood rather than accidental.
+    expect(truth - modelled).toBeCloseTo(0.12 * height, 5);
+  });
+
+  it("falls back to the segment's top when the fraction is unknown", () => {
+    // A caller with no fraction still lands strictly better than the old
+    // description-top behaviour, because the segment top is measured.
+    expect(
+      descriptionFindOffset({
+        segmentTop: 5000,
+        segmentHeight: 2000,
+        fraction: undefined,
+        viewportHeight: VIEWPORT,
+      }),
+    ).toBe(5000 - 350);
+  });
+
+  it("falls back to no pad before the viewport has been measured", () => {
+    // `viewportHeight` is 0 until the list's first layout pass. The landing then
+    // sits at the match's position rather than an arbitrary half-viewport above
+    // it — degraded, but still the right neighbourhood.
+    expect(
+      descriptionFindOffset({
+        segmentTop: 5000,
+        segmentHeight: 2000,
+        fraction: 0.5,
+        viewportHeight: 0,
+      }),
+    ).toBe(6000);
+  });
+
+  it("falls back to the given origin when the segment height is unmeasured", () => {
+    // An unlaid-out segment reports height 0. The offset must then be its top
+    // (here: the description's own top, which is what the caller passes), never
+    // a fraction of a height that does not exist.
+    expect(
+      descriptionFindOffset({
+        segmentTop: 3782,
+        segmentHeight: 0,
+        fraction: 0.9,
+        viewportHeight: VIEWPORT,
+      }),
+    ).toBe(3782 - 350);
+  });
+
+  it("clamps a nonsense fraction instead of scrolling to a nonsense offset", () => {
+    const base = { segmentTop: 1000, segmentHeight: 500, viewportHeight: VIEWPORT };
+    // Out of range in both directions.
+    expect(descriptionFindOffset({ ...base, fraction: 2 })).toBe(1000 + 500 - 350);
+    expect(descriptionFindOffset({ ...base, fraction: -3 })).toBe(1000 - 350);
+    // NaN / Infinity — the shapes a bad computation actually produces. NaN has
+    // no direction, so it falls back to the segment's top; Infinity clamps to
+    // the segment's bottom.
+    expect(descriptionFindOffset({ ...base, fraction: Number.NaN })).toBe(1000 - 350);
+    expect(descriptionFindOffset({ ...base, fraction: Number.POSITIVE_INFINITY })).toBe(
+      1000 + 500 - 350,
+    );
+  });
+
+  it("never returns a negative offset", () => {
+    // A segment near the top of the list with a half-viewport of centring would
+    // otherwise ask the list to scroll above its own start.
+    expect(
+      descriptionFindOffset({
+        segmentTop: 5,
+        segmentHeight: 100,
+        fraction: 0,
+        viewportHeight: VIEWPORT,
+      }),
+    ).toBe(0);
   });
 });
