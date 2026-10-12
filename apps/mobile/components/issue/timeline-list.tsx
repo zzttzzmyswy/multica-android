@@ -746,7 +746,10 @@ export function TimelineList({
           highlightedCommentId={highlightedId}
         />
       ) : (
-        <ActivityRow entry={item.entry} />
+        // An activity row is a find target too (MYS-2109), so it takes the same
+        // highlight bit a comment card does. `highlightedId` reaches it by the
+        // same `findIndex` over `row.entry.id` above — no second channel.
+        <ActivityRow entry={item.entry} highlighted={highlightedId === item.entry.id} />
       );
     },
     [issue.id, issue.identifier, highlightedId],

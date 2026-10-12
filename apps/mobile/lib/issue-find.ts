@@ -25,27 +25,29 @@
  *
  * So the two clients answered different questions about the same issue. This
  * module closes that: the searchable container is the issue's **title, its
- * description, and every comment body**, replies included.
+ * description, every comment body (replies included) and every activity row**.
  *
  * ## The searchable container
  *
  * Web's container is the issue page's whole scroll root — title, description,
- * every comment and every activity (`issue-detail.tsx:2625`). Mobile's is the
- * three parts of that root which carry prose, in the reader's top-to-bottom
- * order:
+ * every comment and every activity (`issue-detail.tsx:2623`). Mobile's is the
+ * four parts of that root which carry text the reader can see, in the reader's
+ * top-to-bottom order:
  *
  *   1. the **title** — one block, read as the literal string the header draws;
  *   2. the **description** — through the SAME `extractSearchBlocks` the
  *      comments use: one markdown dialect, one block rule;
- *   3. the **timeline** — every comment body, replies included.
+ *   3. the **timeline** — every comment body, replies included;
+ *   4. the **activity rows** on that timeline — their drawn text, supplied by
+ *      `lib/activity-search.ts` (see "Activity rows" below).
  *
  * The title is deliberately NOT run through the lexer. The header renders it
  * as plain text (`issue-header-card.tsx` → `<Text>{issue.title}</Text>`), so a
  * title carrying `**` or `_` shows those characters; lexing would delete them
  * and leave the haystack disagreeing with the screen.
  *
- * Before this round the container was the timeline alone, and the gap was
- * measured on this deployment:
+ * The container grew twice, and both gaps were measured on this deployment
+ * rather than argued. First the description:
  *
  *   | issue    | description | timeline | description's share |
  *   |----------|-------------|----------|---------------------|
@@ -57,16 +59,56 @@
  * `preview26` and `Explorer`; MYS-1893's holds `qemu_arm64_linux_min` and
  * `window_scene_board`, and neither appears in any of its 49 comments. Those
  * are words the reader can see on the phone that find reported as "no
- * matches".
+ * matches". Then the activity rows, measured across 40 issues of this
+ * deployment:
+ *
+ *   | measure                                  | value            |
+ *   |------------------------------------------|------------------|
+ *   | activity rows on those issues            | 215              |
+ *   | rows rendering non-empty text            | 215 (100%)       |
+ *   | characters those rows draw               | 15,028           |
+ *   | title + description + comment characters | 328,898          |
+ *   | activity rows' share of the page's text  | **4.4%**         |
+ *   | activity rows : comment rows             | **2.65 : 1**     |
+ *   | (status word, issue) pairs found ONLY in  | **97 across 39** |
+ *   | an activity row, i.e. 0 hits today       | of 40 issues     |
+ *
+ * That last row is the whole point. A status name like `in_progress` appears on
+ * a typical issue **only** inside `changed status: todo → in_progress`, which
+ * the row draws and the reader can read — while find answered "no matches" for
+ * a word plainly on screen.
+ *
+ * ## Activity rows
+ *
+ * Indexed from their **drawn** text, produced by `lib/activity-search.ts` — the
+ * same function `ActivityRow` renders from, so "searched text == drawn text" is
+ * structural rather than a rule to remember. Two properties of that source are
+ * load-bearing and are documented there: the text is two runs (the actor name
+ * and the verb), matching web's two sibling `<span>`s; and it comes from the
+ * **coalesced** rows, because a merged activity renders no row of its own and
+ * its sentence can differ (`completed 3 tasks`).
+ *
+ * A block's target is the row's **own `entry.id`** — no new channel and no
+ * sentinel. It is already the list's `keyExtractor`, and `TimelineList`'s find
+ * effect already resolves a target against `row.entry.id`, so an activity lands
+ * through exactly the path a comment does (scroll to the row, flash it). The
+ * two header sentinels remain the only non-id targets.
+ *
+ * The rows' `×N` coalesce chip and relative timestamp stay out of the haystack:
+ * they are chrome derived from the viewing moment, and "2 days ago" drifting to
+ * "3 days ago" under a stable query is not text find can honestly navigate.
+ * Web reaches both only by walking raw DOM nodes — a one-directional divergence
+ * in mobile's favour, listed under "What is deliberately NOT searchable" below.
  *
  * ## Two kinds of jump target
  *
- * A match lands either in a comment or in the header, and the two navigate
- * differently: a comment is a row of the list, the header is the top of it. So
- * a match carries a `targetId` that is either a real comment id or one of the
- * two header sentinels (`FIND_TARGET_TITLE` / `FIND_TARGET_DESCRIPTION`).
- * `TimelineList` resolves a sentinel to a scroll to offset 0 plus a flash on
- * that header block; a comment id keeps the existing row lookup, which already
+ * A match lands either in a comment, in an activity row, or in the header, and
+ * the first two navigate identically (both are rows of the list) while the
+ * header does not: it is `ListHeaderComponent`, above index 0. So a match
+ * carries a `targetId` that is either a real entry id or one of the two header
+ * sentinels (`FIND_TARGET_TITLE` / `FIND_TARGET_DESCRIPTION`). `TimelineList`
+ * resolves a sentinel to a scroll to the header offset plus a flash on that
+ * header block; an entry id keeps the existing row lookup, which already
  * reaches inside replies.
  *
  * The sentinels are string constants rather than a second channel because the
@@ -74,7 +116,7 @@
  * the description has to travel the same path a hit in a comment does —
  * including the nonce that makes stepping onto the same target twice re-fire
  * the scroll. `highlightCommentId` / `highlightNonce` (inbox deep links) are
- * untouched, and a sentinel cannot collide with the comment ids that channel
+ * untouched, and a sentinel cannot collide with the entry ids that channel
  * carries: those are uuids.
  *
  * ## Matching semantics, ported from web
@@ -95,8 +137,8 @@
  *   reader perceives one continuous run of text, so a query spanning a bold
  *   run matches here where web would miss it. Block granularity is the
  *   coarsest unit that still keeps every reported match landable: each one
- *   belongs to exactly one target (a comment, or the header), which is what
- *   the jump needs.
+ *   belongs to exactly one target (a comment, an activity row, or the header),
+ *   which is what the jump needs.
  *   Mobile is therefore strictly *more* permissive inside a block and
  *   identical across blocks — never less able to find something.
  * - **Empty / whitespace-only query matches nothing.** Web returns early on
@@ -104,30 +146,53 @@
  *
  * ## What is deliberately NOT searchable
  *
- * - **Activity rows.** An activity carries no body (`TimelineEntry.content` is
- *   a comment field); web's walk visits every text node of the scroll root, so
- *   it can match an activity's rendered verb. Mobile has no DOM to walk and no
- *   rendered text to read back, so it searches what it can address: comment
- *   bodies. Counting activities would inflate `matchCount` with hits that have
- *   no text and no jump target, so the count would disagree with what the
- *   reader can step through.
- * - **Code fences.** A fenced block is program text, not prose. Mirrors web's
+ * - **A code fence.** A fenced block is program text, not prose. Mirrors web's
  *   `SKIP_TAGS` (`SCRIPT` / `STYLE` / `NOSCRIPT`) — content present in the
  *   document that find should not walk. `thread-nav.ts` makes the same call
  *   for its preview (`` ```…``` `` collapses to nothing, "they carry no
  *   scannable text").
- * - **Deleted comments.** A tombstone renders no body and, for a reply, no row
+ * - **A deleted comment.** A tombstone renders no body and, for a reply, no row
  *   at all (`lib/comment-deletion.ts` → `comment-card.tsx`). A match there
  *   would point at something the reader cannot see.
- * - **Images.** Guarded on the alt text, which the renderer does not draw as
- *   text — a match there would be unfindable on screen.
+ * - **An image's alt text.** The renderer does not draw it as text, so a match
+ *   there would be unfindable on screen.
+ * - **The `×N` chip and the relative timestamp on an activity row.** The row
+ *   draws both, and web's scroll-root walk reaches both. Mobile does not index
+ *   them because they are derived from *when the reader is looking* rather than
+ *   from the entry: "2 days ago" becomes "3 days ago" with no write, so a query
+ *   that matched yesterday's rendering would miss today's. Everything else on
+ *   an activity row **is** indexed (see "Activity rows" above) — a deliberate,
+ *   one-directional divergence: mobile may find less here, never something that
+ *   is not on screen.
  * - **The custom-property / metadata / sub-issue / PR rows in the header.**
  *   They render text the reader can see, and web's scroll-root walk reaches
  *   them. Mobile does not index them: each is a separate query the screen may
  *   not have loaded, and a hit inside a loading section would be counted and
  *   then be unlandable. The title and description are the two header blocks
  *   that are already on the `Issue` object, which is why they are the two this
- *   round closes.
+ *   module's header half covers.
+ *
+ * ### Two claims this section used to make, and why they are gone (MYS-2109)
+ *
+ * Activities were excluded here for two stated reasons, and **neither held**:
+ *
+ *   1. *"An activity carries no body (`TimelineEntry.content` is a comment
+ *      field)"* → the conclusion drawn from it, "so it renders no text", does
+ *      not follow. `formatActivity` (`lib/format-activity.ts`) is the row's
+ *      text, and it needs no `content`. Measured on this deployment: **215 of
+ *      215 activity rows render non-empty text** — not one is blank.
+ *   2. *"hits that have no text and no jump target"* → activity entries carry
+ *      their own `id` (a uuid), and an activity row is a FlashList row like any
+ *      other, so such a hit has exactly the jump target a comment hit has.
+ *      Nothing had to be invented: the target is `entry.id`.
+ *
+ * The counter-inflation worry the old text raised was real, but its cause was
+ * narrower than "activities have no text": it is that an index over the **raw**
+ * timeline would count merged-away entries, which render no row. The rows come
+ * from `lib/activity-search.ts`, which indexes the coalesced list, so
+ * `matchCount` and the set of rows the reader can step through are the same set
+ * by construction. The invariant itself is unchanged and still the rule: every
+ * counted match must be one the reader can step to and see.
  *
  * PURE — no React, no i18n, no native imports. Runs in the Node vitest lane.
  */
@@ -156,8 +221,13 @@ export const FIND_TARGET_DESCRIPTION = "__issue_description__";
 /** One occurrence of the query inside one searchable block's text. */
 export interface FindMatch {
   /**
-   * Where the jump/highlight should land: a real comment id (root **or**
-   * reply), or one of the two header sentinels above.
+   * Where the jump/highlight should land: a real timeline entry id (a comment
+   * — root **or** reply — or an activity row), or one of the two header
+   * sentinels above.
+   *
+   * An activity row needs no special case anywhere downstream: it is a row of
+   * the list, so its id travels the same `highlightedId` / `scrollToIndex`
+   * path a comment id does.
    */
   targetId: string;
   /**
@@ -429,19 +499,30 @@ function tableRows(token: {
 
 /**
  * Every searchable block on the issue page, in top-to-bottom reading order:
- * title → description → timeline.
+ * title → description → timeline (comments and activity rows interleaved).
  *
  * Kept separate from `findInTimeline` so a caller that recomputes on every
  * keystroke can build the haystack once per content change and re-run only the
  * (cheap) scan — the same split as web, whose host passes a `contentKey` and
  * whose hook re-walks the DOM only when it changes.
  *
- * `header` is optional so the timeline-only input this module shipped with
- * still works; a caller that omits it gets exactly the previous behaviour.
+ * `header` and `activityBlocks` are both optional so the timeline-only input
+ * this module shipped with still works; a caller that omits them gets exactly
+ * the previous behaviour for the parts it omits.
+ *
+ * `activityBlocks` is passed IN rather than computed here, and that is the one
+ * structural decision worth explaining: producing an activity row's text needs
+ * `formatActivity`, which resolves through the i18n dictionary. This module is
+ * deliberately free of i18n and native imports so it runs in the plain-Node
+ * vitest lane, and importing the formatter would drag `expo-secure-store` in
+ * after it. The caller (`components/issue/timeline-list.tsx` via
+ * `lib/activity-search.ts`) owns that side of the line; here the blocks are
+ * just text.
  */
 export function collectSearchables(
   entries: readonly TimelineEntry[] | undefined,
   header?: FindHeader | undefined,
+  activityBlocks?: ReadonlyMap<string, readonly string[]> | undefined,
 ): Searchable[] {
   const out: Searchable[] = [];
 
@@ -468,7 +549,23 @@ export function collectSearchables(
     out.push({ targetId: FIND_TARGET_DESCRIPTION, text });
   }
 
+  // The timeline, in its own order: a comment contributes its body, an
+  // activity row contributes the text it draws. Walking `entries` once keeps
+  // the two interleaved the way the list renders them, so `n/m` steps in the
+  // order the reader scrolls.
   for (const entry of entries ?? []) {
+    if (entry.type === "activity") {
+      // Absent from the index means the row is not rendered — a merged-away
+      // entry, or a caller that passed no index at all. Either way there is
+      // nothing on screen to land on, so nothing is counted. See
+      // `lib/activity-search.ts` for why the index is keyed by row, not by
+      // raw entry.
+      for (const text of activityBlocks?.get(entry.id) ?? []) {
+        if (text.length === 0) continue;
+        out.push({ targetId: entry.id, text });
+      }
+      continue;
+    }
     if (entry.type !== "comment") continue;
     if (isDeletedComment(entry)) continue;
     // Joined into ONE entry per comment, not one per block: a hit inside a
@@ -484,8 +581,8 @@ export function collectSearchables(
 
 /**
  * Every case-insensitive occurrence of `query` across the page, in reading
- * order: title, description, then the timeline; within one block, left to
- * right.
+ * order: title, description, then the timeline (comments and activity rows in
+ * the order the list draws them); within one block, left to right.
  *
  * Returns `[]` for an empty or whitespace-only query. The whitespace test is
  * the stricter of web's two guards: web bails on `!needle` (so `" "` does
@@ -584,10 +681,12 @@ export function stepMatch(
  * `components/issue/timeline-list.tsx`) is keyed by a target id. A reply id
  * works there too — `CommentCard` highlights the matching reply inline — so a
  * hit inside a reply lands on the reply itself, not merely on its thread root.
+ * An activity row's id works there unchanged, because an activity row is a row
+ * of the same list.
  *
- * Since this round the return value may also be one of the two header
+ * Since an earlier round the return value may also be one of the two header
  * sentinels; `TimelineList` is what gives those their meaning (scroll to the
- * header, flash that block). Everything already consuming a comment id keeps
+ * header, flash that block). Everything already consuming an entry id keeps
  * working unchanged, because a sentinel only appears when the caller passed a
  * header in.
  */
