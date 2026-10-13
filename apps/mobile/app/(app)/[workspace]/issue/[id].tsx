@@ -36,7 +36,7 @@ import {
   issueTimelineOptions,
   issueChildrenOptions,
 } from "@/data/queries/issues";
-import { useDeleteIssue, useUpdateIssueRelations } from "@/data/mutations/issues";
+import { useDeleteIssue, useUpdateIssueRelations, useUnmarkDuplicate } from "@/data/mutations/issues";
 import { useArchiveInbox, useUnarchiveInbox } from "@/data/mutations/inbox";
 import { pinListOptions } from "@/data/queries/pins";
 import { useCreatePin, useDeletePin } from "@/data/mutations/pins";
@@ -67,6 +67,7 @@ import { activityBlockIndex } from "@/lib/activity-search";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useStatusLabel } from "@/lib/status-options";
 import { resolveCatalogState } from "@/lib/catalog-state";
+import { showMarkDuplicateAction } from "@/lib/issue-duplicates";
 import { useTranslation } from "@/lib/i18n/react";
 
 export default function IssueDetail() {
@@ -301,6 +302,14 @@ export default function IssueDetail() {
   const issue = detail.data;
   const deleteIssue = useDeleteIssue();
   const updateRelations = useUpdateIssueRelations();
+  // Duplicate mark removal (MUL-7349). Bound here rather than inside the
+  // timeline list because the write is a status change on THIS issue, and the
+  // list is presentational — it renders the banner, the screen owns the write.
+  const unmarkDuplicate = useUnmarkDuplicate(id);
+  const onUnmarkDuplicate = useCallback(
+    () => unmarkDuplicate.mutate(),
+    [unmarkDuplicate],
+  );
   const archive = useArchiveInbox();
   const unarchive = useUnarchiveInbox();
   // Inbox-originated detail (deep link from an inbox row): the header shows an
@@ -388,6 +397,18 @@ export default function IssueDetail() {
         label: t("issueRelation.removeParentAction"),
       });
     }
+    // Duplicate mark (MUL-7349). Web puts it in the same "Relations" submenu as
+    // the four above (issue-actions-menu-items.tsx:359), after "add sub-issue"
+    // — the position is kept so the two clients' menus read in the same order.
+    //
+    // Hidden for an issue that is ALREADY a duplicate: marking a duplicate is a
+    // different operation from what the reader wants there (follow it to the
+    // original, which the banner does), and the server refuses the write from
+    // the other end with `issue_has_duplicates` anyway. Every other issue gets
+    // the entry and may be refused with a sentence naming the reason.
+    if (showMarkDuplicateAction(issue)) {
+      actions.push({ kind: "markDuplicate", label: t("duplicates.markAction") });
+    }
     if (issueLink) actions.push({ kind: "copy", label: t("issue.copyLink") });
     actions.push({ kind: "copyWorkdir", label: t("issue.copyWorkdirPath") });
     if (issueLink) actions.push({ kind: "openWeb", label: t("issue.openWeb") });
@@ -416,6 +437,9 @@ export default function IssueDetail() {
         } else if (kind === "setParent") {
           if (wsSlug)
             router.push(`/${wsSlug}/issue/${issue.id}/picker/parent`);
+        } else if (kind === "markDuplicate") {
+          if (wsSlug)
+            router.push(`/${wsSlug}/issue/${issue.id}/picker/duplicate`);
         } else if (kind === "removeParent") {
           // Reported by `useUpdateIssueRelations`' own write-failure title;
           // a per-call onError here would fire a second alert for the same
@@ -562,6 +586,8 @@ export default function IssueDetail() {
             findFraction={findStep?.fraction}
             subIssues={children.data}
             wsSlug={wsSlug}
+            onUnmarkDuplicate={onUnmarkDuplicate}
+            unmarkingDuplicate={unmarkDuplicate.isPending}
           />
           {/* In-page find bar. Floats over the timeline so the reader keeps
               seeing the document it is scrolling — a sheet would cover the

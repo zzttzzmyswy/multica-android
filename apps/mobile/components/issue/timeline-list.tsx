@@ -95,6 +95,10 @@ import { IssueDescription } from "./issue-description";
 import { IssueReactionRow } from "./issue-reaction-row";
 import { IssueParentSection } from "./issue-parent-section";
 import { IssueChildrenSection } from "./issue-children-section";
+import {
+  IssueDuplicateBanner,
+  IssueDuplicatesSection,
+} from "./issue-duplicates";
 import { PullRequestList } from "./pull-request-list";
 import { DeliverablesSection } from "./deliverables-section";
 import { QuickActionsSection } from "@/components/quick-action/quick-actions-section";
@@ -143,6 +147,15 @@ interface Props {
    *  section. */
   subIssues?: Issue[];
   wsSlug?: string;
+  /**
+   * Remove this issue's duplicate mark (MUL-7349), when it has one. Passed in
+   * rather than handled here because the write is a status change on the issue
+   * the SCREEN owns (`useUnmarkDuplicate`) and this list is presentational —
+   * same split as `onRefresh`.
+   */
+  onUnmarkDuplicate?: () => void;
+  /** A mark write is in flight, so the banner's action is disabled. */
+  unmarkingDuplicate?: boolean;
   /** Inbox deep-link target. Root comment id OR reply id — replies live
    *  inline inside their parent's CommentCard, so a reply target scrolls
    *  to the parent's row and the card highlights the matching child. */
@@ -224,6 +237,8 @@ export function TimelineList({
   onRefresh,
   subIssues,
   wsSlug,
+  onUnmarkDuplicate,
+  unmarkingDuplicate,
   highlightCommentId,
   highlightNonce,
   jumpToThreadId,
@@ -709,6 +724,23 @@ export function TimelineList({
 
   const ListHeader = (
     <View>
+      {/* Duplicate banner (MUL-7349) — ABOVE the title, which is where web
+       *  puts it (issue-detail.tsx:3277, outside the title block). It has to
+       *  be: a cancelled issue's title otherwise reads as the whole story, and
+       *  the one thing the reader needs is "this is a duplicate of something
+       *  else, go there". Renders null for every issue that is not a duplicate.
+       *
+       *  Outside `IssueHeaderCard` rather than inside it because the card is
+       *  the issue's own identity block — title, chips, properties — and the
+       *  banner is about a DIFFERENT issue. Keeping them apart is also what
+       *  lets the card stay untouched by this feature. */}
+      {onUnmarkDuplicate ? (
+        <IssueDuplicateBanner
+          issue={issue}
+          onUnmark={onUnmarkDuplicate}
+          unmarking={unmarkingDuplicate}
+        />
+      ) : null}
       {/* Find indexes the title (it is the first thing the page renders), so
        *  the header card takes a flag for it. The flash lives inside that card
        *  around the title line rather than here around the whole card: the card
@@ -780,6 +812,14 @@ export function TimelineList({
           parent, so it doesn't crowd the header in the common case. */}
       <IssueParentSection issue={issue} wsSlug={wsSlug} />
       <IssueChildrenSection issueId={issue.id} subIssues={subIssues} wsSlug={wsSlug} />
+      {/* Duplicates of THIS issue (MUL-7349) — "three other people hit the
+       *  same thing". Web's sidebar order puts it directly after the parent
+       *  block and before the pull-request section
+       *  (issue-detail.tsx:2921), which is the order kept here: relations
+       *  first, then the linked-PR and deliverable sections. Fetches its own
+       *  relation and renders null when empty, so an issue nobody duplicated
+       *  gains no row. */}
+      <IssueDuplicatesSection issueId={issue.id} />
       {/* Linked GitHub PRs (MYS-526) — mirrors web's sidebar section. Sits
           between the sub-issue list and the Activity header; fetches its own
           data via issuePullRequestsOptions and re-renders on cache changes. */}

@@ -324,6 +324,26 @@ export const issueChildrenOptions = (wsId: string | null, id: string) =>
     enabled: !!wsId && !!id,
   });
 
+/**
+ * Both sides of an issue's duplicate relation (MUL-7349): the original it
+ * duplicates, and the issues marked as duplicates of it.
+ *
+ * `refetchOnMount: "always"` for the reason core's `issueDuplicatesOptions`
+ * gives (packages/core/issues/queries.ts:505): the relation is written from
+ * another surface — a mark made on web, or on this phone while a different
+ * issue was open — and nothing in this cache would otherwise learn about it.
+ * With the global `Infinity` stale time an already-cached "no relation" would
+ * survive every remount, so the banner and the section would stay missing on
+ * an issue that is demonstrably a duplicate.
+ */
+export const issueDuplicatesOptions = (wsId: string | null, id: string) =>
+  queryOptions({
+    queryKey: issueKeys.duplicates(wsId, id),
+    queryFn: ({ signal }) => api.listIssueDuplicates(id, { signal }),
+    enabled: !!wsId && !!id,
+    refetchOnMount: "always",
+  });
+
 export type ChildProgress = { done: number; total: number };
 
 /**

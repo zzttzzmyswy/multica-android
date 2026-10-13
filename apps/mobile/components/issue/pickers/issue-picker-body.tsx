@@ -60,6 +60,32 @@ interface Props {
    *  existing direct children, …). */
   excludeIds: string[];
   onSelect: (issue: Issue) => void;
+  /**
+   * Issues offered BEFORE the user types, under a heading. Absent for the
+   * search-first callers (add-sub-issue / set-parent), which is web's default
+   * too; the mark-duplicate picker passes them, matching
+   * `IssuePickerModal`'s `suggestions` prop in the same slot.
+   *
+   * Groups with no surviving issue are dropped, so a caller may pass a group
+   * whose source list is still loading without drawing an empty heading.
+   */
+  suggestions?: IssuePickerSuggestionGroup[];
+  /**
+   * Further narrows what may be picked, on top of `excludeIds`. Web's
+   * `isSelectable` (`IssuePickerModal`): the mark-duplicate picker uses it to
+   * rule out candidates that are themselves duplicates, which can never be an
+   * original. Applied to suggestions and search results alike — a suggestion
+   * the user can tap but the write would refuse is worse than no suggestion.
+   */
+  isSelectable?: (issue: Issue) => boolean;
+}
+
+/** Issues offered before the user types, under a heading. Mirrors web's
+ *  `IssuePickerSuggestionGroup` (`modals/issue-picker-modal.tsx:20`). */
+export interface IssuePickerSuggestionGroup {
+  key: string;
+  heading: string;
+  issues: Issue[];
 }
 
 export function IssuePickerBody({
@@ -67,6 +93,8 @@ export function IssuePickerBody({
   description,
   excludeIds,
   onSelect,
+  suggestions,
+  isSelectable,
 }: Props) {
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
@@ -84,6 +112,26 @@ export function IssuePickerBody({
   // against in-flight searches (web bakes `excludeIds` into `search` via
   // useCallback with the same intent).
   const excludeSet = useMemo(() => new Set(excludeIds), [excludeIds]);
+
+  // One predicate for every entry point, so a suggestion and a search hit are
+  // held to the same standard. Web does exactly this (`selectable` in
+  // `IssuePickerModal`), and the reason is the same: the two lists draw the
+  // same row, so a rule applied to only one of them reads as a bug in the
+  // other.
+  const selectable = useCallback(
+    (issue: Issue) =>
+      !excludeSet.has(issue.id) && (isSelectable?.(issue) ?? true),
+    [excludeSet, isSelectable],
+  );
+
+  const suggestionGroups = useMemo(
+    () =>
+      (suggestions ?? [])
+        .map((group) => ({ ...group, issues: group.issues.filter(selectable) }))
+        .filter((group) => group.issues.length > 0),
+    [suggestions, selectable],
+  );
+  const hasSuggestions = suggestionGroups.length > 0;
 
   // Cleanup pending debounce + abort on unmount.
   useEffect(() => {
@@ -117,7 +165,11 @@ export function IssuePickerBody({
             { signal: controller.signal },
           );
           if (!controller.signal.aborted) {
-            setResults(res.issues.filter((i) => !excludeSet.has(i.id)));
+            // Filtered through the SAME predicate as the suggestions, not just
+            // the exclude set: `isSelectable` rules out candidates that cannot
+            // be picked, and a result the user can tap but the write refuses
+            // is worse than one that never appeared.
+            setResults(res.issues.filter(selectable));
             setIsLoading(false);
           }
         } catch {
@@ -125,7 +177,7 @@ export function IssuePickerBody({
         }
       }, DEBOUNCE_MS);
     },
-    [excludeSet],
+    [selectable],
   );
 
   const handleChange = useCallback(
@@ -139,6 +191,29 @@ export function IssuePickerBody({
   const trimmedQuery = query.trim();
   const showPrompt = !isLoading && !trimmedQuery;
   const showEmpty = !isLoading && trimmedQuery && results.length === 0;
+
+  // One flat list with heading rows rather than `SectionList`: the picker is a
+  // formSheet over a phone-height list, and a section list would add a second
+  // sticky-header behaviour to reason about for two groups. The union keeps
+  // `keyExtractor` honest — a heading and an issue can never collide on id
+  // because the prefix differs.
+  const rows = useMemo<PickerRow[]>(() => {
+    // Suggestions replace the results list only while nothing is typed: web
+    // does the same (its `CommandGroup`s render `suggestions` while the query
+    // is empty and the search results otherwise), and mixing the two would
+    // make a stale suggestion outlive the query that was meant to replace it.
+    if (!showPrompt || !hasSuggestions) {
+      return results.map((issue) => ({ kind: "issue", key: issue.id, issue }));
+    }
+    const out: PickerRow[] = [];
+    for (const group of suggestionGroups) {
+      out.push({ kind: "heading", key: `heading:${group.key}`, label: group.heading });
+      for (const issue of group.issues) {
+        out.push({ kind: "issue", key: issue.id, issue });
+      }
+    }
+    return out;
+  }, [showPrompt, hasSuggestions, suggestionGroups, results]);
 
   return (
     <KeyboardAvoidingView className="flex-1" behavior={keyboardBehavior}>
@@ -170,14 +245,20 @@ export function IssuePickerBody({
       </View>
       <FlatList
         ref={listRef}
-        data={results}
+        data={rows}
         className="flex-1"
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        keyExtractor={(issue) => issue.id}
-        renderItem={({ item }) => (
-          <IssuePickerRow issue={item} onPress={() => onSelect(item)} />
-        )}
+        keyExtractor={(row) => row.key}
+        renderItem={({ item }) =>
+          item.kind === "heading" ? (
+            <Text className="px-4 pt-3 pb-1 text-caption font-medium uppercase tracking-wider text-muted-foreground">
+              {item.label}
+            </Text>
+          ) : (
+            <IssuePickerRow issue={item.issue} onPress={() => onSelect(item.issue)} />
+          )
+        }
         ListEmptyComponent={
           <View className="px-3 py-8 items-center">
             {isLoading ? (
@@ -187,13 +268,17 @@ export function IssuePickerBody({
                   {t("issueRelation.searching")}
                 </Text>
               </View>
-            ) : showPrompt ? (
-              <Text className="text-body text-muted-foreground">
-                {t("issueRelation.promptToSearch")}
-              </Text>
             ) : showEmpty ? (
               <Text className="text-body text-muted-foreground">
                 {t("issueRelation.noResults")}
+              </Text>
+            ) : showPrompt ? (
+              // Only reachable with no suggestions to show: with them, the list
+              // is non-empty while the query is empty and this branch never
+              // renders. "Type to search" over a list of tappable issues would
+              // tell the user to do something they do not have to do.
+              <Text className="text-body text-muted-foreground">
+                {t("issueRelation.promptToSearch")}
               </Text>
             ) : null}
           </View>
@@ -202,6 +287,11 @@ export function IssuePickerBody({
     </KeyboardAvoidingView>
   );
 }
+
+/** A heading row or an issue row — see `rows` above for why one list. */
+type PickerRow =
+  | { kind: "heading"; key: string; label: string }
+  | { kind: "issue"; key: string; issue: Issue };
 
 function IssuePickerRow({
   issue,

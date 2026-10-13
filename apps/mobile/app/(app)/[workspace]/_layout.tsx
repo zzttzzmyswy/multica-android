@@ -285,6 +285,13 @@ export default function WorkspaceLayout() {
           name="issue/[id]/picker/parent"
           options={SHEET_OPTIONS}
         />
+        {/* "Mark as duplicate" (MUL-7349) — the same searchable issue list as
+            the two above, seeded with candidates and filtered to issues that
+            can serve as an original. */}
+        <Stack.Screen
+          name="issue/[id]/picker/duplicate"
+          options={SHEET_OPTIONS}
+        />
         {/* Calendar-day edit for an existing issue's start_date — same
             spinner + Done/Clear header as the due-date sheet (MYS-493). */}
         <Stack.Screen

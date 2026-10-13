@@ -49,6 +49,36 @@ export interface WriteFailureMutationLike {
 }
 
 /**
+ * Meta key that hands the failure report to the mutation's OWN `onError`.
+ *
+ * The shared alert and a hook-level `onError` would otherwise BOTH fire for one
+ * failure, because the two run in sequence (`mutation.ts:276` then `:288`): the
+ * cache-level handler is not a fallback for a missing per-call handler, it runs
+ * alongside it. That is exactly right for the common case — a hook-level
+ * handler is gated on a live observer and goes silent when its component
+ * unmounts, which is why the cache-level channel exists at all — but it makes
+ * double-reporting the default for any hook that wants to say something more
+ * specific than a title and the server's message.
+ *
+ * Setting this key means "this hook has taken responsibility for reporting its
+ * own failures". The cache-level handler then stays silent for it, and the hook
+ * carries the obligation to alert on every failure path, not only the ones it
+ * has a special sentence for.
+ *
+ * Carries no value: presence is the signal. A `true`/`false` flag would invite
+ * the reading that `false` means "report it", when the correct default for an
+ * ABSENT key is already to report.
+ */
+export const WRITE_FAILURE_HANDLED_KEY = "writeFailureHandledByHook";
+
+/** Whether a mutation reports its own failures — see {@link WRITE_FAILURE_HANDLED_KEY}. */
+export function writeFailureHandledByHook(
+  mutation: WriteFailureMutationLike | null | undefined,
+): boolean {
+  return mutation?.options?.meta?.[WRITE_FAILURE_HANDLED_KEY] === true;
+}
+
+/**
  * The i18n id to raise for a failed mutation, or `null` when the write opted out
  * of reporting.
  *
@@ -203,6 +233,9 @@ export function reportWriteFailure(
   translate: (id: string) => string,
   alert: WriteFailureAlerter,
 ): void {
+  // A hook that reports its own failures takes them off this channel, or the
+  // user sees two alerts for one failure — see WRITE_FAILURE_HANDLED_KEY.
+  if (writeFailureHandledByHook(mutation)) return;
   const titleKey = writeFailureTitleKey(mutation);
   if (!titleKey) return;
   alert(translate(titleKey), writeFailureDetail(error, mutation, translate));

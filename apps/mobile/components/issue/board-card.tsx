@@ -59,6 +59,7 @@ import {
 import { propertyTypeIcon } from "@/lib/issue-properties";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { CustomStatusChip } from "./custom-status-chip";
+import { IssueDuplicateOfMarker } from "./issue-duplicates";
 import { IssueAgentActivityIndicator } from "./issue-agent-activity-indicator";
 
 /** Column width in pt — ~1.6 lanes visible on a 375pt phone. */
@@ -226,6 +227,17 @@ export function BoardCard({
           </View>
         ) : null}
       </View>
+
+      {/* "→ MUL-123" for a card that is a duplicate (MUL-7349) — its own row
+       *  rather than inline in the title row above: web puts it beside the
+       *  identifier (board-card.tsx:206), and a phone card has no identifier
+       *  line to attach it to. Under the title is the nearest equivalent that
+       *  still reads as card metadata rather than as part of the title.
+       *
+       *  A nested Pressable, so a tap on the marker navigates to the original
+       *  without the card ALSO opening the duplicate — the card's own
+       *  long-press (drag) is unaffected, since the marker does not claim it. */}
+      <IssueDuplicateOfMarker issue={issue} className="mt-1 self-start" />
 
       {cardProperties.labels && labels.length > 0 ? (
         <View className="mt-1.5 flex-row flex-wrap gap-1">

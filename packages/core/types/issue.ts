@@ -53,6 +53,29 @@ export interface IssueReaction {
 export type IssueMetadataValue = string | number | boolean;
 export type IssueMetadata = Record<string, IssueMetadataValue>;
 
+/** The original a duplicate points at (MUL-7349): enough to link it and show
+ *  its status, without fetching the whole issue.
+ *
+ *  Deliberately NOT an `Issue`: the server resolves only these four fields
+ *  into `Issue.duplicate_of` (server/internal/handler/issue.go
+ *  `fillDuplicateOf`), so typing it as a full Issue would promise fields the
+ *  payload never carries and invite a reader to dereference `undefined`. */
+export interface IssueDuplicateOf {
+  id: string;
+  identifier: string;
+  title: string;
+  status: IssueStatus;
+}
+
+/** Both sides of an issue's duplicate relation (MUL-7349) — its original, and
+ *  the issues marked as duplicates of it. `GET /api/issues/:id/duplicates`. */
+export interface IssueDuplicates {
+  /** The original this issue duplicates, when it is marked as one. */
+  duplicate_of: Issue | null;
+  /** Issues marked as duplicates of this one. */
+  duplicates: Issue[];
+}
+
 export interface Issue {
   id: string;
   workspace_id: string;
@@ -73,6 +96,12 @@ export interface Issue {
   creator_type: IssueAssigneeType;
   creator_id: string;
   parent_issue_id: string | null;
+  /**
+   * The original this issue duplicates (MUL-7349): present only while the
+   * issue is cancelled and the original still exists, resolved by the server.
+   * Absent when connected to an older backend.
+   */
+  duplicate_of?: IssueDuplicateOf | null;
   project_id: string | null;
   position: number;
   // Ordered barrier group among sibling sub-issues (null = unstaged). The

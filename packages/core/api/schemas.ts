@@ -917,6 +917,20 @@ export const IssueSchema = z.object({
   creator_type: z.string(),
   creator_id: z.string(),
   parent_issue_id: z.string().nullable(),
+  // Additive pointer (MUL-7349). Same disproportionate-failure reasoning as
+  // status_name above: a parse failure anywhere in IssueSchema sends the whole
+  // response through parseWithFallback to an empty list, so one malformed
+  // pointer would blank an entire issue list. `.catch(undefined)` downgrades it
+  // to "no mark", which every reader already handles, and older backends do not
+  // send the field at all.
+  //
+  // The four fields are exactly what the server resolves
+  // (server/internal/handler/issue.go `fillDuplicateOf`) — not the whole Issue.
+  duplicate_of: z
+    .object({ id: z.string(), identifier: z.string(), title: z.string(), status: z.string() })
+    .nullable()
+    .optional()
+    .catch(undefined),
   project_id: z.string().nullable(),
   position: z.number(),
   // Older backends predate `stage`; default to null so a missing field parses
@@ -1156,6 +1170,16 @@ export const SubscribersListSchema = z.array(SubscriberSchema);
 
 export const ChildIssuesResponseSchema = z.object({
   issues: z.array(IssueSchema).default([]),
+}).loose();
+
+// GET /api/issues/:id/duplicates — both sides of a duplicate relation
+// (MUL-7349). Both halves default, and `.loose()` passes unknown server fields
+// through: a shape drift must degrade to "no relation" rather than take the
+// issue detail page down, which is the same call the client makes when it
+// falls back to `{ duplicate_of: null, duplicates: [] }`.
+export const IssueDuplicatesResponseSchema = z.object({
+  duplicate_of: IssueSchema.nullable().default(null),
+  duplicates: z.array(IssueSchema).default([]),
 }).loose();
 
 export const CloudRuntimeNodeSchema = z.object({
