@@ -229,6 +229,23 @@ describe("the surfaces capture the baseline when the editor opens", () => {
     expect(saveBlock).toContain("contentBase: gate.content");
     expect(saveBlock).toContain("expectedRevision: gate.revision");
   });
+
+  it("the retry re-bases on the revision the SERVER reported, not the stale entry", () => {
+    // The one value a retry cannot afford to guess. `entry` is captured from the
+    // render that started the save, so when the rejection arrives it still
+    // describes the pre-write state — re-gating on it sends the same doomed
+    // value again and the member's "keep my version" does nothing. The 409 body
+    // carries `actual_revision` for exactly this, so the retry reads it there.
+    const src = codeOf(read("components/issue/comment-card.tsx"));
+    const save = src.slice(src.indexOf("const saveEdit = useCallback"));
+    const catchBlock = save.slice(save.indexOf("if (!isRevisionConflictError(err))"));
+
+    expect(catchBlock).toContain("parseRevisionConflict(err)");
+    expect(catchBlock).toContain("conflict?.actualRevision");
+    // …and the retry passes that gate through, rather than falling back to the
+    // baseline it just failed on.
+    expect(catchBlock).toContain("saveEdit(draft, retryGate)");
+  });
 });
 
 describe("both locales carry web's revision wording", () => {

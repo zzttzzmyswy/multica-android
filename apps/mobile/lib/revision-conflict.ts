@@ -70,6 +70,23 @@ export function revisionForEdit(value: unknown): number | undefined {
 /** What the member chose when told the row had moved on. */
 export type RevisionConflictChoice = "useServer" | "keepLocal";
 
+/**
+ * The baseline one write is gated on.
+ *
+ * `content` is optional because the two fields are independent on the server:
+ * `expected_revision` alone is a complete compare-and-swap, and after a refused
+ * save the revision is the only half that can be known — the server reported it
+ * in the 409 body, whereas the content it holds is whatever it holds. Sending
+ * both when only one is trustworthy is how a retry ends up refused a second
+ * time.
+ */
+export interface EditGate {
+  /** The content the editor opened with, when it is known. */
+  content?: string;
+  /** The revision to compare-and-swap against. */
+  revision?: number;
+}
+
 /** The two recovery actions, in the order they are offered.
  *
  *  "Use the latest version" is listed first and marked non-destructive: it is

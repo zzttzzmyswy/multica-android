@@ -73,7 +73,9 @@ import { isDeletedComment } from "@/lib/comment-deletion";
 import {
   REVISION_CONFLICT_KEY,
   isRevisionConflictError,
+  parseRevisionConflict,
   revisionForEdit,
+  type EditGate,
 } from "@/lib/revision-conflict";
 import {
   deriveThreadResolution,
@@ -631,7 +633,7 @@ function CommentBody({
   // they are one fact — the reading the member edited from — and a write that
   // quotes one without the other would be gated against a state that never
   // existed.
-  const [editBase, setEditBase] = useState({ content: "", revision: undefined as number | undefined });
+  const [editBase, setEditBase] = useState<EditGate>({ content: "", revision: undefined });
   // The member's own text. Lifted here so a refused save can be retried against
   // a fresh baseline WITHOUT losing it — the draft is the one thing that cannot
   // be re-derived from the server.
@@ -766,7 +768,7 @@ function CommentBody({
    * the save.
    */
   const saveEdit = useCallback(
-    async (next: string, gate = editBase) => {
+    async (next: string, gate: EditGate = editBase) => {
       try {
         await editComment.mutateAsync({
           commentId: entry.id,
@@ -777,20 +779,31 @@ function CommentBody({
         setEditing(false);
       } catch (err) {
         if (!isRevisionConflictError(err)) return;
-        // `entry` is live: the settle refetch has landed by now, so it holds the
-        // version the server refused against. Nothing needs fetching here.
-        const serverGate = {
-          content: entry.content ?? "",
-          revision: revisionForEdit(entry.revision),
-        };
+        // The server names the revision it actually holds, and that number is
+        // the one piece of this we must not guess at. `entry` is NOT it: it is
+        // captured from the render that started the save, so it still describes
+        // the pre-write state, and re-gating on it would send the same doomed
+        // value a second time.
+        //
+        // Sending ONLY `expected_revision = actual_revision` is enough, and it
+        // is stronger than re-sending both fields: the server checks
+        // `expected_revision` first, so this is a clean compare-and-swap against
+        // the version it just reported — no content baseline to get stale, and
+        // nothing to refetch before the retry can be correct.
+        const conflict = parseRevisionConflict(err);
+        const retryGate =
+          conflict?.actualRevision !== undefined
+            ? { content: undefined, revision: conflict.actualRevision }
+            : gate;
         Alert.alert(t("comment.updateFailed"), t(REVISION_CONFLICT_KEY), [
           { text: t("common.cancel"), style: "cancel" },
           {
             text: t("revision.useServer"),
             onPress: () => {
               // Local-only: the server already stores its version, so dropping
-              // the draft writes nothing. Its content is what `entry` holds, so
-              // closing and reopening re-seeds from it.
+              // the draft writes nothing. Closing is the whole action — the
+              // timeline holds the server's content, and reopening re-seeds
+              // from it.
               setEditing(false);
             },
           },
@@ -798,17 +811,18 @@ function CommentBody({
             text: t("revision.keepLocal"),
             style: "destructive",
             onPress: () => {
-              // Adopt the server's reading as the new baseline, keep the
-              // member's text, and write again. Updating `editBase` first is
-              // what makes the retry gate on the version that actually exists.
-              setEditBase(serverGate);
-              void saveEdit(draft, serverGate);
+              // Adopt the revision the server just reported as the new baseline
+              // and write again. Web re-bases the same way
+              // (`initialContentBase`, comment-card.tsx:411) and its
+              // `keep_local` re-runs the save.
+              if (retryGate.content !== undefined) setEditBase(retryGate);
+              void saveEdit(draft, retryGate);
             },
           },
         ]);
       }
     },
-    [editComment, entry.id, entry.content, entry.revision, editBase, draft, t],
+    [editComment, entry.id, draft, editBase, t],
   );
 
   useEffect(() => {
@@ -912,7 +926,7 @@ function CommentBody({
             <CommentEditBox
               value={draft}
               onChangeText={setDraft}
-              baseline={editBase.content}
+              baseline={editBase.content ?? ""}
               saving={editComment.isPending}
               onCancel={() => setEditing(false)}
               onSave={saveEdit}
