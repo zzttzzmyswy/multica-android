@@ -170,6 +170,16 @@ export const CommentSchema = z.object({
   resolved_by_type: z.string().nullable().default(null),
   resolved_by_id: z.string().nullable().default(null),
   source_task_id: z.string().nullable().optional(),
+  // The aggregate optimistic-concurrency token (MYS-2132). Optional because
+  // older servers do not send it; `.catch(undefined)` so a malformed value
+  // downgrades to "no token" instead of failing the whole response. Losing it
+  // is not harmless — a caller with no token cannot be refused, so its edit
+  // silently overwrites a concurrent one — which is why the write path reads
+  // it from the TIMELINE entry, whose schema parses the same field.
+  revision: z.number().optional().catch(undefined),
+  // The parent issue's revision after this mutation bumped it. Same
+  // optional/lenient treatment, and same consumer (`useEditComment`).
+  issue_revision: z.number().optional().catch(undefined),
 }).loose() as unknown as z.ZodType<Comment>;
 
 export const EMPTY_COMMENT: Comment = {

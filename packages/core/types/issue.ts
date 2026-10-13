@@ -121,4 +121,12 @@ export interface Issue {
   labels?: Label[];
   created_at: string;
   updated_at: string;
+  /** Monotonic server revision; absent when connected to an older backend.
+   *
+   *  Bumped by every issue write, and by any comment mutation on the issue
+   *  (`UpdateComment` returns the new value as `Comment.issue_revision`). It is
+   *  the token a whole-document editor echoes back as `expected_revision` so a
+   *  concurrent edit is refused instead of overwritten — see
+   *  `issues/revision-conflict.ts`. */
+  revision?: number;
 }

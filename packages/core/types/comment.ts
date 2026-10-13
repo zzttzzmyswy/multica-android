@@ -30,6 +30,20 @@ export interface Comment {
   resolved_by_type: CommentAuthorType | null;
   resolved_by_id: string | null;
   source_task_id?: string | null;
+  /** Monotonic server revision; absent when connected to an older backend.
+   *
+   *  The aggregate optimistic-concurrency token. An edit that sends the
+   *  revision it read from (`expected_revision`) is refused with
+   *  `revision_conflict` when another writer got there first, instead of
+   *  overwriting them — see `issues/revision-conflict.ts`. Reading it off the
+   *  row is what makes that possible, so a schema that drops it silently
+   *  downgrades every client to last-write-wins.
+   */
+  revision?: number;
+  /** The parent issue's revision after this comment mutation bumped it
+   *  (server `UpdateComment` / `CreateComment`). Used to keep the issue's own
+   *  revision token in step without a refetch; absent on older servers. */
+  issue_revision?: number;
   // Set only on a comment deleted while it still had replies (#8296): the
   // server keeps the row as an empty tombstone so the replies keep their
   // direct parent. Servers that predate #8296 delete the replies with the

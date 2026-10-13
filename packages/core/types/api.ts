@@ -23,7 +23,25 @@ export interface CreateIssueRequest {
 }
 
 export interface UpdateIssueRequest {
+  /** Aggregate optimistic-concurrency token: the `Issue.revision` the editor
+   *  read before producing this update. The server refuses the write with
+   *  `revision_conflict` when the issue has moved on since, instead of
+   *  overwriting the other writer.
+   *
+   *  Coarser than the per-field baselines below — any issue activity bumps it,
+   *  so it rejects edits that a `title_base` / `description_base` check would
+   *  have merged. The mobile edit form is a whole-document editor, so it is the
+   *  right granularity there: both fields are produced from one reading of the
+   *  issue, and a partial merge of two divergent documents is worse than
+   *  asking.
+   *
+   *  Sending it is what makes the write safe; omitting it keeps the old
+   *  last-write-wins behaviour, which is why every value-picker write that
+   *  patches ONE independent column still omits it. */
+  expected_revision?: number;
   title?: string;
+  /** Authoritative title the editor had adopted before producing this update. */
+  title_base?: string;
   description?: string;
   /** Authoritative description the editor had adopted before producing this
    * update. The server uses it to merge channel media that landed meanwhile. */
