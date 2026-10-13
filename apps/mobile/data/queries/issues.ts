@@ -344,6 +344,36 @@ export const issueDuplicatesOptions = (wsId: string | null, id: string) =>
     refetchOnMount: "always",
   });
 
+/**
+ * What "create a sub-issue from this comment" would carry (MYS-2137).
+ *
+ * Keyed by the ANCHOR COMMENT, not by the issue: the preview answers "what does
+ * THIS comment's thread look like right now", and two comments on the same
+ * issue have two different threads and two different capture tokens.
+ *
+ * `staleTime: 0` is load-bearing, unlike the global `Infinity`. The response's
+ * `capture_token` is a proof of what the member was shown, and the server
+ * refuses the create when the source has moved on since — so a token served
+ * from a cache entry created before the member walked away is a token the
+ * server may well reject. Refetching on every mount is what makes the confirm
+ * surface show, and then submit, the same context.
+ *
+ * `refetchOnMount: "always"` for the same reason: `staleTime: 0` alone still
+ * lets a remount within the same tick reuse an in-flight result, and the whole
+ * point here is a fresh token per confirm-surface opening.
+ */
+export const commentSubIssuePreviewOptions = (
+  wsId: string | null,
+  commentId: string,
+) =>
+  queryOptions({
+    queryKey: issueKeys.commentSubIssuePreview(wsId, commentId),
+    queryFn: ({ signal }) => api.getCommentSubIssuePreview(commentId, { signal }),
+    enabled: !!wsId && !!commentId,
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
+
 export type ChildProgress = { done: number; total: number };
 
 /**

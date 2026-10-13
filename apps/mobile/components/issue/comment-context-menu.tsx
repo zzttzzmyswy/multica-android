@@ -29,6 +29,8 @@ import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useCommentSelectStore } from "@/data/comment-select-store";
 import { useReplyTargetStore } from "@/data/stores/reply-target-store";
+import { useSourceContextTargetStore } from "@/data/stores/source-context-target-store";
+import { canCreateSubIssueFromComment } from "@/lib/source-context";
 import { getWebBaseUrl } from "@/data/server-config";
 import { useActorLookup } from "@/data/use-actor-name";
 import {
@@ -85,6 +87,8 @@ export function useCommentLongPress(
     const hasContent = !!entry.content;
     const webUrl = getWebBaseUrl();
     const canCopyLink = !!(webUrl && wsSlug && issueIdentifier);
+    const canCreateSubIssue =
+      canCreateSubIssueFromComment(entry) && !!wsSlug;
     const reactions = (entry.reactions ?? []) as Reaction[];
 
     Haptics.selectionAsync().catch(() => {});
@@ -97,6 +101,7 @@ export function useCommentLongPress(
       | { kind: "copy" }
       | { kind: "select" }
       | { kind: "copyLink" }
+      | { kind: "createSubIssue" }
       | { kind: "resolve" }
       | { kind: "delete" }
       | { kind: "cancel" };
@@ -120,6 +125,19 @@ export function useCommentLongPress(
       push(t("menu.selectText"), { kind: "select" });
     }
     if (canCopyLink) push(t("menu.copyLink"), { kind: "copyLink" });
+    // "Create sub-issue from comment" (MYS-2137) — web's
+    // `source_context.create_action`, which its comment kebab gates on the same
+    // `comment_type === "comment"` test. The gate is load-bearing, not
+    // cosmetic: the write endpoint is keyed on a COMMENT id, so an activity row
+    // has nothing to capture and would 404.
+    //
+    // `canCreateSubIssue` needs BOTH the comment type and a workspace slug:
+    // the confirm route is a workspace-scoped push, and the store it reads from
+    // is what carries the parent issue. Without a slug there is no route to
+    // open, so offering the entry would be a button that does nothing.
+    if (canCreateSubIssue) {
+      push(t("sourceContext.action"), { kind: "createSubIssue" });
+    }
     if (isRoot) {
       push(
         resolved ? t("menu.unresolveThread") : t("menu.resolveThread"),
@@ -212,6 +230,30 @@ export function useCommentLongPress(
             ).catch(() => {});
             return;
           }
+          case "createSubIssue": {
+            if (!canCreateSubIssue) return;
+            // The target rides through the store rather than route params
+            // because the action sheet has no router handle and the identifier
+            // is not recoverable from a comment id downstream. The route ALSO
+            // accepts params — see the confirm route — which is what keeps it
+            // deep-linkable.
+            useSourceContextTargetStore.getState().setTarget({
+              commentId: entry.id,
+              issueId,
+              issueIdentifier,
+            });
+            router.push({
+              pathname:
+                "/[workspace]/issue/[id]/comment/[commentId]/create-sub-issue",
+              params: {
+                workspace: wsSlug!,
+                id: issueId,
+                commentId: entry.id,
+                ...(issueIdentifier ? { identifier: issueIdentifier } : {}),
+              },
+            });
+            return;
+          }
           case "resolve":
             resolveComment.mutate({
               commentId: entry.id,
@@ -267,7 +309,6 @@ export function useCommentLongPress(
     keepReplies,
     onEdit,
   ]);
-
   return { onLongPress, isPressed };
 }
 

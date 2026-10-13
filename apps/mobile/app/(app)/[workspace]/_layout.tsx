@@ -319,6 +319,22 @@ export default function WorkspaceLayout() {
         {/* The issue's wakeup rules (MYS-2023) — pushed from the header badge
             and rendering the same section the issue header shows inline. */}
         <Stack.Screen name="issue/[id]/wakeups" options={SHEET_OPTIONS} />
+        {/* Confirm surface for "create a sub-issue from this comment"
+            (MYS-2137). A modal rather than a formSheet, unlike every picker
+            above it: the surface carries a READ-ONLY context block AND a form
+            with a keyboard, and the two together do not fit a 60% detent —
+            `SHEET_OPTIONS` would put the create button under the keyboard on
+            the first tap. Web reaches the same goal with a two-pane modal;
+            see components/issue/source-context-create-body.tsx for the shape
+            tradeoff. */}
+        <Stack.Screen
+          name="issue/[id]/comment/[commentId]/create-sub-issue"
+          options={{
+            title: t("sourceContext.createTitle"),
+            presentation: "modal",
+            headerLeft: () => <ModalCloseButton />,
+          }}
+        />
         {/* Full emoji picker for a comment reaction. Pushed from the "+"
             button inside the comment long-press tapback row — see
             components/issue/comment-context-menu.tsx. */}

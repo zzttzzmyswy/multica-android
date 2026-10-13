@@ -185,6 +185,16 @@ export const issueKeys = {
     [...issueKeys.all(wsId), "duplicates"] as const,
   duplicates: (wsId: string | null, id: string) =>
     [...issueKeys.duplicatesAll(wsId), id] as const,
+  // What "create a sub-issue from this comment" would carry (MYS-2137). Keyed
+  // by the ANCHOR COMMENT rather than by the issue, because the preview answers
+  // "what does this comment's thread look like right now" and two comments on
+  // one issue have two different threads — and two different capture tokens.
+  //
+  // Its own top-level prefix (`source-context`) rather than a child of
+  // `children`: this is a read about a COMMENT, and it must not be swept by a
+  // children-list invalidation, which fires on every sub-issue write.
+  commentSubIssuePreview: (wsId: string | null, commentId: string) =>
+    [...issueKeys.all(wsId), "source-context", "preview", commentId] as const,
   // Workspace-wide parent→(done/total) child-progress map (MYS-493). Drives
   // the nested-progress ring on sub-issue rows; mirrors core's
   // `issueKeys.childProgress(wsId)`.

@@ -910,6 +910,152 @@ export const IssueTriggerPreviewSchema = z.object({
 // to {} so consumers never need to nil-guard `issue.metadata`.
 const IssueMetadataSchema = z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).default({});
 
+// ---------------------------------------------------------------------------
+// Source context (MYS-2137). A comment-born sub-issue carries the thread
+// snapshot it was opened from. Probed against `mu.zztweb.top` 2026-10-13.
+//
+// Every field past the identifiers is optional with a lenient fallback, for
+// the same disproportionate-failure reason `duplicate_of` below is: one
+// malformed value would otherwise send the whole issue (or list) through
+// `parseWithFallback` to the empty sentinel. `snapshot` is the one nested
+// object that must be present for the banner to have anything to show, so a
+// snapshot that does not parse drops the whole `source_context` to undefined —
+// which every reader already treats as "no source".
+// ---------------------------------------------------------------------------
+
+const SourceContextCommentSchema = z.object({
+  id: z.string(),
+  parent_id: z.string().nullable().default(null),
+  type: z.string().optional(),
+  content: z.string().default(""),
+  author: z
+    .object({ type: z.string().default(""), id: z.string().default(""), name: z.string().default("") })
+    .loose(),
+  created_at: z.string().default(""),
+  updated_at: z.string().optional(),
+  revision: z.number().optional().catch(undefined),
+  attachments: z.array(AttachmentSchema).optional().catch(undefined),
+  deleted: z.boolean().optional().catch(undefined),
+}).loose();
+
+const SourceContextIssueSchema = z.object({
+  id: z.string(),
+  identifier: z.string().default(""),
+  number: z.number().default(0),
+  title: z.string().default(""),
+  description: z.string().nullable().default(null),
+  created_at: z.string().optional(),
+  updated_at: z.string().optional(),
+  revision: z.number().optional().catch(undefined),
+  attachments: z.array(AttachmentSchema).optional().catch(undefined),
+}).loose();
+
+const SourceContextSnapshotSchema = z.object({
+  version: z.number().optional().catch(undefined),
+  captured_by_user_id: z.string().optional(),
+  captured_at: z.string().optional(),
+  source_issue: SourceContextIssueSchema,
+  comment_thread: z.array(SourceContextCommentSchema).default([]),
+  anchor_comment_id: z.string().default(""),
+}).loose();
+
+const SourceContextCurrentSchema = z.object({
+  issue_id: z.string().default(""),
+  identifier: z.string().default(""),
+  anchor_comment_id: z.string().default(""),
+}).loose();
+
+const SourceContextAuthorStateSchema = z.object({
+  type: z.string().default(""),
+  id: z.string().default(""),
+  captured_name: z.string().default(""),
+  current_name: z.string().optional(),
+  state: z.string().default("unchanged").catch("unchanged"),
+}).loose();
+
+// Enum drift downgrades, not crashes: a change reason this build does not know
+// is dropped from the list rather than failing the parse. An empty list then
+// reads as "the server named no reason", and the banner's generic sentence
+// covers it — which stays true for a reason invented after this build shipped.
+const SourceContextChangeReasonSchema = z.enum([
+  "issue_title",
+  "issue_description",
+  "issue_description_attachments",
+  "comment_thread",
+]);
+
+export const IssueSourceContextSchema = z.object({
+  id: z.string().default(""),
+  version: z.number().optional().catch(undefined),
+  usage: z.string().optional(),
+  captured_at: z.string().optional(),
+  display_state: z.enum(["unchanged", "changed", "unavailable"]).optional().catch(undefined),
+  source_issue_state: z.enum(["unchanged", "deleted"]).optional().catch(undefined),
+  comment_thread_state: z.enum(["unchanged", "changed", "unavailable"]).optional().catch(undefined),
+  anchor_comment_state: z.enum(["available"]).optional().catch(undefined),
+  can_open_current_source: z.boolean().optional().catch(undefined),
+  change_reasons: z
+    .array(z.unknown())
+    .optional()
+    .catch(undefined)
+    .transform((items) =>
+      items?.flatMap((item) => {
+        const parsed = SourceContextChangeReasonSchema.safeParse(item);
+        return parsed.success ? [parsed.data] : [];
+      }),
+    ),
+  change_details: z
+    .object({
+      changed_comment_ids: z.array(z.string()).optional().catch(undefined),
+      removed_comment_ids: z.array(z.string()).optional().catch(undefined),
+      added_comments: z.array(SourceContextCommentSchema).optional().catch(undefined),
+      description_attachment_changes: z.array(z.unknown()).optional().catch(undefined),
+    })
+    .loose()
+    .optional()
+    .catch(undefined),
+  current_source: SourceContextCurrentSchema.optional().catch(undefined),
+  source_author_state: z.array(SourceContextAuthorStateSchema).optional().catch(undefined),
+  snapshot: SourceContextSnapshotSchema,
+}).loose();
+
+// The read behind the confirm surface — `GET /api/comments/:id/sub-issue-preview`.
+// `capture_token` is what makes the write safe: the server refuses a create
+// whose token no longer matches with 409 `source_context_changed`.
+export const CommentSubIssuePreviewSchema = z.object({
+  source_issue: SourceContextIssueSchema,
+  comment_thread: z.array(SourceContextCommentSchema).default([]),
+  anchor_comment_id: z.string().default(""),
+  capture_token: z.string().default(""),
+  limits: z
+    .object({
+      comment_count: z.number().default(0),
+      text_bytes: z.number().default(0),
+      attachment_count: z.number().default(0),
+      attachment_bytes: z.number().default(0),
+    })
+    .loose()
+    .default({ comment_count: 0, text_bytes: 0, attachment_count: 0, attachment_bytes: 0 }),
+}).loose();
+
+// Fallback for a preview read whose shape drifted. `capture_token: ""` is
+// load-bearing: the confirm surface refuses to submit without a token, so a
+// drifted read fails closed instead of creating a child with no proof of what
+// the member was shown.
+export const EMPTY_COMMENT_SUB_ISSUE_PREVIEW: import("../types").CommentSubIssuePreview = {
+  source_issue: {
+    id: "",
+    identifier: "",
+    number: 0,
+    title: "",
+    description: null,
+  },
+  comment_thread: [],
+  anchor_comment_id: "",
+  capture_token: "",
+  limits: { comment_count: 0, text_bytes: 0, attachment_count: 0, attachment_bytes: 0 },
+};
+
 export const IssueSchema = z.object({
   id: z.string(),
   workspace_id: z.string(),
@@ -959,6 +1105,11 @@ export const IssueSchema = z.object({
   properties: IssuePropertyValuesSchema,
   reactions: z.array(z.unknown()).optional(),
   labels: z.array(z.unknown()).optional(),
+  // Where this issue came from, when a source-context capture created it
+  // (MYS-2137). A parse failure drops the field rather than the issue — the
+  // banner renders nothing for an absent source, which is the same thing an
+  // older backend that never sends it gives.
+  source_context: IssueSourceContextSchema.optional().catch(undefined),
   created_at: z.string(),
   updated_at: z.string(),
 }).loose();

@@ -16,6 +16,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   AgentTask,
+  CommentSubIssueManualIssue,
+  CommentSubIssueQuickCreate,
   CreateIssueRequest,
   Issue,
   IssuePriority,
@@ -51,6 +53,10 @@ import {
   WRITE_FAILURE_HANDLED_KEY,
   WRITE_FAILURE_TITLE_KEY,
 } from "@/lib/write-failure";
+import {
+  SOURCE_CONTEXT_CHANGED_CODE,
+  SOURCE_CONTEXT_CHANGED_KEY,
+} from "@/lib/source-context";
 import { errorCode } from "@multica/core/api";
 import { REVISION_CONFLICT_CODE } from "@multica/core/issues/revision-conflict";
 import { REVISION_CONFLICT_KEY } from "@/lib/revision-conflict";
@@ -1404,6 +1410,94 @@ export function useUnmarkDuplicate(issueId: string) {
       qc.invalidateQueries({ queryKey: issueKeys.duplicatesAll(wsId) });
       qc.invalidateQueries({ queryKey: issueKeys.detail(wsId, issueId) });
       qc.invalidateQueries({ queryKey: issueKeys.myAll(wsId) });
+      qc.invalidateQueries({ queryKey: issueKeys.list(wsId) });
+    },
+  });
+}
+
+/** What a source-context create needs from the caller. */
+export type CreateCommentSubIssueVars =
+  | {
+      mode: "manual";
+      commentId: string;
+      captureToken: string;
+      /** The issue the comment lives on. The created child is parented to it
+       *  server-side, so this is what has to be invalidated for the new
+       *  sub-issue to appear — the caller holds it, the mutation cannot derive
+       *  it from the comment id. */
+      sourceIssueId: string;
+      issue: CommentSubIssueManualIssue;
+    }
+  | {
+      mode: "agent";
+      commentId: string;
+      captureToken: string;
+      sourceIssueId: string;
+      quickCreate: CommentSubIssueQuickCreate;
+    };
+
+/**
+ * Open a task from a comment (MYS-2137) — the write behind the comment action
+ * sheet's "create sub-issue from this comment".
+ *
+ * ## Why the conflict line is pinned to a CODE
+ *
+ * This route answers 409 for two unrelated reasons: the preview the member
+ * confirmed has gone stale (`source_context_changed`), and a request that
+ * carried no `capture_token` at all. Only the first is something refreshing
+ * fixes, so the substitution is opted into the narrow rule
+ * (`WRITE_FAILURE_CONFLICT_CODE_KEY`), exactly as `useUpdateIssue` does for the
+ * 409s on `PUT /api/issues/:id`. Without the pin, a request with no token would
+ * be told to "refresh and try again" forever.
+ *
+ * ## Why there is no optimistic patch
+ *
+ * Nothing truthful can be put in the cache before the response lands. In
+ * `manual` mode the server owns the new issue's id, identifier and number —
+ * inventing them would put a row on the parent's sub-issue list that no route
+ * can open. In `agent` mode no issue exists yet at all: the caller gets a
+ * `task_id` and the issue arrives later as an inbox notification, which is the
+ * same contract `quickCreateIssue` has.
+ *
+ * ## What settles
+ *
+ * The parent's children list (the new sub-issue), the parent's detail (its
+ * child counter) and the source issue's timeline (the activity row the server
+ * writes for the capture). The preview query is NOT invalidated on success: its
+ * token is spent, and the surface that opened it is leaving.
+ *
+ * Failure reporting rides the shared channel: the mutation carries a title, and
+ * the conflict key only fires for the stale-token code. `agent` mode has no
+ * optimistic feedback either, so its success is reported by the calling surface
+ * (which is also where the "queued" wording lives — mobile has no toast infra).
+ */
+export function useCreateCommentSubIssue() {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    meta: {
+      [WRITE_FAILURE_TITLE_KEY]: "sourceContext.createFailed",
+      [WRITE_FAILURE_CONFLICT_KEY]: SOURCE_CONTEXT_CHANGED_KEY,
+      [WRITE_FAILURE_CONFLICT_CODE_KEY]: SOURCE_CONTEXT_CHANGED_CODE,
+    },
+    mutationFn: (vars: CreateCommentSubIssueVars) =>
+      vars.mode === "manual"
+        ? api.createCommentSubIssue(vars.commentId, {
+            mode: "manual",
+            capture_token: vars.captureToken,
+            issue: vars.issue,
+          })
+        : api.createCommentSubIssue(vars.commentId, {
+            mode: "agent",
+            capture_token: vars.captureToken,
+            quick_create: vars.quickCreate,
+          }),
+    onSettled: (_data, _error, vars) => {
+      qc.invalidateQueries({ queryKey: issueKeys.children(wsId, vars.sourceIssueId) });
+      qc.invalidateQueries({ queryKey: issueKeys.detail(wsId, vars.sourceIssueId) });
+      qc.invalidateQueries({ queryKey: issueKeys.timeline(wsId, vars.sourceIssueId) });
+      qc.invalidateQueries({ queryKey: issueKeys.childProgress(wsId) });
       qc.invalidateQueries({ queryKey: issueKeys.list(wsId) });
     },
   });
