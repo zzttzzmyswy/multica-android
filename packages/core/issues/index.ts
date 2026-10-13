@@ -5,4 +5,5 @@ export * from "./mutations";
 export * from "./ws-updaters";
 export * from "./config";
 export * from "./stores";
+export * from "./duplicates";
 export { isIssueStatusCategory, statusCategoryOfKey } from "./status-category";

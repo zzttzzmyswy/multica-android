@@ -1580,6 +1580,25 @@ export const EMPTY_CHILD_ISSUES_RESPONSE: {
   issues: [],
 };
 
+// Both sides of an issue's duplicate relation — `GET /api/issues/:id/duplicates`
+// (MUL-7349). Mirrors core's IssueDuplicatesResponseSchema
+// (packages/core/api/schemas.ts:1175) and web's `listIssueDuplicates`
+// (packages/core/api/client.ts:1560, which parses with the same fallback).
+//
+// Both halves default rather than being required: the section and the banner
+// both read "no relation" as "render nothing", so a drifted envelope hides a
+// section instead of blanking the issue page.
+export const IssueDuplicatesResponseSchema = z.object({
+  duplicate_of: IssueSchema.nullable().default(null),
+  duplicates: z.array(IssueSchema).default([]),
+}).loose();
+
+export const EMPTY_ISSUE_DUPLICATES_RESPONSE: import("@multica/core/types").IssueDuplicates =
+  {
+    duplicate_of: null,
+    duplicates: [],
+  };
+
 // ---------------------------------------------------------------------------
 // Linked pull requests of an issue — `GET /api/issues/:id/pull-requests`.
 // Mirrors core's GitHubPullRequestSchema / IssuePullRequestsResponseSchema

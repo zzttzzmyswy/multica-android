@@ -42,6 +42,7 @@ import {
   clearIssueDetail,
   commentToTimelineEntry,
   invalidateIssueAfterReconnect,
+  invalidateIssueDuplicates,
   patchIssueDetail,
   patchIssueLabels,
   patchMyIssuesList,
@@ -101,6 +102,24 @@ export function useIssueRealtime(
       return [
         // ----- Issue-level -----
         ws.on("issue:updated", (payload) => {
+          // Duplicate marks (MUL-7349) are refreshed BEFORE the `issueId` gate
+          // below, and deliberately so. A mark can involve three issues, and the
+          // one being written is often NOT the one on screen: marking MYS-5 as a
+          // duplicate of the open MYS-1 changes MYS-1's duplicate LIST while
+          // MYS-1 itself is untouched. Gating first would leave the open issue's
+          // section showing a stale count until it was reopened. The updater
+          // names the ids it needs, so it cannot touch a cache it has no
+          // business in.
+          invalidateIssueDuplicates(
+            qc,
+            wsId,
+            payload.issue.id,
+            payload.duplicate_of_issue_id,
+            payload.prev_duplicate_of_issue_id,
+          );
+          // Everything below acts on THIS issue's own row and timeline, so it
+          // stays gated: another issue's edit must not patch a detail cache it
+          // was never about.
           if (payload.issue.id !== issueId) return;
           patchIssueDetail(qc, wsId, payload.issue);
           patchMyIssuesList(qc, wsId, payload.issue);

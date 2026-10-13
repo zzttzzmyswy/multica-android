@@ -95,6 +95,14 @@ export function invalidateIssueAfterReconnect(
   // `issueKeys.wakeupRuns` hangs off `issueKeys.wakeups`.
   qc.invalidateQueries({ queryKey: issueKeys.wakeups(wsId, issueId) });
   qc.invalidateQueries({ queryKey: issueKeys.systemWakeups(wsId, issueId) });
+  // Duplicate relations (MUL-7349). The mark arrives on `issue:updated`, which
+  // has no replay buffer — a mark written while this client was disconnected is
+  // exactly the case a reconnect exists to repair, and the relation query is
+  // the one thing the detail refetch above cannot recover (it is a separate
+  // endpoint). Only THIS issue's relation is refreshed: a mark made elsewhere
+  // touching some other issue as the original is picked up when that issue is
+  // opened, which is also how web bounds it.
+  qc.invalidateQueries({ queryKey: issueKeys.duplicates(wsId, issueId) });
 }
 
 // =====================================================
@@ -382,6 +390,46 @@ export function removeIssueReaction(
         }
       : old,
   );
+}
+
+// =====================================================
+// Duplicate relations (MUL-7349)
+// =====================================================
+
+/**
+ * Refresh the duplicate relations an `issue:updated` event touched.
+ *
+ * The mark is not a column on `Issue` — `Issue.duplicate_of` is a
+ * server-resolved object behind its own endpoint — so patching the issue row
+ * (which `patchIssueDetail` already does with the event's own payload) is not
+ * enough: the two lists that render the relation are separate queries and
+ * would keep the pre-mark answer.
+ *
+ * Three ids can be affected by one write: the issue itself, the original it
+ * was just marked against, and the original it was marked against BEFORE
+ * (which lost a duplicate). The server sends both ends on the event
+ * (`duplicate_of_issue_id` / `prev_duplicate_of_issue_id`,
+ * `IssueUpdatedPayload`) precisely so the client does not have to guess — an
+ * invalidation of everything would be the alternative, and on a phone that
+ * means refetching a relation query for every issue the user has visited.
+ *
+ * Mirrors core's `onIssueDuplicateMarkChanged`
+ * (packages/core/issues/ws-updaters.ts:760). The early return on an unchanged
+ * mark matters more than it looks: `issue:updated` fires for every field, so
+ * without it every status edit anywhere would refetch three relation queries
+ * that cannot have changed.
+ */
+export function invalidateIssueDuplicates(
+  qc: QueryClient,
+  wsId: string,
+  issueId: string,
+  next: string | null | undefined,
+  prev: string | null | undefined,
+) {
+  if ((next ?? null) === (prev ?? null)) return;
+  for (const id of [issueId, next, prev]) {
+    if (id) qc.invalidateQueries({ queryKey: issueKeys.duplicates(wsId, id) });
+  }
 }
 
 // =====================================================

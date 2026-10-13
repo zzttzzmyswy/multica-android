@@ -51,6 +51,20 @@ export interface UpdateIssueRequest {
    *  context (MUL-3375). Only consumed when a run actually starts. Control
    *  field — strip from optimistic cache patches. */
   handoff_note?: string;
+  /** Marks this issue as a duplicate of another issue (MUL-7349). The server
+   *  turns the request into a status write to `cancelled`, so the caller does
+   *  not have to send `status` — and may not send any other status.
+   *
+   *  WRITE-ONLY and not on `Issue`: the read side is `Issue.duplicate_of`
+   *  (the resolved original), so echoing this id into a cache would leave
+   *  every optimistic row carrying a phantom field the server's response then
+   *  "removes". Strip it from optimistic patches, exactly like
+   *  `suppress_run` / `handoff_note`.
+   *
+   *  There is deliberately no way to send `null`: the server rejects it and
+   *  says to change the status instead, because leaving `cancelled` is what
+   *  clears a mark (server/internal/handler/issue_duplicate.go). */
+  duplicate_of_issue_id?: string;
 }
 
 /**

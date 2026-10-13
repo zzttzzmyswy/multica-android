@@ -45,7 +45,20 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { useFailedCommentsStore } from "@/data/stores/failed-comments-store";
 import { patchSubscribersList } from "@/lib/subscription";
 import { patchIssueBatch } from "@/lib/batch-issues";
-import { WRITE_FAILURE_TITLE_KEY } from "@/lib/write-failure";
+import {
+  WRITE_FAILURE_HANDLED_KEY,
+  WRITE_FAILURE_TITLE_KEY,
+} from "@/lib/write-failure";
+import { errorCode } from "@multica/core/api";
+import { translate } from "@/lib/i18n";
+import {
+  DUPLICATE_TARGET_IS_DUPLICATE,
+  ISSUE_HAS_DUPLICATES,
+  markDuplicatePatch,
+  unmarkDuplicateIssue,
+  unmarkDuplicatePatch,
+} from "@multica/core/issues/duplicates";
+import { Alert } from "react-native";
 
 export type ToggleCommentReactionVars = {
   commentId: string;
@@ -541,6 +554,15 @@ export function useUpdateIssue(
         // (packages/core/issues/mutations.ts:111-119).
         suppress_run: _suppressRun,
         handoff_note: _handoffNote,
+        // duplicate_of_issue_id is the third control field (MUL-7349), and the
+        // one where getting it wrong is most visible: `Issue` has no such
+        // column — its read side is the server-resolved `duplicate_of` object —
+        // so patching the raw id would put a field on screen that no renderer
+        // reads and no response ever confirms. Marking therefore leaves the
+        // banner off until the settle refetch, which is the honest state: the
+        // pointer is not the relation. Web strips it identically
+        // (packages/core/issues/mutations.ts:209,321).
+        duplicate_of_issue_id: _duplicateOfIssueId,
         ...optimisticPatch
       } = patch;
       if (prev) {
@@ -590,6 +612,19 @@ export function useUpdateIssue(
       qc.invalidateQueries({ queryKey: issueKeys.childProgress(wsId) });
       qc.invalidateQueries({ queryKey: issueKeys.myAll(wsId) });
       qc.invalidateQueries({ queryKey: issueKeys.list(wsId) });
+      // Duplicate relations (MUL-7349). A mark is not a column on `Issue`, so
+      // the detail refetch above cannot express it: the relation lives behind
+      // its own endpoint and has to be refreshed separately. Both sides move
+      // on one write — the marked issue gains an original, that original gains
+      // a duplicate — but the OLD original (if any) only loses one. The vars
+      // carry just the new target, so the refresh is the workspace-wide
+      // prefix rather than the two ids web invalidates
+      // (packages/core/issues/mutations.ts:384-389). That costs one refetch
+      // per mounted relation query; an unmark (no `duplicate_of_issue_id` in
+      // the vars at all) is what makes the prefix necessary rather than
+      // tidy — it has no target to name, and it is the only write that can
+      // leave a stale banner on an issue nothing else would refresh.
+      qc.invalidateQueries({ queryKey: issueKeys.duplicatesAll(wsId) });
     },
   });
 }
@@ -640,6 +675,10 @@ export function useUpdateIssueRelations() {
           // attachment_ids are "register new" registrations, never patched
           // into the optimistic Issue (see useUpdateIssue above).
           attachment_ids: _attachmentIds,
+          // Third write-only control field; see the note in useUpdateIssue.
+          // This hook is the generic relations writer, so a caller that marks
+          // a duplicate through it needs the same protection.
+          duplicate_of_issue_id: _duplicateOfIssueId,
           ...optimisticPatch
         } = patch;
         qc.setQueryData<Issue>(key, { ...prev, ...optimisticPatch });
@@ -667,6 +706,11 @@ export function useUpdateIssueRelations() {
       });
       qc.invalidateQueries({ queryKey: issueKeys.myAll(wsId) });
       qc.invalidateQueries({ queryKey: issueKeys.list(wsId) });
+      // Duplicate relations move with a status write: leaving `cancelled` is
+      // what clears a mark server-side, and this hook is one of the paths that
+      // can leave it. Same workspace-wide prefix as `useUpdateIssue` — see the
+      // note there for why the prefix rather than named ids.
+      qc.invalidateQueries({ queryKey: issueKeys.duplicatesAll(wsId) });
     },
   });
 }
@@ -719,6 +763,12 @@ export function useBatchUpdateIssues() {
     onSettled: () => {
       qc.invalidateQueries({ queryKey: issueKeys.list(wsId) });
       qc.invalidateQueries({ queryKey: issueKeys.myAll(wsId) });
+      // A batch status write can clear duplicate marks: leaving `cancelled` is
+      // what removes one server-side, and the toolbar offers every status.
+      // `applyBatchIssuePatch` (lib/batch-issues.ts) whitelists the columns it
+      // patches, so the relation object is never optimistically guessed here —
+      // only the refetch can say what the marks are now.
+      qc.invalidateQueries({ queryKey: issueKeys.duplicatesAll(wsId) });
     },
   });
 }
@@ -1147,6 +1197,159 @@ export function useRerunIssue(issueId: string) {
     onSettled: () => {
       qc.invalidateQueries({ queryKey: issueKeys.activeTasks(wsId, issueId) });
       qc.invalidateQueries({ queryKey: issueKeys.tasks(wsId, issueId) });
+    },
+  });
+}
+
+/**
+ * Mark an issue as a duplicate of another (MUL-7349).
+ *
+ * A dedicated hook rather than a bare `useUpdateIssue(...)` call from the
+ * picker route, for two reasons the generic hook cannot carry:
+ *
+ *  - **The pair is built here.** `markDuplicatePatch` sends `cancelled` and
+ *    `duplicate_of_issue_id` together, because the server rejects that pointer
+ *    against any other status. A caller assembling the two fields is a caller
+ *    that can get it wrong.
+ *  - **The two refusals are told apart, and each is said once.** Both are 409s,
+ *    so the shared alert can only offer one generic sentence for the pair,
+ *    while they describe different problems with different remedies (pick the
+ *    target's own original; remove this issue's duplicates first). This hook
+ *    therefore reports its own failures — `WRITE_FAILURE_HANDLED_KEY` takes it
+ *    off the shared channel, which would otherwise fire as well
+ *    (`mutation.ts:276` then `:288`) and show two alerts for one failure. The
+ *    cost of opting out is that this handler must cover EVERY failure path, not
+ *    only the distinguished one; see the `default` branch.
+ *
+ * Deliberately NO optimistic patch. The write sets a control field that `Issue`
+ * does not carry, and what the reader sees afterwards is the server-resolved
+ * `duplicate_of` object — so there is nothing truthful to put in the cache
+ * before the response lands. A guessed "cancelled + banner" would also have to
+ * invent the original's title and status before the banner could render at all.
+ * The settle invalidation refetches both ends, which is what makes the change
+ * appear.
+ *
+ * Reports success with an alert because the sheet that started it has already
+ * popped: without one, a mark that worked and a mark that silently failed look
+ * identical. Mobile has no toast infra — a native Alert is the app's pattern
+ * for this (see components/agent/agent-detail-actions.tsx:11).
+ */
+export function useMarkDuplicate(issueId: string) {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    meta: { [WRITE_FAILURE_HANDLED_KEY]: true },
+    mutationFn: (original: Issue) =>
+      api.updateIssue(issueId, markDuplicatePatch(original.id)),
+    onError: (error, original) => {
+      const title = translate("duplicates.markFailed");
+      switch (errorCode(error)) {
+        case DUPLICATE_TARGET_IS_DUPLICATE:
+          Alert.alert(
+            title,
+            translate("duplicates.errorTargetIsDuplicate", {
+              identifier: original.identifier,
+            }),
+          );
+          return;
+        case ISSUE_HAS_DUPLICATES:
+          Alert.alert(title, translate("duplicates.errorHasDuplicates"));
+          return;
+        default:
+          // The server's own message when it has one — it is written for a
+          // person and is strictly more useful than a static line — else the
+          // generic sentence. `writeFailureDetail`'s rule, applied by hand
+          // because this hook does not use that channel.
+          Alert.alert(title, error instanceof Error ? error.message : undefined);
+      }
+    },
+    onSuccess: (_server, original) => {
+      Alert.alert(
+        translate("duplicates.markSuccess", {
+          identifier: original.identifier,
+        }),
+      );
+    },
+    onSettled: () => {
+      // The relation is not on `Issue`, so a detail refetch alone cannot
+      // express the change. The workspace-wide prefix covers all three ends a
+      // mark can move (this issue, the new original, the previous one) without
+      // naming them; see the note in `useUpdateIssue.onSettled`.
+      qc.invalidateQueries({ queryKey: issueKeys.duplicatesAll(wsId) });
+      qc.invalidateQueries({ queryKey: issueKeys.detail(wsId, issueId) });
+      qc.invalidateQueries({ queryKey: issueKeys.myAll(wsId) });
+      qc.invalidateQueries({ queryKey: issueKeys.list(wsId) });
+    },
+  });
+}
+
+/**
+ * Remove a duplicate mark (MUL-7349).
+ *
+ * A plain status write out of `cancelled` — the server clears the pointer
+ * itself on any status change, which is why `unmarkDuplicatePatch` sends no
+ * second field. The reopen is shown optimistically because, unlike the mark,
+ * everything it needs is already on the row: `status` is a real column, and
+ * clearing `duplicate_of` alongside it is the state the server is about to
+ * produce — `isDuplicateIssue` requires `cancelled`, so the banner goes as the
+ * row flips. Leaving the pointer behind would be a state the server never
+ * returns.
+ *
+ * Reports through the shared channel (it has no per-code sentence to add): a
+ * failed unmark restores the row and says so, which is exactly what that
+ * channel does.
+ */
+export function useUnmarkDuplicate(issueId: string) {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    meta: { [WRITE_FAILURE_TITLE_KEY]: "duplicates.markFailed" },
+    mutationFn: () => api.updateIssue(issueId, unmarkDuplicatePatch()),
+    onMutate: async () => {
+      const key = issueKeys.detail(wsId, issueId);
+      const listKey = issueKeys.list(wsId);
+      const myAllKey = issueKeys.myAll(wsId);
+      await Promise.all([
+        qc.cancelQueries({ queryKey: key }),
+        qc.cancelQueries({ queryKey: listKey }),
+        qc.cancelQueries({ queryKey: myAllKey }),
+      ]);
+      const prev = qc.getQueryData<Issue>(key);
+      const listPrev = qc.getQueryData<IssueListCache>(listKey);
+      const myPrev = qc.getQueriesData<IssueListCache>({ queryKey: myAllKey });
+      // `unmarkDuplicateIssue` owns the row shape, so the status and the pointer
+      // can never be cleared out of step; it returns an untouched row unchanged,
+      // which is what keeps `mapIssueRows` from re-rendering the whole list.
+      const clear = (row: Issue) =>
+        row.id === issueId ? unmarkDuplicateIssue(row) : row;
+      if (prev) qc.setQueryData<Issue>(key, clear(prev));
+      qc.setQueryData<IssueListCache>(listKey, (old) =>
+        mapIssueRows(old, (rows) => rows.map(clear)),
+      );
+      qc.setQueriesData<IssueListCache>({ queryKey: myAllKey }, (old) =>
+        mapIssueRows(old, (rows) => rows.map(clear)),
+      );
+      return { prev, key, listPrev, myPrev, listKey };
+    },
+    onError: (_error, _vars, ctx) => {
+      if (!ctx) return;
+      if (ctx.prev !== undefined) qc.setQueryData(ctx.key, ctx.prev);
+      if (ctx.listPrev !== undefined) qc.setQueryData(ctx.listKey, ctx.listPrev);
+      for (const [k, data] of ctx.myPrev ?? []) qc.setQueryData(k, data);
+    },
+    // No success alert, unlike the mark. The optimistic patch above already
+    // removed the banner, and the row reads `todo` — so the change is visibly
+    // done the moment it is asked for, and an alert on top would be a modal
+    // the reader has to dismiss to say what they can already see. The MARK has
+    // no such feedback to offer (nothing truthful to patch), which is why it
+    // is the one that reports.
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: issueKeys.duplicatesAll(wsId) });
+      qc.invalidateQueries({ queryKey: issueKeys.detail(wsId, issueId) });
+      qc.invalidateQueries({ queryKey: issueKeys.myAll(wsId) });
+      qc.invalidateQueries({ queryKey: issueKeys.list(wsId) });
     },
   });
 }

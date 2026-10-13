@@ -41,6 +41,7 @@ import { useActorProfileStore } from "@/data/stores/actor-profile-store";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { CustomStatusChip } from "./custom-status-chip";
+import { IssueDuplicateOfMarker } from "./issue-duplicates";
 import { IssueAgentActivityIndicator } from "./issue-agent-activity-indicator";
 import type { ChildProgress } from "@/data/queries/issues";
 
@@ -159,6 +160,18 @@ export function IssueRow({
         <Text className="flex-1 text-body text-foreground" numberOfLines={1}>
           {issue.title}
         </Text>
+        {/* "→ MUL-123" for a row that is a duplicate (MUL-7349). Web draws it
+         *  inline after the title (list-row.tsx:137). Sits BEFORE the progress
+         *  ring and the due-date chip so the two trailing affordances keep
+         *  their positions whether or not this row is a duplicate — a marker
+         *  that shifted them would make the row's tap targets move.
+         *
+         *  Takes no `wsSlug` prop: the marker reads the active workspace from
+         *  the store itself, the way `IssueReactionRow` does in this same
+         *  folder. This row is mounted by four surfaces and only one of them
+         *  threads a slug through, so a prop would mean widening three
+         *  signatures the feature has nothing to do with. */}
+        <IssueDuplicateOfMarker issue={issue} />
         {showChildProgress ? (
           <View className="flex-row items-center gap-1 px-1.5 py-0.5 rounded-full bg-secondary shrink-0">
             <ProgressRing done={childProgress.done} total={childProgress.total} size={11} />

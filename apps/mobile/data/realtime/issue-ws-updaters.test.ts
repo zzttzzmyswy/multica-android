@@ -72,6 +72,10 @@ describe("invalidateIssueAfterReconnect", () => {
       // client can learn that a rule it showed as "waiting" already fired.
       issueKeys.wakeups(wsId, issueId),
       issueKeys.systemWakeups(wsId, issueId),
+      // Duplicate relation (MUL-7349). The mark arrives on `issue:updated`,
+      // which has no replay buffer, and the relation lives behind its own
+      // endpoint — so the detail refetch above cannot recover it.
+      issueKeys.duplicates(wsId, issueId),
     ]);
   });
 });

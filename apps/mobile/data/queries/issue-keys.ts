@@ -170,6 +170,21 @@ export const issueKeys = {
   // drives both clients.
   children: (wsId: string | null, id: string) =>
     [...issueKeys.all(wsId), "children", id] as const,
+  // Duplicate relations (MUL-7349) — one key shape per issue, carrying BOTH
+  // sides of the relation: the original it duplicates and the issues marked as
+  // its duplicates. One key rather than two because the endpoint returns both
+  // in one response, and a mark write changes both at once (the marked issue
+  // gains an original, that original gains a duplicate).
+  //
+  // `duplicatesAll` is the PREFIX every per-issue duplicate query sits under,
+  // mirroring core's `issueKeys.duplicatesAll` (packages/core/issues/queries.ts:135).
+  // It is what lets one invalidation reach every relation a mark touched —
+  // the issue itself and the originals it was marked against before and after
+  // the write — without enumerating ids.
+  duplicatesAll: (wsId: string | null) =>
+    [...issueKeys.all(wsId), "duplicates"] as const,
+  duplicates: (wsId: string | null, id: string) =>
+    [...issueKeys.duplicatesAll(wsId), id] as const,
   // Workspace-wide parent→(done/total) child-progress map (MYS-493). Drives
   // the nested-progress ring on sub-issue rows; mirrors core's
   // `issueKeys.childProgress(wsId)`.

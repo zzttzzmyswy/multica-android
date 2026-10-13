@@ -57,6 +57,7 @@ import type {
   InboxWorkspaceUnread,
   Invitation,
   Issue,
+  IssueDuplicates,
   IssueLabelsResponse,
   IssuePriority,
   IssuePropertiesResponse,
@@ -296,6 +297,8 @@ import {
   ChatSessionSchema,
   PrioritizeQueuedChatTaskResponseSchema,
   ChildIssuesResponseSchema,
+  IssueDuplicatesResponseSchema,
+  EMPTY_ISSUE_DUPLICATES_RESPONSE,
   CreatePersonalAccessTokenResponseSchema,
   CronPreviewResponseSchema,
   DashboardFailureDailyListSchema,
@@ -3322,6 +3325,24 @@ class ApiClient {
       { ...opts, endpoint: "GET /api/issues/:id/children" },
     );
     return parsed.issues;
+  }
+
+  // GET /api/issues/:id/duplicates — both sides of an issue's duplicate
+  // relation (MUL-7349): the original it duplicates, and the issues marked as
+  // duplicates of it. Mirrors web's `listIssueDuplicates`
+  // (packages/core/api/client.ts:1560), including the fallback to "no
+  // relation": the endpoint is a read that only decorates the issue page, and
+  // a drifted envelope must hide two sections rather than blank the page.
+  async listIssueDuplicates(
+    issueId: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<IssueDuplicates> {
+    return this.fetchValidated(
+      `/api/issues/${issueId}/duplicates`,
+      IssueDuplicatesResponseSchema,
+      EMPTY_ISSUE_DUPLICATES_RESPONSE,
+      { ...opts, endpoint: "GET /api/issues/:id/duplicates" },
+    );
   }
 
   // GET /api/issues/:id/pull-requests — GitHub PRs linked to the issue via a
