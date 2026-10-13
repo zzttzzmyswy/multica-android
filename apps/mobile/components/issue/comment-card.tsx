@@ -779,22 +779,26 @@ function CommentBody({
         setEditing(false);
       } catch (err) {
         if (!isRevisionConflictError(err)) return;
-        // The server names the revision it actually holds, and that number is
-        // the one piece of this we must not guess at. `entry` is NOT it: it is
-        // captured from the render that started the save, so it still describes
-        // the pre-write state, and re-gating on it would send the same doomed
-        // value a second time.
+        // The retry baseline, and the one value a retry must not guess at.
         //
-        // Sending ONLY `expected_revision = actual_revision` is enough, and it
-        // is stronger than re-sending both fields: the server checks
-        // `expected_revision` first, so this is a clean compare-and-swap against
-        // the version it just reported — no content baseline to get stale, and
-        // nothing to refetch before the retry can be correct.
+        // `entry` is NOT it: it is captured from the render that started the
+        // save, so when the rejection arrives it still describes the pre-write
+        // state, and re-gating on it sends the same doomed value a second time.
+        // The aggregate 409 body names `actual_revision` for exactly this, and
+        // that alone is a complete compare-and-swap on the server — no content
+        // baseline to go stale, nothing to refetch before the retry is correct.
+        //
+        // The FIELD-baseline shape carries no revisions (the server compares
+        // `content_base` and reports only that it moved). There is nothing to
+        // re-base on there, so the retry sends NO gate at all: a plain
+        // last-write-wins edit, which is precisely what "keep my version"
+        // asserts. Falling back to the original gate instead would resend the
+        // baseline the server just rejected and refuse forever.
         const conflict = parseRevisionConflict(err);
-        const retryGate =
+        const retryGate: EditGate =
           conflict?.actualRevision !== undefined
-            ? { content: undefined, revision: conflict.actualRevision }
-            : gate;
+            ? { revision: conflict.actualRevision }
+            : {};
         Alert.alert(t("comment.updateFailed"), t(REVISION_CONFLICT_KEY), [
           { text: t("common.cancel"), style: "cancel" },
           {
@@ -811,11 +815,10 @@ function CommentBody({
             text: t("revision.keepLocal"),
             style: "destructive",
             onPress: () => {
-              // Adopt the revision the server just reported as the new baseline
-              // and write again. Web re-bases the same way
-              // (`initialContentBase`, comment-card.tsx:411) and its
-              // `keep_local` re-runs the save.
-              if (retryGate.content !== undefined) setEditBase(retryGate);
+              // Write again against the baseline above, keeping the member's
+              // text. Web re-bases the same way (`initialContentBase`,
+              // comment-card.tsx:411) and its `keep_local` re-runs the save.
+              setEditBase(retryGate);
               void saveEdit(draft, retryGate);
             },
           },

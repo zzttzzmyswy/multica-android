@@ -246,6 +246,19 @@ describe("the surfaces capture the baseline when the editor opens", () => {
     // baseline it just failed on.
     expect(catchBlock).toContain("saveEdit(draft, retryGate)");
   });
+
+  it("the retry sends NO gate when the server reported no revision", () => {
+    // The field-baseline 409 carries only `resource_type` — the server compared
+    // `content_base` and reported that it moved, with no revisions to name.
+    // Falling back to the ORIGINAL gate there would resend the baseline that was
+    // just rejected and refuse forever, so the retry must degrade to a plain
+    // ungated write, which is exactly what "keep my version" asserts.
+    const src = codeOf(read("components/issue/comment-card.tsx"));
+    const save = src.slice(src.indexOf("const saveEdit = useCallback"));
+    const catchBlock = save.slice(save.indexOf("if (!isRevisionConflictError(err))"));
+    expect(catchBlock).toMatch(/:\s*\{\};/);
+    expect(catchBlock).not.toMatch(/:\s*gate;/);
+  });
 });
 
 describe("both locales carry web's revision wording", () => {
