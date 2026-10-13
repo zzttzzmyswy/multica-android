@@ -1122,6 +1122,50 @@ export const PinnedItemSchema: z.ZodType<PinnedItem> = z.object({
 export const PinListSchema = z.array(PinnedItemSchema).default([]);
 export const EMPTY_PIN_LIST: PinnedItem[] = [];
 
+/**
+ * `details` as the server actually sends it: a flat bag of scalars, whose
+ * values are NOT all strings.
+ *
+ * This was `z.record(z.string(), z.string())`, and that is stricter than the
+ * contract. Measured against the live server: an `autopilot_paused`
+ * notification carries
+ * `{reason: "auto_paused_high_failure_rate", fail_pct: 90.6, total_runs: 235,
+ * failed_runs: 213, lookback_seconds: 604800, threshold_min_runs: 50,
+ * threshold_fail_ratio: 0.9, autopilot_id: …, autopilot_title: …}` — four
+ * numbers among the strings. The old schema rejected the whole ROW, and
+ * because `InboxListSchema` is an array whose parse fails as a unit, one such
+ * row rejected the entire LIST: `parseWithFallback` then handed back the empty
+ * fallback, so a page containing an autopilot notification rendered as "no
+ * archived notifications" over a full archive. Silent, and silent in the worst
+ * direction — it looked like data loss.
+ *
+ * Upstream never hit this because its `InboxItemListSchema` omits `details`
+ * entirely and passes the key through `.loose()`; this is the mobile-side
+ * equivalent of that leniency, kept inside the declared type rather than
+ * widening it and the consumers with it.
+ *
+ * Scalars are coerced to their string form (so a number cannot fail the parse),
+ * and a structural value — a nested object or array, which no consumer reads
+ * out of this flat map — is dropped rather than allowed to fail the row.
+ * Nothing parses these values back into numbers; the one key with behaviour
+ * attached, `comment_id`, is a uuid string on the wire and stays byte-identical.
+ */
+const InboxDetailsSchema = z
+  .record(z.string(), z.unknown())
+  .nullable()
+  .default(null)
+  .transform((details) => {
+    if (!details) return null;
+    const out: Record<string, string> = {};
+    for (const [key, value] of Object.entries(details)) {
+      if (typeof value === "string") out[key] = value;
+      else if (typeof value === "number" || typeof value === "boolean") {
+        out[key] = String(value);
+      }
+    }
+    return out;
+  });
+
 const InboxItemSchema: z.ZodType<InboxItem> = z.object({
   id: z.string(),
   workspace_id: z.string().default(""),
@@ -1151,14 +1195,76 @@ const InboxItemSchema: z.ZodType<InboxItem> = z.object({
   issue_status: z.string().nullable().default(null) as unknown as z.ZodType<
     InboxItem["issue_status"]
   >,
+  // Projected by the archived-page query (`GET /api/inbox/archived/page`) so
+  // the archive's priority filter has something to match on. Optional rather
+  // than defaulted: a server that predates the projection omits the key, and
+  // "absent" has to stay distinguishable from "the issue has no priority" —
+  // `inboxPriorityFilterSupport` reads exactly that difference to decide
+  // whether offering a priority filter would lie. `null` here means the
+  // server spoke and the answer is "no priority" (issue-less notification, or
+  // an issue explicitly set to none).
+  issue_priority: z
+    .enum(["urgent", "high", "medium", "low", "none"])
+    .nullable()
+    .catch(null)
+    .optional() as unknown as z.ZodType<InboxItem["issue_priority"]>,
   read: z.boolean().default(false),
   archived: z.boolean().default(false),
   created_at: z.string().default(""),
-  details: z.record(z.string(), z.string()).nullable().default(null),
+  details: InboxDetailsSchema,
 }).loose();
 
 export const InboxListSchema = z.array(InboxItemSchema).default([]);
 export const EMPTY_INBOX_LIST: InboxItem[] = [];
+
+/**
+ * One page of `GET /api/inbox/archived/page`. Mirrors web's
+ * `ArchivedInboxPageSchema` (packages/core/api/schemas.ts) including its
+ * cross-field refinement, which is not decoration: `has_more` and
+ * `next_cursor` are two spells of one fact, and a response where they
+ * disagree is one the client cannot act on — "more" with no cursor renders a
+ * load-more that can never load, and a cursor under `has_more: false` would
+ * have the client throw away the rest of the archive. Rejecting the page lets
+ * `parseWithFallback` degrade it to the caller's fallback instead of
+ * rendering a truncated list that looks complete.
+ */
+export const ArchivedInboxPageSchema = z
+  .object({
+    items: z.array(InboxItemSchema).default([]),
+    next_cursor: z.string().min(1).nullable(),
+    has_more: z.boolean(),
+  })
+  .refine(
+    (page) =>
+      page.has_more === (page.next_cursor !== null) &&
+      (!page.has_more || page.items.length > 0),
+  )
+  .transform((page) => ({
+    items: page.items,
+    nextCursor: page.next_cursor,
+    hasMore: page.has_more,
+  }));
+
+/**
+ * `GET /api/inbox/archived/facets`. The counts are what the filter menu
+ * prints, so a missing or negative one is drift the menu must not show —
+ * `.nonnegative()` plus a whole-object parse means a malformed body falls
+ * back to "no facets" and the menu renders its own loading/error state
+ * rather than counts that add up to nothing.
+ */
+export const ArchivedInboxFacetsSchema = z
+  .object({
+    statuses: z.record(z.string(), z.number().int().nonnegative()),
+    priorities: z.record(z.string(), z.number().int().nonnegative()),
+    actors: z.record(z.string(), z.number().int().nonnegative()),
+    unread_count: z.number().int().nonnegative(),
+  })
+  .transform((facets) => ({
+    statuses: facets.statuses,
+    priorities: facets.priorities,
+    actors: facets.actors,
+    unreadCount: facets.unread_count,
+  }));
 
 export const MemberWithUserSchema: z.ZodType<MemberWithUser> = z.object({
   id: z.string(),

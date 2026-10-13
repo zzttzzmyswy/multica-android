@@ -19,7 +19,11 @@
  */
 import type { QueryClient } from "@tanstack/react-query";
 import type { InboxItem, IssueStatus } from "@multica/core/types";
-import { inboxKeys } from "@/data/queries/inbox";
+import {
+  inboxKeys,
+  mapArchivedInboxCache,
+  type ArchivedInboxCache,
+} from "@/data/queries/inbox";
 
 export function patchInboxIssueStatus(
   qc: QueryClient,
@@ -32,7 +36,16 @@ export function patchInboxIssueStatus(
       i.issue_id === issueId ? { ...i, issue_status: status } : i,
     );
   qc.setQueryData<InboxItem[]>(inboxKeys.list(wsId), patch);
-  qc.setQueryData<InboxItem[]>(inboxKeys.archived(wsId), patch);
+  // The archive is a paged infinite query, and an `issue:updated` has to
+  // reach every cached page under the prefix — a status icon that updates in
+  // the main list but not the archive would show two different states for one
+  // issue. Prefix-based, so pages cached under other filter selections are
+  // patched too (see `mapArchivedInboxCache`).
+  for (const [key, data] of qc.getQueriesData<ArchivedInboxCache>({
+    queryKey: inboxKeys.archived(wsId),
+  })) {
+    if (data) qc.setQueryData(key, mapArchivedInboxCache(data, patch));
+  }
 }
 
 export function dropInboxItemsByIssue(
@@ -43,7 +56,11 @@ export function dropInboxItemsByIssue(
   const drop = (old: InboxItem[] | undefined) =>
     old?.filter((i) => i.issue_id !== issueId);
   qc.setQueryData<InboxItem[]>(inboxKeys.list(wsId), drop);
-  qc.setQueryData<InboxItem[]>(inboxKeys.archived(wsId), drop);
+  for (const [key, data] of qc.getQueriesData<ArchivedInboxCache>({
+    queryKey: inboxKeys.archived(wsId),
+  })) {
+    if (data) qc.setQueryData(key, mapArchivedInboxCache(data, drop));
+  }
 }
 
 /**

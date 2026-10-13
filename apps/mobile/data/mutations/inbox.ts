@@ -28,7 +28,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { InboxItem } from "@multica/core/types";
 import { api } from "@/data/api";
-import { inboxKeys } from "@/data/queries/inbox";
+import { inboxKeys, patchArchivedInboxCaches } from "@/data/queries/inbox";
 import { invalidateInboxSummary } from "@/data/realtime/inbox-ws-updaters";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { WRITE_FAILURE_TITLE_KEY } from "@/lib/write-failure";
@@ -113,6 +113,11 @@ export function useArchiveInbox() {
       await qc.cancelQueries({ queryKey: key });
       const prev = qc.getQueryData<InboxItem[]>(key);
       qc.setQueryData<InboxItem[]>(key, (old) => archiveInboxPatch(old, id));
+      // The archived side needs no optimistic insert: the row arrives when
+      // the invalidate below refetches page one. Inserting it locally would
+      // have to guess its position in a cursor-ordered, server-filtered list
+      // — and the list is filtered server-side, so a row that does not match
+      // the active selection must not appear at all.
       return { prev, key };
     },
     onError: (_err, _id, ctx) => {
@@ -121,7 +126,9 @@ export function useArchiveInbox() {
     onSettled: () => {
       // Both lists: the item just moved from the main inbox into the archive,
       // and a sibling of the same issue could resurface in the archived view
-      // after the refetch (web invalidates all inbox keys too).
+      // after the refetch (web invalidates all inbox keys too). The prefix
+      // reaches the paged archive and its facets, so the counts follow the
+      // rows rather than lagging a reload behind.
       qc.invalidateQueries({ queryKey: inboxKeys.all(wsId) });
     },
   });
@@ -168,14 +175,23 @@ export function useUnarchiveInbox() {
     meta: { [WRITE_FAILURE_TITLE_KEY]: "inbox.unarchiveFailed" },
     mutationFn: (id: string) => api.unarchiveInbox(id),
     onMutate: async (id) => {
-      const key = inboxKeys.archived(wsId);
-      await qc.cancelQueries({ queryKey: key });
-      const prev = qc.getQueryData<InboxItem[]>(key);
-      qc.setQueryData<InboxItem[]>(key, (old) => unarchiveInboxPatch(old, id));
-      return { prev, key };
+      // Cancel by the archived PREFIX, not the single legacy key: the archive
+      // view reads a paged infinite query, and a page still in flight would
+      // otherwise land after the optimistic patch and put the restored row
+      // back on screen.
+      await qc.cancelQueries({ queryKey: inboxKeys.archived(wsId) });
+      // Patches every archived cache under the prefix — the legacy array and
+      // the paged entries for every filter selection the user has visited —
+      // so the restored row leaves the archive whichever view is showing.
+      const prev = patchArchivedInboxCaches(qc, wsId, (items) =>
+        unarchiveInboxPatch(items, id),
+      );
+      return { prev };
     },
     onError: (_err, _id, ctx) => {
-      if (ctx?.prev) qc.setQueryData(ctx.key, ctx.prev);
+      for (const [key, data] of ctx?.prev ?? []) {
+        qc.setQueryData(key, data);
+      }
     },
     onSettled: () => {
       // Both lists: the item just moved from the archive back into the main

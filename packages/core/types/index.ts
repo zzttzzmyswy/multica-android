@@ -90,7 +90,14 @@ export type {
   PluginReleaseRequest,
   PluginBindingRequest,
 } from "./plugin";
-export type { InboxItem, InboxSeverity, InboxItemType, InboxWorkspaceUnread } from "./inbox";
+export type {
+  ArchivedInboxFacets,
+  ArchivedInboxPage,
+  InboxItem,
+  InboxSeverity,
+  InboxItemType,
+  InboxWorkspaceUnread,
+} from "./inbox";
 export type { NotificationGroupKey, NotificationGroupValue, NotificationPreferences, NotificationPreferenceResponse } from "./notification-preference";
 export type { Comment, CommentType, CommentAuthorType, CommentTriggerPreview, CommentTriggerPreviewAgent, CommentTriggerSource, CommentTriggerOutcome, CommentTriggerStatus, Reaction } from "./comment";
 export type { Label, LabelResourceType, CreateLabelRequest, UpdateLabelRequest, ListLabelsResponse, IssueLabelsResponse, ResourceLabelsResponse } from "./label";

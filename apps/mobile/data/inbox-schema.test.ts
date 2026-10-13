@@ -38,7 +38,7 @@ describe("inbox list schema", () => {
       read: false,
       archived: false,
       created_at: "2026-07-30T00:00:00Z",
-      // Every value is a string. A number here drops the whole list.
+      // The ordinary shape: all strings, as most notification types send.
       details: { from: "in_progress", to: "in_review" },
     };
 
@@ -48,27 +48,39 @@ describe("inbox list schema", () => {
     expect(parsed.success && parsed.data[0]?.details?.to).toBe("in_review");
   });
 
-  it("rejects a numeric details value", () => {
-    const badRow = {
+  it("accepts a numeric details value, coerced to its string form", () => {
+    // This test used to assert the opposite ("rejects a numeric details
+    // value"), on the assumption that `details` is a string map. The live
+    // server disproved it in iteration 238: an `autopilot_paused` row carries
+    // `{fail_pct: 90.6, total_runs: 235, …}`. Rejecting the row emptied the
+    // whole page (see the test below), which is how the archive rendered as
+    // "no archived notifications" over 910 of them. Numbers are coerced rather
+    // than dropped so a consumer still reads a value.
+    const row = {
       id: "inbox-2",
       recipient_type: "member",
       type: "status_changed",
       details: { child_count: 3 },
     };
 
-    expect(InboxListSchema.safeParse([badRow]).success).toBe(false);
+    const parsed = InboxListSchema.safeParse([row]);
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data[0]?.details?.child_count).toBe("3");
   });
 
-  it("keeps one malformed row from emptying the entire list observable", () => {
-    // Documents the blast radius that made this a P1 rather than a cosmetic bug:
-    // the schema is an array, so a single bad row invalidates every good one.
+  it("keeps one odd row from emptying the entire list", () => {
+    // The blast radius that makes this a P1 rather than a cosmetic bug: the
+    // schema is an array, so a single rejected row invalidates every good one
+    // and `parseWithFallback` returns the empty list for the whole page. The
+    // fix is to make the row parseable, so this asserts the blast radius is
+    // gone rather than documenting it as expected behaviour.
     const good = {
       id: "inbox-3",
       recipient_type: "member",
       type: "status_changed",
       details: { from: "todo", to: "in_review" },
     };
-    const bad = {
+    const odd = {
       id: "inbox-4",
       recipient_type: "member",
       type: "status_changed",
@@ -76,7 +88,11 @@ describe("inbox list schema", () => {
     };
 
     expect(InboxListSchema.safeParse([good]).success).toBe(true);
-    expect(InboxListSchema.safeParse([good, bad]).success).toBe(false);
+    const parsed = InboxListSchema.safeParse([good, odd]);
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data).toHaveLength(2);
+    // The good row's own details are untouched by its neighbour.
+    expect(parsed.success && parsed.data[0]?.details?.to).toBe("in_review");
   });
 
   it("renders an unknown server type instead of dropping the row", () => {

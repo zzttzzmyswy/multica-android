@@ -47,6 +47,8 @@ import type {
   CreateIssueStatusRequest,
   CreateProjectRequest,
   CreateProjectResourceRequest,
+  ArchivedInboxFacets,
+  ArchivedInboxPage,
   CreateQuickActionRequest,
   CronPreviewResponse,
   GetAutopilotResponse,
@@ -322,6 +324,8 @@ import {
   EMPTY_CANCEL_AGENT_TASKS_RESPONSE,
   EMPTY_AUTOPILOT_DETAIL,
   EMPTY_AUTOPILOT_TRIGGER,
+  ArchivedInboxFacetsSchema,
+  ArchivedInboxPageSchema,
   EMPTY_ATTACHMENT_LIST,
   EMPTY_CHAT_MESSAGE_LIST,
   EMPTY_CHAT_MESSAGES_PAGE,
@@ -484,6 +488,7 @@ import { createDownloadResumable } from "expo-file-system/legacy";
 import { getCurrentSlug } from "./workspace-store";
 import { getApiBaseUrl, getEnvBaseUrl, setApiBaseUrl } from "./server-config";
 import { parseWithFallback } from "@/lib/parse-response";
+import type { InboxFilters } from "@/lib/inbox-filters";
 import { createRequestId } from "@/lib/request-id";
 import { resolveAttachmentUrl } from "@/lib/attachment-url";
 import { sanitizeBasename } from "@/lib/attachment-download";
@@ -546,6 +551,16 @@ const MAX_FILE_SIZE = 100 * 1024 * 1024;
  *  pull-to-refresh spinner never going away). 30s is generous for any
  *  reasonable Multica payload size on cellular. */
 const FETCH_TIMEOUT_MS = 30_000;
+
+/**
+ * Rows per archived-inbox page. 50 matches web's `listArchivedInboxPage`,
+ * which pins `limit=50` for the same reason the server pins the ceiling at
+ * 100: the archive grows without end, so page size is a scroll-length
+ * decision, and two clients disagreeing about it would make the same archive
+ * feel like a different list to scroll. Exported so the "has more" logic and
+ * the tests share the one number instead of restating it.
+ */
+export const ARCHIVED_INBOX_PAGE_SIZE = 50;
 
 /** Messages per page when walking a chat session's history backwards.
  *  Mirrors web's `chatMessagesPageOptions` default (`packages/core/chat/
@@ -1048,6 +1063,13 @@ class ApiClient {
   // server-side (no pagination in v1). Schema-guarded like listInbox so a
   // contract drift renders an empty archive instead of taking the inbox down
   // with it — note the endpoint label used by parseWithFallback's warning.
+  //
+  // The archive view no longer reads this; `listArchivedInboxPage` below does,
+  // because this endpoint's `LIMIT` bounds the response and the archive grows
+  // without end — see that method. Kept because the shared `inboxBucketOptions`
+  // (the notification detail screen) still resolves the archived bucket
+  // through it, and because a capped read is the right shape for a single-row
+  // lookup that only needs "is this notification archived".
   async listArchivedInbox(opts?: {
     signal?: AbortSignal;
   }): Promise<InboxItem[]> {
@@ -1057,6 +1079,110 @@ class ApiClient {
     return parseWithFallback(raw, InboxListSchema, EMPTY_INBOX_LIST, {
       endpoint: "listArchivedInbox",
     });
+  }
+
+  /**
+   * Filter selection → query string, shared by the paged list and the facets
+   * count so the numbers and the rows they describe can never come from
+   * different questions.
+   *
+   * Value order is sorted before joining, matching web's `archivedInboxParams`
+   * exactly. That is not cosmetic: the server echoes nothing back and the
+   * client keys its cache on the params it sent, so an unsorted join would
+   * make the same selection two different cache entries depending on click
+   * order — two requests, two spinners, for one answer.
+   *
+   * Absent dimensions are omitted rather than sent empty, again like web:
+   * `statuses=` and no `statuses` mean the same thing server-side, but only
+   * one of them is a stable, minimal URL.
+   */
+  private archivedInboxParams(filters: InboxFilters): string {
+    const params = new URLSearchParams();
+    if (filters.statuses.length) {
+      params.set("statuses", [...filters.statuses].sort().join(","));
+    }
+    if (filters.priorities.length) {
+      params.set("priorities", [...filters.priorities].sort().join(","));
+    }
+    if (filters.actors.length) {
+      params.set("actors", [...filters.actors].sort().join(","));
+    }
+    if (filters.unreadOnly) params.set("unread_only", "true");
+    return params.toString();
+  }
+
+  /**
+   * One page of the archived inbox, newest-first, cursor-paged.
+   *
+   * This is the archive's real read path, replacing the capped
+   * `/api/inbox/archived` for the list. That endpoint's query carries a
+   * server-side `LIMIT`, so past its bound the client cannot reach the rest of
+   * the archive at all — and because archiving is issue-level but notifications
+   * keep arriving, the unreachable fraction only grows. Here `limit` bounds one
+   * page and `next_cursor` walks to the end.
+   *
+   * Throws rather than falling back to an empty page on a malformed response.
+   * That is the opposite of `listArchivedInbox` above, and deliberately so: an
+   * empty list is a legitimate archive state, so a silent fallback here would
+   * render "no archived notifications" over a full one — reinstating exactly
+   * the silent truncation this endpoint exists to remove. Throwing routes it to
+   * the list's error state, which says so and offers a retry.
+   */
+  async listArchivedInboxPage(
+    filters: InboxFilters,
+    options: {
+      cursor?: string | null;
+      signal?: AbortSignal;
+    } = {},
+  ): Promise<ArchivedInboxPage> {
+    const params = new URLSearchParams(this.archivedInboxParams(filters));
+    params.set("limit", String(ARCHIVED_INBOX_PAGE_SIZE));
+    // Only on a continuation: `cursor=` (empty) is not the same request as no
+    // cursor, and the first page is defined by the latter.
+    if (options.cursor) params.set("cursor", options.cursor);
+    const raw = await this.fetch<unknown>(
+      `/api/inbox/archived/page?${params.toString()}`,
+      { signal: options.signal },
+    );
+    // Validated strictly, fallback null, then thrown on: `parseWithFallback`
+    // logs the drift (so the console says what actually arrived) and the throw
+    // carries it to the query's error state.
+    const page = parseWithFallback<ArchivedInboxPage | null>(
+      raw,
+      ArchivedInboxPageSchema,
+      null,
+      { endpoint: "listArchivedInboxPage" },
+    );
+    if (!page) throw new Error("Invalid archived inbox page response");
+    return page;
+  }
+
+  /**
+   * Facet counts for the filter menu, computed over the CURRENT selection.
+   *
+   * Every count is "how many rows would selecting this value reveal", so it
+   * respects the other active dimensions and ignores its own. Same strict
+   * parse-and-throw as the page: the menu renders these numbers next to the
+   * checkboxes, and a menu showing 0 beside every option would read as "your
+   * archive is empty" rather than "the counts failed to load".
+   */
+  async getArchivedInboxFacets(
+    filters: InboxFilters,
+    opts?: { signal?: AbortSignal },
+  ): Promise<ArchivedInboxFacets> {
+    const query = this.archivedInboxParams(filters);
+    const raw = await this.fetch<unknown>(
+      `/api/inbox/archived/facets${query ? `?${query}` : ""}`,
+      { signal: opts?.signal },
+    );
+    const facets = parseWithFallback<ArchivedInboxFacets | null>(
+      raw,
+      ArchivedInboxFacetsSchema,
+      null,
+      { endpoint: "getArchivedInboxFacets" },
+    );
+    if (!facets) throw new Error("Invalid archived inbox facets response");
+    return facets;
   }
 
   // Archive endpoints — write surface. Match web's surface in
