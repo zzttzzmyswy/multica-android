@@ -717,6 +717,13 @@ const TimelineEntrySchema = z.object({
   content: z.string().optional(),
   parent_id: z.string().nullable().optional(),
   updated_at: z.string().optional(),
+  // The comment's aggregate revision. `/timeline` sends it on comment entries
+  // and it is the token an edit must echo back to be REFUSED rather than to
+  // overwrite a concurrent edit (MYS-2132). Optional because older servers omit
+  // it; a malformed value reads as "no token" rather than failing the whole
+  // timeline, since `.object()` stripping it would be the same silent downgrade
+  // the field exists to prevent.
+  revision: z.number().optional().catch(undefined),
   comment_type: z.string().optional(),
   reactions: z.array(ReactionSchema).optional(),
   attachments: z.array(AttachmentSchema).optional(),
@@ -933,6 +940,14 @@ export const IssueSchema = z.object({
     .catch(undefined),
   project_id: z.string().nullable(),
   position: z.number(),
+  // The aggregate optimistic-concurrency token (MYS-2132): what a whole-document
+  // editor echoes back as `expected_revision`. Optional because older backends
+  // omit it, which a reader must treat as "cannot be refused" rather than as
+  // revision 0 — sending 0 is a value the server rejects outright (it requires a
+  // positive integer). A malformed value reads as absent for the same reason
+  // `duplicate_of` above does: `.object()` would strip it and quietly downgrade
+  // every edit to last-write-wins.
+  revision: z.number().optional().catch(undefined),
   // Older backends predate `stage`; default to null so a missing field parses
   // cleanly into the non-optional Issue.stage (number | null).
   stage: z.number().nullable().default(null),

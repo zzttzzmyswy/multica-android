@@ -71,6 +71,11 @@ import {
 import { commentPreview } from "@/lib/comment-collapse";
 import { isDeletedComment } from "@/lib/comment-deletion";
 import {
+  REVISION_CONFLICT_KEY,
+  isRevisionConflictError,
+  revisionForEdit,
+} from "@/lib/revision-conflict";
+import {
   deriveThreadResolution,
   foldThreadReplies,
 } from "@/lib/thread-resolution";
@@ -621,6 +626,16 @@ function CommentBody({
   // the long-press entry hides for attachment-only comments.
   const editComment = useEditComment(issueId);
   const [editing, setEditing] = useState(false);
+  // The baseline this edit is gated on (MYS-2132): the content AND revision the
+  // server held when the editor was opened. Both are captured together because
+  // they are one fact — the reading the member edited from — and a write that
+  // quotes one without the other would be gated against a state that never
+  // existed.
+  const [editBase, setEditBase] = useState({ content: "", revision: undefined as number | undefined });
+  // The member's own text. Lifted here so a refused save can be retried against
+  // a fresh baseline WITHOUT losing it — the draft is the one thing that cannot
+  // be re-derived from the server.
+  const [draft, setDraft] = useState("");
   // Failed-comment state for THIS entry — undefined when the entry is a
   // normal server-backed comment OR an in-flight optimistic. Only set when
   // the matching `useCreateComment` mutation errored and the entry was
@@ -713,11 +728,87 @@ function CommentBody({
   const canOfferEdit =
     entry.actor_type === "member" &&
     (entry.actor_id === userId || canManageRole(role));
+  // Opening the editor snapshots the baseline the write will be gated on. Taken
+  // here rather than read at save time on purpose: `entry` is live, and by the
+  // time the member taps Save the cache may already hold a newer version from a
+  // websocket or a refetch — gating on THAT would compare the write against
+  // itself and never refuse. The baseline has to be what the member actually
+  // read. Web does the same (`initialContentBase` seeded on edit start,
+  // comment-card.tsx:374).
+  const openEditor = useCallback(() => {
+    const content = entry.content ?? "";
+    setEditBase({ content, revision: revisionForEdit(entry.revision) });
+    setDraft(content);
+    setEditing(true);
+  }, [entry.content, entry.revision]);
   const longPress = useCommentLongPress(
     entry,
     issueId,
     issueIdentifier,
-    canOfferEdit && entry.content ? () => setEditing(true) : undefined,
+    canOfferEdit && entry.content ? openEditor : undefined,
+  );
+
+  /**
+   * Save the draft, gated on the baseline the editor opened with.
+   *
+   * A refusal (`revision_conflict`) is classified SEPARATELY from every other
+   * failure, because it is the one the member can act on: another writer saved a
+   * different version, so the question is which of the two to keep. Every other
+   * failure just keeps the editor open with the draft intact — `useEditComment`
+   * carries the generic sentence through the write-failure channel and rolls its
+   * optimistic patch back, so this branch must not alert a second time.
+   *
+   * `gate` defaults to the baseline captured on open. The retry passes a
+   * DIFFERENT one: what the server reported it holds now. Re-sending the
+   * original would be refused again, and "keep my version" means exactly the
+   * write that succeeds against the current one. Web re-bases the same way
+   * (`initialContentBase`, comment-card.tsx:411) and its `keep_local` re-runs
+   * the save.
+   */
+  const saveEdit = useCallback(
+    async (next: string, gate = editBase) => {
+      try {
+        await editComment.mutateAsync({
+          commentId: entry.id,
+          content: next,
+          contentBase: gate.content,
+          expectedRevision: gate.revision,
+        });
+        setEditing(false);
+      } catch (err) {
+        if (!isRevisionConflictError(err)) return;
+        // `entry` is live: the settle refetch has landed by now, so it holds the
+        // version the server refused against. Nothing needs fetching here.
+        const serverGate = {
+          content: entry.content ?? "",
+          revision: revisionForEdit(entry.revision),
+        };
+        Alert.alert(t("comment.updateFailed"), t(REVISION_CONFLICT_KEY), [
+          { text: t("common.cancel"), style: "cancel" },
+          {
+            text: t("revision.useServer"),
+            onPress: () => {
+              // Local-only: the server already stores its version, so dropping
+              // the draft writes nothing. Its content is what `entry` holds, so
+              // closing and reopening re-seeds from it.
+              setEditing(false);
+            },
+          },
+          {
+            text: t("revision.keepLocal"),
+            style: "destructive",
+            onPress: () => {
+              // Adopt the server's reading as the new baseline, keep the
+              // member's text, and write again. Updating `editBase` first is
+              // what makes the retry gate on the version that actually exists.
+              setEditBase(serverGate);
+              void saveEdit(draft, serverGate);
+            },
+          },
+        ]);
+      }
+    },
+    [editComment, entry.id, entry.content, entry.revision, editBase, draft, t],
   );
 
   useEffect(() => {
@@ -819,23 +910,12 @@ function CommentBody({
         <>
           {editing ? (
             <CommentEditBox
-              initialContent={entry.content ?? ""}
+              value={draft}
+              onChangeText={setDraft}
+              baseline={editBase.content}
               saving={editComment.isPending}
               onCancel={() => setEditing(false)}
-              onSave={async (next) => {
-                try {
-                  await editComment.mutateAsync({
-                    commentId: entry.id,
-                    content: next,
-                  });
-                  setEditing(false);
-                } catch {
-                  // Keep the editor open with the draft intact so the text is
-                  // never lost; `useEditComment` already rolled the optimistic
-                  // timeline patch back to the server value.
-                  Alert.alert(t("comment.updateFailed"));
-                }
-              }}
+              onSave={saveEdit}
             />
           ) : entry.content ? (
             <Markdown
@@ -916,28 +996,38 @@ function CommentBody({
  * the card body for its editor the same way). Save is disabled when the
  * trimmed draft is unchanged, mirroring web's "nothing changed — close
  * without a write" shortcut (comment-card.tsx:430-435).
+ *
+ * The draft is lifted into the parent (`value` / `onChangeText`) rather than
+ * held here. A refused edit has to be re-savable against a NEW baseline while
+ * keeping the member's text — and the text is the one thing that must not be
+ * reconstructed from anywhere else. Web's editor keeps the draft in a store for
+ * the same reason (`useCommentDraftStore`); this is the same idea with the card
+ * itself as the owner, since mobile has exactly one editor per comment.
  */
 function CommentEditBox({
-  initialContent,
+  value,
+  onChangeText,
+  baseline,
   saving,
   onCancel,
   onSave,
 }: {
-  initialContent: string;
+  value: string;
+  onChangeText: (next: string) => void;
+  baseline: string;
   saving: boolean;
   onCancel: () => void;
   onSave: (content: string) => void;
 }) {
   const { t } = useTranslation();
-  const [draft, setDraft] = useState(initialContent);
-  const trimmed = draft.trim();
-  const unchanged = trimmed === initialContent.trim();
+  const trimmed = value.trim();
+  const unchanged = trimmed === baseline.trim();
 
   return (
     <View className="gap-2">
       <AutosizeTextArea
-        value={draft}
-        onChangeText={setDraft}
+        value={value}
+        onChangeText={onChangeText}
         autoFocus
         editable={!saving}
         maxHeight={240}

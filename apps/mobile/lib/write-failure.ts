@@ -126,7 +126,7 @@ export function writeFailureDetail(
   translate?: (id: string) => string,
 ): string | undefined {
   const conflictKey = writeFailureConflictKey(mutation);
-  if (conflictKey && translate && isConflictError(error)) {
+  if (conflictKey && translate && isConflictFor(error, mutation)) {
     return translate(conflictKey);
   }
   const permissionKey = writeFailurePermissionKey(mutation);
@@ -161,6 +161,26 @@ export type WriteFailureAlerter = (
  *  every write whose 409 has no better phrasing than the API's own. */
 export const WRITE_FAILURE_CONFLICT_KEY = "writeFailureConflictKey";
 
+/** Meta key naming the SERVER CODE that the conflict line is allowed to replace.
+ *
+ *  `WRITE_FAILURE_CONFLICT_KEY` on its own keys off the HTTP status, which was
+ *  enough while every 409 a titled mutation could see was a lost update. That
+ *  stopped being true when `PUT /api/issues/:id` grew a second and third 409:
+ *  the status-archive race ("reload the status list and retry") and the two
+ *  duplicate-mark refusals ("pick the original instead"). All three are 409s on
+ *  the same endpoint as the revision conflict, and none of them is a race the
+ *  member can resolve by comparing versions — substituting the conflict line for
+ *  them hides the one sentence that says what to do.
+ *
+ *  A mutation that sets this key opts into the narrower rule: the substitution
+ *  happens only when the body carries this exact code. Absent — the default —
+ *  keeps the status-only rule, which is still right for the endpoints where
+ *  409 means exactly one thing (saved views, wakeup rules).
+ *
+ *  Opt-in rather than a blanket narrowing because narrowing would silently drop
+ *  the substitution for those endpoints' 409s, which carry no code at all. */
+export const WRITE_FAILURE_CONFLICT_CODE_KEY = "writeFailureConflictCodeKey";
+
 /** The i18n id to substitute for the server's message on a 409, or `null`. */
 export function writeFailureConflictKey(
   mutation: WriteFailureMutationLike | null | undefined,
@@ -169,6 +189,50 @@ export function writeFailureConflictKey(
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+/** The server code the substitution is restricted to, or `null` for the
+ *  status-only rule — see {@link WRITE_FAILURE_CONFLICT_CODE_KEY}. */
+export function writeFailureConflictCode(
+  mutation: WriteFailureMutationLike | null | undefined,
+): string | null {
+  const value = mutation?.options?.meta?.[WRITE_FAILURE_CONFLICT_CODE_KEY];
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+/** The `code` a failure body carries, or `null`.
+ *
+ *  Duck-typed on the body rather than read through `@multica/core/api`'s
+ *  `errorCode`, because that helper is `instanceof` against core's OWN
+ *  `ApiError` and every mobile failure is thrown by `apps/mobile/data/api.ts`'s
+ *  class instead — so it answers `undefined` for all of them. A rule that
+ *  decides which sentence the member sees cannot depend on a class identity the
+ *  app never constructs. */
+function errorCodeOf(error: unknown): string | null {
+  if (typeof error !== "object" || error === null) return null;
+  const body = (error as { body?: unknown }).body;
+  if (typeof body !== "object" || body === null) return null;
+  const code = (body as { code?: unknown }).code;
+  return typeof code === "string" && code.length > 0 ? code : null;
+}
+
+/**
+ * Whether this failure is the one the conflict line may replace.
+ *
+ * The status-only rule unless the mutation named a code, in which case BOTH
+ * must hold. Fails closed on the narrower rule: a 409 whose body carries a
+ * different code, or none at all, keeps the server's own message.
+ */
+export function isConflictFor(
+  error: unknown,
+  mutation?: WriteFailureMutationLike | null,
+): boolean {
+  if (!isConflictError(error)) return false;
+  const code = writeFailureConflictCode(mutation);
+  if (code === null) return true;
+  return errorCodeOf(error) === code;
 }
 
 /** Whether the write lost an optimistic-concurrency race.

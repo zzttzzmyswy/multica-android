@@ -20,6 +20,11 @@ export interface TimelineEntry {
   content?: string;
   parent_id?: string | null;
   updated_at?: string;
+  /** The comment's aggregate revision (`Comment.revision`). `/timeline` sends
+   *  it on comment entries, and it is the token an edit must echo back as
+   *  `expected_revision` to be refused rather than to overwrite a concurrent
+   *  edit. Absent on older servers. */
+  revision?: number;
   comment_type?: string;
   /** Set only on comments a quick action produced (MUL-5465). Unforgeable. */
   quick_action_id?: string | null;

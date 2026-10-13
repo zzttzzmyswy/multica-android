@@ -46,10 +46,14 @@ import { useFailedCommentsStore } from "@/data/stores/failed-comments-store";
 import { patchSubscribersList } from "@/lib/subscription";
 import { patchIssueBatch } from "@/lib/batch-issues";
 import {
+  WRITE_FAILURE_CONFLICT_CODE_KEY,
+  WRITE_FAILURE_CONFLICT_KEY,
   WRITE_FAILURE_HANDLED_KEY,
   WRITE_FAILURE_TITLE_KEY,
 } from "@/lib/write-failure";
 import { errorCode } from "@multica/core/api";
+import { REVISION_CONFLICT_CODE } from "@multica/core/issues/revision-conflict";
+import { REVISION_CONFLICT_KEY } from "@/lib/revision-conflict";
 import { translate } from "@/lib/i18n";
 import {
   DUPLICATE_TARGET_IS_DUPLICATE,
@@ -258,6 +262,21 @@ export function useToggleCommentReaction(issueId: string) {
  *
  * Server returns the full updated Comment; we map it into the timeline's
  * TimelineEntry shape (`type: "comment"`, the rest of Comment fields flat).
+ *
+ * ## The concurrency gate (MYS-2132)
+ *
+ * `expectedRevision` / `contentBase` are forwarded to the server, which refuses
+ * the write with 409 `revision_conflict` when the comment moved on. Before this
+ * the hook sent neither, so an edit made against a stale body was accepted and
+ * REPLACED whatever another writer had saved in between — with no prompt and no
+ * way for either party to notice. Sending the gate is the whole fix; the
+ * classification of the refusal lives in the surfaces that render it, through
+ * `lib/revision-conflict.ts`.
+ *
+ * The optimistic patch below is still applied: it is what keeps the editor
+ * responsive, and a refused write rolls it back in `onError` like any other
+ * failure. What the gate changes is that the rollback now happens INSTEAD OF an
+ * overwrite, rather than alongside one.
  */
 export function useEditComment(issueId: string) {
   const qc = useQueryClient();
@@ -268,11 +287,26 @@ export function useEditComment(issueId: string) {
       commentId,
       content,
       attachmentIds,
+      contentBase,
+      expectedRevision,
     }: {
       commentId: string;
       content: string;
       attachmentIds?: string[];
-    }) => api.updateComment(commentId, content, attachmentIds),
+      /** The content the editor opened with. The server refuses the edit when
+       *  the stored content has moved on from it. */
+      contentBase?: string;
+      /** The `Comment.revision` the editor opened with. */
+      expectedRevision?: number;
+    }) =>
+      api.updateComment(
+        commentId,
+        content,
+        attachmentIds,
+        undefined,
+        contentBase,
+        expectedRevision,
+      ),
     onMutate: async ({ commentId, content }) => {
       const key = issueKeys.timeline(wsId, issueId);
       await qc.cancelQueries({ queryKey: key });
@@ -485,13 +519,26 @@ export type UpdateIssueVars = UpdateIssueRequest & {
 export function useUpdateIssue(
   issueId: string,
   titleKey: string = "issueRelation.updateFailed",
+  conflictKey: string = REVISION_CONFLICT_KEY,
 ) {
   const qc = useQueryClient();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   return useMutation({
     mutationKey: ["updateIssue", issueId] as const,
-    meta: { [WRITE_FAILURE_TITLE_KEY]: titleKey },
+    // The 409 substitution is opt-in and deliberately applies to the WHOLE
+    // hook, not only the edit form. A value-picker write carries no
+    // `expected_revision`, so it cannot produce a `revision_conflict` at all —
+    // the server only refuses when the request says what it was editing from —
+    // but this endpoint emits TWO other 409s (the status-archive race and the
+    // two duplicate-mark refusals) whose own messages are the actionable ones.
+    // `WRITE_FAILURE_CONFLICT_CODE_KEY` therefore pins the substitution to the
+    // code, so those keep their server sentence. See `write-failure.ts`.
+    meta: {
+      [WRITE_FAILURE_TITLE_KEY]: titleKey,
+      [WRITE_FAILURE_CONFLICT_KEY]: conflictKey,
+      [WRITE_FAILURE_CONFLICT_CODE_KEY]: REVISION_CONFLICT_CODE,
+    },
     mutationFn: ({ move_intent: moveIntent, ...patch }: UpdateIssueVars) => {
       if (!moveIntent) return api.updateIssue(issueId, patch);
       // A drag sends its NEIGHBOURS, not a position: the server owns the
@@ -563,6 +610,14 @@ export function useUpdateIssue(
         // pointer is not the relation. Web strips it identically
         // (packages/core/issues/mutations.ts:209,321).
         duplicate_of_issue_id: _duplicateOfIssueId,
+        // expected_revision / title_base are the concurrency GATE fields
+        // (MYS-2132). They describe the reading the editor produced this patch
+        // from, not a new state for the issue, so they must never land in the
+        // cache: a `revision` left in the optimistic row would be a value the
+        // server is about to change, and the next edit would gate on it and be
+        // refused for no reason.
+        expected_revision: _expectedRevision,
+        title_base: _titleBase,
         ...optimisticPatch
       } = patch;
       if (prev) {

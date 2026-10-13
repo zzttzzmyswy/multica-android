@@ -38,6 +38,7 @@ import { issueDetailOptions } from "@/data/queries/issues";
 import { useUpdateIssue } from "@/data/mutations/issues";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useMentionInput } from "@/lib/use-mention-input";
+import { revisionForEdit, isRevisionConflictError } from "@/lib/revision-conflict";
 import { keyboardBehavior } from "@/lib/keyboard";
 import { useTranslation } from "@/lib/i18n/react";
 
@@ -48,10 +49,32 @@ export default function EditIssue() {
   const detail = useQuery(issueDetailOptions(wsId, id));
   // "Failed to save" — this screen writes a whole form, so its failure line is
   // the save-specific one rather than the attribute-picker generic.
-  const update = useUpdateIssue(id, "editIssue.failedTitle");
+  //
+  // Its CONFLICT line is also its own. The shared `revision.conflict` says the
+  // content "was refreshed; compare it" — true of the comment editor, which
+  // re-renders the server's version behind the draft, but false here: this form
+  // never re-seeds itself, so nothing was refreshed for the member to look at
+  // and telling them to compare would send them hunting for a screen that does
+  // not exist. What is true here is that the draft survives and saving
+  // overwrites, which is what this line says.
+  const update = useUpdateIssue(
+    id,
+    "editIssue.failedTitle",
+    "revision.conflictEditForm",
+  );
 
   const [title, setTitle] = useState("");
   const [descriptionBase, setDescriptionBase] = useState("");
+  // The issue's revision at the moment this form was seeded (MYS-2132). That is
+  // the value the save is gated on — deliberately NOT re-read from
+  // `detail.data` at save time. A live read would compare the write against
+  // whatever the cache holds now, which includes changes that landed while the
+  // member was typing; the write would then be permitted precisely in the
+  // concurrent case the gate exists to catch. Captured once, it is what the
+  // member actually read.
+  const [openedRevision, setOpenedRevision] = useState<number | undefined>(
+    undefined,
+  );
   const description = useMentionInput();
   const [seeded, setSeeded] = useState(false);
   // Attachment ids freshly uploaded from the description toolbar; carried
@@ -74,6 +97,7 @@ export default function EditIssue() {
     const initial = detail.data.description ?? "";
     setDescriptionText(stripChannelMediaMarkers(initial));
     setDescriptionBase(initial);
+    setOpenedRevision(revisionForEdit(detail.data.revision));
     setSeeded(true);
   }, [detail.data, seeded, setDescriptionText]);
 
@@ -94,6 +118,23 @@ export default function EditIssue() {
     dirty &&
     !update.isPending &&
     !uploadsPending;
+
+  // Re-base the gate after a refused save.
+  //
+  // `openedRevision` is stale by definition the moment the server refuses the
+  // write, so leaving it alone would make the form a dead end: the conflict line
+  // offers "save to overwrite", and every further tap would send the same dead
+  // revision and be refused again. The hook's `onSettled` has already
+  // invalidated the detail query, so the refetched row carries the revision the
+  // server actually holds — adopting it is what turns the next tap into the
+  // overwrite the message promised.
+  //
+  // The member's text is untouched: this only re-arms the gate.
+  const conflicted = isRevisionConflictError(update.error);
+  useEffect(() => {
+    if (!conflicted || !detail.data) return;
+    setOpenedRevision(revisionForEdit(detail.data.revision));
+  }, [conflicted, detail.data]);
 
   const onCancel = useCallback(() => {
     if (!dirty) {
@@ -123,6 +164,18 @@ export default function EditIssue() {
       title: title.trim(),
       description: currentDescription.trim(),
       description_base: descriptionBase,
+      // The concurrency gate (MYS-2132). `title_base` alone does not cover the
+      // description, and the description's own base is NOT a gate — the server
+      // deliberately treats description writes as last-write-wins because the
+      // editor autosaves on a debounce and a rejected autosave wedged the editor
+      // (MUL-6971, issue.go:3687-3701). `expected_revision` is the field that
+      // actually refuses, and this screen is its one legitimate caller: it edits
+      // BOTH fields from a single reading of the issue, so a whole-document
+      // conflict is the right granularity. Read from the row this form was
+      // seeded off, never from a live `detail.data` — see `openedRevision`.
+      ...(openedRevision !== undefined
+        ? { expected_revision: openedRevision }
+        : {}),
       ...(uploadedAttachmentIds.length > 0
         ? { attachment_ids: uploadedAttachmentIds }
         : {}),
@@ -138,6 +191,7 @@ export default function EditIssue() {
     currentDescription,
     descriptionBase,
     uploadedAttachmentIds,
+    openedRevision,
     update,
   ]);
 

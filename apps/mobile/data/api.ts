@@ -3465,11 +3465,27 @@ class ApiClient {
   }
 
   // PUT /api/comments/:id — content edit (+ optional attachment swap).
+  //
+  // `contentBase` / `expectedRevision` are the two optimistic-concurrency gate
+  // fields (MYS-2132). The server treats EITHER of them as "this is a strict
+  // edit" and then refuses the write with 409 `revision_conflict` if the comment
+  // moved on — without them the same edit is accepted and silently overwrites
+  // whatever landed in between (server/internal/handler/comment.go:
+  // `strictContentEdit := req.ContentBase != nil || req.ExpectedRevision != nil`).
+  //
+  // Both are optional and neither is sent when undefined, matching
+  // packages/core/api/client.ts:1708. That is not merely parity: `attachment_ids`
+  // is dropped from the body when undefined on purpose (an omitted key means
+  // "keep the existing set", whereas `[]` means "remove them all"), so the same
+  // "undefined means omit" rule has to hold for these or a caller that passes no
+  // gate would start sending `null` and trip the positive-integer check.
   async updateComment(
     commentId: string,
     content: string,
     attachmentIds?: string[],
     suppressAgentIds?: string[],
+    contentBase?: string,
+    expectedRevision?: number,
   ): Promise<Comment> {
     return this.fetchValidatedWith(
       `/api/comments/${commentId}`,
@@ -3481,6 +3497,10 @@ class ApiClient {
           content,
           ...(attachmentIds ? { attachment_ids: attachmentIds } : {}),
           ...(suppressAgentIds ? { suppress_agent_ids: suppressAgentIds } : {}),
+          ...(contentBase !== undefined ? { content_base: contentBase } : {}),
+          ...(expectedRevision !== undefined
+            ? { expected_revision: expectedRevision }
+            : {}),
         }),
       },
       { endpoint: "updateComment" },
