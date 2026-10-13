@@ -5,7 +5,7 @@ import {
   Pressable,
   View,
 } from "react-native";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { InboxItem } from "@multica/core/types";
@@ -16,8 +16,12 @@ import { Header } from "@/components/ui/header";
 import { IconButton } from "@/components/ui/icon-button";
 import { HeaderActions } from "@/components/ui/app-header-actions";
 import { SwipeableInboxRow } from "@/components/inbox/swipeable-inbox-row";
+import { InboxArchiveFilterSheet } from "@/components/inbox/inbox-archive-filter-sheet";
+import { InboxArchiveListFooter } from "@/components/inbox/inbox-archive-list-footer";
 import {
+  archivedInboxFacetsOptions,
   archivedInboxListOptions,
+  archivedInboxPagesOptions,
   inboxListOptions,
 } from "@/data/queries/inbox";
 import {
@@ -40,6 +44,22 @@ import {
   deduplicateInboxItems,
   getInboxDisplayTitle,
 } from "@/lib/inbox-display";
+import {
+  archivedCountUnavailable,
+  archivedEmptyReason,
+  archivedEntryCount,
+  archivedInboxTotal,
+  archivedPriorityFilterSupport,
+  archivedRowsFromPages,
+  hasPagedBeyondFirst,
+} from "@/lib/inbox-archive-view";
+import {
+  EMPTY_INBOX_FILTERS as EMPTY_FILTERS,
+  filterInboxItems,
+  inboxFilterCount,
+  useInboxFilterStore,
+  useInboxFilters,
+} from "@/lib/inbox-filters";
 
 // Both inbox lists (main + archived) share one row-separator shape: a hairline
 // under each row aligned to the avatar gutter (avatar starts at px-4 → 36pt →
@@ -64,21 +84,158 @@ export default function Inbox() {
     () => deduplicateInboxItems(rawItems ?? []),
     [rawItems],
   );
-  // Archived sub-view. Fetched in BOTH views, not just the archived one: the
-  // main list's entry into the archive is labelled with this count, so it has
-  // to be known before the user goes there (web inbox-page.tsx:104-112).
+  // Archived sub-view. The list is the CURSOR-PAGED endpoint, not the capped
+  // one: `/api/inbox/archived` carries a server-side LIMIT, so past its bound
+  // the rest of the archive is simply unreachable from here — and since the
+  // archive only grows, that blind spot only widens. Pages are deduplicated
+  // across their boundaries by `archivedRowsFromPages`.
+  const filters = useInboxFilters(wsId);
+  const clearFilters = useInboxFilterStore((s) => s.clearFilters);
+  const toggleStatusFilter = useInboxFilterStore((s) => s.toggleStatusFilter);
+  const togglePriorityFilter = useInboxFilterStore((s) => s.togglePriorityFilter);
+  const toggleActorFilter = useInboxFilterStore((s) => s.toggleActorFilter);
+  const toggleUnreadOnly = useInboxFilterStore((s) => s.toggleUnreadOnly);
+
+  // Which view is showing. Local state, not URL-synced — mobile follows the
+  // chat archive precedent (web keeps it in ?view=, a shared-link concern
+  // this app doesn't have). `filtersOpen` is declared alongside it because the
+  // facets query below is gated on it.
+  const [view, setView] = useState<"inbox" | "archived">("inbox");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  // Gated on the view, matching web (`enabled: isArchivedView`): these are the
+  // archive's rows, and fetching a page of them while the user reads the main
+  // inbox would spend a request and 50 rows of memory on a list nobody asked
+  // for. The entry row's COUNT does not need them — it comes from the facets
+  // query below, which is a few hundred bytes of counts.
   const {
-    data: rawArchivedItems,
+    data: archivedPages,
     isLoading: archivedLoading,
     isError: archivedError,
     error: archivedErrorObj,
     refetch: refetchArchived,
     isRefetching: isRefetchingArchived,
-  } = useQuery(archivedInboxListOptions(wsId));
-  const archivedData = useMemo(
-    () => deduplicateArchivedInboxItems(rawArchivedItems ?? []),
-    [rawArchivedItems],
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isFetchNextPageError,
+  } = useInfiniteQuery({
+    ...archivedInboxPagesOptions(wsId, filters),
+    enabled: !!wsId && view === "archived",
+  });
+
+  // Unfiltered facets, for the entry row's count. The archive's size must not
+  // change when the user narrows the list, or the number under the main inbox
+  // would describe their last filter instead of the archive. Keyed by the
+  // empty filter set, so it is its own cache entry — and the one archive
+  // request that runs in both views, because the entry row is rendered in both.
+  const {
+    data: archivedFacets,
+    isError: facetsUnavailable,
+    isPending: facetsPending,
+  } = useQuery({
+    ...archivedInboxFacetsOptions(wsId, EMPTY_FILTERS),
+    enabled: !!wsId,
+  });
+
+  // Fallback for a server with no facets endpoint: the capped legacy list,
+  // fetched ONLY when the facets failed and only while the main view is
+  // showing. It is a lower bound (that endpoint's own LIMIT), which is why it
+  // is a fallback and not the source. `retry: false` because a 404 on an
+  // endpoint the server does not have is not worth three attempts.
+  const legacyArchivedQuery = useQuery({
+    ...archivedInboxListOptions(wsId),
+    enabled: !!wsId && view === "inbox" && facetsUnavailable,
+    retry: false,
+  });
+  const legacyRowCount = useMemo(
+    () =>
+      legacyArchivedQuery.data
+        ? deduplicateArchivedInboxItems(legacyArchivedQuery.data).length
+        : undefined,
+    [legacyArchivedQuery.data],
   );
+
+  // Facets for the filter menu: SAME filters as the list, because every count
+  // is "how many rows selecting this would reveal" and that answer depends on
+  // the other active dimensions. Enabled only while the sheet is open — the
+  // counts are menu content, and fetching them for the background list would
+  // be a request per filter change with nothing on screen to show for it.
+  const {
+    data: facets,
+    isLoading: facetsLoading,
+    isError: facetsError,
+    refetch: refetchFacets,
+  } = useQuery({
+    ...archivedInboxFacetsOptions(wsId, filters),
+    enabled: !!wsId && filtersOpen,
+  });
+
+  // Every fetched page, flattened and deduplicated by issue ACROSS page
+  // boundaries (see `archivedRowsFromPages`): the cursor pages by time, so one
+  // issue's notifications can straddle two pages, and deduplicating per page
+  // would render that issue twice.
+  const rawArchivedItems = useMemo(
+    () => archivedRowsFromPages(archivedPages?.pages),
+    [archivedPages],
+  );
+
+  // Priority filtering is always available here, and this is NOT the
+  // capability probe the main inbox uses. The paged endpoint guarantees the
+  // projection: it selects `iss.priority AS issue_priority` in SQL, so every
+  // row of every page carries the key — including rows with no linked issue,
+  // which serialize `null`. Measured against the live server across the
+  // unfiltered archive and four filter combinations: 938 rows, 0 missing.
+  //
+  // Probing it from the returned rows (as `inboxPriorityFilterSupport` does for
+  // the main inbox, whose endpoint predates the column) would be worse than
+  // redundant, it would be circular: the filtered response holds only rows the
+  // priority filter matched, so a probe over it answers "did the server honour
+  // what I sent" instead of "does this backend have priorities" — and an EMPTY
+  // result answers "unknown", which `inboxFiltersForPrioritySupport` reads as
+  // "cannot filter" and strips the selection. The header and the client-side
+  // pass would then disagree with the request actually on the wire, which is
+  // exactly what the device run showed: a list filtered to `priorities=urgent`
+  // still labelled 910 with no filter badge. Web hardcodes `"supported"` for
+  // the archived view for the same reason (`inbox-page.tsx:151`).
+  const prioritySupport = archivedPriorityFilterSupport();
+
+  // The server filters, so this should be a no-op on a settled page — it earns
+  // its place on the edges: an optimistic unarchive lands here before the
+  // invalidate refetches, and a filter toggled while a page is in flight must
+  // not leave the now-excluded rows on screen.
+  const archivedData = useMemo(
+    () => filterInboxItems(rawArchivedItems, filters),
+    [rawArchivedItems, filters],
+  );
+  const activeFilterCount = inboxFilterCount(filters);
+  // The archive's real size — the facet total when the facets answered, and a
+  // lower bound from the capped list when they could not (see
+  // `archivedEntryCount`). Either way it is the archive, not the rows fetched
+  // so far.
+  const archivedTotal = archivedEntryCount({
+    facetTotal: archivedInboxTotal(archivedFacets),
+    facetsUnavailable,
+    legacyRowCount,
+  });
+  const countUnavailable = archivedCountUnavailable({
+    facetsUnavailable,
+    fallbackPending: facetsPending || legacyArchivedQuery.isPending,
+    fallbackUnavailable: legacyArchivedQuery.isError,
+  });
+  const emptyReason = archivedEmptyReason({
+    visibleCount: archivedData.length,
+    activeFilterCount,
+  });
+
+  // One entry point for "fetch the next page", shared by the footer's press
+  // target and the list's `onEndReached`. `fetchNextPage` is a no-op with no
+  // next page, and the in-flight guard stops a scroll from firing a second
+  // request for the page a press already asked for.
+  const loadNextArchivedPage = useCallback(() => {
+    if (!hasNextPage || isFetchingNextPage) return;
+    void fetchNextPage();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const markRead = useMarkInboxRead();
   const markUnread = useMarkInboxUnread();
@@ -89,24 +246,25 @@ export default function Inbox() {
   const archiveAllRead = useArchiveAllReadInbox();
   const archiveCompleted = useArchiveCompletedInbox();
 
-  // Which view is showing. Local state, not URL-synced — mobile follows the
-  // chat archive precedent (web keeps it in ?view=, a shared-link concern
-  // this app doesn't have).
-  const [view, setView] = useState<"inbox" | "archived">("inbox");
-
   // Never strand the user on an empty archive: when the last archived issue is
   // restored (or a new notification revives it into the main inbox), fall back
   // to the main list. Gated on the load so a cold-open doesn't bounce before
   // the data lands, and on error so a failed fetch swaps the error message
   // for the main list and leaves the user with no idea it failed (web
   // inbox-page.tsx:188-208).
+  //
+  // Gated on `emptyReason` too, and that gate is the difference between a
+  // helpful fallback and a bug: a filter that matches nothing also leaves the
+  // list at zero, and bouncing the user to the main inbox there would eject
+  // them from the archive for using its filter. Only a genuinely empty archive
+  // falls back; a filtered-to-nothing one stays put and says so.
   useEffect(() => {
     if (view !== "archived") return;
     if (archivedLoading) return;
     if (archivedError) return;
-    if (archivedData.length > 0) return;
+    if (emptyReason !== "archive") return;
     setView("inbox");
-  }, [view, archivedLoading, archivedError, archivedData.length]);
+  }, [view, archivedLoading, archivedError, emptyReason]);
 
   const onPressItem = (item: InboxItem) => {
     if (!item.read && view === "inbox") {
@@ -238,8 +396,15 @@ export default function Inbox() {
   // state too — that is exactly when a user goes looking for what they filed
   // away). Hidden at zero and in the archived view. Placement mirrors web
   // inbox-list.tsx and chat's archive entry.
+  //
+  // The count is the archive's real size, from the facet totals — NOT the
+  // length of the rows fetched so far. Those rows are one cursor page; printing
+  // them here was the visible half of the silent truncation this iteration
+  // fixes, because a user reads a number under "Archived" as the total. The
+  // filters deliberately do not narrow it: this row reports the archive, not
+  // the reader's last search inside it.
   const archivedEntry =
-    view === "inbox" && archivedData.length > 0 ? (
+    view === "inbox" && (archivedTotal > 0 || countUnavailable) ? (
       <Pressable
         onPress={() => setView("archived")}
         accessibilityLabel={t("inbox.archivedTitle")}
@@ -256,7 +421,7 @@ export default function Inbox() {
           {t("inbox.archivedTitle")}
         </Text>
         <Text className="text-body text-muted-foreground tabular-nums">
-          {archivedData.length}
+          {countUnavailable ? "—" : archivedTotal}
         </Text>
         <Ionicons
           name="chevron-forward"
@@ -266,9 +431,9 @@ export default function Inbox() {
       </Pressable>
     ) : null;
 
-  // Archived sub-view: back row (arrow + title + count), then the archived
-  // rows. Swipe action is Restore; the header's batch menu is hidden. Same
-  // shape as chat's archived view.
+  // Archived sub-view: back row (arrow + title + count), a filter control,
+  // then the paged rows. Swipe action is Restore; the header's batch menu is
+  // hidden. Same shape as chat's archived view.
   if (view === "archived") {
     return (
       <View className="flex-1 bg-background">
@@ -289,10 +454,70 @@ export default function Inbox() {
           <Text className="flex-1 text-title-sm font-semibold text-foreground">
             {t("inbox.archivedTitle")}
           </Text>
+          {/* The archive's real size, not the rows fetched so far — the same
+              reasoning as the entry row in the main view. While a filter is
+              active it reports the filtered count instead, because the list
+              under it shows those rows: a total that disagreed with the list
+              would read as the filter being broken. With no count available
+              (a server without the facets endpoint, read from this view) an
+              em dash stands in — inventing a number from the fetched pages
+              would be the very conflation this iteration removes. */}
           <Text className="text-body text-muted-foreground tabular-nums">
-            {archivedData.length}
+            {activeFilterCount > 0
+              ? archivedData.length
+              : archivedTotal > 0
+                ? archivedTotal
+                : "—"}
           </Text>
+          <Pressable
+            onPress={() => setFiltersOpen(true)}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel={
+              activeFilterCount > 0
+                ? t("inbox.archivedFiltersActive", { count: activeFilterCount })
+                : t("inbox.archivedFilters")
+            }
+            className="flex-row items-center gap-1 p-0.5"
+          >
+            <Ionicons
+              name="filter-outline"
+              size={18}
+              color={
+                activeFilterCount > 0
+                  ? THEME[colorScheme].primary
+                  : THEME[colorScheme].mutedForeground
+              }
+            />
+            {/* The count beside the glyph, so an active filter is visible
+                without opening the sheet — web puts the same number on its
+                trigger (`inbox-filter-menu.tsx`). */}
+            {activeFilterCount > 0 ? (
+              <Text className="text-caption font-medium text-primary tabular-nums">
+                {activeFilterCount}
+              </Text>
+            ) : null}
+          </Pressable>
         </View>
+        <InboxArchiveFilterSheet
+          visible={filtersOpen}
+          onClose={() => setFiltersOpen(false)}
+          wsId={wsId}
+          filters={filters}
+          facets={facets}
+          facetsLoading={facetsLoading}
+          facetsError={facetsError}
+          onRetryFacets={() => void refetchFacets()}
+          prioritySupport={prioritySupport}
+          activeCount={activeFilterCount}
+          onToggleStatus={(status) => wsId && toggleStatusFilter(wsId, status)}
+          onTogglePriority={(priority) =>
+            wsId && togglePriorityFilter(wsId, priority)
+          }
+          onToggleActor={(actor) => wsId && toggleActorFilter(wsId, actor)}
+          onToggleUnreadOnly={() => wsId && toggleUnreadOnly(wsId)}
+          onClear={() => wsId && clearFilters(wsId)}
+        />
         {archivedLoading ? (
           <InboxLoading />
         ) : archivedError ? (
@@ -307,13 +532,31 @@ export default function Inbox() {
               <Text>{t("workspace.retry")}</Text>
             </Button>
           </View>
-        ) : archivedData.length === 0 ? (
+        ) : emptyReason === "archive" ? (
           // Transient: the fallback effect flips to the main list as soon as
-          // the (non-loading, non-error) archive is confirmed empty.
+          // the (non-loading, non-error, unfiltered) archive is confirmed
+          // empty.
           <InboxEmpty
             iconColor={THEME[colorScheme].mutedForeground}
             titleText={t("inbox.archivedEmpty")}
           />
+        ) : emptyReason === "filtered" ? (
+          // Deliberately NOT the empty-archive copy: nothing is missing, the
+          // selection is just narrow. Wording says which, and the way out is
+          // one press rather than backing out of the archive.
+          <View className="flex-1 items-center justify-center px-8 gap-3">
+            <Ionicons
+              name="filter-outline"
+              size={42}
+              color={THEME[colorScheme].mutedForeground}
+            />
+            <Text className="text-title-sm font-medium text-foreground text-center">
+              {t("inbox.archivedFilterEmpty")}
+            </Text>
+            <Button variant="outline" onPress={() => wsId && clearFilters(wsId)}>
+              <Text>{t("inbox.archivedFiltersClear")}</Text>
+            </Button>
+          </View>
         ) : (
           <FlatList
             data={archivedData}
@@ -334,6 +577,22 @@ export default function Inbox() {
                 onLongPress={() => onLongPressItem(item)}
               />
             )}
+            // Touch-to-load-more is the footer's press target; `onEndReached`
+            // also fires when the user scrolls to the bottom, which is what
+            // makes the list feel continuous. Both go through one guard so a
+            // scroll cannot double-fetch a page the press already asked for.
+            onEndReached={loadNextArchivedPage}
+            onEndReachedThreshold={0.4}
+            ListFooterComponent={
+              <InboxArchiveListFooter
+                hasMore={!!hasNextPage}
+                isLoadingMore={isFetchingNextPage}
+                isError={isFetchNextPageError}
+                paged={hasPagedBeyondFirst(archivedPages?.pages.length ?? 0)}
+                onLoadMore={loadNextArchivedPage}
+                onRetry={loadNextArchivedPage}
+              />
+            }
             refreshing={isRefetchingArchived}
             onRefresh={refetchArchived}
           />
