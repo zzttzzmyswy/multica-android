@@ -202,6 +202,9 @@ import type {
   PluginReleaseRequest,
   MikaBootstrapResponse,
   StartMikaOnboardingResponse,
+  CommentSubIssuePreview,
+  CommentSubIssueManualIssue,
+  CommentSubIssueQuickCreate,
 } from "@multica/core/types";
 import type {
   CloudRuntimeNode,
@@ -269,6 +272,13 @@ import {
   // export on the sharing whitelist — mobile reuses it instead of mirroring a
   // second copy. Only the mobile-side fallback value lives in data/schemas.ts.
   IssueTriggerPreviewSchema,
+  // Source context (MYS-2137) — the preview read behind the "create a
+  // sub-issue from this comment" confirm surface. Same sharing rule as the
+  // line above: core owns both for web, so mobile reuses them rather than
+  // mirroring a second copy. `EMPTY_COMMENT_SUB_ISSUE_PREVIEW` is the fallback,
+  // and its empty `capture_token` is what makes a drifted read fail closed.
+  CommentSubIssuePreviewSchema,
+  EMPTY_COMMENT_SUB_ISSUE_PREVIEW,
 } from "@multica/core/api/schemas";
 import type {
   CreateIssueViewRequest,
@@ -3588,6 +3598,87 @@ class ApiClient {
       EMPTY_ISSUE_TRIGGER_PREVIEW,
       { endpoint: "previewIssueTrigger" },
     );
+  }
+
+  // GET /api/comments/:id/sub-issue-preview — what turning this comment into a
+  // sub-issue would carry (MYS-2137). Mirrors web's
+  // packages/core/api/client.ts:getCommentSubIssuePreview.
+  //
+  // Reads through `parseWithFallback` like every other mobile read, but the
+  // fallback is deliberately NOT a "usable empty preview": its `capture_token`
+  // is `""`, and the confirm surface refuses to write without one. A drifted
+  // read therefore fails closed — the member is told the preview could not be
+  // loaded, rather than creating a child whose context was never shown.
+  //
+  // No `enabled`-style guard here: the caller owns whether to ask (the confirm
+  // route mounts only when a comment was picked).
+  async getCommentSubIssuePreview(
+    commentId: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<CommentSubIssuePreview> {
+    const raw = await this.fetch<unknown>(
+      `/api/comments/${commentId}/sub-issue-preview`,
+      opts?.signal ? { signal: opts.signal } : undefined,
+    );
+    return parseWithFallback(
+      raw,
+      CommentSubIssuePreviewSchema,
+      EMPTY_COMMENT_SUB_ISSUE_PREVIEW,
+      { endpoint: "getCommentSubIssuePreview" },
+    );
+  }
+
+  // POST /api/comments/:id/sub-issues — open a task from a comment (MYS-2137).
+  //
+  // Two modes, and they return DIFFERENT shapes, so the response is typed as a
+  // union the caller must narrow rather than one shape with optional halves:
+  //
+  //   - `manual`: the server creates the issue synchronously and returns it, so
+  //     the caller can navigate straight to it.
+  //   - `agent`: the server enqueues a quick-create task and returns
+  //     `{task_id}` — the issue does not exist yet, so there is nothing to
+  //     navigate to and the caller reports "queued" instead.
+  //
+  // `capture_token` from the preview is REQUIRED on both: it is what the server
+  // compares against the live source, and it answers 409
+  // `source_context_changed` when they disagree. That refusal is classified
+  // separately from a generic failure by `lib/source-context.ts` — it is the
+  // one outcome the member can act on (refresh and retry).
+  //
+  // NOT parsed through `parseWithFallback`: a create that the server accepted
+  // must not be reported to the member as an empty issue. `manual` reuses the
+  // core `IssueSchema` so a drifted payload throws (the same choice
+  // `createIssue` makes), and `agent` accepts any object carrying a `task_id`.
+  async createCommentSubIssue(
+    commentId: string,
+    body:
+      | { mode: "manual"; capture_token: string; issue: CommentSubIssueManualIssue }
+      | { mode: "agent"; capture_token: string; quick_create: CommentSubIssueQuickCreate },
+  ): Promise<{ mode: "manual"; issue: Issue } | { mode: "agent"; task_id: string }> {
+    const raw = await this.fetch<unknown>(`/api/comments/${commentId}/sub-issues`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    if (body.mode === "agent") {
+      const taskId = (raw as { task_id?: unknown } | null)?.task_id;
+      if (typeof taskId !== "string" || taskId.length === 0) {
+        throw new ApiError(
+          "POST /api/comments/:id/sub-issues (agent) returned no task_id",
+          200,
+          raw,
+        );
+      }
+      return { mode: "agent", task_id: taskId };
+    }
+    const parsed = IssueSchema.safeParse(raw);
+    if (!parsed.success) {
+      throw new ApiError(
+        "POST /api/comments/:id/sub-issues returned a malformed issue",
+        200,
+        raw,
+      );
+    }
+    return { mode: "manual", issue: parsed.data as Issue };
   }
 
   // PUT /api/comments/:id — content edit (+ optional attachment swap).

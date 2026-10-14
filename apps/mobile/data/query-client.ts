@@ -32,7 +32,18 @@ export const queryClient = new QueryClient({
   mutationCache: new MutationCache({
     onError: (error, _variables, _context, mutation) => {
       reportWriteFailure(error, mutation, translate, (title) =>
-        Alert.alert(title, writeFailureDetail(error)),
+        // The SAME three arguments `reportWriteFailure` uses to decide WHAT to
+        // say. Passing the error alone — as this call did — silently disabled
+        // every substitution the message rules define: `writeFailureDetail`
+        // reads the mutation's `meta` to find the conflict and permission keys
+        // and calls `translate` to render them, so with neither it fell through
+        // to the server's own body on every failure. The visible damage was a
+        // lost-update 409 showing `revision mismatch` instead of the sentence
+        // that tells the member which version to keep (MYS-2132), and a
+        // source-context 409 showing `source context changed` instead of
+        // 「请刷新后重试」 (MYS-2137). The classifier tests all passed
+        // throughout, because they exercise `writeFailureDetail` directly.
+        Alert.alert(title, writeFailureDetail(error, mutation, translate)),
       );
     },
   }),

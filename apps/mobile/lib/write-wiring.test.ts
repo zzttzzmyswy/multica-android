@@ -70,6 +70,11 @@ const REPORTING_MUTATIONS: [string, string, string][] = [
   ["data/mutations/properties.ts", "useSetIssueProperty", "properties.valueUpdateFailed"],
   ["data/mutations/properties.ts", "useUnsetIssueProperty", "properties.valueUpdateFailed"],
   ["data/mutations/projects.ts", "useDeleteProjectResource", "resource.removeFailed"],
+  // Iteration 239 — creating an issue from a comment. Its refusal
+  // (`source_context_changed`) is the one failure the member can act on, so it
+  // MUST report; the substitution that turns the server's body into
+  // 「请刷新后重试」 is covered by the assertion below.
+  ["data/mutations/issues.ts", "useCreateCommentSubIssue", "sourceContext.createFailed"],
 ];
 
 /** Hooks whose title is a PARAMETER rather than a hardcoded literal, so one
@@ -358,5 +363,48 @@ describe("the silent-write backlog only shrinks", () => {
       expect(silent.has(hook), `${hook} now has a title — drop its allow-list entry`)
         .toBe(true);
     }
+  });
+});
+
+/**
+ * The channel must be able to RENDER a substitution, not merely decide on one
+ * (MYS-2137).
+ *
+ * Found on device: a source-context 409 showed the server's raw body
+ * (`source context changed`) where the message rules had a member-facing
+ * sentence for it, even though `isSourceContextChangedError` classified that
+ * exact body correctly and every rule test passed. The cause was one argument
+ * short in the only production call site: `query-client.ts` invoked
+ * `writeFailureDetail(error)` and dropped the `mutation` and `translate` the
+ * function needs to look up — and render — the conflict/permission line. With
+ * neither, `writeFailureDetail` fell through to `error.message` on EVERY
+ * failure, so `WRITE_FAILURE_CONFLICT_KEY` and `WRITE_FAILURE_PERMISSION_KEY`
+ * were dead across the whole app.
+ *
+ * A rule-level test cannot see this: it supplies the arguments itself, which is
+ * exactly what the production path was failing to do. So the assertion has to
+ * be about the CALL SITE.
+ */
+describe("the global channel passes the arguments the substitutions need", () => {
+  const src = code("data/query-client.ts");
+
+  it("hands writeFailureDetail the mutation and the translator", () => {
+    const call = src.slice(src.indexOf("writeFailureDetail("));
+    const args = call.slice(0, call.indexOf(")"));
+    // All three, by name. `error` alone is the defect; the translator is what
+    // renders the id and the mutation is what carries the id to render.
+    expect(args).toContain("error");
+    expect(args, "the mutation carries the conflict/permission i18n ids").toContain(
+      "mutation",
+    );
+    expect(args, "without the translator the id cannot be rendered").toContain(
+      "translate",
+    );
+  });
+
+  it("passes the same translator it gave reportWriteFailure", () => {
+    // Two different translators would let the title and the body disagree about
+    // which language the member is reading.
+    expect(src).toContain("reportWriteFailure(error, mutation, translate,");
   });
 });

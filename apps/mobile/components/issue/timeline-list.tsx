@@ -99,6 +99,7 @@ import {
   IssueDuplicateBanner,
   IssueDuplicatesSection,
 } from "./issue-duplicates";
+import { IssueSourceContextBanner } from "./issue-source-context";
 import { PullRequestList } from "./pull-request-list";
 import { DeliverablesSection } from "./deliverables-section";
 import { QuickActionsSection } from "@/components/quick-action/quick-actions-section";
@@ -741,6 +742,18 @@ export function TimelineList({
           unmarking={unmarkingDuplicate}
         />
       ) : null}
+      {/* Source-context strip (MYS-2137) — where a comment-born issue came
+       *  from, and whether that source has moved on. Same slot as the duplicate
+       *  banner and for the same reason: both are statements about ANOTHER
+       *  issue, so both sit outside `IssueHeaderCard`, above the title. Renders
+       *  null for every issue that was not opened from a comment, which is
+       *  almost all of them.
+       *
+       *  Unconditional where the duplicate banner is gated on `onUnmarkDuplicate`
+       *  — that prop exists because the banner carries a write (the unmark
+       *  action), and this strip carries none. It is a pure read of a field the
+       *  server already resolved into the payload. */}
+      <IssueSourceContextBanner issue={issue} />
       {/* Find indexes the title (it is the first thing the page renders), so
        *  the header card takes a flag for it. The flash lives inside that card
        *  around the title line rather than here around the whole card: the card

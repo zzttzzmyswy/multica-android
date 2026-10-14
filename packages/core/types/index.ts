@@ -1,4 +1,4 @@
-export type { Issue, IssueStatus, IssueStatusCategory, IssuePriority, IssueAssigneeType, IssueMetadata, IssueMetadataValue, IssueReaction, IssueDuplicateOf, IssueDuplicates } from "./issue";
+export type { Issue, IssueStatus, IssueStatusCategory, IssuePriority, IssueAssigneeType, IssueMetadata, IssueMetadataValue, IssueReaction, IssueDuplicateOf, IssueDuplicates, IssueSourceContext, SourceContextSnapshot, SourceContextIssue, SourceContextComment, SourceContextChangeReason, SourceContextDisplayState, SourceContextAuthorState, SourceContextCurrent, SourceContextChangeDetails, CommentSubIssuePreview, CommentSubIssueLimits, CommentSubIssueMode, CommentSubIssueManualIssue, CommentSubIssueQuickCreate, SourceContextIssueState, SourceContextAnchorState } from "./issue";
 export type { IssueStatusEntry, ListIssueStatusesResponse, CreateIssueStatusRequest, UpdateIssueStatusRequest } from "./issue-status";
 export type {
   Agent,
