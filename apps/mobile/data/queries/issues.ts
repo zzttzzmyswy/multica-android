@@ -193,6 +193,43 @@ export const issueDetailOptions = (wsId: string | null, id: string) =>
   });
 
 /**
+ * Batch-resolve many issue ids to their rows in ONE query (MYS-2156).
+ *
+ * The swimlane's parent grouping names its lanes after the parent issues
+ * themselves, so it needs a row per distinct parent in the filtered window.
+ * `issueDetailOptions` per parent is an N-request fan-out that grows with the
+ * number of distinct parents; this collapses it to `ceil(N/100)` requests
+ * (see `api.listIssuesByIds` for why the divisor is the list endpoint's
+ * 100-row clamp).
+ *
+ * Returns an id → Issue map, which is the shape both consumers want:
+ * `knownParentIds` reads its keys and the lane label reads a parent's
+ * `identifier` + `title`.
+ *
+ * `ids` must be SORTED and DEDUPLICATED by the caller: it is part of the query
+ * key, so an unsorted list would key a different cache entry for the same
+ * question and refetch on every render. The result is rebuilt into a map
+ * rather than returned as an array so callers cannot accidentally depend on
+ * the server's row order.
+ *
+ * A parent missing from the map means "not loaded", which is the same state a
+ * still-in-flight per-id query left behind — its children render in the pinned
+ * orphan lane for that frame (web's `buildParentLanes` rule).
+ */
+export const issuesByIdsOptions = (
+  wsId: string | null,
+  ids: readonly string[],
+) =>
+  queryOptions({
+    queryKey: issueKeys.issuesByIds(wsId, ids),
+    queryFn: async ({ signal }): Promise<Map<string, Issue>> => {
+      const issues = await api.listIssuesByIds(ids, { signal });
+      return new Map(issues.map((issue) => [issue.id, issue]));
+    },
+    enabled: !!wsId && ids.length > 0,
+  });
+
+/**
  * Resolve a bare issue identifier (`MYS-2109`) to the issue it names, or
  * `null` when this workspace has no such issue.
  *

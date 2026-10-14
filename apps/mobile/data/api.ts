@@ -579,6 +579,23 @@ export const ARCHIVED_INBOX_PAGE_SIZE = 50;
  *  first paint and every follow-up page would show different window sizes. */
 const CHAT_MESSAGES_PAGE_LIMIT = 50;
 
+/** Rows one `listIssuesByIds` request may return, and therefore the number of
+ *  ids it may name per request (MYS-2156).
+ *
+ *  This is the SERVER's number, not a client preference: `ListIssues` clamps
+ *  `limit` to 100 (`server/internal/handler/issue.go:945`, the same clamp on
+ *  the table path at :1488), so a request naming more than 100 ids silently
+ *  returns only the first 100 that match — every id past that is resolved to
+ *  nothing, and the parents it named fall into the orphan lane. Chunking at the
+ *  clamp is what makes the batch correct at any size, and it is also what keeps
+ *  the request count at `ceil(N/100)`.
+ *
+ *  Deliberately NOT web's `CHILDREN_BY_PARENTS_CHUNK_SIZE = 200`: that constant
+ *  is the parent cap of a different endpoint (`/api/issues/children`, whose
+ *  handler enforces `listChildrenByParentsLimit = 200`). This path pages a
+ *  LIST response, so the list's 100-row clamp is the binding constraint. */
+export const ISSUES_BY_IDS_CHUNK_SIZE = 100;
+
 export class ApiError extends Error {
   readonly status: number;
   readonly body?: unknown;
@@ -2938,6 +2955,67 @@ class ApiClient {
     return parseWithFallback(raw, ListIssuesResponseSchema, EMPTY_LIST_ISSUES_RESPONSE, {
       endpoint: "GET /api/issues",
     });
+  }
+
+  /**
+   * Batch-resolve a set of issue ids to their full rows (MYS-2156). The
+   * swimlane's parent grouping needs one row per distinct parent it names, and
+   * resolving those one id at a time was an N-request fan-out whose size grows
+   * with the number of distinct parents in the filtered window.
+   *
+   * Transport is the list endpoint's `ids` facet, NOT
+   * `GET /api/issues/children?parent_ids=…`: that endpoint returns the CHILDREN
+   * of the given parents, so labelling a lane from it would print a child's
+   * identifier/title where the parent's belongs. `ids` returns the named issues
+   * themselves (probed against mu.zztweb.top 2026-10-14: 4 parents → 4 rows,
+   * exact id match, `identifier` + `title` present).
+   *
+   * `ids` goes out through `listIssues`, so it inherits that method's POST
+   * `/api/issues/query` routing (the id list can exceed a request line) and its
+   * per-response `parseWithFallback` — schema drift in one chunk degrades that
+   * chunk to empty instead of failing the batch.
+   *
+   * The chunk size is {@link ISSUES_BY_IDS_CHUNK_SIZE}, whose value is set by
+   * the server's `limit` clamp rather than by choice: `ListIssues` clamps
+   * `limit` to 100 (server/internal/handler/issue.go:945), so ONE request can
+   * return at most 100 rows no matter what is asked for. Chunking at that cap
+   * is what keeps the request count at `ceil(N/100)` instead of silently
+   * dropping every id past the first 100.
+   */
+  async listIssuesByIds(
+    ids: readonly string[],
+    opts?: { signal?: AbortSignal },
+  ): Promise<Issue[]> {
+    // Dedupe here as well as at the key: a caller that passes the same id twice
+    // would otherwise spend a slot of the server's 100-row budget on a
+    // duplicate and drop a real row off the end.
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) return [];
+
+    const chunks: string[][] = [];
+    for (let i = 0; i < unique.length; i += ISSUES_BY_IDS_CHUNK_SIZE) {
+      chunks.push(unique.slice(i, i + ISSUES_BY_IDS_CHUNK_SIZE));
+    }
+
+    // Chunks are independent, so they run in parallel. A chunk that fails
+    // outright is treated as "resolved nothing" rather than failing the batch:
+    // that reproduces the per-id fan-out's blast radius, where one failed
+    // request left the OTHER parents resolved and only its own children
+    // orphaned.
+    const responses = await Promise.all(
+      chunks.map((chunk) =>
+        this.listIssues(
+          { ids: chunk, limit: ISSUES_BY_IDS_CHUNK_SIZE },
+          { signal: opts?.signal },
+        ).catch(() => EMPTY_LIST_ISSUES_RESPONSE),
+      ),
+    );
+
+    const byId = new Map<string, Issue>();
+    for (const response of responses) {
+      for (const issue of response.issues) byId.set(issue.id, issue);
+    }
+    return [...byId.values()];
   }
 
   /**
