@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import type {
+  ChatCancelFinalizedPayload,
   ChatDonePayload,
   ChatMessage,
   ChatPendingTask,
@@ -9,10 +10,12 @@ import type {
 } from "@multica/core/types";
 
 import {
+  applyChatCancelFinalizedToCache,
   applyChatDoneToCache,
   applyChatQuickActionsToCache,
   patchSessionListAfterUpdate,
   promotePendingTaskToRunning,
+  removeChatMessageFromCache,
   seedAcceptedPendingTask,
   seedPendingTaskFromQueued,
 } from "./chat-ws-updaters";
@@ -285,6 +288,18 @@ function assistantMsg(over: Partial<ChatMessage> = {}): ChatMessage {
   };
 }
 
+function userMsg(over: Partial<ChatMessage> = {}): ChatMessage {
+  return {
+    id: "msg-user",
+    chat_session_id: SESSION,
+    role: "user",
+    content: "the prompt",
+    task_id: "task-1",
+    created_at: "2026-07-09T00:00:00Z",
+    ...over,
+  };
+}
+
 function quickActionsPayload(
   over: Partial<ChatQuickActionsPayload> = {},
 ): ChatQuickActionsPayload {
@@ -525,5 +540,147 @@ describe("applyChatQuickActionsToCache — pending marker", () => {
         chatKeys.quickActionsPending(SESSION),
       )?.message_id,
     ).toBe("msg-2");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Deferred cancellation outcome (#5219)
+// ---------------------------------------------------------------------------
+
+function cancelFinalizedPayload(
+  over: Partial<ChatCancelFinalizedPayload> = {},
+): ChatCancelFinalizedPayload {
+  return {
+    outcome: "restored",
+    chat_session_id: SESSION,
+    task_id: "task-1",
+    initiator_user_id: "user-1",
+    ...over,
+  };
+}
+
+describe("removeChatMessageFromCache", () => {
+  it("drops the deleted prompt from the flat message cache", () => {
+    const qc = new QueryClient();
+    qc.setQueryData<ChatMessage[]>(chatKeys.messages(SESSION), [
+      userMsg({ id: "msg-1" }),
+      assistantMsg({ id: "msg-2" }),
+    ]);
+    removeChatMessageFromCache(qc, SESSION, "msg-1");
+    expect(
+      qc.getQueryData<ChatMessage[]>(chatKeys.messages(SESSION))?.map((m) => m.id),
+    ).toEqual(["msg-2"]);
+  });
+
+  it("is a no-op for a session with no cache", () => {
+    const qc = new QueryClient();
+    expect(() => removeChatMessageFromCache(qc, SESSION, "msg-1")).not.toThrow();
+  });
+});
+
+describe("applyChatCancelFinalizedToCache", () => {
+  it("evicts the deleted prompt on outcome 'restored'", () => {
+    const qc = new QueryClient();
+    qc.setQueryData<ChatMessage[]>(chatKeys.messages(SESSION), [
+      userMsg({ id: "msg-1" }),
+      assistantMsg({ id: "msg-2" }),
+    ]);
+    applyChatCancelFinalizedToCache(
+      qc,
+      cancelFinalizedPayload({ message_id: "msg-1" }),
+      "user-1",
+    );
+    expect(
+      qc.getQueryData<ChatMessage[]>(chatKeys.messages(SESSION))?.map((m) => m.id),
+    ).toEqual(["msg-2"]);
+  });
+
+  it("records the 'Stopped.' assistant row on outcome 'stopped'", () => {
+    const qc = new QueryClient();
+    qc.setQueryData<ChatMessage[]>(chatKeys.messages(SESSION), [userMsg({ id: "msg-1" })]);
+    applyChatCancelFinalizedToCache(
+      qc,
+      cancelFinalizedPayload({
+        outcome: "stopped",
+        message_id: "msg-stopped",
+        content: "Stopped.",
+        created_at: "2026-07-09T00:01:00Z",
+      }),
+      "user-1",
+    );
+    expect(
+      qc.getQueryData<ChatMessage[]>(chatKeys.messages(SESSION))?.map((m) => m.id),
+    ).toContain("msg-stopped");
+  });
+
+  it("drops only the cancelled task from the pending head, not a promoted successor", () => {
+    const qc = new QueryClient();
+    qc.setQueryData<ChatPendingTask>(chatKeys.pendingTask(SESSION), {
+      task_id: "task-1",
+      status: "running",
+    });
+    applyChatCancelFinalizedToCache(
+      qc,
+      cancelFinalizedPayload({ task_id: "task-1" }),
+      "user-1",
+    );
+    expect(qc.getQueryData<ChatPendingTask>(chatKeys.pendingTask(SESSION))?.task_id)
+      .toBeUndefined();
+  });
+
+  it("refetches the durable restores for the initiator", () => {
+    const qc = new QueryClient();
+    const spy = vi.spyOn(qc, "invalidateQueries");
+    applyChatCancelFinalizedToCache(qc, cancelFinalizedPayload(), "user-1");
+    expect(spy).toHaveBeenCalledWith({
+      queryKey: chatKeys.draftRestores(SESSION),
+    });
+  });
+
+  it("does NOT refetch for a different user", () => {
+    // The restores endpoint is creator-authorized; a non-initiator refetching
+    // would be a wasted request at best.
+    const qc = new QueryClient();
+    const spy = vi.spyOn(qc, "invalidateQueries");
+    applyChatCancelFinalizedToCache(qc, cancelFinalizedPayload(), "user-2");
+    expect(spy).not.toHaveBeenCalledWith({
+      queryKey: chatKeys.draftRestores(SESSION),
+    });
+  });
+
+  it("fails closed when the event carries no initiator", () => {
+    const qc = new QueryClient();
+    const spy = vi.spyOn(qc, "invalidateQueries");
+    applyChatCancelFinalizedToCache(
+      qc,
+      cancelFinalizedPayload({ initiator_user_id: undefined }),
+      "user-1",
+    );
+    expect(spy).not.toHaveBeenCalledWith({
+      queryKey: chatKeys.draftRestores(SESSION),
+    });
+  });
+
+  it("still evicts the message for a non-initiator viewing the session", () => {
+    // The bubble is gone for everyone; only the refetch is initiator-scoped.
+    const qc = new QueryClient();
+    qc.setQueryData<ChatMessage[]>(chatKeys.messages(SESSION), [userMsg({ id: "msg-1" })]);
+    applyChatCancelFinalizedToCache(
+      qc,
+      cancelFinalizedPayload({ message_id: "msg-1" }),
+      "user-2",
+    );
+    expect(qc.getQueryData<ChatMessage[]>(chatKeys.messages(SESSION))).toEqual([]);
+  });
+
+  it("ignores an event with no session id", () => {
+    const qc = new QueryClient();
+    const spy = vi.spyOn(qc, "setQueryData");
+    applyChatCancelFinalizedToCache(
+      qc,
+      cancelFinalizedPayload({ chat_session_id: "" }),
+      "user-1",
+    );
+    expect(spy).not.toHaveBeenCalled();
   });
 });

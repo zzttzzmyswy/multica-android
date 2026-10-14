@@ -46,7 +46,12 @@ import { runtimeListOptions } from "@/data/queries/runtimes";
 import { skillListOptions } from "@/data/queries/skills";
 import { useCreateAgent } from "@/data/mutations/agents";
 import { useChatSessionRealtime } from "@/data/realtime/use-chat-session-realtime";
-import { invalidatePendingTask, seedAcceptedPendingTask } from "@/data/realtime/chat-ws-updaters";
+import {
+  invalidatePendingTask,
+  removeChatMessageFromCache,
+  seedAcceptedPendingTask,
+} from "@/data/realtime/chat-ws-updaters";
+import { planCancelRestore } from "@/lib/chat-draft-restore";
 import { ChatMessageList } from "@/components/chat/chat-message-list";
 import { ChatComposer } from "@/components/chat/chat-composer";
 import { BuilderConfigPanel } from "@/components/agent/builder-config-panel";
@@ -315,8 +320,23 @@ export function BuilderWorkspace({
     qc.setQueryData<ChatPendingTask>(chatKeys.pendingTask(sessionId), (old) =>
       old?.task_id === taskId ? {} : old,
     );
+    // Read the response: stopping a turn that had not produced output yet
+    // deletes the member's prompt server-side, and the cancel response is where
+    // the server hands it back (see `planCancelRestore`). The builder's
+    // composer owns its text inline rather than through the drafts store, so the
+    // recovered prompt goes straight back into it.
     void api
       .cancelTaskById(taskId)
+      .then((result) => {
+        const plan = planCancelRestore(result.cancelled_chat_message, {
+          sessionId,
+          restoreDraftToInput: true,
+        });
+        if (plan.removeMessageId) {
+          removeChatMessageFromCache(qc, sessionId, plan.removeMessageId);
+        }
+        if (plan.restore) setComposer(plan.restore.content);
+      })
       .catch(() => {})
       .finally(() => invalidatePendingTask(qc, sessionId));
   }, [pendingTask?.task_id, pendingTask?.status, sessionId, qc]);

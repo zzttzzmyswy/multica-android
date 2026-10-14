@@ -57,6 +57,9 @@ import { api, MAX_FILE_SIZE } from "@/data/api";
 import { useMentionDraftStore } from "@/data/stores/mention-draft-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { quickActionListOptions } from "@/data/queries/quick-actions";
+import { resolveAttachmentUrl } from "@/lib/attachment-url";
+import { restoredAttachmentToComposerItem } from "@/lib/chat-draft-restore";
+import type { Attachment } from "@multica/core/types";
 import {
   buildBuiltinCommandItems,
   buildChatSkillItems,
@@ -188,6 +191,27 @@ interface Props {
    *  arms nothing — web's "no skills configured" empty state is skipped
    *  on mobile so normal typing is never interrupted (see MYS-682). */
   slashSkills?: ChatSkillInput[];
+
+  /** A prompt the composer should adopt (#5219) — a cancelled turn's dismissed
+   *  input, restored either from the cancel response or from a durable server
+   *  row. Applied ONLY when `restoreReady` is true: the owner decides when the
+   *  hand-off may happen (empty draft, session on screen, surface visible), and
+   *  a request it cannot apply yet is a WAIT, not a decision — the owner
+   *  re-offers it, so nothing is lost by not acting. */
+  restoreRequest?: RestoreRequest | null;
+  /** True when the owner has cleared the request for hand-off. */
+  restoreReady?: boolean;
+  /** Fired after the text + chips are actually written, so the owner can record
+   *  the hand-off as terminal (ledger entry, durable-row consume, dequeue). */
+  onRestoreApplied?: () => void;
+}
+
+/** See `Props.restoreRequest`. Attachments arrive as completed server rows and
+ *  are staged without re-uploading. */
+export interface RestoreRequest {
+  id: string;
+  content: string;
+  attachments?: Attachment[];
 }
 
 function makeLocalId(): string {
@@ -238,6 +262,9 @@ export function MessageComposer({
   slashSkills,
   triggerPreviewSlot,
   suppressAgentIds,
+  restoreRequest,
+  restoreReady = false,
+  onRestoreApplied,
 }: Props) {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
@@ -442,6 +469,62 @@ export function MessageComposer({
     onClearReplyTarget?.();
     requestAnimationFrame(() => inputRef.current?.focus());
   }, [disabled, onClearReplyTarget]);
+
+  // Adopt a restored prompt (#5219) once the owner says it's time. The owner
+  // owns every guard (session match, empty draft, surface visible), because only
+  // it knows which session's draft this composer is showing — a request it
+  // cannot apply is a WAIT and gets re-offered, so doing nothing here is safe.
+  //
+  // The hand-off is reported back AFTER the write, never before: the owner's
+  // terminal action for a durable restore is to record it in the persisted
+  // ledger and consume the server row, and firing that on an offer the composer
+  // then declined would delete the prompt's only remaining copy.
+  const appliedRestoreIdRef = useRef<string | null>(null);
+  const restoreId = restoreRequest?.id ?? null;
+  // Work in progress is judged HERE, not by the owner. The owner cannot see
+  // staged attachments or mention chips, and reporting them upward closes a
+  // render loop (owner state → hook deps → verdict → prop → this effect → owner
+  // state), which on device showed up as "Maximum update depth exceeded" in
+  // ChatTab. Declining to apply is equivalent: the owner keeps the request in
+  // its slot, and this effect re-runs on every draft change, so the restore
+  // lands the moment the user sends or clears what they were typing.
+  const busy = text.trim().length > 0 || attachments.length > 0 || mentions.length > 0;
+  useEffect(() => {
+    if (!restoreRequest || !restoreId) {
+      // The slot emptied — a released request (surface hidden, wrong session)
+      // will be re-offered by the owner, and this latch must not reject it.
+      appliedRestoreIdRef.current = null;
+      return;
+    }
+    if (!restoreReady) return;
+    if (appliedRestoreIdRef.current === restoreId) return;
+    // A WAIT, not a decision: no latch is taken, nothing is reported, and the
+    // request stays pending for the next render.
+    if (busy) return;
+    appliedRestoreIdRef.current = restoreId;
+    setText(restoreRequest.content);
+    setAttachments(
+      (restoreRequest.attachments ?? []).map((a) =>
+        restoredAttachmentToComposerItem(a, resolveAttachmentUrl),
+      ),
+    );
+    // A restore lands in a composer the user is looking at; open it so the
+    // recovered text is visible rather than parked behind a collapsed pill.
+    if (restoreRequest.content.trim() || (restoreRequest.attachments?.length ?? 0) > 0) {
+      setExpanded(true);
+    }
+    onRestoreApplied?.();
+  }, [
+    restoreReady,
+    restoreRequest,
+    restoreId,
+    busy,
+    text,
+    attachments,
+    mentions,
+    setText,
+    onRestoreApplied,
+  ]);
 
   const handleSubmit = useCallback(async () => {
     if (!canSend) return;

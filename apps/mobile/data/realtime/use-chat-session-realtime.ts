@@ -13,6 +13,9 @@
  *                                  onto the assistant message
  *   - task:queued / dispatch    → seed / promote pendingTask
  *   - task:cancelled            → refresh pendingTask + messages
+ *   - chat:cancel_finalized     → the deferred cancellation outcome: insert a
+ *                                  late "Stopped." row, or evict the deleted
+ *                                  prompt and re-pull the durable restores
  *   - task:completed            → no-op for messages (chat:done already
  *                                  wrote the assistant message); just
  *                                  refresh pendingTask
@@ -25,10 +28,13 @@
  *                                  pendingTask
  */
 import { useQueryClient } from "@tanstack/react-query";
+import type { ChatCancelFinalizedPayload } from "@multica/core/types";
 import { chatKeys } from "@/data/queries/chat";
+import { useAuthStore } from "@/data/auth-store";
 import { useWSSubscriptions } from "@/lib/use-ws-subscriptions";
 import {
   appendTaskMessage,
+  applyChatCancelFinalizedToCache,
   applyChatDoneToCache,
   applyChatQuickActionsToCache,
   invalidatePendingTask,
@@ -41,6 +47,7 @@ export function useChatSessionRealtime(
   onSessionDeleted?: () => void,
 ) {
   const qc = useQueryClient();
+  const userId = useAuthStore((s) => s.user?.id);
 
   useWSSubscriptions(
     (ws) => {
@@ -52,6 +59,12 @@ export function useChatSessionRealtime(
       const invalidateMine = () => {
         qc.invalidateQueries({ queryKey: chatKeys.messages(sessionId) });
         qc.invalidateQueries({ queryKey: chatKeys.pendingTask(sessionId) });
+        // A `chat:cancel_finalized` broadcast missed while disconnected is
+        // exactly what the durable draft-restore rows exist for (#5219) —
+        // re-pull them so a mounted composer recovers the prompt without a
+        // remount. Mirrors web's reconnect invalidation of
+        // `chatKeys.draftRestoresAll()`.
+        qc.invalidateQueries({ queryKey: chatKeys.draftRestores(sessionId) });
       };
 
       return [
@@ -87,6 +100,20 @@ export function useChatSessionRealtime(
           invalidatePendingTask(qc, sessionId);
           qc.invalidateQueries({ queryKey: chatKeys.messages(sessionId) });
         }),
+        // Deferred cancellation outcome (#5219): the server settles the
+        // empty/non-empty judgment only after the daemon acked its transcript
+        // flush, so this arrives seconds after the cancel HTTP response — and
+        // nothing else refetches at that point. Without it a client that
+        // cancelled while backgrounded would keep rendering the deleted bubble,
+        // and its composer would never learn to look for the durable restore.
+        ws.on("chat:cancel_finalized", (payload) => {
+          if (!isMine(payload)) return;
+          applyChatCancelFinalizedToCache(
+            qc,
+            payload as ChatCancelFinalizedPayload,
+            userId,
+          );
+        }),
         ws.on("task:completed", (payload) => {
           if (!isMine(payload)) return;
           invalidatePendingTask(qc, sessionId);
@@ -115,6 +142,6 @@ export function useChatSessionRealtime(
         ws.onReconnect(invalidateMine),
       ];
     },
-    [sessionId, qc, onSessionDeleted],
+    [sessionId, qc, onSessionDeleted, userId],
   );
 }

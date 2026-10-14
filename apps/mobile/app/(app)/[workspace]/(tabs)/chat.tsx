@@ -96,6 +96,7 @@ import { useChatSessionPickerStore } from "@/data/stores/chat-session-picker-sto
 import { useChatSessionRealtime } from "@/data/realtime/use-chat-session-realtime";
 import {
   invalidatePendingTask,
+  removeChatMessageFromCache,
   seedAcceptedPendingTask,
 } from "@/data/realtime/chat-ws-updaters";
 import { canAssignAgent } from "@/lib/can-assign-agent";
@@ -103,6 +104,8 @@ import { useWorkspaceAgentAvailability } from "@/lib/workspace-agent-availabilit
 import { didPendingTaskFinish, isPendingTaskActive } from "@/lib/chat-task-polling";
 import { useAgentPresence } from "@/lib/use-agent-presence";
 import { queueEditDraftText } from "@/lib/chat-queue";
+import { planCancelRestore } from "@/lib/chat-draft-restore";
+import { useChatDraftRestore } from "@/lib/use-chat-draft-restore";
 import { Header } from "@/components/ui/header";
 import { HeaderSearchGroup } from "@/components/ui/header-search-button";
 import { ChatTitleButton } from "@/components/chat/chat-title-button";
@@ -393,6 +396,20 @@ export default function ChatTab() {
   const clearDraft = useChatDraftsStore((s) => s.clearDraft);
   const promoteNewDraft = useChatDraftsStore((s) => s.promoteNewDraft);
 
+  // ── Cancelled-prompt restoration (#5219) ───────────────────────────────
+  // Stop deletes the prompt the user just sent when the turn had produced no
+  // output yet — on web the recovery is two complementary paths (synchronous
+  // restore from the cancel response, plus a durable server row), and both are
+  // wired here. The composer decides whether it is in a state to take the offer
+  // (see `RestoreApplication`); the owner only decides whether to make it.
+  const {
+    restoreDraftRequest,
+    application: restoreApplication,
+    confirmRestoreApplied,
+    enqueueLocalRestore,
+    settleDurableRestore,
+  } = useChatDraftRestore(activeSessionId);
+
   // ── Realtime ───────────────────────────────────────────────────────────
   useChatSessionRealtime(activeSessionId, () => {
     setActiveSessionId(null);
@@ -574,6 +591,12 @@ export default function ChatTab() {
   );
 
   // ── Cancel in-flight ───────────────────────────────────────────────────
+  // Stop deletes the prompt the user just sent when the turn had not produced
+  // output yet, so the cancel response is READ rather than discarded: the
+  // server hands the text back here on the synchronous branch, and switches to
+  // the durable-row branch when this client declares the capability (it does —
+  // see `api.cancelTaskById`). Both branches are handled; neither may drop the
+  // user's words.
   const handleStop = useCallback(() => {
     if (!pendingTask?.task_id || !activeSessionId) return;
     if (pendingTask.status === "queued") return;
@@ -582,12 +605,31 @@ export default function ChatTab() {
     qc.setQueryData<ChatPendingTask>(chatKeys.pendingTask(sessionId), (old) =>
       removePendingChatTask(old, taskId),
     );
-    void api.cancelTaskById(taskId)
+    void api
+      .cancelTaskById(taskId)
+      .then((result) => {
+        const plan = planCancelRestore(result.cancelled_chat_message, {
+          sessionId,
+          restoreDraftToInput: true,
+        });
+        // The server really deleted that message; leaving the bubble up would
+        // render a prompt that no longer exists.
+        if (plan.removeMessageId) {
+          removeChatMessageFromCache(qc, sessionId, plan.removeMessageId);
+        }
+        if (plan.restore) enqueueLocalRestore(plan.restore);
+      })
       .catch(() => {
         // Silent — task may have already terminated server-side.
       })
       .finally(() => invalidatePendingTask(qc, sessionId));
-  }, [pendingTask?.task_id, pendingTask?.status, activeSessionId, qc]);
+  }, [
+    pendingTask?.task_id,
+    pendingTask?.status,
+    activeSessionId,
+    qc,
+    enqueueLocalRestore,
+  ]);
 
   // ── Chat queue (queued-task) actions ───────────────────────────────────
   const patchPending = useCallback(
@@ -614,16 +656,30 @@ export default function ChatTab() {
         }
         if (result.active_task_id) {
           // 目标已接管 head —— 停掉先前 running 的任务（web 同路径经
-          // cancelChatTask 停止，见 use-chat-task-actions.ts）。
-          await api.cancelTaskById(result.active_task_id).catch(() => {
-            // Silent — the task may have already terminated.
-          });
+          // cancelChatTask 停止，见 use-chat-task-actions.ts）。该任务已经
+          // 有输出才会被 Steer 顶掉，故服务端走同步分支回填；这里同样读回
+          // 响应，避免「顶掉即丢字」。
+          await api
+            .cancelTaskById(result.active_task_id)
+            .then((cancelled) => {
+              const plan = planCancelRestore(cancelled.cancelled_chat_message, {
+                sessionId,
+                restoreDraftToInput: true,
+              });
+              if (plan.removeMessageId) {
+                removeChatMessageFromCache(qc, sessionId, plan.removeMessageId);
+              }
+              if (plan.restore) enqueueLocalRestore(plan.restore);
+            })
+            .catch(() => {
+              // Silent — the task may have already terminated.
+            });
         }
       } finally {
         invalidatePendingTask(qc, sessionId);
       }
     },
-    [activeSessionId, patchPending, qc],
+    [activeSessionId, patchPending, qc, enqueueLocalRestore],
   );
 
   const handleQueueEdit = useCallback(
@@ -631,18 +687,38 @@ export default function ChatTab() {
       if (!activeSessionId) return;
       const sessionId = activeSessionId;
       try {
-        // queue_action=edit 在服务端取消排队任务；成功后把内容回填 composer。
-        await api.cancelTaskById(task.task_id, {
+        // queue_action=edit 在服务端取消排队任务。本地 `queueEditDraftText`
+        // 只是 composer 缓存里的乐观文本；服务端的权威内容随响应
+        // `cancelled_chat_message` 回来（web 同路径），因此以响应为准，
+        // 缓存缺失时才退回本地构造与占位文案。
+        const result = await api.cancelTaskById(task.task_id, {
           queuedAction: "edit",
           sessionId,
         });
-        setDraft(sessionId, queueEditDraftText(task) ?? t("chat.queue.fallback"));
+        const plan = planCancelRestore(result.cancelled_chat_message, {
+          sessionId,
+          // 显式 remove 才是丢弃；edit 的语义就是「拿回来改」，所以回填。
+          restoreDraftToInput: true,
+        });
+        if (plan.removeMessageId) {
+          removeChatMessageFromCache(qc, sessionId, plan.removeMessageId);
+        }
+        if (plan.restore) {
+          setDraft(sessionId, plan.restore.content);
+          // `queue_action=edit` both writes a durable row and returns the same
+          // content in this response, so the row is already satisfied — record
+          // it applied and consume it now instead of waiting a round trip for
+          // the composer to pick it up from the draft-restores fetch.
+          settleDurableRestore(sessionId, plan.restore.id);
+        } else {
+          setDraft(sessionId, queueEditDraftText(task) ?? t("chat.queue.fallback"));
+        }
       } finally {
         patchPending((old) => removePendingChatTask(old, task.task_id));
         invalidatePendingTask(qc, sessionId);
       }
     },
-    [activeSessionId, patchPending, setDraft, t, qc],
+    [activeSessionId, patchPending, setDraft, t, qc, settleDurableRestore],
   );
 
   const handleQueueRemove = useCallback(
@@ -650,10 +726,21 @@ export default function ChatTab() {
       if (!activeSessionId) return;
       const sessionId = activeSessionId;
       try {
-        await api.cancelTaskById(task.task_id, {
+        // 显式 remove 是丢弃：服务端会删掉这条排队消息，但**不回填** composer。
+        // 仍要读响应，把被删掉的那条气泡从缓存里摘掉，否则界面上会留一条
+        // 服务端已经不存在、且永远不会再执行的消息。
+        const result = await api.cancelTaskById(task.task_id, {
           queuedAction: "remove",
           sessionId,
         });
+        const plan = planCancelRestore(result.cancelled_chat_message, {
+          sessionId,
+          queuedAction: "remove",
+          restoreDraftToInput: false,
+        });
+        if (plan.removeMessageId) {
+          removeChatMessageFromCache(qc, sessionId, plan.removeMessageId);
+        }
       } finally {
         patchPending((old) => removePendingChatTask(old, task.task_id));
         invalidatePendingTask(qc, sessionId);
@@ -834,6 +921,12 @@ export default function ChatTab() {
             // /\-menu catalog = the active agent's embedded skills (MYS-682);
             // an agent with no skills simply never arms the menu.
             activeAgentSkills={currentAgent?.skills ?? []}
+            // Cancelled-prompt restore (#5219): the offer, the owner's verdict,
+            // and the two callbacks that make the hand-off terminal. Only the
+            // active session's composer may take it — see useChatDraftRestore.
+            restoreRequest={restoreDraftRequest}
+            restoreReady={restoreApplication === "apply"}
+            onRestoreApplied={confirmRestoreApplied}
           />
         </KeyboardStickyView>
       </View>

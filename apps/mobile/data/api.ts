@@ -33,6 +33,8 @@ import type {
   ChatMessage,
   ChatPendingTask,
   ChatSession,
+  ChatDraftRestoresResponse,
+  CancelTaskResponse,
   Comment,
   CommentTriggerPreview,
   CreateAgentRequest,
@@ -283,6 +285,15 @@ import {
   // and its empty `capture_token` is what makes a drifted read fail closed.
   CommentSubIssuePreviewSchema,
   EMPTY_COMMENT_SUB_ISSUE_PREVIEW,
+  // Cancellation + deferred draft restore (#5219). Core owns both schemas for
+  // web and its fallbacks, and the server's response *shape* is the contract
+  // the two clients must read identically — a `cancelled_chat_message` the
+  // mobile copy parsed differently from web's would lose the user's prompt on
+  // one client and not the other. Same sharing rule as the lines above.
+  CancelTaskResponseSchema,
+  EMPTY_CANCEL_TASK_RESPONSE,
+  ChatDraftRestoresResponseSchema,
+  EMPTY_CHAT_DRAFT_RESTORES,
 } from "@multica/core/api/schemas";
 import type {
   CreateIssueViewRequest,
@@ -502,6 +513,11 @@ import { createDownloadResumable } from "expo-file-system/legacy";
 import { getCurrentSlug } from "./workspace-store";
 import { getApiBaseUrl, getEnvBaseUrl, setApiBaseUrl } from "./server-config";
 import { parseWithFallback } from "@/lib/parse-response";
+import { CHAT_DRAFT_RESTORE_CAPABILITY } from "@/lib/chat-draft-restore";
+import {
+  clientIdentityHeaders,
+  type ClientIdentitySource,
+} from "@/lib/client-identity";
 import type { InboxFilters } from "@/lib/inbox-filters";
 import { createRequestId } from "@/lib/request-id";
 import { resolveAttachmentUrl } from "@/lib/attachment-url";
@@ -685,6 +701,20 @@ export interface ApiClientOptions {
    *  to clear the token + navigate to /login so a stale token doesn't keep
    *  every subsequent request looping on 401. */
   onUnauthorized?: () => void;
+  /**
+   * This app's platform + version, sent as `X-Client-OS` /
+   * `X-Client-Version` on every request.
+   *
+   * Injected rather than read here because `react-native` and `expo-constants`
+   * cannot load in the Node vitest lane that every data-layer test runs in, and
+   * `data/api.ts` must stay importable there. The app root resolves it once at
+   * startup (see `app/_layout.tsx`); web does the same through
+   * `ApiClientOptions.identity` in packages/core/api/client.ts.
+   *
+   * Left unset, the headers honestly report "unknown" — see
+   * `lib/client-identity.ts` for why that beats a plausible-looking default.
+   */
+  identity?: ClientIdentitySource;
 }
 
 class ApiClient {
@@ -718,9 +748,7 @@ class ApiClient {
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      "X-Client-Platform": "mobile",
-      "X-Client-OS": "ios",
-      "X-Client-Version": "0.6.5",
+      ...clientIdentityHeaders(this.options.identity ?? {}),
       "X-Request-ID": rid,
       ...((init.headers as Record<string, string>) ?? {}),
     };
@@ -4853,10 +4881,72 @@ class ApiClient {
     );
   }
 
+  /**
+   * Pending deferred-cancellation draft restores for a session.
+   *
+   * The server only defers the empty-transcript judgment for a client that
+   * declared `chat-draft-restore-v1` (see `cancelTaskById`), so this endpoint is
+   * the second half of that contract: the deleted prompt is durable here and
+   * the creator's client is the only reader. A 404 means the backend predates
+   * the endpoint — "nothing pending", so an older server never errors the
+   * composer. Mirrors web `listChatDraftRestores` in
+   * packages/core/api/client.ts.
+   */
+  async listChatDraftRestores(
+    sessionId: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<ChatDraftRestoresResponse> {
+    let raw: unknown;
+    try {
+      raw = await this.fetch<unknown>(
+        `/api/chat/sessions/${sessionId}/draft-restores`,
+        { signal: opts?.signal },
+      );
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return { restores: [] };
+      throw err;
+    }
+    return parseWithFallback(
+      raw,
+      ChatDraftRestoresResponseSchema,
+      EMPTY_CHAT_DRAFT_RESTORES,
+      { endpoint: "GET /api/chat/sessions/{id}/draft-restores" },
+    );
+  }
+
+  /** Consume one applied draft restore. Idempotent — deleting an
+   *  already-consumed row is still a 204, which is what lets a lost consume be
+   *  retried until it lands. Mirrors web `consumeChatDraftRestore`. */
+  async consumeChatDraftRestore(
+    sessionId: string,
+    restoreId: string,
+  ): Promise<void> {
+    await this.fetch<void>(
+      `/api/chat/sessions/${sessionId}/draft-restores/${restoreId}`,
+      { method: "DELETE" },
+    );
+  }
+
+  /**
+   * Cancel a chat task and return the server's verdict.
+   *
+   * Declares `chat-draft-restore-v1`, which switches the server from the legacy
+   * synchronous branch to the deferred one for a started task with no assistant
+   * output yet (`server/internal/service/task.go` CancelTaskWithResult): the
+   * prompt moves to a durable restore row instead of being deleted outright and
+   * handed back only in this response. Both shapes are still read here —
+   * a task that had already produced output, or a queued-only cancel, settles
+   * synchronously and returns `cancelled_chat_message` regardless of the
+   * capability — so the caller never has to know which branch ran.
+   *
+   * The body is parsed rather than discarded: on the synchronous branch it is
+   * the ONLY copy of the user's prompt, and dropping it is exactly how the
+   * mobile app used to lose it.
+   */
   async cancelTaskById(
     taskId: string,
     options?: { queuedAction?: "edit" | "remove"; sessionId?: string },
-  ): Promise<void> {
+  ): Promise<CancelTaskResponse> {
     const params = new URLSearchParams();
     if (options?.queuedAction) {
       if (!options.sessionId) {
@@ -4867,9 +4957,18 @@ class ApiClient {
       params.set("queue_action", options.queuedAction);
     }
     const query = params.size > 0 ? `?${params}` : "";
-    await this.fetch<void>(`/api/tasks/${taskId}/cancel${query}`, {
+    const raw = await this.fetch<unknown>(`/api/tasks/${taskId}/cancel${query}`, {
       method: "POST",
+      headers: {
+        "X-Client-Capabilities": CHAT_DRAFT_RESTORE_CAPABILITY,
+      },
     });
+    return parseWithFallback(
+      raw,
+      CancelTaskResponseSchema,
+      EMPTY_CANCEL_TASK_RESPONSE,
+      { endpoint: "POST /api/tasks/{id}/cancel" },
+    );
   }
 
   /** Steer — 把排队中的任务提升为立即发送（web `prioritizeQueuedChatTask`，
@@ -5282,9 +5381,7 @@ class ApiClient {
 
     const headers: Record<string, string> = {
       // No Content-Type — let fetch set the multipart boundary.
-      "X-Client-Platform": "mobile",
-      "X-Client-OS": "ios",
-      "X-Client-Version": "0.6.5",
+      ...clientIdentityHeaders(this.options.identity ?? {}),
       "X-Request-ID": rid,
     };
     if (this.token) headers["Authorization"] = `Bearer ${this.token}`;
