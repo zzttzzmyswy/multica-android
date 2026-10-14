@@ -34,6 +34,7 @@ import { AgentAccessPicker } from "@/components/agent/agent-access-picker";
 import { AgentConcurrencyField } from "@/components/agent/agent-concurrency-field";
 import { AgentActivitySection } from "@/components/agent/agent-activity-section";
 import { AgentNoAccess } from "@/components/agent/agent-no-access";
+import { AgentSystemLayerCard } from "@/components/agent/agent-system-layer-card";
 import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { ActorIssuesPanel } from "@/components/issue/actor-issues-panel";
 import { catalogRead, recordRead } from "@/lib/catalog-read";
@@ -53,6 +54,7 @@ import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { formatDateTime } from "@/lib/autopilot-format";
 import { isArchivedAgent as isArchived } from "@/lib/filter-agents";
+import { hasSystemPromptLayer, systemPromptLayer } from "@/lib/agent-system-prompt";
 import { cn } from "@/lib/utils";
 
 // availability enum → i18n key + text color for the detail presence line.
@@ -109,6 +111,12 @@ export default function AgentDetailPage() {
   const agent = agents.data?.find((a) => a.id === id);
   const read = recordRead(agent, [agents]);
   const archived = agent != null && isArchived(agent);
+
+  // The product half of a system agent's prompt, when there is one (MYS-2162).
+  // Read-only everywhere on mobile — the field has no write path in the edit
+  // form either — so this is a review surface, not a second editor.
+  const hasSystemLayer = hasSystemPromptLayer(agent);
+  const systemLayer = hasSystemLayer ? systemPromptLayer(agent) : "";
 
   // Fallback probe: when this agent is missing from the workspace list, ask
   // GET /api/agents/{id} to tell "doesn't exist" (404) apart from "you can't
@@ -367,6 +375,39 @@ export default function AgentDetailPage() {
               </PropertyRow>
             ) : null}
           </View>
+
+          {/* Instructions — the review surface for a system agent's prompt
+              (MYS-2162). Both halves are shown, read-only: the product half
+              Multica maintains (card, expandable) and this workspace's own
+              notes. Showing only the product half would repeat the defect in
+              reverse — the reader would take it for the whole prompt.
+
+              Rendered ONLY when a system half exists. An ordinary agent's
+              instructions are editable in the edit form and adding a
+              read-only echo of them here would change a screen this
+              iteration has no business changing. */}
+          {hasSystemLayer ? (
+            <>
+              <SectionTitle>{t("agents.detail.instructions")}</SectionTitle>
+              <View className="px-4 gap-3">
+                <AgentSystemLayerCard instructions={systemLayer} />
+                <View className="gap-1">
+                  <Text className="text-caption font-medium uppercase tracking-wide text-muted-foreground">
+                    {t("agents.instructions.workspaceLabel")}
+                  </Text>
+                  {agent.instructions?.trim() ? (
+                    <Text className="text-caption leading-5 text-foreground">
+                      {agent.instructions}
+                    </Text>
+                  ) : (
+                    <Text className="text-caption leading-5 text-muted-foreground/70 italic">
+                      {t("agents.detail.instructionsWorkspaceEmpty")}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            </>
+          ) : null}
 
           {/* Access — owner edits grants, everyone else sees a read-only
               summary (iteration-84 A8, MUL-3963 parity). The picker renders

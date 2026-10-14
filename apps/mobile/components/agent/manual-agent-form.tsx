@@ -29,6 +29,12 @@
  *    radios disabled and the access fields are omitted from the PUT body.
  *  - No autoFocus on the name field (the user landed to make one small change,
  *    not to type).
+ *  - The instructions field is two halves for a system agent (MYS-2162): a
+ *    read-only "Maintained by Multica" card above, and the editable field
+ *    relabelled 「工作区补充」 with the "your notes layer on top of what Multica
+ *    maintains" intro. Web parity — same split, same wording
+ *    (packages/views/agents/components/tabs/instructions-tab.tsx:29-107) — but
+ *    stacked rather than on one flex row. Ordinary agents are unaffected.
  *
  * Deliberate mobile divergences from web (each documented at its site):
  *  - Model / thinking / speed load the runtime's live model catalog
@@ -72,6 +78,7 @@ import { AutosizeTextArea } from "@/components/ui/autosize-textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { AgentEmojiPickerSheet } from "@/components/agent/agent-emoji-picker-sheet";
+import { AgentSystemLayerCard } from "@/components/agent/agent-system-layer-card";
 import { ConversationStartersEditor } from "@/components/agent/conversation-starters-editor";
 import { RuntimePickerSheet } from "@/components/agent/runtime-picker-sheet";
 import { ModelPickerSheet } from "@/components/agent/model-picker-sheet";
@@ -79,6 +86,11 @@ import { MultiSelectSheet } from "@/components/agent/multi-select-sheet";
 import { agentCreateGate, classifyAgentCreateError, resolveDuplicateSeed, usableRuntimes } from "@/lib/agent-create";
 import { catalogRead } from "@/lib/catalog-read";
 import { agentEditGate } from "@/lib/agent-edit";
+import {
+  agentInstructionsCopy,
+  hasSystemPromptLayer,
+  systemPromptLayer,
+} from "@/lib/agent-system-prompt";
 import { fallbackConversationStarters } from "@/lib/conversation-starters-mobile";
 import { agentSquadJoin } from "@/lib/agent-squad-join";
 import { useAddSquadMember } from "@/data/mutations/squads";
@@ -152,6 +164,14 @@ export function ManualAgentForm({
   // edit page only renders the form with a loaded agent). Create mode starts
   // empty.
   const isEdit = agent != null;
+  // The product half of a system agent's prompt (MYS-2162). Derived from the
+  // agent, never from the draft: this text has no editing surface and must not
+  // reach `buildUpdateAgentRequest`. Read through the two helpers so "is there
+  // a system half" and "what does it say" cannot disagree, and so the same
+  // answer drives the detail screen.
+  const hasSystemLayer = isEdit && hasSystemPromptLayer(agent);
+  const systemLayer = hasSystemLayer ? systemPromptLayer(agent) : "";
+  const instructionsCopy = agentInstructionsCopy(hasSystemLayer);
   // `duplicateSource` present → duplicate mode: this page seeded a create
   // draft from an existing agent. Edit takes precedence (the two props are
   // never both set by the routes).
@@ -559,11 +579,29 @@ export function ManualAgentForm({
       />
 
       <View className="gap-1.5">
-        <FieldLabel text={t("agents.new.instructionsLabel")} />
+        {/* A system agent's prompt has two halves and this field owns only one
+            of them (MYS-2162, lib/agent-system-prompt.ts). When the product
+            half is present it is shown read-only above, and the label /
+            placeholder / intro below switch to the workspace-notes wording —
+            without that, 「指令」 reads as "the whole prompt" while the 3.5 KB
+            the product maintains is invisible. Ordinary agents (and any agent
+            on a backend that predates the field) take the `plain` branch and
+            render exactly as before. Edit mode only: a duplicate is an
+            ordinary agent — the create endpoint cannot mint a system one —
+            so there is nothing read-only to show it. */}
+        {hasSystemLayer ? (
+          <AgentSystemLayerCard instructions={systemLayer} />
+        ) : null}
+        <FieldLabel text={t(instructionsCopy.labelKey)} />
+        {instructionsCopy.introKey ? (
+          <Text className="text-caption leading-relaxed text-muted-foreground">
+            {t(instructionsCopy.introKey)}
+          </Text>
+        ) : null}
         <AutosizeTextArea
           value={draft.instructions}
           onChangeText={(text) => set("instructions", text)}
-          placeholder={t("agents.new.instructionsPlaceholder")}
+          placeholder={t(instructionsCopy.placeholderKey)}
           editable={!isSubmitting}
           className="border border-border rounded-md px-3 py-2 min-h-[120px] font-mono text-body leading-6"
         />
