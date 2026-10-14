@@ -57,7 +57,7 @@ import { FlatList, PanResponder, Pressable, ScrollView, View } from "react-nativ
 import type { LayoutChangeEvent } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import type {
   Issue,
@@ -86,7 +86,7 @@ import {
 import { useUpdateIssue } from "@/data/mutations/issues";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
-import { issueDetailOptions } from "@/data/queries/issues";
+import { issuesByIdsOptions } from "@/data/queries/issues";
 import { projectListOptions } from "@/data/queries/projects";
 import {
   buildSwimlaneLanes,
@@ -118,6 +118,11 @@ const GROUPING_PICKER_PATHNAME = {
   project: "/[workspace]/issue/[id]/picker/project",
   parent: "/[workspace]/issue/[id]/picker/parent",
 } as const;
+
+/** Stable empty map for "no parents resolved yet". A fresh `new Map()` per
+ *  render would invalidate the `builtLanes` memo on every render and, worse,
+ *  hand `knownParentIds` a new `Set` each time — rebuilding every lane. */
+const EMPTY_PARENT_MAP: ReadonlyMap<string, Issue> = new Map();
 
 /** Applies a lane move to one issue — `SwimlaneCard` supplies its own
  *  `useUpdateIssue`-backed writer. */
@@ -213,28 +218,27 @@ export function SwimlaneView({
   // window references. A parent still in flight counts as "not loaded", so
   // its children render in the pinned orphan lane for that frame — web's
   // buildParentLanes rule, not a mobile invention.
+  //
+  // Sorted + deduplicated because these ids are the batch query's cache key
+  // (see `issuesByIdsOptions`): the window's id set is stable across renders,
+  // but its ITERATION order is not, and an unsorted key would re-key the same
+  // question on every render and refetch each time.
   const parentIds = useMemo(() => {
     if (grouping !== "parent") return [];
     const ids = new Set<string>();
     for (const issue of issues) {
       if (issue.parent_issue_id) ids.add(issue.parent_issue_id);
     }
-    return [...ids];
+    return [...ids].sort();
   }, [grouping, issues]);
 
-  const parentQueries = useQueries({
-    queries: parentIds.map((id) => issueDetailOptions(wsId, id)),
-  });
+  // ONE batch query for every distinct parent, instead of one detail request
+  // per parent. The request count is `ceil(parentIds.length / 100)`
+  // (`api.listIssuesByIds`), so a window naming 40 parents costs one request
+  // where the per-id fan-out cost 40.
+  const parentQuery = useQuery(issuesByIdsOptions(wsId, parentIds));
 
-  const parentById = useMemo(() => {
-    const map = new Map<string, Issue>();
-    for (const query of parentQueries) {
-      if (query.data) map.set(query.data.id, query.data);
-    }
-    return map;
-    // `parentQueries` is a fresh array every render; the map is rebuilt from
-    // whatever is loaded, which is cheap and always current.
-  }, [parentQueries]);
+  const parentById = parentQuery.data ?? EMPTY_PARENT_MAP;
 
   const builtLanes = useMemo(
     () =>
@@ -401,8 +405,7 @@ export function SwimlaneView({
     [lanes, laneLabel, t, wsSlug, grouping],
   );
 
-  const parentLoading =
-    grouping === "parent" && parentQueries.some((query) => query.isLoading);
+  const parentLoading = grouping === "parent" && parentQuery.isLoading;
 
   const renderLane = useCallback(
     ({ item: lane, index }: { item: SwimlaneLane; index: number }) => {

@@ -170,6 +170,16 @@ export const issueKeys = {
   // drives both clients.
   children: (wsId: string | null, id: string) =>
     [...issueKeys.all(wsId), "children", id] as const,
+  /** Prefix for every batch parent-resolution query in a workspace. */
+  issuesByIdsAll: (wsId: string | null) =>
+    [...issueKeys.all(wsId), "by-ids"] as const,
+  /** Batch parent-resolution read (MYS-2156). The key carries the FULL sorted,
+   *  deduplicated id list rather than a hash: the list IS the request, and a
+   *  hash would make two genuinely different windows collide on one cache
+   *  entry. Callers must sort + dedupe before calling — an unsorted list keys
+   *  a different entry for the same question and refetches on every render. */
+  issuesByIds: (wsId: string | null, ids: readonly string[]) =>
+    [...issueKeys.issuesByIdsAll(wsId), ids] as const,
   // Duplicate relations (MUL-7349) — one key shape per issue, carrying BOTH
   // sides of the relation: the original it duplicates and the issues marked as
   // its duplicates. One key rather than two because the endpoint returns both
