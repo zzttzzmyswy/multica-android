@@ -9,6 +9,7 @@
  * Mirrors the optimistic-update + rollback + onSettled-invalidate pattern
  * of data/mutations/inbox.ts and web's packages/core/chat/mutations.ts.
  */
+import { useCallback } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   ChatPendingTask,
@@ -18,6 +19,12 @@ import type {
 import { api } from "@/data/api";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { chatKeys, sortChatSessions } from "@/data/queries/chat";
+import { useChatDraftRestoreStore } from "@/data/stores/chat-draft-restore-store";
+import { removeChatMessageFromCache } from "@/data/realtime/chat-ws-updaters";
+import {
+  planCancelRestore,
+  type PendingSendRestore,
+} from "@/lib/chat-draft-restore";
 import { EMPTY_CHAT_PENDING_TASK } from "@/data/schemas";
 import { WRITE_FAILURE_TITLE_KEY } from "@/lib/write-failure";
 import {
@@ -224,7 +231,7 @@ export function useSetChatSessionArchived() {
 /**
  * Stop the in-flight task behind a session — the session list's "stop"
  * action, offered in place of "archive" while a turn is running (web
- * `chat-thread-list.tsx:301-311`).
+ * `chat-thread-list.tsx:301-311`), and the header ⋯ menu's stop.
  *
  * Not optimistic about the outcome, only about the *presentation*: the
  * pending-task row is dropped from both the aggregate and the per-session
@@ -233,16 +240,36 @@ export function useSetChatSessionArchived() {
  * server keeps is what renders. A failure rolls the pending row back; the WS
  * lifecycle events reconcile either way.
  *
+ * The response is READ, not discarded. Stopping a turn that had not produced
+ * output yet deletes the member's prompt server-side, and the cancel response
+ * is where the server hands it back (or, for a client declaring
+ * `chat-draft-restore-v1`, the signal that it parked it in a durable row) — so
+ * the deleted bubble is evicted here and the recovered text is queued for the
+ * composer. Without this the menu's stop would silently destroy input while the
+ * composer's own Stop recovered it, which is worse than the original bug: the
+ * same user action behaving two ways.
+ *
  * `cancelTaskById` takes no session id — a task id is globally unique — so
  * the session id is only used to locate the caches to patch.
  */
 export function useStopChatTask() {
   const qc = useQueryClient();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const enqueueLocalRestore = useEnqueueLocalRestore();
 
   return useMutation({
     mutationFn: ({ taskId }: { taskId: string; sessionId: string }) =>
       api.cancelTaskById(taskId),
+    onSuccess: (result, { sessionId }) => {
+      const plan = planCancelRestore(result.cancelled_chat_message, {
+        sessionId,
+        restoreDraftToInput: true,
+      });
+      if (plan.removeMessageId) {
+        removeChatMessageFromCache(qc, sessionId, plan.removeMessageId);
+      }
+      if (plan.restore) enqueueLocalRestore(plan.restore);
+    },
     onMutate: async ({
       taskId,
       sessionId,
@@ -336,4 +363,29 @@ export function useRegenerateChatQuickActions() {
       if (ctx) qc.setQueryData(ctx.key, ctx.previous ?? null);
     },
   });
+}
+
+/**
+ * Queue a server-less restore for the current workspace.
+ *
+ * The ledger is workspace-scoped, and the caller should not have to know that.
+ * This lives in the mutation layer rather than in the composer's hook so that
+ * call sites which recover a prompt WITHOUT owning a composer — the header ⋯
+ * menu's stop, the session list's stop — can feed the same queue the chat screen
+ * drains. That shared queue is what keeps one user action (Stop) from behaving
+ * two different ways depending on which affordance was tapped.
+ *
+ * It cannot live in the store module: that module is imported by the Node vitest
+ * lane, and the workspace store transitively pulls in react-native.
+ */
+export function useEnqueueLocalRestore(): (restore: PendingSendRestore) => void {
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const enqueue = useChatDraftRestoreStore((s) => s.enqueue);
+  return useCallback(
+    (restore: PendingSendRestore) => {
+      if (!wsId) return;
+      enqueue(wsId, restore);
+    },
+    [enqueue, wsId],
+  );
 }

@@ -1,6 +1,8 @@
 import "../global.css";
 
 import { useEffect, useRef } from "react";
+import { Platform } from "react-native";
+import Constants from "expo-constants";
 import { Stack, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -16,6 +18,7 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { loadApiBaseUrl } from "@/data/server-config";
 import { LightboxProvider, prewarmHighlighter } from "@/lib/markdown";
 import { ActionSheetProvider } from "@/lib/action-sheet";
+import { resolveAppVersion } from "@/lib/app-identity";
 import { NAV_THEME } from "@/lib/theme";
 import { useColorScheme } from "@/lib/use-color-scheme";
 
@@ -33,6 +36,18 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
   const signingOutRef = useRef(false);
 
   useEffect(() => {
+    // Tell the server which client this is. Both values used to be hard-coded
+    // (`ios` / `0.6.5`) on every request, so the server's platform breakdown and
+    // version dimension were wrong for every Android install; resolve them from
+    // the running app instead. Set synchronously before the first request —
+    // `initialize()` below is what fires it. `Platform.OS` is a static value and
+    // `Constants.expoConfig` is embedded in the bundle, so neither can throw.
+    api.setOptions({
+      identity: {
+        os: Platform.OS,
+        version: resolveAppVersion(Constants),
+      },
+    });
     // Wire 401 handling onto the shared ApiClient singleton. Must be set
     // before any request fires — initialize() below kicks off the first
     // getMe() call, so do this synchronously first.

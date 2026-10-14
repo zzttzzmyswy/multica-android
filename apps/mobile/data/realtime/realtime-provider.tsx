@@ -35,7 +35,8 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { AppState, type AppStateStatus } from "react-native";
+import { AppState, Platform, type AppStateStatus } from "react-native";
+import Constants from "expo-constants";
 import NetInfo from "@react-native-community/netinfo";
 import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
@@ -45,6 +46,7 @@ import {
   subscribeApiBaseUrl,
 } from "@/data/server-config";
 import { WSClient } from "./ws-client";
+import { resolveAppVersion } from "@/lib/app-identity";
 
 // http(s)://host → ws(s)://host/ws. The base is read at runtime (not module
 // load) so a user-pointed server switch rebuilds the socket on the new host.
@@ -93,7 +95,10 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
         url: wsUrlFromBase(apiBaseUrl),
         token,
         workspaceSlug: wsSlug,
-        clientVersion: "0.1.0",
+        // Same identity as the HTTP layer: this used to be the literal "0.1.0"
+        // (the package version, not the app version — off by 75 releases).
+        clientVersion: resolveAppVersion(Constants),
+        os: Platform.OS,
         logger: console,
       });
       ws.connect();

@@ -36,6 +36,7 @@ import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import type { ChatSkillInput } from "@/lib/slash-command";
 import { MessageComposer } from "@/components/composer/message-composer";
+import type { RestoreRequest } from "@/components/composer/message-composer";
 import { ChatProjectContextRow } from "@/components/chat/chat-project-context-row";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useColorScheme } from "@/lib/use-color-scheme";
@@ -87,6 +88,13 @@ interface Props {
   /** True while a turn is in flight — locks the project chip (web
    *  `projectSelectionEnabled`). */
   projectContextDisabled?: boolean;
+  /** A cancelled prompt the chat screen wants this composer to adopt (#5219).
+   *  Forwarded verbatim; see `MessageComposer`'s doc for the hand-off rules. */
+  restoreRequest?: RestoreRequest | null;
+  /** The chat screen's verdict that the hand-off may happen now. */
+  restoreReady?: boolean;
+  /** Fired after the restored text + chips are actually written. */
+  onRestoreApplied?: () => void;
 }
 
 const IS_IOS = process.env.EXPO_OS === "ios";
@@ -106,6 +114,9 @@ export function ChatComposer({
   projectId,
   projectContextUnsupported = false,
   projectContextDisabled = false,
+  restoreRequest,
+  restoreReady = false,
+  onRestoreApplied,
 }: Props) {
   const { t } = useTranslation();
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
@@ -171,6 +182,9 @@ export function ChatComposer({
         slashSkills={activeAgentSkills}
         renderStop={allowStop ? () => <StopButton onPress={handleStop} /> : undefined}
         manageKeyboard={false}
+        restoreRequest={restoreRequest}
+        restoreReady={restoreReady}
+        onRestoreApplied={onRestoreApplied}
       />
     </>
   );

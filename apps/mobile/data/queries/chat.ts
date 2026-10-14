@@ -63,6 +63,10 @@ export const chatKeys = {
    *  the IM session list's "typing…" indicator (web `chatKeys.pendingTasks`). */
   pendingTasks: (wsId: string | null) =>
     [...chatKeys.all(wsId), "pending-tasks"] as const,
+  /** Durable deferred-cancellation draft restores for a session (#5219). */
+  draftRestoresAll: () => ["chat", "draft-restores"] as const,
+  draftRestores: (sessionId: string) =>
+    [...chatKeys.draftRestoresAll(), sessionId] as const,
 };
 
 // UUID gate mirrors `packages/core/chat/queries.ts`: optimistic task ids
@@ -228,6 +232,25 @@ export const taskMessagesOptions = (taskId: string | null | undefined) =>
     queryFn: ({ signal }) => api.listTaskMessages(taskId!, { signal }),
     enabled: isTaskMessageTaskId(taskId),
     staleTime: Infinity,
+  });
+
+/**
+ * Durable deferred-cancellation draft restores for a session (#5219).
+ *
+ * `staleTime: 0` deliberately overrides the session-wide Infinity default: this
+ * is the recovery path for a client that MISSED the `chat:cancel_finalized`
+ * broadcast, so it must actually refetch on every composer mount — an
+ * Infinity-fresh cache would pin the first (usually empty) result forever and
+ * the prompt would never be offered. The response is tiny, so the extra fetch
+ * is negligible. Mirrors web's `chatDraftRestoresOptions` in
+ * packages/core/chat/queries.ts.
+ */
+export const chatDraftRestoresOptions = (sessionId: string | null) =>
+  queryOptions({
+    queryKey: chatKeys.draftRestores(sessionId ?? ""),
+    queryFn: ({ signal }) => api.listChatDraftRestores(sessionId!, { signal }),
+    enabled: !!sessionId,
+    staleTime: 0,
   });
 
 /**

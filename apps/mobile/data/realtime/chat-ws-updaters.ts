@@ -26,6 +26,7 @@ import {
 } from "@multica/core/chat/pending";
 import type {
   ChatDonePayload,
+  ChatCancelFinalizedPayload,
   ChatMessage,
   ChatPendingTask,
   ChatQuickActionsPayload,
@@ -37,6 +38,7 @@ import type {
 } from "@multica/core/types";
 import { chatKeys, sortChatSessions } from "@/data/queries/chat";
 import type { ChatQuickActionsPendingState } from "@/lib/chat-quick-actions";
+import { planCancelFinalized } from "@/lib/chat-draft-restore";
 
 // =====================================================
 // Sessions list (ChatSession[] keyed by wsId)
@@ -352,4 +354,90 @@ export function appendTaskMessage(
       return [...old, payload].sort((a, b) => a.seq - b.seq);
     },
   );
+}
+
+// =====================================================
+// Cancelled-prompt restores (#5219)
+// =====================================================
+
+/**
+ * Drop one message from a session's caches.
+ *
+ * A cancellation on the legacy branch deletes the user's prompt server-side and
+ * a deferred one settles as `restored` — in both cases the bubble is gone for
+ * real, so leaving it on screen would render a prompt that no longer exists
+ * (and whose re-send the user is about to make from the restored draft). The
+ * paginated cursor is untouched: the row left the middle of the window, not the
+ * window's edge.
+ *
+ * Mirrors web's `removeChatMessageFromCaches` (packages/core/realtime).
+ */
+export function removeChatMessageFromCache(
+  qc: QueryClient,
+  sessionId: string,
+  messageId: string,
+) {
+  qc.setQueryData<ChatMessage[]>(chatKeys.messages(sessionId), (old) =>
+    old ? old.filter((m) => m.id !== messageId) : old,
+  );
+}
+
+/**
+ * Apply a `chat:cancel_finalized` event (#5219) — the deferred outcome of a
+ * cancelled chat task, settled after the daemon's transcript flush.
+ *
+ *   - outcome "stopped": a late "Stopped." assistant row was persisted; insert
+ *     it exactly like a chat:done message.
+ *   - outcome "restored": the triggering user message was deleted — drop it from
+ *     the cache. The deleted prompt itself never rides this workspace-wide
+ *     broadcast (it is durable server-side and only the initiator's client reads
+ *     it through the creator-authorized draft-restores endpoint), so the only
+ *     local work is eviction plus an invalidation hint.
+ *
+ * The draft-restores invalidation is gated to the task's initiator and fails
+ * closed when `initiator_user_id` is missing — nothing is lost either way,
+ * because the durable row is fetched again on the next composer mount or
+ * network reconnect. Mirrors web's `applyChatCancelFinalizedToCache`.
+ */
+export function applyChatCancelFinalizedToCache(
+  qc: QueryClient,
+  payload: ChatCancelFinalizedPayload,
+  currentUserId?: string,
+) {
+  const sessionId = payload.chat_session_id;
+  if (!sessionId) return;
+  const plan = planCancelFinalized({
+    outcome: payload.outcome,
+    chatSessionId: sessionId,
+    taskId: payload.task_id,
+    messageId: payload.message_id,
+    initiatorUserId: payload.initiator_user_id,
+    currentUserId,
+  });
+  if (payload.outcome === "stopped") {
+    applyChatDoneToCache(qc, {
+      chat_session_id: sessionId,
+      task_id: payload.task_id,
+      message_id: payload.message_id,
+      content: payload.content,
+      elapsed_ms: payload.elapsed_ms,
+      created_at: payload.created_at,
+      message_kind: payload.message_kind,
+    });
+    return;
+  }
+  if (plan.removeMessageId) {
+    removeChatMessageFromCache(qc, sessionId, plan.removeMessageId);
+  }
+  // Deferred finalization can arrive after a queued successor was promoted.
+  // Remove only the cancelled task so a late restore cannot hide newer work.
+  qc.setQueryData<ChatPendingTask>(
+    chatKeys.pendingTask(sessionId),
+    (old) => removePendingChatTask(old, payload.task_id),
+  );
+  qc.invalidateQueries({ queryKey: chatKeys.messages(sessionId) });
+  qc.invalidateQueries({ queryKey: chatKeys.pendingTask(sessionId) });
+  if (plan.refetchDraftRestores) {
+    void qc.invalidateQueries({ queryKey: chatKeys.draftRestores(sessionId) });
+  }
 }

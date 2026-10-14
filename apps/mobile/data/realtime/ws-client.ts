@@ -27,6 +27,11 @@ import type {
   WSEventType,
   WSMessage,
 } from "@multica/core/types";
+import {
+  CLIENT_PLATFORM,
+  UNKNOWN_CLIENT_OS,
+  UNKNOWN_CLIENT_VERSION,
+} from "@/lib/client-identity";
 
 /** Generic handler used internally by the dispatcher map. Each `on<E>()`
  *  call narrows this to `(payload: WSEventPayload<E>, actorId?) => void`
@@ -56,6 +61,10 @@ export interface WSClientOptions {
   workspaceSlug: string;
   /** Mobile app version, surfaced to server logs for debuggability. */
   clientVersion?: string;
+  /** `Platform.OS`. Injected for the same reason as the HTTP identity: the
+   *  socket layer must not read react-native, and a wrong value here is a wrong
+   *  analytics dimension. Defaults to "unknown" rather than claiming a OS. */
+  os?: string;
   logger?: Logger;
 }
 
@@ -198,11 +207,16 @@ export class WSClient {
   private openSocket() {
     const url = new URL(this.opts.url);
     url.searchParams.set("workspace_slug", this.opts.workspaceSlug);
-    url.searchParams.set("client_platform", "mobile");
-    url.searchParams.set("client_os", "ios");
-    if (this.opts.clientVersion) {
-      url.searchParams.set("client_version", this.opts.clientVersion);
-    }
+    // Same identity the HTTP layer sends (`lib/client-identity.ts`). These were
+    // hard-coded to `ios` and left the version to the call site, so the server's
+    // socket logs and any per-connection analytics carried the same wrong
+    // platform/version the request headers did.
+    url.searchParams.set("client_platform", CLIENT_PLATFORM);
+    url.searchParams.set("client_os", this.opts.os ?? UNKNOWN_CLIENT_OS);
+    url.searchParams.set(
+      "client_version",
+      this.opts.clientVersion ?? UNKNOWN_CLIENT_VERSION,
+    );
 
     const ws = new WebSocket(url.toString());
     this.ws = ws;
