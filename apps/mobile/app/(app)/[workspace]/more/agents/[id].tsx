@@ -21,7 +21,7 @@
  * merely unreachable — with no retry.
  */
 import { Alert, FlatList, Pressable, RefreshControl, View } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, router } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Text } from "@/components/ui/text";
@@ -33,10 +33,12 @@ import { AgentSkillsSection } from "@/components/agent/agent-skills-section";
 import { AgentAccessPicker } from "@/components/agent/agent-access-picker";
 import { AgentConcurrencyField } from "@/components/agent/agent-concurrency-field";
 import { AgentActivitySection } from "@/components/agent/agent-activity-section";
+import { AgentNoAccess } from "@/components/agent/agent-no-access";
 import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { ActorIssuesPanel } from "@/components/issue/actor-issues-panel";
 import { catalogRead, recordRead } from "@/lib/catalog-read";
-import { agentListAllOptions } from "@/data/queries/agents";
+import { isAgentAccessDenied, shouldProbeAgentAccess } from "@/lib/agent-detail-access";
+import { agentAccessProbeOptions, agentListAllOptions } from "@/data/queries/agents";
 import { issueKeys } from "@/data/queries/issue-keys";
 import { memberListOptions } from "@/data/queries/members";
 import { runtimeListOptions } from "@/data/queries/runtimes";
@@ -94,6 +96,10 @@ export default function AgentDetailPage() {
   const agents = useQuery(agentListAllOptions(wsId));
   const runtimes = useQuery(runtimeListOptions(wsId));
   const membersRead = catalogRead(useQuery(memberListOptions(wsId)));
+  // `replace`, not `push`: the no-access face exists to leave a dead end, and
+  // pushing would stack a second agents list behind it (the deep-link entry
+  // that reaches this page has no list to go back to — see AgentNoAccess).
+  const agentsListHref = wsSlug ? `/${wsSlug}/more/agents` : "/select-workspace";
   const members = membersRead.items;
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
   const presence = useWorkspacePresenceMap(wsId);
@@ -103,6 +109,32 @@ export default function AgentDetailPage() {
   const agent = agents.data?.find((a) => a.id === id);
   const read = recordRead(agent, [agents]);
   const archived = agent != null && isArchived(agent);
+
+  // Fallback probe: when this agent is missing from the workspace list, ask
+  // GET /api/agents/{id} to tell "doesn't exist" (404) apart from "you can't
+  // see this private agent" (403). The list is filtered server-side by
+  // `memberAllowedToViewAgent`, so an inaccessible private agent is simply
+  // absent from it — previously the page reported that as 「不存在或已被删除」,
+  // a false statement (web renders 「你没有访问该权限」 off this same probe:
+  // packages/views/agents/…/agent-detail-page.tsx:93-105, 199-236).
+  //
+  // Gated on `shouldProbeAgentAccess`: it fires only once the list has settled
+  // AND still lacks this id, so the common path — an agent reached from the
+  // agents list — makes zero extra requests. `read.isResolved` is the settled
+  // test because `recordRead` is pessimistic in the direction that matters:
+  // a failed list read keeps the page on the loading/error face instead of
+  // probing (and asserting a permission verdict) off data we never got.
+  const accessProbe = useQuery(
+    agentAccessProbeOptions(
+      wsId,
+      id,
+      shouldProbeAgentAccess({
+        listSettled: read.isResolved,
+        agentFound: agent != null,
+        agentId: id,
+      }),
+    ),
+  );
 
   // Permission gate for the editable properties. `canEditAgent` is core's
   // single source of truth (packages/core/permissions/rules.ts:32-42): admin
@@ -140,6 +172,34 @@ export default function AgentDetailPage() {
     return (
       <View className="flex-1 justify-center bg-background">
         <CatalogStatus state={read.state} onRetry={read.retry} layout="centered" />
+      </View>
+    );
+  }
+
+  if (!agent && isAgentAccessDenied(accessProbe.error)) {
+    // The agent exists; this member may not open it. Checked BEFORE the
+    // not-found branch below, which is what makes the two faces exclusive: a
+    // 403 in hand means the 「不存在或已被删除」 sentence must not be reachable.
+    // (The list read is already known settled here — the branch above returned
+    // on every unresolved state — so `!agent` is a fact, not an in-flight gap.)
+    return (
+      <AgentNoAccess onBackToAgents={() => router.replace(agentsListHref)} />
+    );
+  }
+
+  // The probe is still answering, so neither sentence is earned yet. Rendering
+  // 「不存在或已被删除」 here would be the very claim this route is being fixed
+  // to stop making — just briefly, and on the one path where the answer is
+  // genuinely still unknown. Spinner beats a falsehood: the same rule MYS-1908
+  // established for a record read (`isLoading` is not "it is gone").
+  //
+  // `isFetching`, not `isPending`: a DISABLED query is `pending` in TanStack v5
+  // and would spin here forever on the no-id path, where no probe was ever
+  // issued and the not-found branch below is the honest answer.
+  if (!agent && accessProbe.isFetching) {
+    return (
+      <View className="flex-1 justify-center bg-background">
+        <CatalogStatus state="loading" onRetry={read.retry} layout="centered" />
       </View>
     );
   }
