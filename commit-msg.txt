@@ -1,0 +1,50 @@
+feat(mobile): 手机上编辑 Mika 的「指令」不再只显示一半提示词 (v0.6.78 / MYS-2162)
+
+系统智能体（Mika）的提示词被服务端切成两半：`system_instructions` 是产品维护的那半
+（后端二进制内嵌的 3.5 KB，`handler/agent.go:52-63`，**从不落库**），`instructions`
+是本工作区自己的补充。移动端此前两处都没读：
+
+* 编辑表单把可编辑的那半标成「指令」，占位「写下这个智能体该做什么、关注什么、要
+  避开什么…」——**暗示这就是全部提示词**；实际只有工作区补充，产品维护的那 3.5 KB
+  一个字都看不到、也没有任何提示它存在。
+* 详情页完全不展示指令。
+
+后果不止「看不见」：web 明确告诉编辑者「你写的这半叠加在 Multica 维护的指令之上、
+且永远不会被覆盖」，手机不给这句话，编辑者会合理地以为清空/改写就改变了它的行为，
+而实际清空的只是补充层。**这是对编辑范围的错误陈述。**
+
+本次对齐 web（`packages/views/agents/components/tabs/instructions-tab.tsx:29-107`）：
+
+* 新增 `lib/agent-system-prompt.ts`：`systemPromptLayer`（取只读产品层，带 drift
+  守卫）/ `hasSystemPromptLayer`（判定非空，**按载荷而非 `system_key`**——key 是标签，
+  payload 才是内容）/ `agentInstructionsCopy`（两套 label+placeholder+intro，纯函数，
+  保证表单与详情页不会各写一份而漂移）。
+* 新增只读卡片 `AgentSystemLayerCard`：「由 Multica 维护」+ 说明 + 「查看 / 收起」展开。
+  结构上只读——正文是 `<Text>`，且**没有** `value`/`onChange` 这类 prop，调用方无法把它
+  接回 draft。正文用 260px 上限的 ScrollView（3.5 KB 远超一屏，不封顶会把作者真正要
+  编辑的输入框顶出视野）。
+* 编辑表单：系统层存在时卡片置顶，可编辑区的标题/占位切到「工作区补充」/「写下这个
+  智能体应该始终知道的上下文。」，并加一句「你写的内容会叠加在 Multica 为这个智能体
+  维护的指令之上，且永远不会被覆盖。」。仅 edit 模式——create 造不出系统智能体、
+  duplicate 是普通智能体。
+* 详情页：也只在有系统层时，只读展示**两半**（产品层卡片 + 工作区补充）。只展示产品
+  层会把同一个缺陷反过来重演——读者会把它当成全部提示词。
+* `data/schemas.ts` 显式声明 `system_instructions: z.string().optional().catch(undefined)`。
+  `.optional()` 保住「服务端没有该字段」与「服务端发了空串」的区别（判定读的就是这个
+  区别）；`.catch(undefined)` 是字段自身的漂移防线——此前靠 `.loose()` 透传，对合法
+  字符串毫无差别，但 `null` / 数字会一路透到 `.trim()` 在渲染里抛错，为一个没人读的
+  字段拖垮整个智能体页面。
+* i18n：zh / en 各 9 个键，文案取 web 同义，沿用移动端扁平键风格。**故意不照抄 web
+  intro 结尾的「支持 Markdown。」**——移动端指令框是普通 `AutosizeTextArea`，承诺
+  markdown 支持等于说一句这个输入框兑不了的话。
+
+**普通智能体逐像素不变**：无系统层时走 `plain` 分支，标题、占位、intro 与改动前完全
+一致，详情页整块不渲染。
+
+验证：`tsc --noEmit` 通过；`expo lint` **0 error**（31 warning = 基线）；`vitest run`
+**496 文件 / 5748 用例全绿**（基线 492 / 5711，**只增不减**）；突变测试 **24/24 变红且
+还原变绿**（`scripts/falsify-iter244-system-layer.py`，含验收口径点名的四条）。真机
+双向对照取证见交付评论。
+
+Co-authored-by: multica-agent <github@multica.ai>
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

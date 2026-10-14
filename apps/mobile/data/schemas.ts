@@ -1344,6 +1344,22 @@ export const AgentSchema: z.ZodType<Agent> = z.object({
   name: z.string().default(""),
   description: z.string().default(""),
   instructions: z.string().default(""),
+  // The read-only product half of a system agent's prompt (MYS-2162). Served
+  // from the backend binary, absent for ordinary agents and omitted entirely by
+  // a backend that predates the field.
+  //
+  // `.optional()` keeps "the server has no such field" distinct from "the
+  // server sent an empty one" — `hasSystemPromptLayer` reads that difference —
+  // and `.catch(undefined)` is the drift defense for the field itself. Without
+  // the declaration it rode the `.loose()` passthrough, which for a well-typed
+  // string changes nothing; what it changes is a drifted value. `null`, or a
+  // number from some future payload, would pass through untouched, reach
+  // `systemPromptLayer`'s `.trim()` and throw inside the render — taking down
+  // the agent screen over one unread field. Caught here it degrades to "no
+  // system layer", which is this screen's honest reading of a value it cannot
+  // use. `.catch` rather than `.default("")` for the same reason `.optional()`:
+  // a default would synthesise an empty string and erase the distinction.
+  system_instructions: z.string().optional().catch(undefined),
   // Conversation starters (MUL-6629): the suggestions a new chat offers.
   // Before this the field was simply not declared, so zod's object behaviour
   // dropped it and EVERY agent looked unconfigured — the chat empty state then
