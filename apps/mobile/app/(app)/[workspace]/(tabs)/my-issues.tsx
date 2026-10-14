@@ -711,6 +711,7 @@ export default function MyIssues() {
           grouping={tableGrouping}
           onGroupingChange={setTableGrouping}
           groupCountQuery={groupCountQuery}
+          exportQuery={groupCountQuery}
           hierarchy={tableHierarchy}
           sortBy={sortBy}
           sortDirection={sortDirection}
@@ -726,11 +727,6 @@ export default function MyIssues() {
           }
           search={tableSearch}
           onSearchChange={setTableSearch}
-          exportWindow={{
-            hasNextPage,
-            isFetchNextPageError,
-            loadedRows: listIssues.length,
-          }}
         />
       ) : view === "gantt" ? (
         <GanttView

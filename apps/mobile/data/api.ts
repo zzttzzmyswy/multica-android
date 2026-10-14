@@ -82,6 +82,8 @@ import type {
   IssueTableFacetsResponse,
   IssueTableGroupsRequest,
   IssueTableGroupsResponse,
+  IssueTableRowsRequest,
+  IssueTableRowsResponse,
   Label,
   LabelResourceType,
   IssueReaction,
@@ -228,6 +230,7 @@ import {
   EMPTY_LIST_GITHUB_REPOSITORIES_RESPONSE,
   EMPTY_ISSUE_TABLE_FACETS_RESPONSE,
   EMPTY_ISSUE_TABLE_GROUPS_RESPONSE,
+  EMPTY_ISSUE_TABLE_ROWS_RESPONSE,
   EMPTY_LIST_ISSUES_RESPONSE,
   EMPTY_LIST_PROPERTIES_RESPONSE,
   EMPTY_LIST_QUICK_ACTIONS_RESPONSE,
@@ -243,6 +246,7 @@ import {
   IssueSchema,
   IssueTableFacetsResponseSchema,
   IssueTableGroupsResponseSchema,
+  IssueTableRowsResponseSchema,
   IssueViewListSchema,
   IssueViewPreferenceSchema,
   IssueViewSchema,
@@ -3056,6 +3060,33 @@ class ApiClient {
       EMPTY_ISSUE_TABLE_FACETS_RESPONSE,
       { method: "POST", body: JSON.stringify(request) },
       { ...opts, endpoint: "POST /api/issues/table/facets" },
+    );
+  }
+
+  /**
+   * Server-cursor pages of the Table's flat result set. The Table's "Export
+   * all" walks this instead of the client's loaded window: one page is up to
+   * `page.limit` rows (the server rejects >100), and `next_cursor` advances.
+   * Same contract as web's `client.listIssueTableRows`
+   * (`packages/core/api/client.ts:860`), which is what web's `exportTableIssues`
+   * already uses.
+   *
+   * The fallback is the schema's EMPTY response, whose `query_fingerprint` is
+   * empty — that sentinel is exactly what `collectIssueTableExportRows`
+   * (`lib/issue-table-export-server.ts`) refuses to treat as a real page, so a
+   * drifted response fails the export closed rather than producing a short
+   * file that looks complete.
+   */
+  async listIssueTableRows(
+    request: IssueTableRowsRequest,
+    opts?: { signal?: AbortSignal },
+  ): Promise<IssueTableRowsResponse> {
+    return this.fetchValidatedWith(
+      "/api/issues/table/rows",
+      IssueTableRowsResponseSchema,
+      EMPTY_ISSUE_TABLE_ROWS_RESPONSE,
+      { method: "POST", body: JSON.stringify(request) },
+      { ...opts, endpoint: "POST /api/issues/table/rows" },
     );
   }
 

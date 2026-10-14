@@ -624,16 +624,12 @@ export function ProjectIssueSurface({
           grouping={tableGrouping}
           onGroupingChange={setTableGrouping}
           groupCountQuery={groupCountQuery}
+          exportQuery={groupCountQuery}
           hierarchy={tableHierarchy}
           sortBy={sortBy}
           sortDirection={sortDirection}
           search={tableSearch}
           onSearchChange={setTableSearch}
-          exportWindow={{
-            hasNextPage,
-            isFetchNextPageError,
-            loadedRows: listIssues.length,
-          }}
           onSort={(field, direction) => {
             useProjectIssuesViewStore.getState().setSortBy(field);
             useProjectIssuesViewStore.getState().setSortDirection(direction);

@@ -116,6 +116,7 @@ import {
   type CellEditorTarget,
 } from "@/components/issue/table-cell-editor";
 import { useUpdateIssue } from "@/data/mutations/issues";
+import { api } from "@/data/api";
 import { ActionSheet } from "@/lib/action-sheet";
 import {
   buildIssuesCsv,
@@ -125,11 +126,12 @@ import {
   type IssueTableExportContext,
 } from "@/lib/issue-table-export";
 import {
-  assertExportComplete,
-  exportBlockedMessageKey,
-  exportBlockedReason,
-  type IssueTableExportWindow,
-} from "@/lib/issue-table-export-completeness";
+  ISSUE_TABLE_EXPORT_PAGE_LIMIT,
+  IssueTableExportIntegrityError,
+  IssueTableExportTooLargeError,
+  buildIssueTableExportQuerySpec,
+  collectIssueTableExportRows,
+} from "@/lib/issue-table-export-server";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
@@ -214,6 +216,17 @@ interface Props {
    *  complete result set, not just the loaded window). Surfaces that omit it
    *  keep the local count. */
   groupCountQuery?: IssueTableGroupCountQuery | null;
+  /** The same scope + window the export walks server-side, as the required
+   *  counterpart of `groupCountQuery` above.
+   *
+   *  Deliberately a separate prop rather than a read of `groupCountQuery`:
+   *  server COUNTS are optional (a surface may legitimately prefer its local
+   *  count), whereas there is no honest client-side substitute for "export
+   *  all" any more — the loaded window cannot prove itself complete. Required,
+   *  so a surface that forgot it fails `tsc` instead of shipping a short CSV.
+   *  Same shape on purpose: the exported set and the counted set are built from
+   *  one projection (`buildIssueTableExportQuerySpec`), so they cannot drift. */
+  exportQuery: IssueTableGroupCountQuery;
   /** Whether sub-issues nest under their parent (surface store's
    *  `tableHierarchy`, web's toggle of the same name). Defaults to true. */
   hierarchy?: boolean;
@@ -223,11 +236,6 @@ interface Props {
    *  surface with no search — the toolbar entry then hides entirely. */
   search?: string;
   onSearchChange?: (query: string) => void;
-  /** The fetch state of the window these rows came from. Required: exporting
-   *  "all" has to prove the collection is complete before it writes a file,
-   *  and only the surface's query knows whether pages are still outstanding.
-   *  A surface that forgot it would ship the truncated CSV this guards. */
-  exportWindow: IssueTableExportWindow;
 }
 
 export function IssueTableView({
@@ -247,10 +255,10 @@ export function IssueTableView({
   grouping,
   onGroupingChange,
   groupCountQuery,
+  exportQuery,
   search,
   onSearchChange,
   hierarchy,
-  exportWindow,
 }: Props) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const statusLabel = useStatusLabel(wsId);
@@ -583,6 +591,33 @@ export function IssueTableView({
     [issues, selectedIds],
   );
 
+  /** The "Export all" fetch: one cursor walk over the server's flat result set,
+   *  assembled from the SAME scope + window the surface's counts use, plus the
+   *  table's live sort (see `buildIssueTableExportQuerySpec`).
+   *
+   *  Memoised on the inputs rather than the assembled spec, so a re-render with
+   *  identical filters does not rebuild an object the walk would then treat as
+   *  a new query. */
+  const collectExportRows = useCallback(
+    () =>
+      collectIssueTableExportRows((cursor) =>
+        api.listIssueTableRows({
+          query: buildIssueTableExportQuerySpec(
+            exportQuery.scope,
+            exportQuery.window,
+            exportQuery.includeSubIssues,
+            { field: sortBy, direction: sortDirection },
+          ),
+          group: { kind: "none" },
+          group_key: null,
+          hierarchy: { enabled: false },
+          parent_id: null,
+          page: { limit: ISSUE_TABLE_EXPORT_PAGE_LIMIT, cursor },
+        }),
+      ),
+    [exportQuery, sortBy, sortDirection],
+  );
+
   const openExportSheet = () => {
     if (exporting) return;
     const choices: ("all" | "selected")[] =
@@ -601,19 +636,6 @@ export function IssueTableView({
       (index) => {
         if (index == null || index >= labels.length) return;
         const scope = choices[index];
-        // Fail closed on "all": the rows on screen are the CLIENT-filtered
-        // window, so only the fetch state can prove the collection is whole.
-        // Blocked here (rather than after the sheet closes) so the user gets
-        // the reason without a file ever being written.
-        const blocked = exportBlockedReason(scope, exportWindow);
-        if (blocked !== null) {
-          Alert.alert(
-            t("table.exportFailedTitle"),
-            t(exportBlockedMessageKey(blocked)),
-          );
-          return;
-        }
-        const rows = scope === "all" ? issues : selectedIssues;
         const ctx: IssueTableExportContext = {
           // Built-ins resolve through i18n; custom statuses append their
           // catalog keys and resolve through the catalog name.
@@ -637,22 +659,26 @@ export function IssueTableView({
           String(now.getMonth() + 1).padStart(2, "0"),
           String(now.getDate()).padStart(2, "0"),
         ].join("-");
-        void writeAndShareCsv(
-          rows,
-          columns,
-          ctx,
-          columnLabel,
-          scope,
-          dateOnly,
-          exportWindow,
-        )
-          // A write/share failure used to be swallowed here, which is what
-          // made a truncated or unsaveable export look successful. Surface it:
-          // the blocked reasons already got their specific message above, so
-          // anything landing here is a real I/O failure.
+        void (async () => {
+          // "all" walks the SERVER's flat result set by cursor; "selected"
+          // stays on the rendered rows, because a selection can only ever
+          // contain rows the user can see (web draws the same line).
+          const rows =
+            scope === "all"
+              ? (await collectExportRows()).rows
+              : selectedIssues;
+          await writeAndShareCsv(rows, columns, ctx, columnLabel, scope, dateOnly);
+        })()
+          // Every failure used to be collapsed into one generic message, which
+          // is what let a truncated or unsaveable export read as success. Each
+          // class now names the action the user can take; anything else is a
+          // real I/O failure.
           .catch((err: unknown) => {
             if (__DEV__) console.warn("table export failed", err);
-            Alert.alert(t("table.exportFailedTitle"), t("table.exportFailed"));
+            Alert.alert(
+              t("table.exportFailedTitle"),
+              t(exportFailureMessageKey(err)),
+            );
           })
           .finally(() => setExporting(false));
       },
@@ -1077,10 +1103,19 @@ function HeaderCell({
   );
 }
 
-/** Build the CSV, write it to the cache dir, hand it to the system sheet.
- *  Re-asserts completeness before writing so the invariant holds even if a
- *  future caller skips the UI-side pre-check; a real write/share failure
- *  reaches the caller, which surfaces it instead of swallowing it. */
+/** i18n key for an export failure. The two named classes are the ones the user
+ *  can act on differently — retrying a cancelled export is worthwhile, retrying
+ *  an oversized one never is — so they get their own copy; everything else is
+ *  the generic I/O message. */
+function exportFailureMessageKey(err: unknown): string {
+  if (err instanceof IssueTableExportTooLargeError) return "table.exportTooLarge";
+  if (err instanceof IssueTableExportIntegrityError) return "table.exportIncomplete";
+  return "table.exportFailed";
+}
+
+/** Build the CSV, write it to the cache dir, hand it to the system sheet. A
+ *  real write/share failure reaches the caller, which surfaces it instead of
+ *  swallowing it. */
 async function writeAndShareCsv(
   rows: readonly Issue[],
   columns: readonly TableColumnKey[],
@@ -1088,9 +1123,7 @@ async function writeAndShareCsv(
   columnLabel: (column: TableColumnKey) => string,
   scope: "all" | "selected",
   dateOnly: string,
-  window: IssueTableExportWindow,
 ): Promise<void> {
-  assertExportComplete(scope, window);
   const csv = buildIssuesCsv(
     rows,
     columns,
