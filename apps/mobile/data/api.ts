@@ -304,6 +304,7 @@ import {
   ActiveTasksResponseSchema,
   AgentEnvSchema,
   AgentListSchema,
+  AgentSchema,
   AgentTaskListSchema,
   CancelAgentTasksResponseSchema,
   AutopilotDetailSchema,
@@ -343,6 +344,7 @@ import {
   RuntimeUsageListSchema,
   RuntimeUsageByAgentListSchema,
   EMPTY_ACTIVE_TASKS_RESPONSE,
+  EMPTY_AGENT,
   EMPTY_AGENT_ENV,
   EMPTY_AGENT_LIST,
   EMPTY_AGENT_TASK_LIST,
@@ -1427,6 +1429,33 @@ class ApiClient {
     });
     return parseWithFallback(raw, AgentListSchema, EMPTY_AGENT_LIST, {
       endpoint: "listAgents",
+    });
+  }
+
+  // GET /api/agents/{id} — mirrors packages/core/api/client.ts:1222. The agent
+  // LIST filters out agents the caller may not see (`memberAllowedToViewAgent`,
+  // agent.go:921-931), so a private agent belonging to somebody else is simply
+  // absent from it — indistinguishable from a deleted one. This endpoint is the
+  // only way to tell those apart: the server answers 403 for a private agent
+  // the caller is not in `allowed_principals` for, and 404 for one that really
+  // does not exist. The server's own comment names that contract
+  // (handler/agent.go:964-968: "The 403 lets the front-end render an explicit
+  // 'no access' placeholder instead of a 404 — see agent-detail-page.tsx").
+  //
+  // `parseWithFallback` per the house read-side discipline, and the fallback is
+  // safe here because the probe's caller branches on the thrown STATUS, never
+  // on the returned value: a 403 arrives as an `ApiError` from `fetch` before
+  // any parsing, so schema drift can never manufacture a permission verdict —
+  // it degrades to EMPTY_AGENT (id === ""), which the caller does not read.
+  async getAgent(
+    id: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<Agent> {
+    const raw = await this.fetch<unknown>(`/api/agents/${id}`, {
+      signal: opts?.signal,
+    });
+    return parseWithFallback(raw, AgentSchema, EMPTY_AGENT, {
+      endpoint: "getAgent",
     });
   }
 

@@ -1384,6 +1384,13 @@ export const AgentSchema: z.ZodType<Agent> = z.object({
 export const AgentListSchema = z.array(AgentSchema).default([]);
 export const EMPTY_AGENT_LIST: Agent[] = [];
 
+// Only `id` has no default on AgentSchema, so an empty id is the whole
+// fallback — the same reasoning as EMPTY_MIKA_BOOTSTRAP below. Callers read
+// `id === ""` as "the body did not parse" and must not mistake it for a real
+// agent (see `ApiClient.getAgent`, whose caller distinguishes 403 from
+// everything else by status, not by this value).
+export const EMPTY_AGENT: Agent = AgentSchema.parse({ id: "" });
+
 // Response of POST /api/agents/mika — the workspace's Mika plus the caller's
 // conversation with it, resolved together server-side so two clients cannot
 // each open their own onboarding session (web types this as
