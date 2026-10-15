@@ -83,4 +83,38 @@ describe("issue quick-create api method", () => {
       due_date: "2026-09-01",
     });
   });
+
+  it("carries attachment_ids in the request body", async () => {
+    // The server has always accepted these (`QuickCreateIssueRequest`), and the
+    // daemon receives them on the task — the agent panel simply never sent any.
+    // This pins the wire contract the panel now relies on: the ids must reach
+    // the JSON body, not merely be accepted by the method's TypeScript type.
+    const spy = fetchSpy().mockResolvedValue({ task_id: "task-42" });
+    await api.quickCreateIssue({
+      agent_id: "agent-1",
+      prompt: "按这张截图改一下空状态",
+      attachment_ids: ["att-1", "att-2"],
+    });
+    const [, opts] = spy.mock.calls[0] as unknown as [
+      string,
+      { body?: string },
+    ];
+    expect(JSON.parse(opts.body ?? "{}")).toEqual({
+      agent_id: "agent-1",
+      prompt: "按这张截图改一下空状态",
+      attachment_ids: ["att-1", "att-2"],
+    });
+  });
+
+  it("omits attachment_ids entirely when there are none", async () => {
+    // `omitempty` on the server: the no-upload request must stay byte-identical
+    // to what this path sent before attachments existed.
+    const spy = fetchSpy().mockResolvedValue({ task_id: "task-42" });
+    await api.quickCreateIssue({ agent_id: "agent-1", prompt: "hi" });
+    const [, opts] = spy.mock.calls[0] as unknown as [
+      string,
+      { body?: string },
+    ];
+    expect("attachment_ids" in JSON.parse(opts.body ?? "{}")).toBe(false);
+  });
 });

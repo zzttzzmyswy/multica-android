@@ -9,37 +9,58 @@
  * (packages/views/modals/quick-create-issue.tsx): the prompt describes the
  * task in plain language (no handwritten title), the picked actor turns it
  * into a real issue via `POST /api/issues/quick-create`, and the issue
- * surfaces later as an inbox notification. Deliberately simpler than web —
- * no attachment upload, no CLI-version gate, no persisted last-actor
- * preference.
+ * surfaces later as an inbox notification.
  *
- * The prompt is a controlled input owned by `new-issue.tsx` so a mode
- * switch manual ↔ agent never loses either draft; the actor lives in
- * `useNewIssueDraftStore` (same cross-route channel as assignee).
+ * The prompt is the SAME `DescriptionField` the manual tab uses, for the same
+ * reason web's agent panel uses the same editor as its advanced form: the
+ * prompt is where "fix this screenshot / read this log" lives, so attaching
+ * the file IS part of describing the task, and `POST /api/issues/quick-create`
+ * has always accepted the `attachment_ids` that ride along. It used to be a
+ * bare `TextInput` here, so the two tabs of one modal disagreed about whether
+ * a file could be sent. Still deliberately simpler than web in two ways that
+ * cost no capability: no CLI-version gate, no persisted last-actor preference.
+ *
+ * The prompt input lives in `new-issue.tsx` (second `useMentionInput`
+ * instance) so a mode switch manual ↔ agent never loses either draft, and so
+ * the @ suggestion bar — which has to float above the keyboard, outside the
+ * scroll view — is rendered by the screen for both modes. Uploaded attachment
+ * ids bubble up through `onAttachmentUploaded`; the in-flight flag through
+ * `onUploadingChange`, which is what keeps submit from firing while a picked
+ * file is still uploading (same gate manual mode uses).
  */
 import { useEffect, useMemo } from "react";
-import { TextInput, View } from "react-native";
+import { View } from "react-native";
 import { router } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { AttributeChip } from "@/components/issue/attribute-chip";
 import { CreateFormAttributeRow } from "@/components/issue/create-form-attribute-row";
+import { DescriptionField } from "@/components/issue/description-field";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
-import { MOBILE_PLACEHOLDER_COLOR } from "@/components/ui/input-tokens";
 import { agentListOptions } from "@/data/queries/agents";
 import { useNewIssueDraftStore } from "@/data/stores/new-issue-draft-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
 import { isAgentRuntimeBound } from "@/lib/is-agent-runtime-bound";
+import type { UseMentionInputReturn } from "@/lib/use-mention-input";
 import { useTranslation } from "@/lib/i18n/react";
 
 interface Props {
-  prompt: string;
-  onPromptChange: (next: string) => void;
+  /** Live prompt input, owned by `new-issue.tsx` (see the header). */
+  promptInput: UseMentionInputReturn;
+  /** Reports a freshly uploaded attachment id for `attachment_ids`. */
+  onAttachmentUploaded: (id: string) => void;
+  /** Mirrors the in-flight upload flag so the screen can hold submit. */
+  onUploadingChange: (uploading: boolean) => void;
   disabled?: boolean;
 }
 
-export function QuickCreatePanel({ prompt, onPromptChange, disabled }: Props) {
+export function QuickCreatePanel({
+  promptInput,
+  onAttachmentUploaded,
+  onUploadingChange,
+  disabled,
+}: Props) {
   const { t } = useTranslation();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
@@ -78,15 +99,12 @@ export function QuickCreatePanel({ prompt, onPromptChange, disabled }: Props) {
 
   return (
     <View className="gap-4">
-      <TextInput
-        value={prompt}
-        onChangeText={onPromptChange}
+      <DescriptionField
+        description={promptInput}
+        disabled={!!disabled}
         placeholder={t("newIssue.agentPlaceholder")}
-        placeholderTextColor={MOBILE_PLACEHOLDER_COLOR}
-        className="min-h-24 py-2 text-title-sm text-foreground"
-        multiline
-        textAlignVertical="top"
-        editable={!disabled}
+        onAttachmentUploaded={onAttachmentUploaded}
+        onUploadingChange={onUploadingChange}
       />
       {/* Actor chip — taps into the agent/squad formSheet picker. */}
       <View className="flex-row flex-wrap items-center gap-2">

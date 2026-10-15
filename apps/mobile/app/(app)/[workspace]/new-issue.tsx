@@ -6,8 +6,8 @@
  * switches between the two creation modes; each mode keeps its own input
  * state (title/description vs prompt) so switching back and forth never
  * loses a half-typed draft. Property chips are part of the form, not
- * pinned above keyboard. MentionSuggestionBar floats above keyboard only
- * when the user is mid-@ in manual mode.
+ * pinned above keyboard. MentionSuggestionBar floats above keyboard when
+ * the user is mid-@ in either mode.
  *
  * Manual mode: title → description → property chips. Mention pipeline
  * shares `useMentionInput` with `issue/[id]/new-comment.tsx` — both
@@ -21,8 +21,11 @@
  * + project / priority / due-date → POST /api/issues/quick-create. The
  * server enqueues a quick-create task and the picked agent authors the
  * issue (no handwritten title needed); success/failure surface as inbox
- * notifications. Mirrors web's AgentCreatePanel, without attachment
- * upload / CLI-version gating.
+ * notifications. Mirrors web's AgentCreatePanel, including its attachment
+ * support: the prompt carries the same `DescriptionField` the manual form
+ * uses, so a screenshot or a log file can ride along on the request's
+ * `attachment_ids` — the prompt is where "fix THIS screenshot" lives, so the
+ * attachment is part of the task, not an extra. Still no CLI-version gating.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -49,7 +52,12 @@ import { projectDetailOptions } from "@/data/queries/projects";
 import { useNewIssueDraftStore } from "@/data/stores/new-issue-draft-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
-import { useMentionInput } from "@/lib/use-mention-input";
+import { useMentionInput, type UseMentionInputReturn } from "@/lib/use-mention-input";
+import {
+  addUploadedAttachmentId,
+  attachmentIdsPayload,
+  canSubmitQuickCreate,
+} from "@/lib/quick-create-attachments";
 import type { SubIssueRouteParams } from "@/lib/sub-issue-route";
 import { keyboardBehavior } from "@/lib/keyboard";
 import { cn } from "@/lib/utils";
@@ -61,6 +69,70 @@ const MODES: { key: CreateMode; labelKey: string }[] = [
   { key: "manual", labelKey: "newIssue.modeManual" },
   { key: "agent", labelKey: "newIssue.modeAgent" },
 ];
+
+/** The two rich-text bodies this form persists. Both are mention inputs owned
+ *  by the screen, and both are stored as serialized markdown. */
+type DraftBodyField = "description" | "prompt";
+
+/**
+ * Keep one mention-input body in step with its persisted draft slot.
+ *
+ * Restore the saved text once, as soon as the workspace's draft file has been
+ * read, then mirror every later edit back into it. Web parity: its draft holds
+ * the editor's markdown and is rewritten on each keystroke, so a form
+ * dismissed mid-sentence reopens with the sentence intact. Because the stored
+ * value is markdown, the mention markers need no separate storage slot —
+ * `serializeMentions` passes the canonical `[@name](mention://…)` links
+ * already in the text straight through.
+ *
+ * Both halves wait for `hydrated`: until the file has been read, an empty
+ * in-memory draft means "not loaded yet", and acting on it would either
+ * restore nothing or write the empty state over the file it is about to read.
+ * The mirror keys on the SERIALIZED body rather than the hook object, because
+ * `useMentionInput` returns a fresh object every render.
+ */
+function useDraftBodySync(
+  input: UseMentionInputReturn,
+  field: DraftBodyField,
+  persist: (next: string) => void,
+  hydrated: boolean,
+  /** A URL-carried seed is the only writer of the description this mount. */
+  skipRestore: boolean,
+) {
+  const restore = input.restore;
+  const liveText = input.text;
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (!hydrated || restoredRef.current || skipRestore) return;
+    restoredRef.current = true;
+    const saved = useNewIssueDraftStore.getState()[field];
+    // Never clobber text the user got in first — the same "don't overwrite
+    // live work" rule the store applies to a late file read.
+    if (!saved || liveText) return;
+    restore({
+      text: saved,
+      markers: [],
+      selection: { start: saved.length, end: saved.length },
+    });
+  }, [hydrated, skipRestore, field, restore, liveText]);
+
+  const serialized = input.serialize();
+  const lastMirroredRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!hydrated) return;
+    // The first hydrated render also carries the pre-restore input (`""`).
+    // Adopt it as the baseline without writing: otherwise the empty string
+    // would overwrite the draft, and a crash before the restore's re-render
+    // would lose it for good.
+    if (lastMirroredRef.current === null) {
+      lastMirroredRef.current = serialized;
+      return;
+    }
+    if (lastMirroredRef.current === serialized) return;
+    lastMirroredRef.current = serialized;
+    persist(serialized);
+  }, [hydrated, serialized, persist]);
+}
 
 export default function NewIssueModal() {
   const { t } = useTranslation();
@@ -85,6 +157,14 @@ export default function NewIssueModal() {
   // `@` query, and the picker routes never touch it — so the store keeps the
   // serialized markdown and the two effects below keep them in step.
   const description = useMentionInput();
+  // Agent mode's prompt, the second mention-input instance. Same reasoning as
+  // the description: the panel renders `DescriptionField` so a picked file can
+  // be uploaded and linked into the prompt (web's agent panel uses the same
+  // rich editor as its advanced form). It is owned here rather than inside
+  // `QuickCreatePanel` for two reasons — a manual ↔ agent mode switch must not
+  // lose either body, and the @ suggestion bar has to be rendered by the
+  // screen, outside the scroll view, so it can float above the keyboard.
+  const promptInput = useMentionInput();
   // Attribute chips (status / priority / assignee / due date / project) and
   // the text fields all live in `useNewIssueDraftStore`, so the
   // new-issue-picker/* formSheet routes can read and write the same values
@@ -95,8 +175,10 @@ export default function NewIssueModal() {
   const setMode = useNewIssueDraftStore((s) => s.setMode);
   const title = useNewIssueDraftStore((s) => s.title);
   const setTitle = useNewIssueDraftStore((s) => s.setTitle);
-  const prompt = useNewIssueDraftStore((s) => s.prompt);
-  const setPrompt = useNewIssueDraftStore((s) => s.setPrompt);
+  // Agent mode's prompt lives in its own mention-input instance (see above);
+  // the store only holds its serialized form for the reopen-restores-draft
+  // behaviour, exactly like `description`.
+  const promptSetter = useNewIssueDraftStore((s) => s.setPrompt);
   const status = useNewIssueDraftStore((s) => s.status);
   const priority = useNewIssueDraftStore((s) => s.priority);
   const assignee = useNewIssueDraftStore((s) => s.assignee);
@@ -110,54 +192,21 @@ export default function NewIssueModal() {
   const setDraftDescription = useNewIssueDraftStore((s) => s.setDescription);
   const { getName } = useActorLookup();
 
-  // Restore the saved body, then mirror every later edit back into the store.
-  // Web parity: its draft holds the editor's markdown and is rewritten on each
-  // keystroke, so a form dismissed mid-sentence reopens with the sentence
-  // intact. The store's `description` is therefore always the serialized
-  // markdown; the mention markers themselves are rebuilt by `serializeMentions`
-  // from the `[@name](mention://…)` links already in the text, so they need no
-  // separate storage slot.
-  //
-  // Both effects wait for `hydrated`: until the workspace's file has been
-  // read, an empty in-memory draft means "not loaded yet", and acting on it
-  // would either restore nothing or write the empty state over the saved file.
+  // Restore each saved body, then mirror every later edit back into the store
+  // (see `useDraftBodySync`). Waits for `hydrated` — until the workspace's
+  // file has been read, an empty in-memory draft means "not loaded yet", and
+  // acting on it would either restore nothing or write the empty state over
+  // the saved file. The description skips the restore on a seeded mount
+  // because the seed effect below is then its only writer.
   const hydrated = useNewIssueDraftStore((s) => s.hydrated);
-  const restoredRef = useRef(false);
-  const descriptionRestore = description.restore;
-  useEffect(() => {
-    if (!hydrated || restoredRef.current || seedDescription) return;
-    restoredRef.current = true;
-    const saved = useNewIssueDraftStore.getState().description;
-    // Never clobber text the user got in first — the same "don't overwrite
-    // live work" rule the store applies to a late file read.
-    if (!saved || description.text) return;
-    descriptionRestore({
-      text: saved,
-      markers: [],
-      selection: { start: saved.length, end: saved.length },
-    });
-  }, [hydrated, seedDescription, descriptionRestore, description.text]);
-
-  // Keyed on the serialized markdown, not the hook object: `serialize` is
-  // memoized per (text, markers) while `useMentionInput` returns a fresh object
-  // every render, so depending on the object would rewrite the file on every
-  // keystroke of any kind.
-  const serializedDescription = description.serialize();
-  const lastMirroredRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!hydrated) return;
-    // The first hydrated render also carries the pre-restore input (`""`).
-    // Adopt it as the baseline without writing: otherwise the empty string
-    // would overwrite the draft, and a crash before the restore's re-render
-    // would lose it for good.
-    if (lastMirroredRef.current === null) {
-      lastMirroredRef.current = serializedDescription;
-      return;
-    }
-    if (lastMirroredRef.current === serializedDescription) return;
-    lastMirroredRef.current = serializedDescription;
-    setDraftDescription(serializedDescription);
-  }, [hydrated, serializedDescription, setDraftDescription]);
+  useDraftBodySync(
+    description,
+    "description",
+    setDraftDescription,
+    hydrated,
+    !!seedDescription,
+  );
+  useDraftBodySync(promptInput, "prompt", promptSetter, hydrated, false);
 
   // Apply the quick-create recovery seed. The restore effect above skips a
   // mount that carries a seed, so the seed is the only writer here and a stale
@@ -196,13 +245,19 @@ export default function NewIssueModal() {
   const isSubmitting =
     mode === "manual" ? createIssue.isPending : quickCreate.isPending;
 
-  // Attachment ids freshly uploaded from the description toolbar. Carried
-  // into the create payload so the server binds them to the issue.
+  // Attachment ids freshly uploaded from either body's toolbar. Carried into
+  // the create payload so the server binds them to the issue. One list for
+  // both modes, mirroring web's single shared upload pool
+  // (`packages/views/modals/use-issue-create-uploads.ts`): the user uploaded
+  // the file in THIS modal, and a mode switch must not throw it away.
   const [uploadedAttachmentIds, setUploadedAttachmentIds] = useState<string[]>(
     [],
   );
-  // In-flight description upload — hold submit until the picked file lands,
-  // else its attachment id never reaches the create payload.
+  const collectAttachment = useCallback((id: string) => {
+    setUploadedAttachmentIds((prev) => addUploadedAttachmentId(prev, id));
+  }, []);
+  // In-flight upload on either body's toolbar — hold submit until the picked
+  // file lands, else its attachment id never reaches the create payload.
   const [uploadsPending, setUploadsPending] = useState(false);
 
   const canSubmit =
@@ -210,12 +265,18 @@ export default function NewIssueModal() {
       ? !isSubmitting &&
         !uploadsPending &&
         title.trim().length > 0
-      : !isSubmitting &&
-        prompt.trim().length > 0 &&
-        agentActor != null;
+      : canSubmitQuickCreate({
+          prompt: promptInput.text,
+          hasActor: agentActor != null,
+          submitting: isSubmitting,
+          uploadsPending,
+        });
 
   const submitAgentMode = useCallback(async (): Promise<boolean> => {
-    const trimmedPrompt = prompt.trim();
+    // Serialize rather than read the raw body: the prompt can carry @mentions
+    // now that it is a real editor, and the agent should receive the canonical
+    // `[@name](mention://…)` markdown, not the in-editor sentinel form.
+    const trimmedPrompt = promptInput.serialize().trim();
     if (trimmedPrompt.length === 0 || !agentActor) return false;
     try {
       await quickCreate.mutateAsync({
@@ -227,6 +288,7 @@ export default function NewIssueModal() {
         ...(dueDate ? { due_date: dueDate } : {}),
         ...(project ? { project_id: project.id } : {}),
         ...(parent ? { parent_issue_id: parent } : {}),
+        ...attachmentIdsPayload(uploadedAttachmentIds),
       });
       // The issue exists, so the draft is spent — clear it before leaving, or
       // the next open would restore the issue the user just filed. Web runs a
@@ -249,7 +311,7 @@ export default function NewIssueModal() {
       );
       return false;
     }
-  }, [prompt, agentActor, priority, dueDate, project, parent, quickCreate, getName, t, resetDraft]);
+  }, [promptInput, agentActor, priority, dueDate, project, parent, uploadedAttachmentIds, quickCreate, getName, t, resetDraft]);
 
   const submitManualMode = useCallback(async () => {
     const trimmedTitle = title.trim();
@@ -405,11 +467,7 @@ export default function NewIssueModal() {
               <DescriptionField
                 description={description}
                 disabled={isSubmitting}
-                onAttachmentUploaded={(id) =>
-                  setUploadedAttachmentIds((prev) =>
-                    prev.includes(id) ? prev : [...prev, id],
-                  )
-                }
+                onAttachmentUploaded={collectAttachment}
                 onUploadingChange={setUploadsPending}
               />
               <CreateFormAttributeRow mode="manual" />
@@ -429,19 +487,23 @@ export default function NewIssueModal() {
             </>
           ) : (
             <QuickCreatePanel
-              prompt={prompt}
-              onPromptChange={setPrompt}
+              promptInput={promptInput}
+              onAttachmentUploaded={collectAttachment}
+              onUploadingChange={setUploadsPending}
               disabled={isSubmitting}
             />
           )}
         </ScrollView>
 
-        {/* Mention suggestions float above the keyboard only when the user
-            types `@` in manual mode. Self-hides via `if (!visible) return
-            null` so it doesn't take space at rest. */}
-        {mode === "manual" ? (
-          <MentionSuggestionBar {...description.suggestionBar} />
-        ) : null}
+        {/* Mention suggestions float above the keyboard in BOTH modes — the
+            agent prompt carries the same toolbar and `@` support as the manual
+            description. Self-hides via `if (!visible) return null` so it
+            doesn't take space at rest. */}
+        <MentionSuggestionBar
+          {...(mode === "manual"
+            ? description.suggestionBar
+            : promptInput.suggestionBar)}
+        />
       </KeyboardAvoidingView>
     </>
   );
