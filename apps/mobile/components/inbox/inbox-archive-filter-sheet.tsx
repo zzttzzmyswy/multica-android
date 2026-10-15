@@ -1,5 +1,5 @@
 /**
- * Archived-inbox filter sheet — the mobile host for web's inbox filter popover
+ * Inbox filter sheet — the mobile host for web's inbox filter popover
  * (`packages/views/inbox/components/inbox-filter-menu.tsx`).
  *
  * Web hangs four submenus off a dropdown trigger; a phone has no dropdown
@@ -8,20 +8,32 @@
  * each row a checkbox, matching the agent filter sheet's shape so the app has
  * one filter idiom rather than two.
  *
- * Two things are deliberately different from a "local filtering" sheet:
+ * **One sheet, two views.** Web renders this menu unconditionally and hands it
+ * the view's items; the main inbox and the archived sub-view therefore share
+ * one implementation on web, and they do here too — `inbox.tsx` instantiates
+ * this for whichever list is on screen. What differs between the two is where
+ * the COUNTS come from, and the caller decides that by what it passes as
+ * `facets`; the sheet only renders them:
  *
- *   - **The counts come from the server.** Web computes them locally over the
- *     deduplicated list it already holds; here the list is paged, so a local
- *     count would describe the pages fetched so far and claim, say, "9 done"
- *     about an archive holding 816. `facets` is fetched over the same filters
- *     the list is, and every number is "how many rows selecting this would
- *     reveal".
- *   - **The priority section can be absent.** It is offered only once the
- *     response proves the backend projects `issue_priority`
- *     (`inboxPriorityFilterSupport`); against an older server the section is
- *     omitted rather than shown with counts that can never be right. Status
- *     and actor always appear, because every row has an actor and the status
- *     dimension is the one the archive is mostly browsed by.
+ *   - **The archived view's counts come from the server.** Its list is paged,
+ *     so a local count would describe the pages fetched so far and claim, say,
+ *     "9 done" about an archive holding 816. `facets` is the facet endpoint's
+ *     response over the same filters the list is, and every number is "how
+ *     many rows selecting this would reveal".
+ *   - **The main view's counts come from the client**, over the deduplicated
+ *     list already in hand (`inboxLocalFacets`). `/api/inbox` returns the whole
+ *     unarchived inbox, so those counts are complete, and web's main view
+ *     counts locally for the same reason.
+ *
+ * The sheet is deliberately ignorant of which one it got: both arrive as the
+ * same `{ statuses, priorities, actors, unreadCount }` shape, so a number can
+ * never be drawn from one source while its list came from the other.
+ *
+ * One more thing is conditional: **the priority section can be absent.** It is
+ * offered only when the caller's capability probe says the backend projects
+ * `issue_priority` (`showsPriorityFilter`). Status and actor always appear,
+ * because every row has an actor and status is the dimension these lists are
+ * mostly browsed by.
  *
  * The section list itself stays stable: a dimension with no options renders a
  * placeholder rather than vanishing, so the sheet is a learnable list instead
@@ -53,9 +65,11 @@ import {
 interface Props {
   visible: boolean;
   onClose: () => void;
+  /** Sheet heading — each list names itself (`inbox.filters` / `inbox.archivedFilters`). */
+  title: string;
   wsId: string | null;
   filters: InboxFilters;
-  /** Server counts for the current selection; undefined while loading. */
+  /** Counts for the current selection; undefined while a server fetch is pending. */
   facets:
     | {
         statuses: Record<string, number>;
@@ -65,8 +79,15 @@ interface Props {
       }
     | undefined;
   facetsLoading: boolean;
-  facetsError: boolean;
-  onRetryFacets: () => void;
+  /**
+   * Server-facet failure and its retry. Optional because only the archived
+   * view has a facet REQUEST to fail: the main view's counts are computed from
+   * the list it already holds, so there is nothing to load, fail, or retry.
+   * Passing a no-op retry instead would put a "Retry" button on a fetch that
+   * does not exist.
+   */
+  facetsError?: boolean;
+  onRetryFacets?: () => void;
   prioritySupport: InboxPriorityFilterSupport;
   /** Count of active selections — gates Clear (web's `inboxFilterCount`). */
   activeCount: number;
@@ -80,6 +101,7 @@ interface Props {
 export function InboxArchiveFilterSheet({
   visible,
   onClose,
+  title,
   wsId,
   filters,
   facets,
@@ -191,7 +213,7 @@ export function InboxArchiveFilterSheet({
 
   return (
     <PickerSheet
-      title={t("inbox.archivedFilters")}
+      title={title}
       visible={visible}
       onClose={onClose}
       fill
@@ -201,8 +223,9 @@ export function InboxArchiveFilterSheet({
           {/* Facet fetch state. Shown in place of the counts rather than
               replacing the sheet: the toggles still work (they filter
               server-side regardless of whether the menu could count), so a
-              failed count must not block the filter itself. */}
-          {facetsError ? (
+              failed count must not block the filter itself. Absent entirely
+              for a caller whose counts cannot fail (see `facetsError`). */}
+          {facetsError && onRetryFacets ? (
             <View className="px-4 py-2 flex-row items-center gap-3">
               <Text className="flex-1 text-caption text-destructive">
                 {t("inbox.archivedFiltersFailed")}
