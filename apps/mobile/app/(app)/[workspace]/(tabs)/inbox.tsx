@@ -54,9 +54,15 @@ import {
   hasPagedBeyondFirst,
 } from "@/lib/inbox-archive-view";
 import {
+  inboxLocalFacets,
+  mainInboxEmptyReason,
+} from "@/lib/inbox-main-view";
+import {
   EMPTY_INBOX_FILTERS as EMPTY_FILTERS,
   filterInboxItems,
   inboxFilterCount,
+  inboxFiltersForPrioritySupport,
+  inboxPriorityFilterSupport,
   useInboxFilterStore,
   useInboxFilters,
 } from "@/lib/inbox-filters";
@@ -95,6 +101,54 @@ export default function Inbox() {
   const togglePriorityFilter = useInboxFilterStore((s) => s.togglePriorityFilter);
   const toggleActorFilter = useInboxFilterStore((s) => s.toggleActorFilter);
   const toggleUnreadOnly = useInboxFilterStore((s) => s.toggleUnreadOnly);
+
+  // -- Main list's filter layer -------------------------------------------
+  //
+  // The four dimensions apply to BOTH lists. Web renders one
+  // `InboxFilterMenu` for the two of them (`inbox-page.tsx:513-518`) and
+  // filters the main list through `filterInboxItems` just like the archive
+  // (`:153`); mobile had the filter store, the predicate, the counts and the
+  // sheet, and wired them only into the archived branch — so the main inbox,
+  // 339 groups on this deployment, could only be scrolled.
+  //
+  // The capability probe reads the RAW response, not the deduplicated list.
+  // Whether the backend projects `issue_priority` is a property of the wire
+  // format, and dedup discards rows: probing the dedup result would let a
+  // list that happens to dedup to nothing answer "unknown" about a response
+  // that plainly carries the field. Web probes `rawItems` for the same reason
+  // (`inbox-page.tsx:151`), and the archived view hardcodes `"supported"`
+  // because its paged endpoint guarantees the projection — two different
+  // answers to the same question, each derived from its own source of truth.
+  const rawMainItems = useMemo(() => rawItems ?? [], [rawItems]);
+  const mainPrioritySupport = inboxPriorityFilterSupport(rawMainItems);
+  // The copy the REQUEST and the badge use. `unknown` and `unsupported` strip
+  // a priority selection rather than keeping one the backend cannot honour —
+  // see `inboxFiltersForPrioritySupport`. The store keeps the user's choice, so
+  // a backend that starts reporting the field brings it back.
+  const mainFilters = useMemo(
+    () => inboxFiltersForPrioritySupport(filters, mainPrioritySupport),
+    [filters, mainPrioritySupport],
+  );
+  const mainActiveFilterCount = inboxFilterCount(mainFilters);
+  // The list the main view DRAWS. Filtering the deduplicated rows rather than
+  // the raw response keeps the two in step: dedup drops an issue's older
+  // notifications in favour of its newest, and filtering first would let a
+  // row that dedup was about to discard decide whether the surviving row
+  // matches.
+  const visibleData = useMemo(
+    () => filterInboxItems(data, mainFilters),
+    [data, mainFilters],
+  );
+  // Counts over the same list, each respecting the other dimensions and
+  // ignoring its own — web's main-view rule (`inbox-filter-menu.tsx:139-176`).
+  const mainFacets = useMemo(
+    () => inboxLocalFacets(data, mainFilters),
+    [data, mainFilters],
+  );
+  const mainEmptyReason = mainInboxEmptyReason({
+    visibleCount: visibleData.length,
+    activeFilterCount: mainActiveFilterCount,
+  });
 
   // Which view is showing. Local state, not URL-synced — mobile follows the
   // chat archive precedent (web keeps it in ?view=, a shared-link concern
@@ -161,6 +215,13 @@ export default function Inbox() {
   // the other active dimensions. Enabled only while the sheet is open — the
   // counts are menu content, and fetching them for the background list would
   // be a request per filter change with nothing on screen to show for it.
+  //
+  // Gated on the archived view as well as the open sheet. Both lists now open
+  // the same sheet, and the main list's counts are computed locally
+  // (`inboxLocalFacets`) — so without this gate, opening the filter on the main
+  // inbox would spend a request on the archive's facets and then discard the
+  // answer. The archive's own counts are the only ones this query has ever
+  // been for.
   const {
     data: facets,
     isLoading: facetsLoading,
@@ -168,7 +229,7 @@ export default function Inbox() {
     refetch: refetchFacets,
   } = useQuery({
     ...archivedInboxFacetsOptions(wsId, filters),
-    enabled: !!wsId && filtersOpen,
+    enabled: !!wsId && filtersOpen && view === "archived",
   });
 
   // Every fetched page, flattened and deduplicated by issue ACROSS page
@@ -502,6 +563,7 @@ export default function Inbox() {
         <InboxArchiveFilterSheet
           visible={filtersOpen}
           onClose={() => setFiltersOpen(false)}
+          title={t("inbox.archivedFilters")}
           wsId={wsId}
           filters={filters}
           facets={facets}
@@ -607,6 +669,41 @@ export default function Inbox() {
         title={t("inbox.title")}
         right={
           <>
+            {/* The filter entry. Web puts one `InboxFilterMenu` beside the
+                title and passes it whichever list is on screen
+                (`inbox-page.tsx:513-518`); mobile had it only inside the
+                archived branch, so the main list had no way to narrow. Same
+                trigger shape as the archived sub-view's, one screen up.
+                `h-10 min-w-10` matches the neighbouring `IconButton`'s touch
+                target; web's trigger widens to fit the count the same way
+                (`w-auto px-2`), and the glyph plus count is the idiom the
+                archived sub-view already uses. */}
+            <Pressable
+              onPress={() => setFiltersOpen(true)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={
+                mainActiveFilterCount > 0
+                  ? t("inbox.filtersActive", { count: mainActiveFilterCount })
+                  : t("inbox.filters")
+              }
+              className="h-10 min-w-10 flex-row items-center justify-center gap-1 px-1.5 active:bg-accent rounded-md"
+            >
+              <Ionicons
+                name="filter-outline"
+                size={20}
+                color={
+                  mainActiveFilterCount > 0
+                    ? THEME[colorScheme].primary
+                    : THEME[colorScheme].foreground
+                }
+              />
+              {mainActiveFilterCount > 0 ? (
+                <Text className="text-caption font-medium text-primary tabular-nums">
+                  {mainActiveFilterCount}
+                </Text>
+              ) : null}
+            </Pressable>
             <IconButton
               name="ellipsis-horizontal"
               onPress={onPressMenu}
@@ -615,6 +712,24 @@ export default function Inbox() {
             <HeaderActions />
           </>
         }
+      />
+      <InboxArchiveFilterSheet
+        visible={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        title={t("inbox.filters")}
+        wsId={wsId}
+        filters={mainFilters}
+        facets={mainFacets}
+        facetsLoading={false}
+        prioritySupport={mainPrioritySupport}
+        activeCount={mainActiveFilterCount}
+        onToggleStatus={(status) => wsId && toggleStatusFilter(wsId, status)}
+        onTogglePriority={(priority) =>
+          wsId && togglePriorityFilter(wsId, priority)
+        }
+        onToggleActor={(actor) => wsId && toggleActorFilter(wsId, actor)}
+        onToggleUnreadOnly={() => wsId && toggleUnreadOnly(wsId)}
+        onClear={() => wsId && clearFilters(wsId)}
       />
       {isLoading ? (
         <InboxLoading />
@@ -628,18 +743,45 @@ export default function Inbox() {
             <Text>{t("workspace.retry")}</Text>
           </Button>
         </View>
-      ) : !data || data.length === 0 ? (
+      ) : mainEmptyReason !== "none" ? (
         <View className="flex-1">
-          <InboxEmpty
-            iconColor={THEME[colorScheme].mutedForeground}
-            titleText={t("inbox.zero")}
-            subtitleText={t("inbox.emptySubtitle")}
-          />
+          {mainEmptyReason === "filtered" ? (
+            // Deliberately NOT the empty-inbox copy: the inbox is not empty,
+            // the selection is just narrow — and on this deployment it is
+            // narrow enough to hide all 339 groups. Web draws the same
+            // distinction (`inbox-page.tsx:602-617`), and the way out is one
+            // press rather than clearing four dimensions by hand.
+            <View className="flex-1 items-center justify-center px-8 gap-3">
+              <Ionicons
+                name="filter-outline"
+                size={42}
+                color={THEME[colorScheme].mutedForeground}
+              />
+              <Text className="text-title-sm font-medium text-foreground text-center">
+                {t("inbox.filterEmpty")}
+              </Text>
+              <Button variant="outline" onPress={() => wsId && clearFilters(wsId)}>
+                <Text>{t("inbox.archivedFiltersClear")}</Text>
+              </Button>
+            </View>
+          ) : (
+            <InboxEmpty
+              iconColor={THEME[colorScheme].mutedForeground}
+              titleText={t("inbox.zero")}
+              subtitleText={t("inbox.emptySubtitle")}
+            />
+          )}
+          {/* The archive entry is shown under BOTH empty states, matching
+              web: its `InboxList` renders the footer (which carries this
+              entry) in its empty branch whatever the label
+              (`inbox-list.tsx:201-217`). "Nothing matches my filter" must not
+              also hide the way to the archive, which is where a user who
+              filed something away goes looking. */}
           {archivedEntry}
         </View>
       ) : (
         <FlatList
-          data={data}
+          data={visibleData}
           keyExtractor={(item) => item.id}
           ItemSeparatorComponent={InboxSeparator}
           initialNumToRender={12}
