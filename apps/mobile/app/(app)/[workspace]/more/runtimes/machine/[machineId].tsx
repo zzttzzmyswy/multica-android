@@ -70,6 +70,10 @@ import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import {
+  customRuntimeRegistrationFailure,
+  pendingRuntimeCommandName,
+} from "@/lib/pending-runtime";
 
 const MACHINE_ICON: Record<RuntimeMachine["section"], keyof typeof Ionicons.glyphMap> = {
   local: "hardware-chip",
@@ -555,19 +559,37 @@ function MachineRuntimeRow({
   const activeCount = runtimeActiveTaskCount(workload);
   const cliVersion = runtimeCliVersion(runtime);
   const agentIds = workload?.agentIds ?? [];
+  // Web's CliCell prints the profile's command plus the daemon's own failure
+  // reason in place of the CLI version. The row otherwise carries no trace of
+  // the failure: deriveRuntimeHealth only sees status/last_seen_at, so a
+  // registration that will never succeed reads as "recently lost" — a runtime
+  // that is coming back. Same branch the list row takes, and the same one web
+  // takes before its pending branch.
+  const registrationFailure = customRuntimeRegistrationFailure(runtime);
+  const failedCommand = registrationFailure
+    ? pendingRuntimeCommandName(runtime)
+    : null;
 
-  const healthLine = [
-    t(`runtimes.health.${health}`),
-    runtime.provider || null,
-    health !== "online" && runtime.last_seen_at
-      ? timeAgo(runtime.last_seen_at)
-      : null,
-    showRuntimeLoadSuffix(health, activeCount)
-      ? t("runtimes.row.taskCount", { count: activeCount })
-      : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const healthLine = registrationFailure
+    ? [
+        t("runtimes.list.pending_health_error"),
+        failedCommand,
+        registrationFailure,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : [
+        t(`runtimes.health.${health}`),
+        runtime.provider || null,
+        health !== "online" && runtime.last_seen_at
+          ? timeAgo(runtime.last_seen_at)
+          : null,
+        showRuntimeLoadSuffix(health, activeCount)
+          ? t("runtimes.row.taskCount", { count: activeCount })
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
 
   return (
     <Pressable onPress={onPress} className="px-4 py-3 active:bg-secondary">
@@ -587,8 +609,27 @@ function MachineRuntimeRow({
           </View>
 
           <View className="flex-row items-center gap-1.5">
-            <View className={cn("size-1.5 rounded-full", HEALTH_DOT[health])} />
-            <Text className="text-caption text-muted-foreground" numberOfLines={1}>
+            {registrationFailure ? (
+              <Ionicons
+                name="alert-circle"
+                size={12}
+                color={THEME[colorScheme].destructive}
+              />
+            ) : (
+              <View className={cn("size-1.5 rounded-full", HEALTH_DOT[health])} />
+            )}
+            <Text
+              className={cn(
+                "text-caption",
+                registrationFailure ? "text-destructive" : "text-muted-foreground",
+              )}
+              numberOfLines={1}
+              accessibilityLabel={
+                registrationFailure
+                  ? `${t("runtimes.list.pending_health_error")} · ${registrationFailure}`
+                  : undefined
+              }
+            >
               {healthLine}
             </Text>
           </View>

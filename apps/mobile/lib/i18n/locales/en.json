@@ -2892,6 +2892,7 @@
   "runtimes.list.badge_registering": "Registering",
   "runtimes.list.pending_health": "Registering with daemon",
   "runtimes.list.pending_health_disabled": "Disabled",
+  "runtimes.list.pending_health_error": "Registration error",
   "runtimes.list.pending_health_warning": "Waiting for daemon sync",
   "runtimes.loadError": "Failed to load runtimes: ",
   "runtimes.machine.actions": "Machine actions",
