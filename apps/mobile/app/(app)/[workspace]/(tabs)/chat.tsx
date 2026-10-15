@@ -104,6 +104,7 @@ import { useWorkspaceAgentAvailability } from "@/lib/workspace-agent-availabilit
 import { didPendingTaskFinish, isPendingTaskActive } from "@/lib/chat-task-polling";
 import { useAgentPresence } from "@/lib/use-agent-presence";
 import { queueEditDraftText } from "@/lib/chat-queue";
+import { clearChatQueue } from "@/lib/chat-queue-clear";
 import { planCancelRestore } from "@/lib/chat-draft-restore";
 import { useChatDraftRestore } from "@/lib/use-chat-draft-restore";
 import { Header } from "@/components/ui/header";
@@ -751,14 +752,12 @@ export default function ChatTab() {
 
   const handleQueueClear = useCallback(async () => {
     if (!activeSessionId) return;
-    const sessionId = activeSessionId;
-    try {
-      await api.clearQueuedChatTasks(sessionId);
-      patchPending((old) => (old ? { ...old, queued_tasks: [] } : {}));
-    } finally {
-      invalidatePendingTask(qc, sessionId);
-    }
-  }, [activeSessionId, patchPending, qc]);
+    // 清空不只发生在 pendingTask 缓存里：被滤掉的排队气泡本体仍在 messages
+    // 缓存中，队列一空它们就会以「服务端已删」的状态重新现身。收尾逻辑
+    // （摘要清单 → 摘气泡 → 清队列 → 失效）集中在 lib/chat-queue-clear.ts，
+    // 与 web handleClearQueuedTasks 同序。失败时抛给 ChatQueue 弹 Alert。
+    await clearChatQueue(qc, activeSessionId, wsId);
+  }, [activeSessionId, qc, wsId]);
 
   // ── Header / sheet actions ─────────────────────────────────────────────
   const handleNewChat = useCallback(() => {
