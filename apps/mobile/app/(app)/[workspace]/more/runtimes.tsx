@@ -37,6 +37,7 @@ import {
   type RuntimeMachine,
 } from "@/lib/runtime-machines";
 import {
+  customRuntimeRegistrationFailure,
   isDisabledCustomRuntime,
   isPendingCustomRuntime,
   isPendingCustomRuntimeWarning,
@@ -518,6 +519,7 @@ function RuntimeRow({
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const muted = THEME[colorScheme].mutedForeground;
+  const destructive = THEME[colorScheme].destructive;
   const timeAgo = useTimeAgo();
   const health = deriveRuntimeHealth(runtime, Date.now());
   const pending = isPendingCustomRuntime(runtime);
@@ -525,6 +527,14 @@ function RuntimeRow({
   const isCustom = !!runtime.profile_id;
   const displayName = runtimeRowLabel(runtime, machineTitle);
   const command = pending ? pendingRuntimeCommandName(runtime) : null;
+  // Web HealthCell's failure branch, checked before the pending one: a daemon
+  // that tried and failed to resolve the profile's command reaches us as an
+  // ordinary offline row (server writes runtime_profile_registration_error on
+  // an upsert with no pending_custom_runtime flag), so `pending` is false for
+  // it. Without this branch the row's only signal is the derived health —
+  // "recently lost" then "offline" — which reads as a runtime that will come
+  // back on its own, while the reason it never will stays hidden.
+  const registrationFailure = customRuntimeRegistrationFailure(runtime);
 
   // Pair the dot colour with a filled badge tone, same split as web's
   // HealthCell (colored dot + caption label underneath).
@@ -583,33 +593,59 @@ function RuntimeRow({
           <View className="flex-row items-center gap-1.5">
             {/* A placeholder is offline by construction, so the health dot
                 would read as "this runtime is down" instead of "nothing has
-                picked it up yet" — web drops the dot and states the wait. */}
-            {pending ? null : (
+                picked it up yet" — web drops the dot and states the wait.
+                The failure test comes first, as in web's HealthCell: a row can
+                carry both flags, and pending-first would leave a spinner on a
+                runtime that has already given up. */}
+            {registrationFailure ? (
+              <Ionicons name="alert-circle" size={12} color={destructive} />
+            ) : pending ? null : (
               <View className={cn("size-1.5 rounded-full", HEALTH_DOT[health])} />
             )}
+            {/* Web puts the reason behind a `title` tooltip on the health cell
+                and repeats it in the CLI column. A phone has no hover, so the
+                reason goes inline where the daemon's own words are readable
+                without a tap. */}
             <Text
               className={cn(
                 "text-caption",
-                pending && !disabled ? "text-warning" : "text-muted-foreground",
+                registrationFailure
+                  ? "text-destructive"
+                  : pending && !disabled
+                    ? "text-warning"
+                    : "text-muted-foreground",
               )}
               numberOfLines={1}
+              accessibilityLabel={
+                registrationFailure
+                  ? `${t("runtimes.list.pending_health_error")} · ${registrationFailure}`
+                  : undefined
+              }
             >
-              {pending
-                ? disabled
-                  ? t("runtimes.list.pending_health_disabled")
-                  : isPendingCustomRuntimeWarning(runtime, Date.now())
-                    ? t("runtimes.list.pending_health_warning")
-                    : t("runtimes.list.pending_health")
-                : t(`runtimes.health.${health}`)}
-              {pending
-                ? command
-                  ? ` · ${command}`
-                  : ""
-                : `${runtime.provider ? ` · ${runtime.provider}` : ""}${
-                    health !== "online" && runtime.last_seen_at
-                      ? ` · ${timeAgo(runtime.last_seen_at)}`
-                      : ""
-                  }`}
+              {registrationFailure ? (
+                t("runtimes.list.pending_health_error")
+              ) : pending ? (
+                disabled ? (
+                  t("runtimes.list.pending_health_disabled")
+                ) : isPendingCustomRuntimeWarning(runtime, Date.now()) ? (
+                  t("runtimes.list.pending_health_warning")
+                ) : (
+                  t("runtimes.list.pending_health")
+                )
+              ) : (
+                t(`runtimes.health.${health}`)
+              )}
+              {registrationFailure
+                ? ` · ${registrationFailure}`
+                : pending
+                  ? command
+                    ? ` · ${command}`
+                    : ""
+                  : `${runtime.provider ? ` · ${runtime.provider}` : ""}${
+                      health !== "online" && runtime.last_seen_at
+                        ? ` · ${timeAgo(runtime.last_seen_at)}`
+                        : ""
+                    }`}
             </Text>
           </View>
         </View>

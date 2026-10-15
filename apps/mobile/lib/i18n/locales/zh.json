@@ -2892,6 +2892,7 @@
   "runtimes.list.badge_registering": "注册中",
   "runtimes.list.pending_health": "正在向守护进程注册",
   "runtimes.list.pending_health_disabled": "已禁用",
+  "runtimes.list.pending_health_error": "注册错误",
   "runtimes.list.pending_health_warning": "等待守护进程同步",
   "runtimes.loadError": "加载运行时失败：",
   "runtimes.machine.actions": "机器操作",

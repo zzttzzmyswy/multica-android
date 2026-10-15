@@ -227,13 +227,13 @@ MUTATIONS: list[tuple[str, Path, str, str]] = [
         SCREEN,
         "            <Pressable\n"
         "              onPress={() => setFiltersOpen(true)}\n"
-        "              hitSlop={12}\n"
+        "              hitSlop={8}\n"
         "              accessibilityRole=\"button\"\n"
         "              accessibilityLabel={\n"
         "                mainActiveFilterCount > 0\n",
         "            <Pressable\n"
         "              onPress={() => {}}\n"
-        "              hitSlop={12}\n"
+        "              hitSlop={8}\n"
         "              accessibilityRole=\"button\"\n"
         "              accessibilityLabel={\n"
         "                mainActiveFilterCount > 0\n",
