@@ -38,7 +38,11 @@ import { useQuery } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { router } from "expo-router";
 import { create } from "zustand";
-import type { ProjectPriority, ProjectStatus } from "@multica/core/types";
+import type {
+  Project,
+  ProjectPriority,
+  ProjectStatus,
+} from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
@@ -54,9 +58,11 @@ import {
   useBatchPinToggle,
 } from "@/data/mutations/project-batch";
 import { useTranslation } from "@/lib/i18n/react";
+
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { ActionSheet } from "@/lib/action-sheet";
+import { catalogRead } from "@/lib/catalog-read";
 import {
   projectPriorityLabel,
   projectStatusLabel,
@@ -150,10 +156,13 @@ export function ProjectsScreen({
     projectListOptions(wsId),
   );
   const { data: members = [] } = useQuery(memberListOptions(wsId));
-  const { data: pins = [] } = useQuery({
-    ...pinListOptions(wsId, currentUserId),
-    enabled: !!wsId && !!currentUserId,
-  });
+  const pinsRead = catalogRead(
+    useQuery({
+      ...pinListOptions(wsId, currentUserId),
+      enabled: !!wsId && !!currentUserId,
+    }),
+  );
+  const pins = pinsRead.items;
 
   const sortField = useProjectMobileViewStore((s) => s.sortField);
   const sortDirection = useProjectMobileViewStore((s) => s.sortDirection);
@@ -275,6 +284,73 @@ export function ProjectsScreen({
 
   const batchPin = useBatchPinToggle();
   const batchDelete = useBatchDeleteProjects();
+
+  // Row-level writes (MYS-2197). Both go through the SAME mutations the batch
+  // toolbar uses: `batchPin` already wraps the shared pin pair, and the delete
+  // takes a one-element id list through `useBatchDeleteProjects` rather than
+  // standing up a second delete path — `useDeleteProject` is bound to a single
+  // id at hook-construction time, so a row menu could not share one instance
+  // across rows anyway, and the batch mutation already owns exactly this
+  // snapshot → filter → restore sequence for a set of ids. That keeps one
+  // confirmed question and one failure alert for both entry points, which is
+  // the split web has (`ProjectRowActions` and `ProjectBatchToolbar` mount the
+  // same `useDeleteProject`).
+  const toggleRowPin = useCallback(
+    (project: Project, pinned: boolean) => {
+      if (pinned) batchPin.unpin(project.id);
+      else batchPin.pin(project.id);
+    },
+    [batchPin],
+  );
+
+  const confirmRowDelete = useCallback(
+    (project: Project) => {
+      Alert.alert(
+        t("project.deleteTitle"),
+        t("project.deleteMessage"),
+        [
+          { text: t("common.cancel"), style: "cancel" },
+          {
+            text: t("projects.batchDelete"),
+            style: "destructive",
+            onPress: () =>
+              batchDelete.mutate([project.id], {
+                onError: (err) =>
+                  Alert.alert(
+                    t("project.deleteFailed"),
+                    err instanceof Error
+                      ? err.message
+                      : t("common.unknownError"),
+                  ),
+              }),
+          },
+        ],
+      );
+    },
+    [batchDelete, t],
+  );
+
+  // The row menu's props, shared by both views (MYS-2197). `pinsResolved` is
+  // the load-bearing half: the kebab refuses to name a pin direction while the
+  // pin list is still loading or failed, because `pinnedProjectIds` is empty in
+  // both of those states and reading that emptiness as "nothing is pinned"
+  // would offer 「置顶」 over a project the user already pinned.
+  const rowMenu = useMemo(
+    () => ({
+      pinnedIds: pinnedProjectIds,
+      pinsResolved: pinsRead.isResolved,
+      canDelete: isWorkspaceAdmin,
+      onTogglePin: toggleRowPin,
+      onDelete: confirmRowDelete,
+    }),
+    [
+      pinnedProjectIds,
+      pinsRead.isResolved,
+      isWorkspaceAdmin,
+      toggleRowPin,
+      confirmRowDelete,
+    ],
+  );
 
   const confirmBatchDelete = useCallback(() => {
     const ids = selectedProjects.map((p) => p.id);
@@ -485,6 +561,7 @@ export function ProjectsScreen({
           onResetColumns={resetTableColumns}
           columnMenuOpen={columnMenuOpen}
           onColumnMenuClose={() => setColumnMenuOpen(false)}
+          rowMenu={rowMenu}
           onOpenProject={(project) => {
             if (wsSlug) router.push(`/${wsSlug}/project/${project.id}`);
           }}
@@ -515,6 +592,7 @@ export function ProjectsScreen({
           renderItem={({ item }) => (
             <ProjectRow
               project={item}
+              menu={rowMenu}
               selectionMode={selectionMode}
               selected={selectedIds.has(item.id)}
               onLongPress={() => {

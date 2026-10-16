@@ -41,6 +41,10 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import type { Project } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ProjectIcon } from "@/components/ui/project-icon";
+import {
+  ProjectRowMenu,
+  type ProjectRowMenuProps,
+} from "@/components/project/project-row-menu";
 import { ProjectStatusIcon } from "@/components/ui/project-status-icon";
 import { ProjectPriorityIcon } from "@/components/ui/project-priority-icon";
 import { ProgressRing } from "@/components/ui/progress-ring";
@@ -70,10 +74,19 @@ import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/react";
 
-/** Pinned pane width. Fits a project icon plus a legible title at the phone's
- *  393dp width while leaving the majority of the row for the columns the user
- *  chose — the whole point of the view. */
-const PINNED_WIDTH = 148;
+/** Pinned pane width. Fits a project icon, a legible title and the row's "⋯"
+ *  (MYS-2197) at the phone's 393dp width while leaving the majority of the row
+ *  for the columns the user chose — the whole point of the view.
+ *
+ *  Widened from 148 in iteration 252, when the kebab arrived. The menu lives in
+ *  this pane rather than in the scrolling body on purpose: the body is 440dp
+ *  wide before any resize, so a trailing cell there is off-screen at rest and
+ *  the only way to reach a row's actions would be to pan the columns first. The
+ *  pinned pane is the one part of the row that is always on screen, which is
+ *  exactly why the row's subject lives here — its actions belong beside it. The
+ *  48dp the pane took from the columns region buys back the title width the
+ *  kebab would otherwise eat. */
+const PINNED_WIDTH = 196;
 
 /** Row / header heights. The row is two text lines (title, status) — the same
  *  information the card row leads with, at roughly half its height. */
@@ -98,6 +111,11 @@ interface Props {
   columnMenuOpen: boolean;
   onColumnMenuClose: () => void;
   onOpenProject: (project: Project) => void;
+  /** The row's "⋯" (MYS-2197, web `ProjectRowActions` parity). The menu is
+   *  rendered in the PINNED pane — see `PINNED_WIDTH` — so it stays reachable
+   *  whatever the column strip is scrolled to. Omitted by a caller with no
+   *  write path, and the trigger then does not render. */
+  rowMenu?: ProjectRowMenuProps;
   selectionMode: boolean;
   selectedIds: ReadonlySet<string>;
   onToggleSelected: (id: string) => void;
@@ -122,6 +140,7 @@ export function ProjectTableView({
   columnMenuOpen,
   onColumnMenuClose,
   onOpenProject,
+  rowMenu,
   selectionMode,
   selectedIds,
   onToggleSelected,
@@ -383,6 +402,12 @@ export function ProjectTableView({
               size={16}
               color={selected ? theme.brand : theme.mutedForeground}
             />
+          ) : rowMenu ? (
+            /* The row's "⋯" (MYS-2197). In selection mode it gives way to the
+               checkbox — one control per row, and picking is what the mode is
+               for (the rule the card list and the other eight row menus
+               follow). */
+            <ProjectRowMenu project={item} {...rowMenu} />
           ) : null}
         </Pressable>
       );

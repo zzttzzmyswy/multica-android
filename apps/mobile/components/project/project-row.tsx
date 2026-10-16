@@ -15,6 +15,8 @@ import { Text } from "@/components/ui/text";
 import { ProjectIcon } from "@/components/ui/project-icon";
 import { ProjectStatusIcon } from "@/components/ui/project-status-icon";
 import { ProjectPriorityIcon } from "@/components/ui/project-priority-icon";
+import { ProjectRowMenu } from "@/components/project/project-row-menu";
+import type { ProjectRowMenuProps } from "@/components/project/project-row-menu";
 import {
   projectPriorityLabel,
   projectStatusLabel,
@@ -33,6 +35,10 @@ interface Props {
   selectionMode?: boolean;
   selected?: boolean;
   onLongPress?: () => void;
+  /** The row's "⋯" (MYS-2197, web `ProjectRowActions` parity). Omitted by a
+   *  caller that has no write path to give it — the trigger then does not
+   *  render at all, rather than opening an empty sheet. */
+  menu?: ProjectRowMenuProps;
 }
 
 export function ProjectRow({
@@ -41,6 +47,7 @@ export function ProjectRow({
   onLongPress,
   selectionMode = false,
   selected = false,
+  menu,
 }: Props) {
   const timeAgo = useTimeAgo();
   const { colorScheme } = useColorScheme();
@@ -101,6 +108,18 @@ export function ProjectRow({
             {timeAgo(project.updated_at)}
           </Text>
         </View>
+        {/* Row actions (MYS-2197). The trigger claims the touch responder, so
+            opening the sheet never falls through to the row's own onPress —
+            tapping elsewhere on the row still navigates. In selection mode the
+            kebab gives way to the leading checkbox: a row carries one control
+            for picking, and picking is what the mode is for (the rule the
+            skills, autopilots and labels lists follow). Web renders the menu in
+            both of its views; mobile does too, via this prop.
+
+            The right column above stacks count over recency, so the kebab sits
+            beside that column rather than inside it — it is a control, not a
+            third line of secondary text. */}
+        {menu && !selectionMode ? <ProjectRowMenu project={project} {...menu} /> : null}
       </View>
     </Pressable>
   );
