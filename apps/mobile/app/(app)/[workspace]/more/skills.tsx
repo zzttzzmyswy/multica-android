@@ -48,6 +48,7 @@ import { MultiSelectSheet } from "@/components/agent/multi-select-sheet";
 import { AddToAgentsSheet } from "@/components/skill/add-to-agents-sheet";
 import { SkillBatchBar } from "@/components/skill/skill-batch-bar";
 import { SkillRowMenu } from "@/components/skill/skill-row-menu";
+import { SupportingDataWarning } from "@/components/skill/supporting-data-warning";
 import { skillListOptions } from "@/data/queries/skills";
 import { useDeleteSkill, useRefreshSkill } from "@/data/mutations/skills";
 import { agentListOptions } from "@/data/queries/agents";
@@ -82,6 +83,11 @@ import { ActionSheet } from "@/lib/action-sheet";
 import { catalogRead, retryCatalogs } from "@/lib/catalog-read";
 import { aggregateCatalogState } from "@/lib/catalog-state";
 import type { CatalogState } from "@/lib/catalog-state";
+import {
+  skillLockCell,
+  supportingDataWarningVisible,
+  usedByCell,
+} from "@/lib/skill-supporting-data";
 
 const SORT_LABEL_KEY: Record<SkillSortField, string> = {
   name: "skills.list.sortField.name",
@@ -150,8 +156,28 @@ export default function SkillsPage() {
   const skills = useMemo(() => data ?? [], [data]);
 
   const allRows = useMemo(
-    () => buildSkillRows({ skills, agents, members, userId, role }),
-    [skills, agents, members, userId, role],
+    () =>
+      buildSkillRows({
+        skills,
+        agents,
+        members,
+        userId,
+        role,
+        // The row's cells may only state an absence once the directory they
+        // resolve through answered (MYS-2192) — `error` and `loading` alike
+        // leave a zero unread, and the cells say so instead of 「未使用」.
+        agentsResolved: agentsRead.isResolved,
+        membersResolved: membersRead.isResolved,
+      }),
+    [
+      skills,
+      agents,
+      members,
+      userId,
+      role,
+      agentsRead.isResolved,
+      membersRead.isResolved,
+    ],
   );
 
   const rows = useMemo(() => {
@@ -320,6 +346,19 @@ export default function SkillsPage() {
     <>
       <Stack.Screen options={{ headerRight }} />
       <View className="flex-1 bg-background">
+        {/* Supporting-data degradation (MYS-2192). Above every branch below —
+            loading, error, empty, list — because web puts it above them too
+            (`skills-page.tsx:802`): the strip explains cells that are rendered
+            in the list branch, and suppressing it in the others would make the
+            one failure that matters the one that goes unmentioned. */}
+        {supportingDataWarningVisible({
+          agents: agentsRead.state,
+          members: membersRead.state,
+        }) ? (
+          <SupportingDataWarning
+            message={t("skills.list.supportingDataWarning")}
+          />
+        ) : null}
         {isLoading ? (
           <View className="flex-1 items-center justify-center">
             <ActivityIndicator />
@@ -792,7 +831,8 @@ function SkillRowItem({
   const muted = THEME[colorScheme].mutedForeground;
   const theme = THEME[colorScheme];
   const timeAgo = useTimeAgo();
-  const { skill, agents, creator, canEdit } = row;
+  const { skill, agents, creator, canEdit, agentsResolved, membersResolved } = row;
+  const lockVerdict = skillLockCell(canEdit, membersResolved);
   const origin = ORIGIN_LABEL_KEY[readOrigin(skill).type];
 
   return (
@@ -834,17 +874,25 @@ function SkillRowItem({
             </View>
             {/* Web shows the lock on rows the viewer cannot edit and nothing on
                 the ones they can; the pencil is this list's own "you may edit
-                this" affordance, so the two read as a pair. */}
-            {canEdit ? (
+                this" affordance, so the two read as a pair.
+
+                MYS-2192: the lock is a CONCLUSION, and under a members read
+                that has not answered it is an unsupported one — `canEditSkill`
+                falls back to `created_by === userId`, so a failed read locks
+                every skill the viewer did not create. Rather than restate that
+                as fact, the row draws neither glyph (`skillLockCell`), and the
+                banner above the list names the failure. Drawing the pencil
+                instead would advertise an edit the server may reject. */}
+            {lockVerdict === "pencil" ? (
               <Ionicons name="pencil" size={11} color={muted} />
-            ) : (
+            ) : lockVerdict === "lock" ? (
               <Ionicons
                 name="lock-closed"
                 size={11}
                 color={muted}
                 accessibilityLabel={t("skills.list.lockTooltip")}
               />
-            )}
+            ) : null}
           </View>
           {skill.description ? (
             <Text
@@ -855,7 +903,7 @@ function SkillRowItem({
             </Text>
           ) : null}
           <View className="flex-row items-center gap-2">
-            <UsedBy agents={agents} />
+            <UsedBy agents={agents} resolved={agentsResolved} />
             {creator ? (
               <Text className="text-micro text-muted-foreground/60" numberOfLines={1}>
                 {t("skills.list.addedBy", { name: creator.name })}
@@ -894,11 +942,31 @@ function SkillRowItem({
  * Web's Used by cell: the sole agent's avatar + name, an overlapping stack of
  * up to three plus `+N`, or an explicit "unused" — never a bare blank, which
  * would be indistinguishable from a skill whose agents have not loaded.
+ *
+ * MYS-2192 widened that last clause from a layout remark into a rule. Web's
+ * cell renders 「unused」 for any zero-length list, and on the desktop that is
+ * legible because a page-level warning strip sits above it whenever the agents
+ * read failed (`skills-page.tsx:778`). A phone has the strip too now, but the
+ * row must stop making the claim on its own: `resolved` is the agents
+ * directory's settlement, and an unsettled directory turns the would-be
+ * absence into `usedByUnknown` — the same "value not known" wording the app
+ * already uses for the filter's usage facet, rather than a count nobody
+ * measured.
  */
-function UsedBy({ agents }: { agents: Agent[] }) {
+function UsedBy({ agents, resolved }: { agents: Agent[]; resolved: boolean }) {
   const { t } = useTranslation();
 
-  if (agents.length === 0) {
+  const verdict = usedByCell(agents.length, resolved);
+
+  if (verdict === "unknown") {
+    return (
+      <Text className="text-micro text-muted-foreground/60">
+        {t("skills.list.usedByUnknown")}
+      </Text>
+    );
+  }
+
+  if (verdict === "unused") {
     return (
       <Text className="text-micro text-muted-foreground/60">
         {t("skills.list.unused")}

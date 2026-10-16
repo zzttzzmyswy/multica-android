@@ -80,12 +80,26 @@ export interface SkillRow {
   creator: MemberWithUser | null;
   originType: SkillOriginType;
   canEdit: boolean;
+  /** The agents directory settled, so `agents.length === 0` is a measurement
+   *  rather than an unanswered request. A row may only say 「未使用」 once this
+   *  is true (see `lib/skill-supporting-data.ts`). */
+  agentsResolved: boolean;
+  /** Same for the members directory, which is what `canEdit`'s negative half
+   *  rests on: a null `role` collapses `canEditSkill` to creator-only. */
+  membersResolved: boolean;
 }
 
 /**
  * Assemble the rows the list, the toolbar's counts and the filter sheet all
  * read from. Same inputs web passes (`skills-page.tsx:616-655`), minus the
  * runtimes map web uses only to render a runtime-local skill's CLI name.
+ *
+ * `agentsResolved` / `membersResolved` (MYS-2192) are the *settlement* of the
+ * two supporting directories, and they ride on the row because the row's cells
+ * are where a failed read used to be restated as a fact: 「未使用」 off an
+ * unanswered agents read, a read-only lock off an unanswered members read. Web
+ * carries the same two reads and states the failure once, in a page-level
+ * banner; this app states it in the banner AND stops the cells asserting.
  */
 export function buildSkillRows({
   skills,
@@ -93,12 +107,16 @@ export function buildSkillRows({
   members,
   userId,
   role,
+  agentsResolved = true,
+  membersResolved = true,
 }: {
   skills: SkillSummary[];
   agents: Agent[];
   members: MemberWithUser[];
   userId: string | null | undefined;
   role: MemberRole | null | undefined;
+  agentsResolved?: boolean;
+  membersResolved?: boolean;
 }): SkillRow[] {
   const membersById = new Map<string, MemberWithUser>();
   for (const member of members) membersById.set(member.user_id, member);
@@ -115,6 +133,8 @@ export function buildSkillRows({
       : null,
     originType: readOrigin(skill).type,
     canEdit: canEditSkill(skill, { userId, role }),
+    agentsResolved,
+    membersResolved,
   }));
 }
 

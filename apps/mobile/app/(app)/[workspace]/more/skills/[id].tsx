@@ -93,6 +93,12 @@ import { THEME } from "@/lib/theme";
 import { Markdown } from "@/lib/markdown";
 import { catalogRead } from "@/lib/catalog-read";
 import { CatalogStatus } from "@/components/catalog/catalog-status";
+import { SupportingDataWarning } from "@/components/skill/supporting-data-warning";
+import {
+  supportingDataWarningVisible,
+  usedByCount,
+  usedBySection,
+} from "@/lib/skill-supporting-data";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 function isMarkdownPath(path: string): boolean {
@@ -560,6 +566,22 @@ export default function SkillDetailPage() {
 
   const originInfo = origin!;
 
+  // Supporting-data degradation (MYS-2192). Web's gate minus its runtimes
+  // disjunct: this screen reads no runtime directory (the origin badge is a
+  // static label off the skill record), so gating on one would show a banner
+  // for a read that never happens. The copy is the detail page's own — web
+  // splits `detail.supporting_data_warning` from the list's by adding "until
+  // the next refresh", which is what tells the user here whether waiting helps.
+  const supportingDown = supportingDataWarningVisible({
+    agents: agentsRead.state,
+    members: membersRead.state,
+  });
+  const usedByVerdict = usedBySection(
+    usedByAgents.length,
+    agentsRead.isResolved,
+  );
+  const usedByTotal = usedByCount(usedByAgents.length, agentsRead.isResolved);
+
   return (
     <>
       {/* Android runs edge-to-edge: the window never resizes for the IME, so
@@ -576,6 +598,17 @@ export default function SkillDetailPage() {
         contentContainerStyle={{ paddingBottom: keyboardHeight + 40 }}
         keyboardShouldPersistTaps="handled"
       >
+        {/* Above the identity card, which is where web mounts the same strip
+            (`skill-detail-page.tsx:1236`, between the page header and
+            `SkillIdentity`). It is the only channel that names the failure on a
+            phone: the lock's explanation lives in an `accessibilityLabel` a
+            sighted user never reads, and this page's "not assigned yet" panel
+            is otherwise rendered from a read that may not have answered. */}
+        {supportingDown ? (
+          <SupportingDataWarning
+            message={t("skills.detail.supportingDataWarning")}
+          />
+        ) : null}
         {/* Identity card */}
         <View className="px-4 pt-4 gap-1">
           <View className="flex-row items-start gap-3">
@@ -620,11 +653,19 @@ export default function SkillDetailPage() {
                     color={theme.mutedForeground}
                   />
                   <Text className="text-caption text-muted-foreground">
-                    {usedByAgents.length === 1
-                      ? t("skills.usedBy.title", { count: 1 })
-                      : t("skills.usedBy.titleOther", {
-                          count: usedByAgents.length,
-                        })}
+                    {usedByTotal === null
+                      ? // MYS-2192: the count is a measurement, so an
+                        // unanswered agents read shows the app's "—"
+                        // placeholder rather than "0" — "0" and "not known"
+                        // must not read alike (the rule
+                        // `components/issue/agents-working-chip.tsx:66` and
+                        // `run-timeline-panel.tsx` already follow).
+                        "—"
+                      : usedByTotal === 1
+                        ? t("skills.usedBy.title", { count: 1 })
+                        : t("skills.usedBy.titleOther", {
+                            count: usedByTotal,
+                          })}
                   </Text>
                 </View>
               </View>
@@ -749,15 +790,25 @@ export default function SkillDetailPage() {
 
         {/* Used by — agents with this skill bound (web skill-detail-page
             Overview "Used by" section). Header count + "Add to agent"
-            affordance; rows show avatar, name, description. */}
+            affordance; rows show avatar, name, description.
+
+            MYS-2192: `usedBySection` decides the body, because the empty panel
+            below states an absence. `usedByAgents.length === 0` over a failed
+            agents read rendered 「还未分配给任何智能体。打开某个智能体的 Skills
+            标签页进行分配。」 — the same false-absence sentence the picker sweep
+            (MYS-1892/1907) removed elsewhere, on a page that never joined it.
+            `status` renders the live read state instead, the treatment this
+            page already gives the labels row above. */}
         <View className="mt-6 px-4 gap-2">
           <View className="flex-row items-center justify-between gap-3">
             <SectionTitle
               icon="people-outline"
               title={
-                usedByAgents.length === 1
-                  ? t("skills.usedBy.title", { count: 1 })
-                  : t("skills.usedBy.titleOther", { count: usedByAgents.length })
+                usedByTotal === null
+                  ? t("skills.usedBy.titlePlain")
+                  : usedByTotal === 1
+                    ? t("skills.usedBy.title", { count: 1 })
+                    : t("skills.usedBy.titleOther", { count: usedByTotal })
               }
             />
             <Pressable
@@ -775,7 +826,13 @@ export default function SkillDetailPage() {
               </Text>
             </Pressable>
           </View>
-          {usedByAgents.length === 0 ? (
+          {usedByVerdict === "status" ? (
+            <CatalogStatus
+              state={agentsRead.state}
+              onRetry={agentsRead.retry}
+              className="items-start px-0 py-0"
+            />
+          ) : usedByVerdict === "empty" ? (
             <View className="rounded-lg border border-dashed border-border px-3 py-6 items-center">
               <Text className="text-caption text-muted-foreground/70 italic text-center">
                 {t("skills.usedBy.empty")}
