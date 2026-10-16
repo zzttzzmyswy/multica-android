@@ -40,6 +40,10 @@ function row(
     creator: null,
     originType: readOrigin({ config } as unknown as SkillSummary).type,
     canEdit,
+    // Settled supporting reads — this suite is about the action gates, not the
+    // MYS-2192 degradation branches.
+    agentsResolved: true,
+    membersResolved: true,
   };
 }
 

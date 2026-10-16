@@ -56,6 +56,11 @@ function row(overrides: Partial<SkillRow> = {}): SkillRow {
     creator: null,
     originType: "manual",
     canEdit: true,
+    // Both supporting directories answered by default: a fixture that leaves
+    // them unsettled would silently exercise the MYS-2192 "unknown" branches
+    // in every unrelated case.
+    agentsResolved: true,
+    membersResolved: true,
     ...overrides,
   };
 }
