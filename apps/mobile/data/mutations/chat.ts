@@ -26,6 +26,7 @@ import {
   type PendingSendRestore,
 } from "@/lib/chat-draft-restore";
 import { EMPTY_CHAT_PENDING_TASK } from "@/data/schemas";
+import { setChatSessionArchivedPatch } from "@/lib/chat-session-archive";
 import { WRITE_FAILURE_TITLE_KEY } from "@/lib/write-failure";
 import {
   QUICK_ACTIONS_PENDING_TIMEOUT_MS,
@@ -208,14 +209,13 @@ export function useSetChatSessionArchived() {
       const key = chatKeys.sessions(wsId);
       await qc.cancelQueries({ queryKey: key });
       const prev = qc.getQueryData<ChatSession[]>(key);
-      // Flip status locally so the sheet row shows archived immediately;
-      // the settle refetch reconciles flags the server derives.
-      qc.setQueryData<ChatSession[]>(key, (old) =>
-        old?.map((s) =>
-          s.id === id
-            ? { ...s, status: archived ? "archived" : "active" }
-            : s,
-        ),
+      // Flip status locally so the sheet row shows archived immediately (and
+      // clears its badge) — the settle refetch reconciles flags the server
+      // derives. See lib/chat-session-archive.ts for why unread is zeroed and
+      // for the two points where mobile deliberately differs from web.
+      qc.setQueryData<ChatSession[]>(
+        key,
+        setChatSessionArchivedPatch(prev, id, archived),
       );
       return { prev, key };
     },

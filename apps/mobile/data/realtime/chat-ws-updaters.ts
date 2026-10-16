@@ -45,23 +45,77 @@ import { planCancelFinalized } from "@/lib/chat-draft-restore";
 // =====================================================
 
 /**
+ * Payload of a `chat:session_updated` event (MYS-2183).
+ *
+ * The server's `protocol.ChatSessionUpdatedPayload` declares every field
+ * optional-but-meaningful, and the three non-title ones are each set by
+ * exactly ONE write path (`server/internal/handler/chat.go`):
+ *
+ *   - `pinned`     — pin/unpin only
+ *   - `status`     — archive/unarchive only ("active" | "archived")
+ *   - `project_id` — project-context update only, and it is a `**string`
+ *                    server-side precisely so an explicit JSON `null` means
+ *                    "detach the project" while an absent key means "untouched"
+ *   - `updated_at` — always sent
+ *
+ * So absence is load-bearing: a sparse payload (rename emitted `title` +
+ * `updated_at` alone) must leave the other fields as cached. Kept mobile-owned
+ * rather than added to `packages/core/types/events.ts`, whose map still types
+ * this event as `unknown` by design ("no formal payload interfaces yet —
+ * clients consume as opaque triggers"); web narrows the same shape inline in
+ * `packages/core/realtime/use-realtime-sync.ts`.
+ */
+export interface ChatSessionUpdatedPayload {
+  chat_session_id: string;
+  title?: string;
+  project_id?: string | null;
+  pinned?: boolean;
+  status?: "active" | "archived";
+  updated_at?: string;
+}
+
+/**
  * Patch one session row from a `chat:session_updated` event and re-sort the
  * list. The event carries whatever changed (title for renames, `pinned` for
- * pin/unpin, `updated_at` for activity) — fields absent from the payload are
- * left untouched so older servers that emit a sparse shape can't clobber the
- * client's view. Sorting after the patch keeps a freshly-pinned session at the
- * top and drops an unpinned one back into activity order, matching web's
- * `sortChatSessions` behaviour on the same event.
+ * pin/unpin, `status` for archive/unarchive, `project_id` for a context
+ * switch) — fields absent from the payload are left untouched so a sparse
+ * payload can't clobber the client's view.
+ *
+ * Why ALL of those fields and not just the three this used to apply: web's
+ * `applyChatSessionUpdatedToCache` (packages/core/realtime/use-realtime-sync.ts)
+ * applies the same set, and `chatSessionsOptions` is `staleTime: Infinity` on
+ * both platforms — nothing refetches on its own, so a field this handler drops
+ * stays wrong for the life of the connection. The missing `status` was the
+ * visible one: `splitChatSessions` buckets history vs archived on `status`
+ * locally, so an archive performed on another device/web left the row sitting
+ * in the phone's history list, badge lit.
+ *
+ * Archiving must also zero the row's unread here. The server emits only
+ * `status`/`updated_at`, and `ListAllChatSessionsByCreator` forces
+ * `unread_count = 0` for archived rows (server/pkg/db/queries/chat.sql:99-104,
+ * "single source of truth for all unread surfaces") — so a surviving count is
+ * uncleanable (SendChatMessage refuses archived sessions) and keeps the row's
+ * dot lit plus its share of the Chat tab badge
+ * (`countUnreadChatMessages` sums `unread_count` without filtering archived).
+ * Same MUL-4360 stuck-badge bug, one surface over. Unarchive does NOT
+ * fabricate a count — the true state arrives with the next server refetch
+ * (last_read_at is untouched), so `active` leaves the unread fields as cached.
+ *
+ * The sort, unlike web's, is UNCONDITIONAL and that is deliberate, not drift.
+ * Mobile's `sortChatSessions` ranks by `last_message.created_at` with
+ * `updated_at` as the fallback, which is exactly the server's own
+ * `ORDER BY … COALESCE(lm.created_at, cs.updated_at) DESC` — so re-sorting
+ * after every patch converges on the row order a refetch would produce. Web
+ * skips the sort on a rename to avoid the row jumping under the pointer; on a
+ * phone the list is not under a pointer while the event lands (the sheet is
+ * either open over a *different* device's change or not mounted), and matching
+ * server order is the stronger guarantee. Pinned sessions still hoist and
+ * archived ones still leave the history bucket either way.
  */
 export function patchSessionListAfterUpdate(
   qc: QueryClient,
   wsId: string | null,
-  payload: {
-    chat_session_id: string;
-    title?: string;
-    updated_at?: string;
-    pinned?: boolean;
-  },
+  payload: ChatSessionUpdatedPayload,
 ) {
   qc.setQueryData<ChatSession[]>(chatKeys.sessions(wsId), (old) => {
     if (!old) return old;
@@ -70,11 +124,21 @@ export function patchSessionListAfterUpdate(
         ? {
             ...s,
             ...(payload.title !== undefined ? { title: payload.title } : {}),
-            ...(payload.updated_at !== undefined
-              ? { updated_at: payload.updated_at }
+            // Presence, NOT value: the server signals "detach the project" with
+            // an explicit null, so `!== undefined` would read that null as
+            // "field absent" and silently keep the old binding.
+            ...("project_id" in payload
+              ? { project_id: payload.project_id }
               : {}),
             ...(payload.pinned !== undefined
               ? { pinned: payload.pinned }
+              : {}),
+            ...(payload.status !== undefined ? { status: payload.status } : {}),
+            ...(payload.updated_at !== undefined
+              ? { updated_at: payload.updated_at }
+              : {}),
+            ...(payload.status === "archived"
+              ? { unread_count: 0, has_unread: false }
               : {}),
           }
         : s,

@@ -18,6 +18,7 @@ import type { WSClient } from "@/data/realtime/ws-client";
 import {
   dropSessionFromList,
   patchSessionListAfterUpdate,
+  type ChatSessionUpdatedPayload,
 } from "./chat-ws-updaters";
 
 /** The slice of the socket this module needs — keeps the test free of the
@@ -102,15 +103,14 @@ export function planChatSessionsSubscriptions(
     // chat:session_read clears the unread flag (could be triggered from
     // web/desktop on the same account).
     ws.on("chat:session_read", invalidateSessions),
-    // chat:session_updated has no formal payload type yet — server
-    // emits {chat_session_id, title?, updated_at?, pinned?}. Narrow inline.
+    // chat:session_updated has no entry in core's WSEventPayloadMap (the event
+    // is typed `unknown` there by design), so the payload is narrowed to the
+    // full server shape — title / project_id / pinned / status / updated_at.
+    // The previous narrow here listed only three of them, which is how the
+    // archive branch went missing: the handler could not have consumed a field
+    // its own type said did not exist. See ChatSessionUpdatedPayload.
     ws.on("chat:session_updated", (p) => {
-      const payload = p as {
-        chat_session_id: string;
-        title?: string;
-        updated_at?: string;
-        pinned?: boolean;
-      };
+      const payload = p as ChatSessionUpdatedPayload;
       patchSessionListAfterUpdate(qc, wsId, payload);
     }),
     ws.on("chat:session_deleted", (payload) => {
