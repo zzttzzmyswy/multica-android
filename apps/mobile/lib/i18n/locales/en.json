@@ -3719,6 +3719,7 @@
   "update.error.installFailed": "Install failed. Check “install unknown apps” permission and retry.",
   "update.error.network": "Couldn't reach the update server. Try again later.",
   "update.error.noAsset": "No APK for this device architecture yet.",
+  "update.error.unreadableTag": "Couldn't read the published version — the update check is inconclusive. Open GitHub Releases to compare manually.",
   "update.hasNew": "New version",
   "update.installUnknownSourcesHint": "If the installer is blocked, allow “unknown apps” from this app.",
   "update.openReleases": "Open GitHub Releases",

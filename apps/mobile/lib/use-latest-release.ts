@@ -15,9 +15,10 @@ import { useEffect } from "react";
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import Constants from "expo-constants";
 import { useUpdateStore } from "@/data/update-store";
+import { shouldShowUpdateBadge } from "@/lib/about-update-state";
 import {
   GITHUB_RELEASES_API,
-  isNewer,
+  checkForUpdate,
   parseLatestRelease,
 } from "@/lib/release-check";
 
@@ -64,7 +65,11 @@ export function useLatestRelease(enabled: boolean) {
 
   const currentVersion =
     (Constants.expoConfig?.version as string | undefined) ?? DEFAULT_VERSION;
-  const hasUpdate = query.data ? isNewer(query.data.tag_name, currentVersion) : false;
+  // Only a readable, strictly-newer tag lights the badge — see
+  // `shouldShowUpdateBadge` for why "unreadable" must stay dark.
+  const hasUpdate = shouldShowUpdateBadge(
+    query.data ? checkForUpdate(query.data.tag_name, currentVersion) : null,
+  );
 
   const setHasUpdate = useUpdateStore((s) => s.setHasUpdate);
   useEffect(() => {

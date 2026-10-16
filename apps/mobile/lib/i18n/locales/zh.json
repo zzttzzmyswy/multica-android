@@ -3719,6 +3719,7 @@
   "update.error.installFailed": "安装失败，请检查\"安装未知应用\"权限后重试。",
   "update.error.network": "无法连接更新服务器，请稍后重试。",
   "update.error.noAsset": "当前设备架构暂未发布安装包。",
+  "update.error.unreadableTag": "无法识别已发布的版本号，本次更新检查没有结论。可打开 GitHub Releases 手动比对。",
   "update.hasNew": "有新版本",
   "update.installUnknownSourcesHint": "若安装被系统阻止，请允许此应用\"安装未知应用\"。",
   "update.openReleases": "从 GitHub Releases 下载",

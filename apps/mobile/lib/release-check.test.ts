@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   archToAbiCandidates,
+  checkForUpdate,
+  displayVersion,
   filenameForUpdate,
   isNewer,
   matchAssetForAbi,
@@ -105,6 +107,62 @@ describe("isNewer", () => {
   it("falls back to false (safe direction) on malformed versions", () => {
     expect(isNewer("not-a-version", "0.1.0")).toBe(false);
     expect(isNewer("v0.2.0", "")).toBe(false);
+  });
+
+  it("sees a namespaced mobile-v tag as newer", () => {
+    expect(isNewer("mobile-v0.6.83", "0.6.43")).toBe(true);
+    expect(isNewer("mobile-v0.6.43", "0.6.43")).toBe(false);
+  });
+});
+
+/**
+ * The 2026-10-15 field report, reduced to its inputs: an install on v0.6.43
+ * against a published `mobile-v0.6.83` tag rendered "当前已是最新版本" while the
+ * row directly below it named a different version. `false` from `isNewer`
+ * could not tell the two apart, so the About page had no way to avoid making
+ * the claim. These are the assertions that would have caught it.
+ */
+describe("checkForUpdate", () => {
+  it("reports a namespaced tag newer than the installed version", () => {
+    expect(checkForUpdate("mobile-v0.6.83", "0.6.43")).toBe("update-available");
+  });
+
+  it("reports up-to-date only for a genuine tie or an older tag", () => {
+    expect(checkForUpdate("mobile-v0.6.43", "0.6.43")).toBe("up-to-date");
+    expect(checkForUpdate("mobile-v0.6.42", "0.6.43")).toBe("up-to-date");
+    expect(checkForUpdate("v0.6.43", "0.6.43")).toBe("up-to-date");
+  });
+
+  it("reports an unreadable tag as unreadable, never as up-to-date", () => {
+    expect(checkForUpdate("not-a-version", "0.6.43")).toBe("unreadable");
+    expect(checkForUpdate("mobile-latest", "0.6.43")).toBe("unreadable");
+    expect(checkForUpdate("mobile-v0.6.83", "")).toBe("unreadable");
+  });
+
+  it("covers the bare-v era and the namespaced era across the changeover", () => {
+    expect(checkForUpdate("v0.6.58", "0.6.57")).toBe("update-available");
+    expect(checkForUpdate("mobile-v0.6.59", "0.6.58")).toBe("update-available");
+    expect(checkForUpdate("mobile-v0.6.83", "0.6.83")).toBe("up-to-date");
+  });
+});
+
+describe("displayVersion", () => {
+  /**
+   * The second half of the same report: the About page rendered the literal
+   * string `vmobile-v0.6.83`, because `replace(/^v/i, "")` cannot strip a `v`
+   * that is not at the start, and the locale template already spells its own
+   * `v` before `{{version}}`.
+   */
+  it("strips the namespace and the v marker down to the bare version", () => {
+    expect(displayVersion("mobile-v0.6.83")).toBe("0.6.83");
+    expect(displayVersion("v0.1.0")).toBe("0.1.0");
+    expect(displayVersion("0.1.0")).toBe("0.1.0");
+    expect(displayVersion("android-release-v1.2.3")).toBe("1.2.3");
+  });
+
+  it("shows an unreadable tag verbatim rather than as an empty string", () => {
+    expect(displayVersion("mobile-latest")).toBe("mobile-latest");
+    expect(displayVersion("  weird  ")).toBe("weird");
   });
 });
 
