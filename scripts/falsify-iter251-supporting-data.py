@@ -75,18 +75,14 @@ LOCK_CELL = "  const lockVerdict = skillLockCell(canEdit, membersResolved);"
 DETAIL_GATE = """        {supportingDown ? (
           <SupportingDataWarning
             message={t("skills.detail.supportingDataWarning")}
-            className="mb-3 border-b-0 border-x-0 border-t-0 px-4"
           />
         ) : null}"""
 
-DETAIL_GATE_PREFIXED = """        {supportingDataWarningVisible({
+DETAIL_GATE_REPLACEMENT = """        {supportingDataWarningVisible({
           agents: agentsRead.state,
           members: membersRead.state,
         }) ? (
-          <SupportingDataWarning
-            message={t("skills.detail.supportingDataWarning")}
-            className="mb-3 border-b-0 border-x-0 border-t-0 px-4"
-          />
+          <View />
         ) : null}"""
 
 
@@ -128,12 +124,7 @@ MUTATIONS: list[tuple[str, Path, str, str]] = [
         "4. only the list page is wired — the detail page keeps the pre-fix gate",
         DETAIL,
         DETAIL_GATE,
-        """        {supportingDataWarningVisible({
-          agents: agentsRead.state,
-          members: membersRead.state,
-        }) ? (
-          <View />
-        ) : null}""",
+        DETAIL_GATE_REPLACEMENT,
     ),
     (
         "5. the list banner is worded with the detail page's key",
