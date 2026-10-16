@@ -48,6 +48,7 @@ describe("about i18n", () => {
     "update.openSettings": "打开设置",
     "update.error.network": "无法连接更新服务器，请稍后重试。",
     "update.error.noAsset": "当前设备架构暂未发布安装包。",
+    "update.error.unreadableTag": "无法识别已发布的版本号，本次更新检查没有结论。可打开 GitHub Releases 手动比对。",
     "update.error.downloadFailed": "下载失败：{{message}}",
     "update.error.installFailed": "安装失败，请检查\"安装未知应用\"权限后重试。",
   };
@@ -71,6 +72,24 @@ describe("about i18n", () => {
     expect(mod.translate("about.updateAvailable", { version: "0.2.0" })).toBe(
       "发现新版本 v0.2.0。",
     );
+    mod.setLocale("en");
+  });
+
+  /**
+   * Both templates spell their own `v` before `{{version}}`, so the caller must
+   * hand them a BARE version. Passing a raw tag doubled it: the About page
+   * rendered `vmobile-v0.6.83` because its `replace(/^v/i, "")` could not strip
+   * a prefix that starts with `mobile-`. The caller now derives the value from
+   * `displayVersion`; this pins the contract from this side.
+   */
+  it("renders one v, not the tag's namespace, given a bare version", () => {
+    expect(mod.translate("about.latestVersion", { version: "0.6.83" })).toBe(
+      "Latest: v0.6.83",
+    );
+    mod.setLocale("zh");
+    const zh = mod.translate("about.latestVersion", { version: "0.6.83" });
+    expect(zh).toBe("最新版本：v0.6.83");
+    expect(zh).not.toContain("mobile-");
     mod.setLocale("en");
   });
 });

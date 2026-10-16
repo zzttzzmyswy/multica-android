@@ -7,7 +7,7 @@
  * fetch, download and install live elsewhere (`lib/use-latest-release.ts`,
  * `lib/install-update.ts`).
  */
-import { compareVersions } from "./app-version";
+import { compareVersions, orderVersions, parseVersionSegments } from "./app-version";
 
 export interface ReleaseAsset {
   name: string;
@@ -91,9 +91,54 @@ export function matchAssetForAbi(
  * `true` when the release tag is strictly newer than the installed app
  * version. Malformed inputs resolve to `false` — the update flow's safe
  * direction (never block on a version we can't compare).
+ *
+ * Prefer `checkForUpdate` anywhere the answer reaches the user: `false` here
+ * cannot distinguish "you are current" from "this tag is unreadable", and the
+ * About page spent ~40 releases rendering the second as the first.
  */
 export function isNewer(tagName: string, currentVersion: string): boolean {
   return compareVersions(tagName, currentVersion) > 0;
+}
+
+/** The three answers a release check can give. */
+export type UpdateCheck = "update-available" | "up-to-date" | "unreadable";
+
+/**
+ * Compare the published tag against the installed version, keeping the
+ * unreadable case separate from the up-to-date one.
+ *
+ * The distinction is the whole point. `mobile-v0.6.83` shipped on 2026-10-11
+ * and the parser of the day returned `null` for it; that `null` became a `0`,
+ * that `0` became `false`, and `false` rendered "当前已是最新版本" — a
+ * confident claim assembled entirely out of a parse failure. A caller that
+ * gets `"unreadable"` can say the check failed instead of borrowing the
+ * authority of a comparison that never happened.
+ */
+export function checkForUpdate(
+  tagName: string,
+  currentVersion: string,
+): UpdateCheck {
+  const ordering = orderVersions(tagName, currentVersion);
+  if (ordering === null) return "unreadable";
+  return ordering > 0 ? "update-available" : "up-to-date";
+}
+
+/**
+ * The bare version to show a user for a release tag — `mobile-v0.6.83` →
+ * `0.6.83`, `v0.1.0` → `0.1.0`.
+ *
+ * The previous display path was `latestTag.replace(/^v/i, "")`, which is a
+ * no-op on a namespaced tag: the `v` is not at the start. Combined with the
+ * zh/en templates (which already spell a literal `v` before `{{version}}`)
+ * that rendered the two-prefix string `vmobile-v0.6.83`. Deriving the display
+ * value from the same parse the comparison uses keeps them from disagreeing.
+ *
+ * Falls back to the trimmed tag when it carries no readable version, so an
+ * unreadable tag is shown verbatim rather than as an empty string.
+ */
+export function displayVersion(tagName: string): string {
+  const segments = parseVersionSegments(tagName);
+  return segments ? segments.join(".") : tagName.trim();
 }
 
 /**

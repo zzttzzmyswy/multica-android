@@ -197,6 +197,35 @@ That is enforced: an unreadable declaration **fails** the run rather than
 silently skipping the channel check (a guard that reports OK because it never
 looked is the defect this whole family belongs to).
 
+### The release tag namespace is part of the update contract
+
+`verify-apk.mjs` checks the artifact; nothing checked the *tag*, and the tag is
+what the in-app updater compares against. Mobile's release cadence is decoupled
+from main's (`apps/mobile/CLAUDE.md`), and on 2026-10-11 that decoupling reached
+the tag name itself: the channel went from `v0.6.58` to `mobile-v0.6.59`.
+
+The client's version parser stripped exactly one leading `v` and required every
+remaining segment to be all digits, so `mobile-v…` parsed to `null`. The
+comparison then reported `0` — "equal" — and the About page rendered
+**当前已是最新版本** beside a row naming a different version. The update channel
+was dead for ~40 releases and every surface reported health.
+
+Two things now hold the line:
+
+- `lib/app-version.ts` reads a release tag as `<namespace>-…-v<semver>`, with
+  the namespace segments and the `v` both optional, and exposes
+  `orderVersions()` so "unreadable" is a distinct answer from "equal". The
+  About card has a third state for it (`lib/about-update-state.ts`) instead of
+  collapsing it into "up to date".
+- `lib/app-version.test.ts` and `lib/release-check.test.ts` pin the namespaced
+  spellings (`mobile-v0.6.83`, `mobile-0.6.83`, `android-release-v1.2.3`) and
+  the changeover across 2026-10-11 in both directions.
+
+**If the channel's tag prefix ever moves again, that is a client-side change,
+not a server-side one** — a release published under a spelling the shipped
+parser cannot read goes unnoticed by every user on an older build. Publish the
+new spelling only after a client that understands it is in users' hands.
+
 ## Why the build config lives in `plugins/`
 
 Because `android/` is gitignored, anything written into the generated tree is

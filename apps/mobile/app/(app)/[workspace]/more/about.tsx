@@ -27,9 +27,12 @@ import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
 import {
   GITHUB_REPO,
+  checkForUpdate,
+  displayVersion,
   matchAssetForAbi,
-  isNewer,
+  type UpdateCheck,
 } from "@/lib/release-check";
+import { UPDATE_STATE_KEYS, resolveUpdateState } from "@/lib/about-update-state";
 import {
   APK_MIME_TYPE,
   apkCacheFilename,
@@ -65,7 +68,13 @@ export default function AboutPage() {
   const [phase, setPhase] = useState<CheckPhase>("idle");
 
   const release = query.data;
-  const hasUpdate = release ? isNewer(release.tag_name, appVersion) : false;
+  // Three outcomes, not two: an unreadable tag must not be reported as
+  // "up to date". See `checkForUpdate`.
+  const updateCheck = release
+    ? checkForUpdate(release.tag_name, appVersion)
+    : "up-to-date";
+  const hasUpdate = updateCheck === "update-available";
+  const latestVersion = release ? displayVersion(release.tag_name) : undefined;
 
   // Live progress of the in-flight update download — the row lives in the
   // download manager store (MYS-361), so the About page and the Downloads
@@ -170,7 +179,8 @@ export default function AboutPage() {
         <UpdateCard
           phase={phase}
           hasUpdate={hasUpdate}
-          latestTag={release?.tag_name}
+          check={release ? updateCheck : null}
+          latestVersion={latestVersion}
           progress={downloadProgress}
           onCheck={onCheck}
           onDownload={onDownloadInstall}
@@ -209,14 +219,17 @@ function InfoRow({
 function UpdateCard({
   phase,
   hasUpdate,
-  latestTag,
+  check,
+  latestVersion,
   progress,
   onCheck,
   onDownload,
 }: {
   phase: CheckPhase;
   hasUpdate: boolean;
-  latestTag?: string;
+  check: UpdateCheck | null;
+  /** Bare version of the published release (`0.6.83`), undefined when unknown. */
+  latestVersion?: string;
   /** 0..1 fraction of the in-flight update download, null when unknown. */
   progress: number | null;
   onCheck: () => void;
@@ -227,37 +240,33 @@ function UpdateCard({
   const theme = THEME[colorScheme];
 
   const busy = phase === "checking" || phase === "downloading";
+  // The message is chosen by a pure resolver so the branch that says "you're
+  // on the latest version" is reachable by a behavioural test rather than by
+  // matching this file's source text. See `lib/about-update-state.ts`.
+  const state = resolveUpdateState(phase, check);
+  // `unreadable` is the one state whose copy is a failure even though the
+  // transport worked, so it is the only "inconclusive" tone.
+  const tone =
+    state === "network-error" ||
+    state === "no-asset" ||
+    state === "foreign-package" ||
+    state === "unreadable"
+      ? "text-destructive"
+      : state === "update-available"
+        ? "text-success"
+        : undefined;
 
-  let status: string;
-  let tone: string | undefined;
-  if (phase === "network-error") {
-    status = t("update.error.network");
-    tone = "text-destructive";
-  } else if (phase === "no-asset") {
-    status = t("update.error.noAsset");
-    tone = "text-destructive";
-  } else if (phase === "foreign-package") {
-    // The update is refused, not failed: this install is not the release
-    // channel's package, so the download would have created a second app.
-    status = t("update.error.foreignPackage");
-    tone = "text-destructive";
-  } else if (phase === "downloading") {
-    const pct =
-      progress != null ? Math.round(progress * 100) : null;
-    status =
-      pct != null
-        ? t("about.downloadingWithPct", { pct })
-        : t("about.downloading");
-  } else if (phase === "checking") {
-    status = t("about.checking");
-  } else if (hasUpdate && latestTag) {
-    status = t("about.updateAvailable", { version: latestTag.replace(/^v/i, "") });
-    tone = "text-success";
-  } else if (latestTag) {
-    status = t("about.upToDate");
-  } else {
-    status = t("about.idle");
-  }
+  // Each state has its own params: the download copy interpolates a percent,
+  // the version-bearing states interpolate the release version, and the rest
+  // take none (an unused param is harmless, a missing one renders blank).
+  const status =
+    state === "downloading"
+      ? progress != null
+        ? t("about.downloadingWithPct", { pct: Math.round(progress * 100) })
+        : t("about.downloading")
+      : state === "update-available"
+        ? t(UPDATE_STATE_KEYS[state], { version: latestVersion ?? "" })
+        : t(UPDATE_STATE_KEYS[state]);
 
   const showDownload =
     !busy && hasUpdate && phase !== "no-asset" && phase !== "foreign-package";
@@ -272,10 +281,10 @@ function UpdateCard({
           >
             {status}
           </Text>
-          {latestTag && !hasUpdate && phase !== "checking" && (
+          {latestVersion && !hasUpdate && state === "up-to-date" && (
             <Text className="text-caption text-muted-foreground/70">
               {t("about.latestVersion", {
-                version: latestTag.replace(/^v/i, ""),
+                version: latestVersion,
               })}
             </Text>
           )}
