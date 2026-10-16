@@ -2398,6 +2398,7 @@
   "projects.noMatches": "No projects match your search or filters.",
   "projects.pin": "Pin",
   "projects.resultsCount": "{{count}} projects",
+  "projects.rowMenu": "Project actions",
   "projects.searchPlaceholder": "Search projects",
   "projects.select": "Select",
   "projects.selectAll": "Select all",
