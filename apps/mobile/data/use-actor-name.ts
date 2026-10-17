@@ -4,6 +4,7 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { memberListOptions } from "@/data/queries/members";
 import { agentListAllOptions } from "@/data/queries/agents";
 import { squadListOptions } from "@/data/queries/squads";
+import { catalogRead } from "@/lib/catalog-read";
 
 /**
  * Resolve actor (member / agent / squad) name + avatar URL from the
@@ -22,9 +23,21 @@ import { squadListOptions } from "@/data/queries/squads";
  */
 export function useActorLookup() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
-  const { data: members = [] } = useQuery(memberListOptions(wsId));
-  const { data: agents = [] } = useQuery(agentListAllOptions(wsId));
+  const membersRead = catalogRead(useQuery(memberListOptions(wsId)));
+  const agentsRead = catalogRead(useQuery(agentListAllOptions(wsId)));
   const { data: squads = [] } = useQuery(squadListOptions(wsId));
+  const members = membersRead.items;
+  const agents = agentsRead.items;
+
+  // Whether the two directories a lead can point at have ANSWERED. A surface
+  // that renders an actor's name as a fact needs this: `getName` falls back to
+  // "Unknown" / "Unknown Agent" both when the read is still in flight and when
+  // the id is genuinely gone, and those two must not be told the same way (the
+  // read-side rule `lib/catalog-state.ts` states). The squads directory is
+  // excluded on purpose — no `Project.lead_type` ever names a squad
+  // (`packages/core/types/project.ts:13`), so requiring it would make the lead
+  // cell wait on a read it cannot use.
+  const resolved = membersRead.isResolved && agentsRead.isResolved;
 
   // Index the three lists once per data change. Avatar rows (inbox, issue
   // rows, run rows, comment cards) call name + avatar lookups per render —
@@ -78,7 +91,7 @@ export function useActorLookup() {
     [maps],
   );
 
-  return { getName, getAvatarUrl };
+  return { getName, getAvatarUrl, resolved };
 }
 
 export function getInitials(name: string): string {

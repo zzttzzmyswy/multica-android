@@ -45,8 +45,12 @@ import {
   ProjectRowMenu,
   type ProjectRowMenuProps,
 } from "@/components/project/project-row-menu";
-import { ProjectStatusIcon } from "@/components/ui/project-status-icon";
-import { ProjectPriorityIcon } from "@/components/ui/project-priority-icon";
+import {
+  ProjectLeadCell,
+  ProjectPriorityCell,
+  ProjectStatusCell,
+  type ProjectInlineEdit,
+} from "@/components/project/project-inline-cells";
 import { ProgressRing } from "@/components/ui/progress-ring";
 import { ColumnResizeHandle } from "@/components/ui/column-resize-handle";
 import {
@@ -63,11 +67,6 @@ import {
   type ProjectSortDirection,
   type ProjectSortField,
 } from "@/lib/filter-projects";
-import {
-  projectPriorityLabel,
-  projectStatusLabel,
-} from "@/lib/project-status";
-import { useActorLookup } from "@/data/use-actor-name";
 import { useTimeAgo } from "@/lib/time-ago";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
@@ -116,6 +115,10 @@ interface Props {
    *  whatever the column strip is scrolled to. Omitted by a caller with no
    *  write path, and the trigger then does not render. */
   rowMenu?: ProjectRowMenuProps;
+  /** In-row status / priority / lead editors (MYS-2202, web's in-place cells).
+   *  Omitted by a caller with no write path — the columns then render as static
+   *  text, the same contract `rowMenu` above has. */
+  inlineEdit?: ProjectInlineEdit;
   selectionMode: boolean;
   selectedIds: ReadonlySet<string>;
   onToggleSelected: (id: string) => void;
@@ -141,6 +144,7 @@ export function ProjectTableView({
   onColumnMenuClose,
   onOpenProject,
   rowMenu,
+  inlineEdit,
   selectionMode,
   selectedIds,
   onToggleSelected,
@@ -151,7 +155,6 @@ export function ProjectTableView({
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
-  const { getName } = useActorLookup();
   const timeAgo = useTimeAgo();
 
   /** In-flight resize drag: which column, and its provisional width. */
@@ -298,22 +301,15 @@ export function ProjectTableView({
   const cellFor = (project: Project, column: ProjectTableColumnKey) => {
     switch (column) {
       case "priority":
-        // `none` is a real value, not a missing one — the row shows it as the
-        // em dash so the column does not appear broken on projects that
-        // legitimately have no priority.
-        return project.priority === "none" ? (
-          <Text className="text-caption text-muted-foreground/60">—</Text>
-        ) : (
-          <View className="flex-row items-center gap-1.5">
-            <ProjectPriorityIcon priority={project.priority} size={12} />
-            <Text className="text-caption text-muted-foreground" numberOfLines={1}>
-              {projectPriorityLabel(project.priority)}
-            </Text>
-          </View>
-        );
+        // The cell owns the `none` rendering (an em dash, because `none` is a
+        // real value rather than a missing one) and, unlike before iteration
+        // 253, stays tappable in that state — the project with no priority is
+        // the one a user most wants to give one.
+        return <ProjectPriorityCell project={project} edit={inlineEdit} />;
       case "progress":
         // Web's ProgressRing rule: a project with no tasks has no progress to
-        // report, so it renders the em dash rather than "0/0".
+        // report, so it renders the em dash rather than "0/0". Not editable on
+        // web either — progress is a count of the project's issues, not a field.
         return project.issue_count === 0 ? (
           <Text className="text-caption text-muted-foreground/60">—</Text>
         ) : (
@@ -328,19 +324,12 @@ export function ProjectTableView({
             </Text>
           </View>
         );
-      case "lead": {
-        const name =
-          project.lead_type && project.lead_id
-            ? getName(project.lead_type, project.lead_id)
-            : null;
-        return name ? (
-          <Text className="text-caption text-muted-foreground" numberOfLines={1}>
-            {name}
-          </Text>
-        ) : (
-          <Text className="text-caption text-muted-foreground/60">—</Text>
-        );
-      }
+      case "lead":
+        // No avatar: this column is 132pt by default and a name is what it was
+        // for. Web's table cell carries one (`projects-page.tsx:433`) because a
+        // desktop column is wider; the card below renders it, matching web's
+        // card.
+        return <ProjectLeadCell project={project} edit={inlineEdit} />;
       case "issues":
         return (
           <Text className="text-caption text-muted-foreground tabular-nums">
@@ -386,15 +375,17 @@ export function ProjectTableView({
             >
               {item.title}
             </Text>
-            <View className="flex-row items-center gap-1">
-              <ProjectStatusIcon status={item.status} size={10} />
-              <Text
-                className="text-micro text-muted-foreground"
-                numberOfLines={1}
-              >
-                {projectStatusLabel(item.status)}
-              </Text>
-            </View>
+            {/* Status lives in the pinned pane (web makes it a non-hideable
+                core column) and is editable in place there — the second line is
+                also the cell's own tap target, so the status never needs the
+                column strip panned into view to be changed. In selection mode
+                it gives way with the kebab below: one control per row. */}
+            <ProjectStatusCell
+              project={item}
+              edit={inlineEdit}
+              iconSize={10}
+              textClassName="text-micro text-muted-foreground"
+            />
           </View>
           {selectionMode ? (
             <Ionicons

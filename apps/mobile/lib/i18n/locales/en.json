@@ -2395,6 +2395,8 @@
   "projects.filterStatus": "Status",
   "projects.loadFailed": "Failed to load projects: ",
   "projects.newProject": "New project",
+  "projects.leadNone": "No lead",
+  "projects.leadPending": "Lead not loaded yet",
   "projects.noMatches": "No projects match your search or filters.",
   "projects.pin": "Pin",
   "projects.resultsCount": "{{count}} projects",
