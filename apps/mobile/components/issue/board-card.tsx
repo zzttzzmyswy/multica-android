@@ -32,6 +32,7 @@
  * in their own row under the labels; `lib/card-properties.ts` owns which
  * configured ids actually produce one.
  */
+import { useCallback } from "react";
 import { Pressable, View } from "react-native";
 import type {
   AccessibilityActionEvent,
@@ -43,6 +44,7 @@ import type { Issue } from "@multica/core/types";
 import type { CardProperties } from "@/data/stores/issue-filter-slice";
 import { isPastDateOnly } from "@multica/core/issues/date";
 import { Text } from "@/components/ui/text";
+import { actorNameText } from "@/components/ui/actor-name";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { useActorProfileStore } from "@/data/stores/actor-profile-store";
 import { useActorLookup } from "@/data/use-actor-name";
@@ -165,8 +167,20 @@ export function BoardCard({
   // entry serves every card on every board.
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   // Actor-valued chips resolve their names through the workspace directory —
-  // an actor chip must never print the raw `member:<uuid>` reference.
-  const { getName } = useActorLookup();
+  // an actor chip must never print the raw `member:<uuid>` reference. The
+  // resolver is the read-state-aware one: `cardPropertyChip` folds whatever it
+  // returns into the chip, so handing it raw `getName` painted 「Unknown」 on a
+  // cold-start card exactly as the issue table's columns did (MYS-2215). An
+  // unsettled reference contributes an empty string, and the card drops a chip
+  // with no text rather than drawing a blank pill.
+  const { resolveActorName } = useActorLookup();
+  const actorName = useCallback(
+    (
+      type: "member" | "agent" | "squad" | null | undefined,
+      id: string | null | undefined,
+    ) => actorNameText(resolveActorName(type, id)),
+    [resolveActorName],
+  );
   // Custom-property chips — web's `cardPropertyIds` dimension
   // (board-card.tsx:64-72). The catalog is the ACTIVE definitions, which is
   // what web's board card queries (`propertyListOptions(cardWsId)`,
@@ -272,7 +286,14 @@ export function BoardCard({
       {customEntries && customEntries.shown.length > 0 ? (
         <View className="mt-1.5 flex-row flex-wrap gap-1">
           {customEntries.shown.map(({ property, display }) => {
-            const chip = cardPropertyChip(display, translate, getName);
+            const chip = cardPropertyChip(display, translate, actorName);
+            // An ACTOR chip whose every reference is still unresolved has no
+            // text to show. Rendering the empty pill would claim the field is
+            // set-but-blank; `null` says "nothing known yet", which is what the
+            // directory state actually is. Scoped to `actors` on purpose: every
+            // other kind's text comes off the issue row itself, so an empty one
+            // there is a real empty value and keeps its (pre-existing) pill.
+            if (display.kind === "actors" && !chip.text) return null;
             return (
               <View
                 key={property.id}

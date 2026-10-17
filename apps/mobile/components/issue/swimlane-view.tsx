@@ -86,6 +86,7 @@ import {
 import { useUpdateIssue } from "@/data/mutations/issues";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
+import { actorNameText } from "@/components/ui/actor-name";
 import { issuesByIdsOptions } from "@/data/queries/issues";
 import { projectListOptions } from "@/data/queries/projects";
 import {
@@ -181,7 +182,7 @@ export function SwimlaneView({
   const statusLabel = useStatusLabel();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
-  const { getName } = useActorLookup();
+  const { getName, resolveActorName } = useActorLookup();
   const { data: projects = [] } = useQuery(projectListOptions(wsId));
   // Lane folds and lane order are per device, per workspace — see the module
   // doc. Both live in one store so a workspace switch cannot mix them.
@@ -205,6 +206,17 @@ export function SwimlaneView({
   getNameRef.current = getName;
   const actorName = useCallback(
     (type: IssueAssigneeType, id: string) => getNameRef.current(type, id),
+    [],
+  );
+
+  // The read-state-aware twin, for the same reason as `actorName` read through
+  // a ref: `laneLabel` is handed to a `useCallback`-built renderer and must not
+  // churn. A lane header names an actor as confidently as a table cell does, so
+  // an unanswered directory gets no name here either (MYS-2215).
+  const resolveActorRef = useRef(resolveActorName);
+  resolveActorRef.current = resolveActorName;
+  const actorNameState = useCallback(
+    (type: IssueAssigneeType, id: string) => resolveActorRef.current(type, id),
     [],
   );
 
@@ -361,7 +373,14 @@ export function SwimlaneView({
         if (!lane.assigneeType || !lane.assigneeId) {
           return t("filter.noAssignee");
         }
-        return actorName(lane.assigneeType, lane.assigneeId);
+        // No name yet means the directory has not answered, and a lane header
+        // cannot sit empty — it is the row's only label. An ellipsis is the
+        // neutral "not read yet" mark; it claims nothing about who is in the
+        // lane, which is the difference from 「Unknown」.
+        return (
+          actorNameText(actorNameState(lane.assigneeType, lane.assigneeId)) ||
+          t("issues.swimlane.loadingLane")
+        );
       }
       if (lane.grouping === "project") {
         if (!lane.projectId) return t("picker.noProject");
@@ -371,7 +390,7 @@ export function SwimlaneView({
       const parent = parentById.get(lane.parentIssueId);
       return parent ? `${parent.identifier} · ${parent.title}` : lane.parentIssueId;
     },
-    [t, actorName, projectTitle, parentById],
+    [t, actorNameState, projectTitle, parentById],
   );
 
   /** "移动到泳道…" — this grouping's lanes plus the field's own picker. */

@@ -98,22 +98,13 @@ export function leadUpdatePatch(
 
 /**
  * The sentinels `useActorLookup().getName` returns when it cannot resolve an
- * actor (`data/use-actor-name.ts:54-61`). Kept in step with the issue table's
- * own list (`components/issue/table-view.tsx:564-567`), which drops them before
- * a name reaches a CSV.
+ * actor — moved to `lib/actor-name-state.ts` in iteration 254, when the issue
+ * table's CSV export and the new shared name primitive needed the same list.
+ * Re-exported from here so the projects-list call sites and tests that already
+ * import it keep one import path.
  */
-const UNRESOLVED_ACTOR_NAMES: ReadonlySet<string> = new Set([
-  "Unknown",
-  "Unknown Agent",
-  "Unknown Squad",
-  "Squad",
-  "System",
-]);
-
-/** A name that identifies a real actor, as opposed to a lookup fallback. */
-export function isResolvedActorName(name: string): boolean {
-  return name.length > 0 && !UNRESOLVED_ACTOR_NAMES.has(name);
-}
+export { isResolvedActorName, UNRESOLVED_ACTOR_NAMES } from "./actor-name-state";
+import { isResolvedActorName } from "./actor-name-state";
 
 export interface LeadCellInput {
   leadType: "member" | "agent" | null;

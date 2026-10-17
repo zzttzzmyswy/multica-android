@@ -66,13 +66,14 @@ import type { Issue, IssueProperty, IssueStatusEntry } from "@multica/core/types
 import { ISSUE_DATE_SHORT, formatIssueDate } from "@/lib/format-date";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
-import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { AvatarStack } from "@/components/ui/avatar-stack";
 import { ProjectIcon } from "@/components/ui/project-icon";
 import { PriorityIcon } from "@/components/ui/priority-icon";
 import { StatusIcon } from "@/components/ui/status-icon";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
+import { ActorNameLabel, ActorNameText, actorNameText } from "@/components/ui/actor-name";
+import type { ActorNameState, ActorType } from "@/lib/actor-name-state";
 import { useIssueBatchSelectionStore } from "@/data/stores/issue-batch-selection-store";
 import {
   columnMoveAvailability,
@@ -268,7 +269,7 @@ export function IssueTableView({
     isSuccess: propertiesSettled,
   } = useQuery(propertyActiveOptions(wsId));
   const { data: projects = [] } = useQuery(projectListOptions(wsId));
-  const { getName } = useActorLookup();
+  const { getName, resolveActorName } = useActorLookup();
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const selectionMode = useIssueBatchSelectionStore((s) => s.selectionMode);
@@ -987,6 +988,7 @@ export function IssueTableView({
                       properties={properties}
                       projects={projects}
                       getName={getName}
+                      resolveActorName={resolveActorName}
                       selected={selectedIds.has(item.row.issue.id)}
                       columnLabel={columnLabel}
                       onPressCell={handlePressCell}
@@ -1397,6 +1399,7 @@ const DataRow = memo(
   properties,
   projects,
   getName,
+  resolveActorName,
   selected,
   columnLabel,
   onPressCell,
@@ -1411,6 +1414,10 @@ const DataRow = memo(
     type: "member" | "agent" | "squad" | null | undefined,
     id: string | null | undefined,
   ) => string;
+  resolveActorName: (
+    type: ActorType | string | null | undefined,
+    id: string | null | undefined,
+  ) => ActorNameState;
   selected: boolean;
   columnLabel: (column: TableColumnKey) => string;
   onPressCell: (issueId: string, column: TableColumnKey) => void;
@@ -1447,6 +1454,7 @@ const DataRow = memo(
               properties={properties}
               projects={projects}
               getName={getName}
+              resolveActorName={resolveActorName}
               t={t}
               statusLabel={statusLabel}
               statusEntry={statusEntry}
@@ -1464,6 +1472,7 @@ const DataRow = memo(
     prev.properties === next.properties &&
     prev.projects === next.projects &&
     prev.getName === next.getName &&
+    prev.resolveActorName === next.resolveActorName &&
     prev.selected === next.selected &&
     prev.columnLabel === next.columnLabel &&
     prev.onPressCell === next.onPressCell &&
@@ -1487,6 +1496,7 @@ function DataCell({
   properties,
   projects,
   getName,
+  resolveActorName,
   t,
   statusLabel,
   statusEntry,
@@ -1499,6 +1509,13 @@ function DataCell({
     type: "member" | "agent" | "squad" | null | undefined,
     id: string | null | undefined,
   ) => string;
+  /** `useActorLookup().resolveActorName` — the read-state-aware twin of
+   *  `getName`. The assignee / creator cells go through it so an unanswered
+   *  directory paints a skeleton instead of 「Unknown」. */
+  resolveActorName: (
+    type: ActorType | string | null | undefined,
+    id: string | null | undefined,
+  ) => ActorNameState;
   t: Translate;
   statusLabel: (statusKey: string) => string;
   statusEntry: IssueStatusEntry | undefined;
@@ -1533,25 +1550,35 @@ function DataCell({
           </Text>
         </View>
       );
-    case "assignee":
-      return issue.assignee_type && issue.assignee_id ? (
-        <View className="flex-row items-center gap-1.5">
-          <ActorAvatar size={18} type={issue.assignee_type} id={issue.assignee_id} />
-          <Text
-            className="flex-shrink text-caption text-muted-foreground"
-            numberOfLines={1}
-          >
-            {getName(issue.assignee_type, issue.assignee_id)}
-          </Text>
-        </View>
-      ) : (
-        <Text className="text-caption text-muted-foreground/60">—</Text>
-      );
-    case "creator":
+    case "assignee": {
+      // The name comes from the shared read-state-aware primitive, not from
+      // `getName` directly: on a cold start the member/agent directory has not
+      // answered, and `getName`'s "Unknown"/"Unknown Agent" fallback is
+      // indistinguishable on screen from "this agent was deleted". The row
+      // asserts a fact only once the directory for the actor's own type has
+      // settled (MYS-2215; the projects list's lead cell closed the same hole
+      // in 253, one surface at a time).
+      const empty = !issue.assignee_type || !issue.assignee_id;
       return (
-        <Text className="text-caption text-muted-foreground" numberOfLines={1}>
-          {getName(issue.creator_type, issue.creator_id)}
-        </Text>
+        <ActorNameLabel
+          type={issue.assignee_type}
+          id={issue.assignee_id}
+          empty={empty}
+          state={resolveActorName(issue.assignee_type, issue.assignee_id)}
+          avatarSize={18}
+          textClassName="flex-shrink"
+        />
+      );
+    }
+    case "creator":
+      // The reference itself is always present (`Issue.creator_type` is
+      // non-null), so this column has no measured-absence branch — only
+      // "named" vs "the directory has not answered".
+      return (
+        <ActorNameText
+          state={resolveActorName(issue.creator_type, issue.creator_id)}
+          className="text-muted-foreground"
+        />
       );
     case "labels": {
       const labels = issue.labels ?? [];
@@ -1612,6 +1639,7 @@ function DataCell({
           issue={issue}
           property={property}
           getName={getName}
+          resolveActorName={resolveActorName}
           t={t}
         />
       );
@@ -1656,6 +1684,7 @@ function PropertyCell({
   issue,
   property,
   getName,
+  resolveActorName,
   t,
 }: {
   issue: Issue;
@@ -1664,6 +1693,10 @@ function PropertyCell({
     type: "member" | "agent" | "squad" | null | undefined,
     id: string | null | undefined,
   ) => string;
+  resolveActorName: (
+    type: ActorType | string | null | undefined,
+    id: string | null | undefined,
+  ) => ActorNameState;
   t: Translate;
 }) {
   const { colorScheme } = useColorScheme();
@@ -1718,7 +1751,9 @@ function PropertyCell({
             size={16}
           />
           <Text className="text-caption text-foreground" numberOfLines={1}>
-            {display.refs.map((ref) => getName(ref.kind, ref.id)).join(", ")}
+            {display.refs
+              .map((ref) => actorNameText(resolveActorName(ref.kind, ref.id)))
+              .join(", ")}
           </Text>
         </View>
       );

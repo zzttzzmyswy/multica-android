@@ -149,6 +149,7 @@ import type {
   IssueGrouping,
 } from "@/data/stores/issue-filter-slice";
 import { useActorLookup } from "@/data/use-actor-name";
+import { actorNameText } from "@/components/ui/actor-name";
 import { groupIssues, type IssueGroupSection } from "@/lib/filter-issues";
 import {
   CARD_HEIGHT_FALLBACK,
@@ -311,7 +312,7 @@ function ColumnHeader({
   statusFixedByView?: boolean;
 }) {
   const { t } = useTranslation();
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   const { colorScheme } = useColorScheme();
   const statusLabel = useStatusLabel();
   let leading: React.ReactNode = null;
@@ -341,7 +342,14 @@ function ColumnHeader({
     label = translate("filter.noAssignee");
     leading = <View className="w-[18px]" />;
   } else {
-    label = getName(column.assigneeType, column.assigneeId);
+    // An assignee lane is titled with an actor's name — a header, but the same
+    // claim a table cell makes. Until the directory for that actor's type has
+    // answered, the column says it is reading rather than naming someone
+    // (MYS-2215). The count beside it is the board's own window, not the
+    // directory's, so it stays.
+    label =
+      actorNameText(resolveActorName(column.assigneeType, column.assigneeId)) ||
+      translate("issues.boardReadingAssignee");
     leading = (
       <ActorAvatar type={column.assigneeType} id={column.assigneeId} size={16} />
     );

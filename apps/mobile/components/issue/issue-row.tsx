@@ -37,6 +37,7 @@ import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
 import { useActorLookup } from "@/data/use-actor-name";
+import { actorNameText } from "@/components/ui/actor-name";
 import { useActorProfileStore } from "@/data/stores/actor-profile-store";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -104,7 +105,7 @@ export function IssueRow({
   const intlLocale = useIntlLocale();
   const statusEntry = useIssueStatuses().entryOf(issue.status);
   const { t } = useTranslation();
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   const openProfile = useActorProfileStore((s) => s.open);
   // The assignee avatar already owns its tap (assignee picker), so the card
   // rides long-press. `assignee_type` is member/agent/squad only — every value
@@ -216,13 +217,22 @@ export function IssueRow({
             disabled={!onPressAssignee}
             hitSlop={8}
             accessibilityRole={onPressAssignee ? "button" : undefined}
-            accessibilityLabel={
-              profileFor(issue.assignee_type, issue.assignee_id)
-                ? t("profileCard.openAria", {
-                    name: getName(issue.assignee_type, issue.assignee_id),
-                  })
-                : undefined
-            }
+            accessibilityLabel={(() => {
+              if (!profileFor(issue.assignee_type, issue.assignee_id)) {
+                return undefined;
+              }
+              // The row's only text-free claim about the assignee. Until the
+              // directory for this actor's type answers there is no name to
+              // announce — the generic profile-call label says what the tap
+              // does without naming someone the row cannot identify
+              // (MYS-2215).
+              const name = actorNameText(
+                resolveActorName(issue.assignee_type, issue.assignee_id),
+              );
+              return name
+                ? t("profileCard.openAria", { name })
+                : t("profileCard.title");
+            })()}
             className="active:opacity-60"
           >
             <ActorAvatar
