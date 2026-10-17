@@ -124,15 +124,19 @@ MUTATIONS: list[tuple[str, Path, str, str]] = [
         '  if (cell.kind === "pending") return <Text>—</Text>;',
     ),
     (
+        # Iteration 254 folded the inline conjunction into `resolvedBy` so an
+        # agent-only surface need not wait for the member read; the lead cell's
+        # two-directory rule is now this fold, and these two mutations attack
+        # it at its new anchor (same defect, same assertion in the suite).
         "9. the resolution flag is taken from the member read alone",
         LOOKUP,
-        "  const resolved = membersRead.isResolved && agentsRead.isResolved;",
-        "  const resolved = membersRead.isResolved;",
+        "  const resolved = resolvedBy.member && resolvedBy.agent;",
+        "  const resolved = resolvedBy.member;",
     ),
     (
         "10. the actor lookup reports 'resolved' unconditionally",
         LOOKUP,
-        "  const resolved = membersRead.isResolved && agentsRead.isResolved;",
+        "  const resolved = resolvedBy.member && resolvedBy.agent;",
         "  const resolved = true;",
     ),
     (

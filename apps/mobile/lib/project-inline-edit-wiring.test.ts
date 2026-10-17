@@ -207,10 +207,18 @@ describe("the lead cell does not state what it has not read", () => {
     // "resolved" off the member read alone paints the empty sentence over a
     // project whose lead is an agent whose directory has not arrived — the
     // whole defect, one directory narrower.
+    //
+    // Iteration 254 replaced the inline conjunction with the per-type
+    // `resolvedBy` map (so an agent-only surface need not wait for the member
+    // read); the lead cell's flag is now folded from exactly those two
+    // entries, and the squad entry stays out of it — see
+    // `lib/actor-name-state.test.ts` for the per-type rule itself.
     const lookup = code("data/use-actor-name.ts");
     expect(lookup).toMatch(
-      /const resolved = membersRead\.isResolved && agentsRead\.isResolved;/,
+      /const resolved = resolvedBy\.member && resolvedBy\.agent;/,
     );
+    expect(lookup).toMatch(/member: membersRead\.isResolved/);
+    expect(lookup).toMatch(/agent: agentsRead\.isResolved/);
     // …and never a constant, which is the same lie with nothing to wait for.
     expect(lookup).not.toMatch(/const resolved = true;/);
   });
@@ -313,13 +321,17 @@ describe("the actor lookup reports whether its directories answered", () => {
     // deliberately out: no project lead is ever a squad, so requiring that read
     // would make the cell wait on data it cannot use.
     expect(lookup).toMatch(
-      /const resolved = membersRead\.isResolved && agentsRead\.isResolved;/,
+      /const resolved = resolvedBy\.member && resolvedBy\.agent;/,
     );
     expect(lookup).toContain("catalogRead(");
   });
 
   it("returns it beside the existing helpers", () => {
-    expect(lookup).toMatch(/return \{ getName, getAvatarUrl, resolved \};/);
+    // `resolvedBy` joined the return in iteration 254: the per-type settle
+    // flags every name-rendering cell reads (`lib/actor-name-state.ts`).
+    expect(lookup).toMatch(
+      /return \{ getName, getAvatarUrl, resolveActorName, resolved, resolvedBy \};/,
+    );
   });
 
   it("does not default the directories to [] again", () => {

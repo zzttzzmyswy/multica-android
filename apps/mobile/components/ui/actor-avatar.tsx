@@ -32,6 +32,7 @@ import { useColorScheme } from "nativewind";
 import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
 import { useActorLookup, getInitials } from "@/data/use-actor-name";
+import { actorNameText } from "@/components/ui/actor-name";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useAgentPresence } from "@/lib/use-agent-presence";
 import { PresenceDot } from "@/components/ui/presence-dot";
@@ -71,7 +72,7 @@ export function ActorAvatar({
   onPressProfile,
 }: Props) {
   const { t } = useTranslation();
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   const avatar = <BareAvatar type={type} id={id} size={size} />;
 
   const dotted =
@@ -90,7 +91,14 @@ export function ActorAvatar({
   // handler), and the label falls back to the generic key if it somehow does.
   const profileLabel =
     id && type && type !== "system"
-      ? t("profileCard.openAria", { name: getName(type, id) })
+      ? (() => {
+          // An unsettled directory must not put 「Unknown」 into the
+          // accessibility tree either — a screen reader announces it with the
+          // same confidence as a name. Fall back to the generic title until
+          // the directory answers.
+          const name = actorNameText(resolveActorName(type, id));
+          return name ? t("profileCard.openAria", { name }) : t("profileCard.title");
+        })()
       : t("profileCard.title");
 
   return (
@@ -118,7 +126,7 @@ function BareAvatar({
   id: Props["id"];
   size: number;
 }) {
-  const { getName, getAvatarUrl } = useActorLookup();
+  const { getAvatarUrl, resolveActorName } = useActorLookup();
   const { colorScheme } = useColorScheme();
   // Ionicons takes a hex string, not a className — go through THEME so the
   // glyph follows light/dark instead of locking to a single hardcoded zinc.
@@ -156,7 +164,9 @@ function BareAvatar({
         className="items-center justify-center bg-muted"
       >
         <Text
-          accessibilityLabel={type === "system" ? "" : getName(type, id)}
+          accessibilityLabel={
+            type === "system" ? "" : actorNameText(resolveActorName(type, id))
+          }
           style={{ fontSize: Math.round(size * 0.58), lineHeight: size }}
         >
           {emoji}
@@ -197,7 +207,12 @@ function BareAvatar({
     );
   }
 
-  const name = getName(type, id);
+  // Initials are derived from the resolved name, so they inherit its read
+  // state: `getInitials("Unknown")` is "U", and a grey disc stamped "U" on
+  // every row of a cold start is the same false claim as the word itself, in
+  // a smaller font. Until the directory answers the disc stays empty — it is
+  // still a stable, tappable placeholder, it just asserts nothing.
+  const name = actorNameText(resolveActorName(type, id));
   const isAgent = type === "agent";
   return (
     <View
@@ -207,14 +222,16 @@ function BareAvatar({
         isAgent ? "bg-brand/15" : "bg-muted",
       )}
     >
-      <Text
-        className={cn(
-          "text-caption font-medium",
-          isAgent ? "text-brand" : "text-muted-foreground",
-        )}
-      >
-        {getInitials(name)}
-      </Text>
+      {name ? (
+        <Text
+          className={cn(
+            "text-caption font-medium",
+            isAgent ? "text-brand" : "text-muted-foreground",
+          )}
+        >
+          {getInitials(name)}
+        </Text>
+      ) : null}
     </View>
   );
 }
