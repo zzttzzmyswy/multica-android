@@ -2395,6 +2395,8 @@
   "projects.filterStatus": "状态",
   "projects.loadFailed": "加载项目失败：",
   "projects.newProject": "新项目",
+  "projects.leadNone": "无负责人",
+  "projects.leadPending": "负责人尚未加载",
   "projects.noMatches": "没有符合搜索或筛选条件的项目。",
   "projects.pin": "置顶",
   "projects.resultsCount": "{{count}} 个项目",

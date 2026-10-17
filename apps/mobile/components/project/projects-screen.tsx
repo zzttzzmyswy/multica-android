@@ -83,8 +83,13 @@ import {
   type ProjectSortField,
 } from "@/lib/filter-projects";
 import { ProjectTableView } from "@/components/project/project-table-view";
+import { ProjectCellEditor } from "@/components/project/project-cell-editor";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { useProjectTableColumnsStore } from "@/data/stores/project-table-columns";
+import {
+  PROJECT_CELL_TITLE_KEY,
+  type ProjectCellColumn,
+} from "@/lib/project-inline-edit";
 
 // Sort + filter dimensions persist for the session; web persists these in
 // its view store but a session-scoped store keeps the phone honest when a
@@ -352,6 +357,35 @@ export function ProjectsScreen({
     ],
   );
 
+  // In-row status / priority / lead editing (MYS-2202), shared by both views
+  // the way `rowMenu` is — one sheet, one write path, so the table and the card
+  // cannot drift on either. The target is re-derived from `visible` on every
+  // render (below) so a write that lands while the sheet is open is reflected
+  // immediately, and so a project filtered or deleted out from under the open
+  // sheet closes it instead of editing a stale row.
+  const [cellKey, setCellKey] = useState<{
+    projectId: string;
+    column: ProjectCellColumn;
+  } | null>(null);
+
+  const cellTarget = useMemo(() => {
+    if (!cellKey) return null;
+    const project = visible.find((p) => p.id === cellKey.projectId);
+    return project ? { project, column: cellKey.column } : null;
+  }, [cellKey, visible]);
+
+  const openCellEditor = useCallback(
+    (project: Project, column: ProjectCellColumn) =>
+      setCellKey({ projectId: project.id, column }),
+    [],
+  );
+  const closeCellEditor = useCallback(() => setCellKey(null), []);
+
+  const inlineEdit = useMemo(
+    () => ({ onEdit: openCellEditor, selectionMode }),
+    [openCellEditor, selectionMode],
+  );
+
   const confirmBatchDelete = useCallback(() => {
     const ids = selectedProjects.map((p) => p.id);
     if (ids.length === 0) return;
@@ -562,6 +596,7 @@ export function ProjectsScreen({
           columnMenuOpen={columnMenuOpen}
           onColumnMenuClose={() => setColumnMenuOpen(false)}
           rowMenu={rowMenu}
+          inlineEdit={inlineEdit}
           onOpenProject={(project) => {
             if (wsSlug) router.push(`/${wsSlug}/project/${project.id}`);
           }}
@@ -593,6 +628,7 @@ export function ProjectsScreen({
             <ProjectRow
               project={item}
               menu={rowMenu}
+              inlineEdit={inlineEdit}
               selectionMode={selectionMode}
               selected={selectedIds.has(item.id)}
               onLongPress={() => {
@@ -668,6 +704,15 @@ export function ProjectsScreen({
           </Pressable>
         </View>
       ) : null}
+
+      {/* In-row cell editor (MYS-2202). Mounted once for the whole list and
+          hosted here rather than inside the row: both views share it, and a
+          sheet rendered per row would remount on every list re-render. */}
+      <ProjectCellEditor
+        target={cellTarget}
+        onClose={closeCellEditor}
+        title={cellTarget ? t(PROJECT_CELL_TITLE_KEY[cellTarget.column]) : ""}
+      />
     </View>
   );
 }

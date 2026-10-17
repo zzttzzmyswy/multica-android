@@ -28,9 +28,9 @@ import type {
   UpdateIssueRequest,
 } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
-import { TextField } from "@/components/ui/text-field";
 import { Button } from "@/components/ui/button";
 import { PickerSheet } from "@/components/issue/pickers/picker-sheet";
+import { SearchablePickerBody } from "@/components/pickers/searchable-picker-body";
 import { StatusPickerBody } from "@/components/issue/pickers/status-picker-body";
 import { PriorityPickerBody } from "@/components/issue/pickers/priority-picker-body";
 import {
@@ -197,7 +197,7 @@ function CellBody({
           ? { type: issue.assignee_type, id: issue.assignee_id }
           : null;
       return (
-        <SearchableBody
+        <SearchablePickerBody
           query={query}
           onQueryChange={onQueryChange}
           placeholder={t("picker.searchPeople")}
@@ -213,13 +213,13 @@ function CellBody({
               )
             }
           />
-        </SearchableBody>
+        </SearchablePickerBody>
       );
     }
     case "project": {
       const value = projects.find((p) => p.id === issue.project_id) ?? null;
       return (
-        <SearchableBody
+        <SearchablePickerBody
           query={query}
           onQueryChange={onQueryChange}
           placeholder={t("picker.searchProjects")}
@@ -229,12 +229,12 @@ function CellBody({
             query={query}
             onChange={(next) => onCommit({ project_id: next?.id ?? null })}
           />
-        </SearchableBody>
+        </SearchablePickerBody>
       );
     }
     case "labels":
       return (
-        <SearchableBody
+        <SearchablePickerBody
           query={query}
           onQueryChange={onQueryChange}
           placeholder={t("picker.searchLabels")}
@@ -246,7 +246,7 @@ function CellBody({
             onDetach={onDetachLabel}
             onCreate={onCreateLabel}
           />
-        </SearchableBody>
+        </SearchablePickerBody>
       );
     case "start_date":
       return (
@@ -265,36 +265,6 @@ function CellBody({
     default:
       return null;
   }
-}
-
-/** Search field above a picker body whose filtering is caller-driven. The
- *  detail-page routes own their own header + search via `usePickerSearch`;
- *  a sheet has no native header, so the field lives in the body here. */
-function SearchableBody({
-  query,
-  onQueryChange,
-  placeholder,
-  children,
-}: {
-  query: string;
-  onQueryChange: (query: string) => void;
-  placeholder: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <View className="flex-1">
-      <View className="px-3 pt-2 pb-1">
-        <TextField
-          value={query}
-          onChangeText={onQueryChange}
-          placeholder={placeholder}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-      </View>
-      {children}
-    </View>
-  );
 }
 
 /**
