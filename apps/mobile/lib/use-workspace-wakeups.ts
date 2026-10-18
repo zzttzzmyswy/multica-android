@@ -127,7 +127,7 @@ export function useWorkspaceWakeupsController(): WorkspaceWakeupsController {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { t } = useTranslation();
   const statusLabel = useStatusLabel(wsId);
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
 
   const [filters, setFiltersState] = useState<WorkspaceWakeupFilters>(
     FIRST_WORKSPACE_WAKEUP_PAGE,
@@ -157,9 +157,11 @@ export function useWorkspaceWakeupsController(): WorkspaceWakeupsController {
     () => ({
       t,
       statusLabel,
-      actorName: (type: string, id: string) => getName(type as "agent", id),
+      // ASSERT: this table reads rules back from the server, so an unread
+      // directory may not put a name (or a noun) into the sentence.
+      actorName: (type: string, id: string) => resolveActorName(type, id),
     }),
-    [t, statusLabel, getName],
+    [t, statusLabel, resolveActorName],
   );
 
   const rows = query.data?.items ?? [];

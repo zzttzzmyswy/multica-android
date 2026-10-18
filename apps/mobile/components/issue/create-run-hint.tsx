@@ -23,6 +23,7 @@ import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { useIssueTriggerPreview } from "@/data/queries/issue-trigger-preview";
 import { useActorLookup } from "@/data/use-actor-name";
+import { selectedActorLabel } from "@/lib/actor-name-state";
 import {
   createRunHintKey,
   createRunHintKind,
@@ -39,7 +40,7 @@ export function CreateRunHint({
   status: Parameters<typeof useIssueTriggerPreview>[0]["status"];
 }) {
   const { t } = useTranslation();
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   // The hook already gates on "agent-like assignee present"; passing the
   // caller's gate through keeps the request off the wire until then.
   const preview = useIssueTriggerPreview({
@@ -61,7 +62,19 @@ export function CreateRunHint({
   // so the form does not reserve a row it will not fill.
   if (!key || !assigneeId) return null;
 
-  const name = getName(assigneeType ?? "agent", assigneeId);
+  // ECHO: the assignee is a value the user picked in this form one tap ago, so
+  // withholding it would read as "my choice was lost" — and the caption's job
+  // is to describe THAT choice. An unread directory degrades to the type's noun
+  // (「智能体」/「小队」), which keeps both sentences grammatical: the agent voice
+  // ("Agent will start working…") and the squad voice ("Squad's leader will
+  // review it…") each still need a subject. `selectedActorLabel` never returns
+  // an empty string, so the caption cannot gain a hole (MYS-2228).
+  const name = selectedActorLabel({
+    state: resolveActorName(assigneeType ?? "agent", assigneeId),
+    type: assigneeType ?? "agent",
+    fallback:
+      assigneeType === "squad" ? t("picker.squad") : t("picker.agent"),
+  });
 
   return (
     <View

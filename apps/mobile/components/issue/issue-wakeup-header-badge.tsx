@@ -50,7 +50,7 @@ export function IssueWakeupHeaderBadge({ issueId }: Props) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const statusLabel = useStatusLabel();
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   const { data: rules = [] } = useQuery(issueWakeupsOptions(wsId, issueId));
   const { data: system = [] } = useQuery(
     issueSystemWakeupsOptions(wsId, issueId),
@@ -62,7 +62,10 @@ export function IssueWakeupHeaderBadge({ issueId }: Props) {
   const text: WakeupTextDeps = {
     t,
     statusLabel,
-    actorName: (type: string, id: string) => getName(type as "agent", id),
+    // ASSERT: this chip's `label` is also its accessibility label, so an
+    // unread directory must not put a name (or a type noun standing in for
+    // one) into a sentence a screen reader announces with full confidence.
+    actorName: (type: string, id: string) => resolveActorName(type, id),
   };
   const label =
     primary.kind === "rule"

@@ -19,7 +19,9 @@ import {
   wakeupTrigger,
   WAKEUP_ACTIVITY_ACTIONS,
   type StoredWakeupPreview,
+  type WakeupTextDeps,
 } from "./wakeup-presentation";
+import type { ActorNameState } from "./actor-name-state";
 
 function statusName(
   s: string | undefined,
@@ -185,10 +187,22 @@ function formatWakeupActivity(
 ): string {
   const getName = (type: string, id: string) =>
     resolveActorName(type, id) || id;
-  const deps = {
+  // `WakeupTextDeps.actorName` carries the read-state decision since iteration
+  // 257 (MYS-2228). This formatter's own resolver is a STRING that has already
+  // folded "not read yet" into the id fragment — the decision documented on
+  // `nameForSentence` (`lib/activity-search.ts`), which is what a timeline row
+  // wants: a sentence with a hole reads as broken, and the id at least says
+  // WHICH actor the past event was about. So the conversion here is faithful
+  // rather than a second decision: an empty answer is the only thing this
+  // layer can still recognise as "nothing to say".
+  const actorState = (type: string, id: string): ActorNameState => {
+    const name = resolveActorName(type, id);
+    return name.length > 0 ? { kind: "name", name } : { kind: "unsettled" };
+  };
+  const deps: WakeupTextDeps = {
     t: translate,
     statusLabel,
-    actorName: (type: string, id: string) => getName(type, id),
+    actorName: actorState,
   };
   const preview = details.wakeup
     ? previewOf(details.wakeup, (type, id) => getName(type, id))

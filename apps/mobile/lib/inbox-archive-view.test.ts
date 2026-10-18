@@ -11,6 +11,7 @@
 import { describe, expect, it } from "vitest";
 import type { ArchivedInboxPage, InboxItem } from "@multica/core/types";
 import {
+  archivedActorFilterRows,
   archivedCountUnavailable,
   archivedEmptyReason,
   archivedEntryCount,
@@ -292,5 +293,139 @@ describe("archivedPriorityFilterSupport", () => {
       inboxFiltersForPrioritySupport(selection, archivedPriorityFilterSupport())
         .priorities,
     ).toEqual(["urgent"]);
+  });
+});
+
+/**
+ * Iteration 257 (MYS-2228): the archived filters' "From" section.
+ *
+ * The section printed `getName(...)` into the row label AND sorted on that same
+ * string, so one read produced two failures at once: 「Unknown」 asserted as a
+ * name, and a row ORDER that depended on which directories had answered. The
+ * second is the one a warm-cache manual check never sees — on a partial cache
+ * (members resolved, agents not) the read and unread rows interleave, and every
+ * directory that lands reshuffles the sheet under the user's finger.
+ *
+ * These tests pin the split: the LABEL may be withheld, the ORDER may not move.
+ */
+describe("archivedActorFilterRows", () => {
+  const NAMES: Record<string, string> = {
+    "member:m1": "Zoe",
+    "member:m2": "Ada",
+    "agent:a1": "Grace",
+    "agent:a2": "Lin",
+  };
+  const nameOf = (type: string, id: string) => NAMES[`${type}:${id}`] ?? "Unknown";
+
+  const FACETS = {
+    "member:m1": 3,
+    "member:m2": 1,
+    "agent:a1": 5,
+    "agent:a2": 2,
+    system: 4,
+  };
+
+  const COLD = { member: false, agent: false, squad: false };
+  const HALF = { member: true, agent: false, squad: false };
+  const WARM = { member: true, agent: true, squad: true };
+
+  const rowsFor = (readiness: typeof COLD) =>
+    archivedActorFilterRows({
+      facetActors: FACETS,
+      selected: [],
+      readiness,
+      nameOf,
+      systemLabel: "From",
+    });
+
+  it("withholds every directory-derived label while nothing has settled", () => {
+    const rows = rowsFor(COLD);
+    // `system` is absent from the facets map? No — it is present, and it is a
+    // constant rather than a read, so it must be stated from the first frame.
+    const system = rows.find((r) => r.type === "system");
+    expect(system?.label).toBe("From");
+    // Every other row withholds — and withholds to `null`, not to a sentinel.
+    for (const r of rows.filter((row) => row.type !== "system")) {
+      expect(r.label, r.key).toBeNull();
+    }
+  });
+
+  it("states no fallback word in any state", () => {
+    // 「Unknown」 is the claim, whatever the spelling. A row that cannot name
+    // its actor says nothing; it never says a placeholder.
+    for (const readiness of [COLD, HALF, WARM]) {
+      for (const r of rowsFor(readiness)) {
+        expect(r.label ?? "", r.key).not.toMatch(/Unknown|Squad$/);
+      }
+    }
+  });
+
+  it("orders the rows identically in the cold, half-read and warm snapshots", () => {
+    // THE assertion of this round. Readiness may change the text; it may not
+    // change the sequence.
+    const keys = (readiness: typeof COLD) => rowsFor(readiness).map((r) => r.key);
+    expect(keys(HALF)).toEqual(keys(COLD));
+    expect(keys(WARM)).toEqual(keys(COLD));
+  });
+
+  it("keeps the order stable on the composite key, not on the names", () => {
+    // Proves the previous test is not vacuous: sorting by the resolved names
+    // would give a DIFFERENT order (Ada < Grace < Lin < Zoe < From), so a
+    // regression to label-sorting fails here rather than passing by accident.
+    const warm = rowsFor(WARM);
+    const byLabel = [...warm]
+      .sort((a, b) => (a.label ?? "").localeCompare(b.label ?? ""))
+      .map((r) => r.key);
+    expect(byLabel).not.toEqual(warm.map((r) => r.key));
+    // …and the actual order is the key order.
+    expect(warm.map((r) => r.key)).toEqual(
+      [...warm.map((r) => r.key)].sort((a, b) => a.localeCompare(b)),
+    );
+  });
+
+  it("names every actor once its own directory has answered, per TYPE", () => {
+    // The half-read snapshot: members resolved, agents not. A gate on BOTH
+    // directories would blank the member names too — the per-type regression
+    // iterations 253/254 exist to prevent.
+    const rows = rowsFor(HALF);
+    expect(rows.find((r) => r.key === "member:m1")?.label).toBe("Zoe");
+    expect(rows.find((r) => r.key === "member:m2")?.label).toBe("Ada");
+    expect(rows.find((r) => r.key === "agent:a1")?.label).toBeNull();
+    expect(rows.find((r) => r.key === "agent:a2")?.label).toBeNull();
+  });
+
+  it("keeps a selected actor in the list even when the facets no longer count it", () => {
+    // The checkbox has to stay reachable to be switched off, so the union with
+    // the current selection is load-bearing — and an unread row must still be
+    // present, just unnamed.
+    const rows = archivedActorFilterRows({
+      facetActors: {},
+      selected: ["agent:a1"],
+      readiness: COLD,
+      nameOf,
+      systemLabel: "From",
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ key: "agent:a1", label: null, count: 0 });
+  });
+
+  it("carries the facet count unchanged — a count is not a directory read", () => {
+    const cold = rowsFor(COLD);
+    const warm = rowsFor(WARM);
+    expect(cold.map((r) => r.count)).toEqual(warm.map((r) => r.count));
+    expect(cold.find((r) => r.key === "agent:a1")?.count).toBe(5);
+  });
+
+  it("renders the settled-but-gone actor as its id fragment", () => {
+    // A directory that answered and does not hold the row is a MEASUREMENT, so
+    // the row names which actor is gone rather than drawing a load mark.
+    const rows = archivedActorFilterRows({
+      facetActors: { "agent:ghost": 1 },
+      selected: [],
+      readiness: WARM,
+      nameOf: () => "Unknown Agent",
+      systemLabel: "From",
+    });
+    expect(rows[0].label).toBe("ghost");
   });
 });

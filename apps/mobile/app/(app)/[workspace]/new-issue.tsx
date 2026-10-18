@@ -52,6 +52,7 @@ import { projectDetailOptions } from "@/data/queries/projects";
 import { useNewIssueDraftStore } from "@/data/stores/new-issue-draft-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
+import { selectedActorLabel } from "@/lib/actor-name-state";
 import { useMentionInput, type UseMentionInputReturn } from "@/lib/use-mention-input";
 import {
   addUploadedAttachmentId,
@@ -190,7 +191,7 @@ export default function NewIssueModal() {
   const agentActor = useNewIssueDraftStore((s) => s.agentActor);
   const resetDraft = useNewIssueDraftStore((s) => s.reset);
   const setDraftDescription = useNewIssueDraftStore((s) => s.setDescription);
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
 
   // Restore each saved body, then mirror every later edit back into the store
   // (see `useDraftBodySync`). Waits for `hydrated` — until the workspace's
@@ -299,7 +300,20 @@ export default function NewIssueModal() {
       Alert.alert(
         t("newIssue.agentSentTitle"),
         t("newIssue.agentSentBody", {
-          name: getName(agentActor.type, agentActor.id),
+          // ECHO: the submit just succeeded against the actor the user picked
+          // in this form, so this dialog confirms a LOCAL fact rather than
+          // reporting a directory read. Withholding the name here would ask
+          // "Task created and handed to ." — unusable at the one moment the
+          // user needs to know where it went. An unread directory therefore
+          // degrades to the type's noun, never to nothing (MYS-2228).
+          name: selectedActorLabel({
+            state: resolveActorName(agentActor.type, agentActor.id),
+            type: agentActor.type,
+            fallback:
+              agentActor.type === "squad"
+                ? t("picker.squad")
+                : t("picker.agent"),
+          }),
         }),
       );
       router.back();
@@ -311,7 +325,7 @@ export default function NewIssueModal() {
       );
       return false;
     }
-  }, [promptInput, agentActor, priority, dueDate, project, parent, uploadedAttachmentIds, quickCreate, getName, t, resetDraft]);
+  }, [promptInput, agentActor, priority, dueDate, project, parent, uploadedAttachmentIds, quickCreate, resolveActorName, t, resetDraft]);
 
   const submitManualMode = useCallback(async () => {
     const trimmedTitle = title.trim();
