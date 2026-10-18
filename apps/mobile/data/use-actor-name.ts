@@ -7,6 +7,7 @@ import { squadListOptions } from "@/data/queries/squads";
 import { catalogRead } from "@/lib/catalog-read";
 import {
   actorNameState,
+  SYSTEM_ACTOR_STATE,
   type ActorNameState,
   type ActorReadiness,
   type ActorType,
@@ -111,6 +112,11 @@ export function useActorLookup() {
       type: ActorType | string | null | undefined,
       id: string | null | undefined,
     ): ActorNameState => {
+      // A platform-authored row names a constant, not a directory row: no
+      // workspace list can ever answer for it, so `isActorTypeResolved` would
+      // withhold it forever. See `SYSTEM_ACTOR_NAME`.
+      if (type === "system") return SYSTEM_ACTOR_STATE;
+
       // The raw row, read straight off the maps rather than through `getName`:
       // the decision needs "is there a row", not "what string did the fallback
       // produce", and routing it through `getName` would make the `gone`

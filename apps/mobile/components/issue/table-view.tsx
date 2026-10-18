@@ -415,9 +415,20 @@ export function IssueTableView({
         return value.status ? statusLabel(value.status) : "";
       }
       if (value.kind === "assignee") {
-        return value.actor
-          ? getName(value.actor.type, value.actor.id)
-          : t("picker.unassigned");
+        // Visible text, so it is subject to the name rule like the assignee
+        // column is (MYS-2219). `groupActorName` below is deliberately NOT
+        // converted: it feeds `buildIssueTableDisplayRows`' group KEY and the
+        // export path, which need one stable string per bucket — an empty
+        // string there would merge every unresolved assignee into one group.
+        //
+        // A band with no name is not left blank: the header is the only label
+        // the group has, so the unsettled case gets the same neutral reading
+        // mark the board and swimlane headers use.
+        if (!value.actor) return t("picker.unassigned");
+        return (
+          actorNameText(resolveActorName(value.actor.type, value.actor.id)) ||
+          t("issues.boardReadingAssignee")
+        );
       }
       if (value.kind === "property") {
         if (value.state === "unset") return t("table.noValue");
@@ -435,7 +446,7 @@ export function IssueTableView({
       }
       return "";
     },
-    [statusLabel, getName, t, properties],
+    [statusLabel, resolveActorName, t, properties],
   );
 
   // Re-derive from the live rows so the editor always shows the current

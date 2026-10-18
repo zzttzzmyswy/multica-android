@@ -4183,5 +4183,12 @@
   "workspaceSettings.saving": "Saving…",
   "workspaceSettings.slug": "Slug",
   "workspaceSettings.typeToConfirmPrefix": "Type",
-  "workspaceSettings.typeToConfirmSuffix": "to confirm"
+  "workspaceSettings.typeToConfirmSuffix": "to confirm",
+  "comment.collapseAriaNoName": "Collapse comment",
+  "comment.expandAriaNoName": "Expand comment",
+  "comment.foldBarNoAuthors": "{{count}} {{messageCount}}",
+  "comment.foldBarNoAuthorsLabel": "{{count}} {{messageCount}}. Tap to expand.",
+  "comment.resolvedBarNoAuthors": "Resolved · {{count}} {{messageCount}}",
+  "comment.resolvedBarNoAuthorsLabel": "Resolved thread, {{count}} {{messageCount}}. Tap to expand.",
+  "comment.resolvedNoName": "Resolved"
 }

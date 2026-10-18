@@ -33,6 +33,7 @@ import { AttributeChip } from "./attribute-chip";
 import { propertyCatalogOptions } from "@/data/queries/properties";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
+import { actorNameText } from "@/lib/actor-name-state";
 import {
   formatPropertyValue,
   propertyTypeIcon,
@@ -43,7 +44,7 @@ export function CustomPropertyRow({ issue }: { issue: Issue }) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const { t } = useTranslation();
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   const { data: catalog } = useQuery(propertyCatalogOptions(wsId));
 
   const { entries, addableCount } = useMemo(() => {
@@ -130,9 +131,19 @@ export function CustomPropertyRow({ issue }: { issue: Issue }) {
                     size={14}
                   />
                 }
-                label={display.refs
-                  .map((ref) => getName(ref.kind, ref.id))
-                  .join(", ")}
+                // One withheld name must not become an empty segment between
+                // two commas — the same defect the folded-thread bars had
+                // (`lib/actor-name-state.ts`'s `joinedActorNames`). With
+                // NOTHING readable the chip gets `null` and draws a load mark,
+                // rather than a pill asserting its actors are gone.
+                label={
+                  display.refs
+                    .map((ref) =>
+                      actorNameText(resolveActorName(ref.kind, ref.id)),
+                    )
+                    .filter(Boolean)
+                    .join(", ") || null
+                }
                 onPress={() => openEditor(property.id)}
               />
             );

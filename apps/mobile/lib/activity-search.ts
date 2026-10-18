@@ -42,28 +42,81 @@
  * and an injected status-label resolver. `lib/issue-find.ts` stays free of that
  * by taking this module's output as an injected parameter rather than importing
  * it — so the find lane keeps running under plain Node.
+ *
+ * ## The actor resolver is read-state-aware (iteration 255)
+ *
+ * The actor run is drawn through `components/ui/actor-name.tsx`, which paints a
+ * skeleton rather than a name while the workspace directory is still being
+ * read. So the haystack cannot hold a name then either: `deps.resolveActorName`
+ * returns the three-state decision, not a string, and an unsettled actor
+ * contributes an EMPTY run which `activityBlockIndex` drops. The alternative —
+ * indexing `getName`'s 「Unknown」 fallback — would make find report a word that
+ * is nowhere on the screen, the precise drift this module exists to prevent.
  */
 import type { TimelineEntry } from "@multica/core/types";
 import { formatActivity } from "./format-activity";
 import { coalesceTimeline } from "./timeline-coalesce";
+import { actorNameText, type ActorNameState } from "./actor-name-state";
 
-/** The resolvers the row itself works from: `useActorLookup().getName` and
- *  `useStatusLabel()`, threaded in so this module needs no React. */
+/**
+ * How a row's actor reference resolves, for BOTH of this module's consumers.
+ *
+ * Returns the three-state decision rather than a string because the row may
+ * not state a name it has not read (`lib/actor-name-state.ts`). The string
+ * form is taken here, once, by `actorNameText` — so the row and the find index
+ * still cannot drift: an unsettled actor contributes an empty run to BOTH, and
+ * find skips empty runs (`activityBlockIndex` filters them out).
+ *
+ * That is the whole contract, and it is why this deps type carries the state
+ * type instead of `string`: a resolver typed `=> string` would have to make
+ * the "name or nothing" decision somewhere, and "somewhere" is exactly how the
+ * drawn text and the haystack end up disagreeing.
+ */
+export type ResolveActorNameState = (
+  type: string | null | undefined,
+  id: string | null | undefined,
+) => ActorNameState;
+
+/** The resolvers the row itself works from: `useActorLookup().resolveActorName`
+ *  and `useStatusLabel()`, threaded in so this module needs no React. */
 export interface ActivityTextDeps {
   /**
-   * Resolve an actor (member / agent / squad) to the name the row draws. May
-   * fall back to "Unknown" / "System" while the workspace lists are still
-   * loading — correct here, because the row draws the same fallback, so the
-   * haystack still holds what is on screen. The caller rebuilds the index once
-   * the lists arrive by depending on this function's (memoised) identity.
+   * Resolve an actor (member / agent / squad) to the read-state-aware decision
+   * the row draws — NOT to a string. While the directory has not answered the
+   * row paints a load state and says no name, so this module must produce no
+   * name either: putting the `getName` fallback (「Unknown」) into the haystack
+   * would let find report a word that is not on screen, which is the exact
+   * class of bug this module was written to prevent (MYS-2109).
+   *
+   * The caller rebuilds the index when the directories settle by depending on
+   * this function's (memoised) identity — `useActorLookup` memoises it on the
+   * data, so the index follows the read.
    */
-  resolveActorName: (
-    type: string | null | undefined,
-    id: string | null | undefined,
-  ) => string;
+  resolveActorName: ResolveActorNameState;
   /** Status key → localized label. Omitted, a built-in key still resolves
    *  through i18n via `issueStatusLabel`. */
   statusLabel?: (statusKey: string) => string;
+}
+
+/** The string form `formatActivity` interpolates. An unsettled actor is the
+ *  empty string there, which `formatActivity`'s own `|| id` fallbacks and
+ *  `assignee_changed`'s truthiness check already handle (see the docblock on
+ *  `activityRowText`).
+ *
+ *  The last-resort `id` is deliberate: `formatActivity`'s wakeup sentences
+ *  read as broken English with a hole in them ("woke  now"), and a raw id at
+ *  least identifies WHICH actor the sentence is about — the same reasoning
+ *  `actorNameState`'s `gone` branch uses for its id fragment. It applies only
+ *  where the sentence has nowhere else to put the reference; the row's own
+ *  name run stays empty, so find cannot match an id the screen never shows in
+ *  that position.
+ */
+function nameForSentence(
+  resolve: ResolveActorNameState,
+  type: string | null | undefined,
+  id: string | null | undefined,
+): string {
+  return actorNameText(resolve(type, id)) || (id ?? "");
 }
 
 /** The row's text runs, in the order they read on screen. */
@@ -87,8 +140,15 @@ export function activityRowText(
   deps: ActivityTextDeps,
 ): ActivityRowText {
   return {
-    actor: deps.resolveActorName(entry.actor_type, entry.actor_id),
-    verb: formatActivity(entry, deps.resolveActorName, deps.statusLabel),
+    // The `font-medium` run. Empty while the actor's directory has not
+    // answered — the row draws a skeleton there, and a skeleton is not a word
+    // to search for.
+    actor: actorNameText(deps.resolveActorName(entry.actor_type, entry.actor_id)),
+    verb: formatActivity(
+      entry,
+      (type, id) => nameForSentence(deps.resolveActorName, type, id),
+      deps.statusLabel,
+    ),
   };
 }
 

@@ -5,7 +5,10 @@ import {
   actorReadiness,
   isActorTypeResolved,
   isResolvedActorName,
+  joinedActorNames,
   GONE_ID_FRAGMENT,
+  SYSTEM_ACTOR_NAME,
+  SYSTEM_ACTOR_STATE,
   UNRESOLVED_ACTOR_NAMES,
   type ActorReadiness,
 } from "./actor-name-state";
@@ -269,5 +272,135 @@ describe("what a cell may render for one actor", () => {
         fallback: { kind: "absent" },
       }),
     ).toEqual({ kind: "unsettled" });
+  });
+});
+
+/**
+ * Iteration 255 (MYS-2219) — the two shapes that only show up once a surface
+ * actually renders a resolver's output, rather than a `getName` string.
+ */
+describe("a system actor names a constant, not a directory row", () => {
+  it("is nameable with no directory read behind it", () => {
+    // Without this, wiring any surface to `resolveActorName` would blank every
+    // platform notice (a child-done comment, a failed-run report): `system` is
+    // not one of the three directories, so `isActorTypeResolved` answers false
+    // for it forever — honest for "no read can answer", wrong for "there is
+    // nothing to read because the name is a constant".
+    expect(SYSTEM_ACTOR_STATE).toEqual({ kind: "name", name: "Multica" });
+    expect(actorNameText(SYSTEM_ACTOR_STATE)).toBe(SYSTEM_ACTOR_NAME);
+    // …and it is not a sentinel, so a downstream `isResolvedActorName` check
+    // does not reject it either.
+    expect(isResolvedActorName(SYSTEM_ACTOR_NAME)).toBe(true);
+  });
+
+  it("uses web's word for it", () => {
+    // `packages/core/workspace/hooks.ts` `buildActorNameResolver`: system →
+    // "Multica". The product's name, not a person's, so it is not translated.
+    expect(SYSTEM_ACTOR_NAME).toBe("Multica");
+  });
+});
+
+describe("a folded thread's author line", () => {
+  const state = (
+    byname: Record<string, string>,
+    settled = true,
+  ) =>
+    (type: string | null | undefined, id: string | null | undefined) => {
+      if (!settled) return { kind: "unsettled" } as const;
+      const name = id ? byname[id] : undefined;
+      return name
+        ? ({ kind: "name", name } as const)
+        : ({ kind: "gone", name: (id ?? "").slice(0, 8) } as const);
+    };
+  const ref = (id: string) => ({ type: "member", id });
+
+  it("names up to the cap and counts the rest", () => {
+    const resolve = state({ a: "Ada", b: "Bob", c: "Cleo" });
+    expect(joinedActorNames([ref("a"), ref("b"), ref("c")], resolve, 2)).toBe(
+      "Ada, Bob +1",
+    );
+    expect(joinedActorNames([ref("a"), ref("b")], resolve, 2)).toBe("Ada, Bob");
+    expect(joinedActorNames([ref("a")], resolve, 2)).toBe("Ada");
+  });
+
+  it("de-duplicates by reference, first-seen order", () => {
+    const resolve = state({ a: "Ada", b: "Bob" });
+    expect(
+      joinedActorNames([ref("b"), ref("a"), ref("b")], resolve, 2),
+    ).toBe("Bob, Ada");
+  });
+
+  it("never leaves an empty segment between two commas", () => {
+    // The measured defect: `map(actorNameText).join(", ")` over a withheld name
+    // produces "Ada, , Grace". A reader takes the gap for a name they are
+    // expected to know. An unsettled author contributes nothing AND takes its
+    // separator with it.
+    const partial = (type: string | null | undefined, id: string | null | undefined) =>
+      id === "b"
+        ? ({ kind: "unsettled" } as const)
+        : state({ a: "Ada", c: "Grace" })(type, id);
+    const line = joinedActorNames([ref("a"), ref("b"), ref("c")], partial, 2);
+    expect(line).toBe("Ada, Grace");
+    expect(line).not.toMatch(/,\s*,/);
+    expect(line).not.toContain("Unknown");
+  });
+
+  it("counts only the authors it actually abbreviated", () => {
+    // The other measured defect: `+N` was `ordered.length - MAX_NAMED`, so a
+    // withheld name inflated a tail that named nobody. Three readable authors
+    // with one withheld is still "Ada, Grace +1" — the tail stands for Hedy
+    // alone, not for Hedy and the name nobody read.
+    const partial = (type: string | null | undefined, id: string | null | undefined) =>
+      id === "b"
+        ? ({ kind: "unsettled" } as const)
+        : state({ a: "Ada", c: "Grace", d: "Hedy" })(type, id);
+    expect(joinedActorNames([ref("a"), ref("b")], partial, 2)).toBe("Ada");
+    expect(
+      joinedActorNames([ref("a"), ref("b"), ref("c"), ref("d")], partial, 2),
+    ).toBe("Ada, Grace +1");
+  });
+
+  it("says nothing at all when no author is readable", () => {
+    // Reachable on a cold start. `""` — not "+5" — is what lets the bars
+    // withhold the whole clause and fall back to a sentence that names nobody.
+    const line = joinedActorNames(
+      [ref("a"), ref("b"), ref("c")],
+      state({}, false),
+      2,
+    );
+    expect(line).toBe("");
+  });
+
+  it("gives no tail when the tail would name nobody", () => {
+    // The narrow case the two rules above leave open: some names ARE readable,
+    // but every other author is withheld — so there is nothing for `+N` to
+    // stand for. "Ada +2" would claim two more participants the line cannot
+    // identify, which is the inflation in its smallest form.
+    const half = (type: string | null | undefined, id: string | null | undefined) =>
+      id === "a" ? state({ a: "Ada" })(type, id) : ({ kind: "unsettled" } as const);
+    expect(
+      joinedActorNames([ref("a"), ref("b"), ref("c")], half, 2),
+    ).toBe("Ada");
+  });
+
+  it("identifies a genuinely-gone author by id rather than dropping them", () => {
+    // A settled absence is a MEASURED participant — the directory answered and
+    // does not hold them — so it fills a named slot with the id fragment the
+    // rest of the primitive uses. Dropping it would undercount the thread, and
+    // "+1" would point at nothing the reader can see.
+    const resolve = state({ a: "Ada" });
+    expect(joinedActorNames([ref("a"), ref("9999999999")], resolve, 2)).toBe(
+      "Ada, 99999999",
+    );
+  });
+
+  it("does not turn a withheld author into an abbreviated one", () => {
+    // The distinction that makes the empty case work: `unsettled` means "not
+    // known to have taken part", so it neither names nor counts. Only `gone`
+    // reaches the `+N` tail.
+    const half = (type: string | null | undefined, id: string | null | undefined) =>
+      id === "a" ? ({ kind: "unsettled" } as const) : state({ c: "Cleo" })(type, id);
+    expect(joinedActorNames([ref("a"), ref("c")], half, 2)).toBe("Cleo");
+    expect(joinedActorNames([ref("a")], half, 2)).toBe("");
   });
 });

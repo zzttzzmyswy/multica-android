@@ -22,6 +22,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import type { AgentTask } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
+import { actorNameText } from "@/components/ui/actor-name";
 import { RunTranscriptDialog } from "@/components/agent/run-transcript-dialog";
 import {
   Collapsible,
@@ -55,7 +56,8 @@ const ACTIVE_STATUSES: readonly AgentTask["status"][] = [
 ];
 
 export function RunRow({ task, issueId }: Props) {
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
+  const agentName = actorNameText(resolveActorName("agent", task.agent_id));
   const { t } = useTranslation();
   const timeAgo = useTimeAgo();
   const [transcriptOpen, setTranscriptOpen] = useState(false);
@@ -74,8 +76,27 @@ export function RunRow({ task, issueId }: Props) {
           className="text-body text-foreground"
           numberOfLines={2}
         >
-          <Text className="font-medium">{getName("agent", task.agent_id)}</Text>
-          <Text className="text-muted-foreground"> · {summary}</Text>
+          {/* The agent's name is asserted only once the AGENT directory has
+           *  answered — `resolveActorName` keys readiness on the actor type, so
+           *  a slow or failed member list cannot blank it. Run rows never draw a
+           *  member, which is why this is the surface the per-type flag was
+           *  built for (MYS-2219).
+           *
+           *  No mark in the name's place here, unlike the standalone cells: this
+           *  name sits inline at the head of a sentence, and a load mark inside
+           *  a <Text> is a View inside a Text — not a shape RN renders
+           *  predictably. Withholding the name AND its separator is the
+           *  sentence-surface answer (`components/inbox/detail-label.tsx` makes
+           *  the same call); the avatar to the left is already an empty disc
+           *  until the directory answers, so the row still reads as loading. */}
+          {agentName ? (
+            <>
+              <Text className="font-medium">{agentName}</Text>
+              <Text className="text-muted-foreground"> · {summary}</Text>
+            </>
+          ) : (
+            <Text className="text-muted-foreground">{summary}</Text>
+          )}
         </Text>
         <View className="flex-row items-center gap-2">
           <StatusBadge task={task} />

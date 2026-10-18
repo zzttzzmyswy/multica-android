@@ -30,6 +30,7 @@ import type { Reaction, TimelineEntry } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { AutosizeTextArea } from "@/components/ui/autosize-textarea";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useTimeAgo } from "@/lib/time-ago";
@@ -70,6 +71,7 @@ import {
 } from "@/data/stores/resolved-expand-store";
 import { commentPreview } from "@/lib/comment-collapse";
 import { isDeletedComment } from "@/lib/comment-deletion";
+import { actorNameText, joinedActorNames } from "@/lib/actor-name-state";
 import {
   REVISION_CONFLICT_KEY,
   isRevisionConflictError,
@@ -100,6 +102,12 @@ interface Props {
    *  packages/views/issues/components/comment-card.tsx:498-682. */
   highlightedCommentId?: string | null;
 }
+
+/** How many distinct authors the two folded-thread bars name before rolling the
+ *  rest into `+N`. Two, because the bars are single-line section rows on a
+ *  narrow phone and a third name pushes the count off the end. Shared by both
+ *  bars so they cannot disagree about what "+N" started from. */
+const MAX_NAMED_AUTHORS = 2;
 
 export function CommentCard({
   entry,
@@ -340,7 +348,7 @@ function ResolvedThreadBar({
   replies: TimelineEntry[];
   onExpand: () => void;
 }) {
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   const { colorScheme } = useColorScheme();
   const { t } = useTranslation();
   const mutedFg = THEME[colorScheme].mutedForeground;
@@ -348,28 +356,22 @@ function ResolvedThreadBar({
   // Unique participant set across root + replies, preserving chronological
   // order of first appearance. Up to two authors are named; the rest are
   // rolled into "+N more" so the bar stays a single line on a narrow phone.
+  //
+  // The join lives in `joinedActorNames` rather than here because of the two
+  // ways the old inline version broke once names could be withheld: an
+  // unsettled author produced "Ada, , Grace" (a separator with no word on
+  // either side), and the `+N` tail counted authors it had not actually left
+  // out. See that function for both.
   const authorsLabel = useMemo(() => {
-    const MAX_NAMED = 2;
-    const seen = new Set<string>();
-    const ordered: { type: string | null; id: string | null }[] = [];
+    const authors: { type: string | null; id: string | null }[] = [];
     for (const e of [entry, ...replies]) {
       // A deleted comment names no author — the server clears it — so listing
       // its actor would credit someone with a message the reader cannot see.
       if (isDeletedComment(e)) continue;
-      const key = `${e.actor_type}:${e.actor_id}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      ordered.push({ type: e.actor_type, id: e.actor_id });
+      authors.push({ type: e.actor_type, id: e.actor_id });
     }
-    const named = ordered
-      .slice(0, MAX_NAMED)
-      .map((a) =>
-        getName(a.type as "member" | "agent" | null | undefined, a.id),
-      )
-      .join(", ");
-    const remaining = ordered.length - MAX_NAMED;
-    return remaining > 0 ? `${named} +${remaining}` : named;
-  }, [entry, replies, getName]);
+    return joinedActorNames(authors, resolveActorName, MAX_NAMED_AUTHORS);
+  }, [entry, replies, resolveActorName]);
 
   // Deleted replies render nothing when the thread expands, so the folded
   // count must not promise them either.
@@ -386,22 +388,28 @@ function ResolvedThreadBar({
         onPress={onExpand}
         className="flex-row items-center gap-2.5 px-4 py-3 rounded-2xl bg-surface-1 active:opacity-70"
         accessibilityRole="button"
-        accessibilityLabel={t("comment.resolvedBarLabel", {
-          authors: authorsLabel,
-          count: total,
-          messageCount,
-        })}
+        accessibilityLabel={t(
+          authorsLabel
+            ? "comment.resolvedBarLabel"
+            : "comment.resolvedBarNoAuthorsLabel",
+          { authors: authorsLabel, count: total, messageCount },
+        )}
       >
         <Ionicons name="checkmark-circle" size={18} color={mutedFg} />
         <Text
           className="flex-1 text-body text-muted-foreground"
           numberOfLines={1}
         >
-          {t("comment.resolvedBar", {
-            count: total,
-            messageCount,
-            authors: authorsLabel,
-          })}
+          {/* No name to give yet (every author's directory is still unread):
+           *  the bar keeps its counts and drops the "by …" clause entirely.
+           *  Withholding the whole clause — rather than leaving the template's
+           *  "by" dangling in front of an empty string, or painting a skeleton
+           *  into the middle of a sentence — is the choice this round makes for
+           *  every name embedded mid-sentence. See `joinedActorNames`. */}
+          {t(
+            authorsLabel ? "comment.resolvedBar" : "comment.resolvedBarNoAuthors",
+            { count: total, messageCount, authors: authorsLabel },
+          )}
         </Text>
         <Ionicons name="chevron-down" size={14} color={mutedFg} />
       </Pressable>
@@ -423,33 +431,21 @@ function CommentsFoldBar({
   replies: TimelineEntry[];
   onExpand: () => void;
 }) {
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   const { colorScheme } = useColorScheme();
   const { t } = useTranslation();
   const mutedFg = THEME[colorScheme].mutedForeground;
 
   const authorsLabel = useMemo(() => {
-    const MAX_NAMED = 2;
-    const seen = new Set<string>();
-    const ordered: { type: string | null; id: string | null }[] = [];
+    const authors: { type: string | null; id: string | null }[] = [];
     for (const e of replies) {
       // Same rule as the resolved bar: a tombstone names no author, and the
       // bar must not list someone whose message renders no row.
       if (isDeletedComment(e)) continue;
-      const key = `${e.actor_type}:${e.actor_id}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      ordered.push({ type: e.actor_type, id: e.actor_id });
+      authors.push({ type: e.actor_type, id: e.actor_id });
     }
-    const named = ordered
-      .slice(0, MAX_NAMED)
-      .map((a) =>
-        getName(a.type as "member" | "agent" | null | undefined, a.id),
-      )
-      .join(", ");
-    const remaining = ordered.length - MAX_NAMED;
-    return remaining > 0 ? `${named} +${remaining}` : named;
-  }, [replies, getName]);
+    return joinedActorNames(authors, resolveActorName, MAX_NAMED_AUTHORS);
+  }, [replies, resolveActorName]);
 
   // A deleted reply renders no row when the bar is expanded, so counting it
   // here would promise a message the reader can never see.
@@ -461,15 +457,17 @@ function CommentsFoldBar({
       onPress={onExpand}
       className="flex-row items-center gap-2.5 px-3 py-2.5 rounded-xl bg-secondary/60 active:opacity-70"
       accessibilityRole="button"
-      accessibilityLabel={t("comment.foldBarLabel", {
-        authors: authorsLabel,
-        count: total,
-        messageCount,
-      })}
+      accessibilityLabel={t(
+        authorsLabel ? "comment.foldBarLabel" : "comment.foldBarNoAuthorsLabel",
+        { authors: authorsLabel, count: total, messageCount },
+      )}
     >
       <Ionicons name="chevron-forward" size={13} color={mutedFg} />
       <Text className="flex-1 text-body text-muted-foreground" numberOfLines={1}>
-        {t("comment.foldBar", {
+        {/* Same clause-withholding rule as `<ResolvedThreadBar>` above: with no
+         *  author readable, the bar says how many messages it folds and stops,
+         *  rather than trailing a "by" with nothing after it. */}
+        {t(authorsLabel ? "comment.foldBar" : "comment.foldBarNoAuthors", {
           count: total,
           messageCount,
           authors: authorsLabel,
@@ -515,14 +513,21 @@ function ResolvedIndicator({
   onCollapse: () => void;
 }) {
   const { t } = useTranslation();
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   const timeAgo = useTimeAgo();
   const { colorScheme } = useColorScheme();
   const mutedFg = THEME[colorScheme].mutedForeground;
-  const resolverName = getName(
-    entry.resolved_by_type as "member" | "agent" | null | undefined,
-    entry.resolved_by_id,
+  // `resolved_by` is a workspace actor like any other, so the sentence naming
+  // it is subject to the same rule as the two bars above: no directory answer
+  // yet → say nothing about WHO, keep saying WHEN. `actorNameText` is empty for
+  // `unsettled`, which selects the author-less sentence below.
+  const resolverName = actorNameText(
+    resolveActorName(
+      entry.resolved_by_type as "member" | "agent" | null | undefined,
+      entry.resolved_by_id,
+    ),
   );
+  const resolvedAt = entry.resolved_at ? ` · ${timeAgo(entry.resolved_at)}` : "";
 
   return (
     <Pressable
@@ -533,8 +538,10 @@ function ResolvedIndicator({
     >
       <Ionicons name="checkmark-circle" size={14} color={mutedFg} />
       <Text className="text-caption text-muted-foreground flex-1" numberOfLines={1}>
-        {t("comment.resolvedBy", { name: resolverName })}
-        {entry.resolved_at ? ` · ${timeAgo(entry.resolved_at)}` : ""}
+        {resolverName
+          ? t("comment.resolvedBy", { name: resolverName })
+          : t("comment.resolvedNoName")}
+        {resolvedAt}
       </Text>
       <Text className="text-caption text-muted-foreground">{t("common.collapse")}</Text>
     </Pressable>
@@ -600,7 +607,7 @@ function CommentBody({
   const isSelecting = useCommentSelectStore(
     (s) => s.selectingId === entry.id,
   );
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   const { colorScheme } = useColorScheme();
   const userId = useAuthStore((s) => s.user?.id);
   const { role } = useCurrentMemberRole();
@@ -649,9 +656,16 @@ function CommentBody({
     issueAttachmentsOptions(wsId, issueId),
   );
 
-  const name = getName(
-    entry.actor_type as "member" | "agent" | null | undefined,
-    entry.actor_id,
+  // The author's name as a decided fact, not a lookup string: an unread
+  // directory must not put 「Unknown」 where a person's name goes, because this
+  // header shows nothing else — the reader would take it as the author's name
+  // (MYS-2219). `name` is therefore empty exactly when the avatar beside it is
+  // also withholding its initials, and the header draws a load mark instead.
+  const name = actorNameText(
+    resolveActorName(
+      entry.actor_type as "member" | "agent" | null | undefined,
+      entry.actor_id,
+    ),
   );
   const edited =
     entry.updated_at &&
@@ -861,10 +875,21 @@ function CommentBody({
             onPress={onToggleCollapse}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel={t(
-              isFolded ? "comment.expandAria" : "comment.collapseAria",
-              { name },
-            )}
+            accessibilityLabel={
+              // "Collapse Ada's comment" needs the name. Without it the label
+              // would read "Collapse 's comment", so the anonymous phrasing is
+              // used instead of a template with a hole in it — the same call
+              // the resolved-by row makes.
+              name
+                ? t(isFolded ? "comment.expandAria" : "comment.collapseAria", {
+                    name,
+                  })
+                : t(
+                    isFolded
+                      ? "comment.expandAriaNoName"
+                      : "comment.collapseAriaNoName",
+                  )
+            }
             className="active:opacity-60"
           >
             <Ionicons
@@ -886,13 +911,26 @@ function CommentBody({
               : undefined
           }
         />
-        <Text
-          numberOfLines={1}
-          ellipsizeMode="tail"
-          className="shrink text-body font-medium text-foreground"
-        >
-          {name}
-        </Text>
+        {/* The author's name — or, while the directory has not answered, a
+         *  load mark in the same slot. The timestamp to its right is derived
+         *  from the comment itself (a measured fact), so it keeps rendering:
+         *  the row still says when this was written, it just does not claim
+         *  who wrote it. */}
+        {name ? (
+          <Text
+            numberOfLines={1}
+            ellipsizeMode="tail"
+            className="shrink text-body font-medium text-foreground"
+          >
+            {name}
+          </Text>
+        ) : (
+          <Skeleton
+            className="h-3.5 w-16"
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          />
+        )}
         <Text
           numberOfLines={1}
           className="shrink-0 text-caption text-muted-foreground"

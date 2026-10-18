@@ -34,6 +34,7 @@ import Svg, { Path } from "react-native-svg";
 import type { AgentTask } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
+import { actorNameText } from "@/components/ui/actor-name";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useTranslation, useIntlLocale } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
@@ -346,7 +347,7 @@ function RunStats({ timeline }: { timeline: RunTimeline }) {
 export function RunTimelineChart({ timeline }: { timeline: RunTimeline }) {
   const { t } = useTranslation();
   const locale = useIntlLocale();
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
 
@@ -551,7 +552,7 @@ export function RunTimelineChart({ timeline }: { timeline: RunTimeline }) {
               >
                 <ActorAvatar type="agent" id={lane.agentId} size={14} />
                 <Text className="flex-1 text-micro text-muted-foreground" numberOfLines={1}>
-                  {getName("agent", lane.agentId)}
+                  {actorNameText(resolveActorName("agent", lane.agentId))}
                 </Text>
               </View>
             ))}
@@ -749,7 +750,7 @@ function runBarColor(
 function RunReadout({ run }: { run: TimelineRun }) {
   const { t } = useTranslation();
   const locale = useIntlLocale();
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   const when = new Intl.DateTimeFormat(locale, {
     month: "short",
     day: "numeric",
@@ -772,7 +773,13 @@ function RunReadout({ run }: { run: TimelineRun }) {
       <View className="flex-row items-center gap-1.5">
         <ActorAvatar type="agent" id={run.task.agent_id} size={12} />
         <Text className="flex-1 text-micro text-muted-foreground" numberOfLines={1}>
-          {[getName("agent", run.task.agent_id), ...facts].join(" · ")}
+          {/* A `join(" · ")` over an empty first element would draw
+           *  「 · Mar 3, 14:20」 — a separator with nothing before it. The name
+           *  is therefore prepended only when there is one; the readout's own
+           *  facts are measured and never withheld. */}
+          {[actorNameText(resolveActorName("agent", run.task.agent_id)), ...facts]
+            .filter((part) => part.length > 0)
+            .join(" · ")}
         </Text>
       </View>
       <Text className="text-micro tabular-nums">
@@ -889,7 +896,7 @@ function RunDayList({ timeline }: { timeline: RunTimeline }) {
 function RunListRow({ run }: { run: TimelineRun }) {
   const { t } = useTranslation();
   const locale = useIntlLocale();
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   const task = run.task;
   const time = new Intl.DateTimeFormat(locale, {
     hour: "2-digit",
@@ -917,7 +924,7 @@ function RunListRow({ run }: { run: TimelineRun }) {
         <View className="flex-row items-center gap-1.5">
           <ActorAvatar type="agent" id={task.agent_id} size={12} />
           <Text className="flex-1 text-micro text-muted-foreground" numberOfLines={1}>
-            {getName("agent", task.agent_id)}
+            {actorNameText(resolveActorName("agent", task.agent_id))}
           </Text>
           <Text className={`text-micro ${STATUS_CLASS[task.status]}`} numberOfLines={1}>
             {run.active

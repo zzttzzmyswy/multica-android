@@ -11,11 +11,16 @@
 import { Pressable, View } from "react-native";
 import type { ReactNode } from "react";
 import { Text } from "@/components/ui/text";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 interface Props {
   icon: ReactNode;
-  label: string;
+  /** The chip's text. `null` means "this value exists but may not be stated
+   *  yet" — an actor whose directory has not answered (MYS-2219). The chip
+   *  keeps its icon, its shape and its tap target, and draws a load mark where
+   *  the text would be instead of asserting a fallback name. */
+  label: string | null;
   variant?: "filled" | "dimmed";
   onPress?: () => void;
   className?: string;
@@ -49,9 +54,20 @@ export function AttributeChip({
   const inner = (
     <>
       {icon}
-      <Text className={labelClass} numberOfLines={1}>
-        {label}
-      </Text>
+      {label === null ? (
+        // A chip whose value is not yet known: the mark occupies the label's
+        // line so the row does not reflow when the directory lands, and it is
+        // hidden from the accessibility tree (a load state is not a value).
+        <Skeleton
+          className="h-2.5 w-10"
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        />
+      ) : (
+        <Text className={labelClass} numberOfLines={1}>
+          {label}
+        </Text>
+      )}
     </>
   );
 
