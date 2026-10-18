@@ -35,12 +35,14 @@ import { useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Text } from "@/components/ui/text";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { LarkInstallDialog, type LarkRegion } from "@/components/agent/lark-install-dialog";
 import { ChannelByoDialog } from "@/components/agent/channel-byo-dialog";
 import { ActionSheet } from "@/lib/action-sheet";
 import { recordRead } from "@/lib/catalog-read";
+import { actorNameText, type ActorNameState } from "@/lib/actor-name-state";
 import type { CatalogState } from "@/lib/catalog-state";
 import {
   useDisconnectDingTalkInstallation,
@@ -129,7 +131,7 @@ export default function AgentIntegrationsPage() {
   const { t } = useTranslation();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   const [openError, setOpenError] = useState(false);
   // Which bind flow is open, if any. Lark needs a region chosen first, so it
   // is held separately from the BYO channels.
@@ -311,7 +313,7 @@ export default function AgentIntegrationsPage() {
               }
               onBindInBrowser={openBindInBrowser}
               onDisconnect={(install) => confirmDisconnect(channel.key, install)}
-              getName={getName}
+              resolveActorName={resolveActorName}
             />
           ))
         )}
@@ -352,7 +354,7 @@ function ChannelSection({
   onBind,
   onBindInBrowser,
   onDisconnect,
-  getName,
+  resolveActorName,
 }: {
   channel: ChannelConfig;
   canManage: boolean;
@@ -364,10 +366,13 @@ function ChannelSection({
   onBind: () => void;
   onBindInBrowser: () => void;
   onDisconnect: (install: BoundInstall) => void;
-  getName: (
-    type: "member" | "agent" | "squad" | null | undefined,
+  /** The read-state-aware resolver. This card prints the installer's name as a
+   *  property value, which is an ASSERTION — 「Unknown」 must not stand in for
+   *  "the member list has not answered" (MYS-2227). */
+  resolveActorName: (
+    type: string | null | undefined,
     id: string | null | undefined,
-  ) => string;
+  ) => ActorNameState;
 }) {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
@@ -391,7 +396,7 @@ function ChannelSection({
       <ConnectedCard
         install={state.activeInstall}
         channelKey={channel.key}
-        getName={getName}
+        resolveActorName={resolveActorName}
         onDisconnect={() => onDisconnect(state.activeInstall as BoundInstall)}
       />
     );
@@ -435,18 +440,25 @@ function ChannelSection({
 function ConnectedCard({
   install,
   channelKey,
-  getName,
+  resolveActorName,
   onDisconnect,
 }: {
   install: BoundInstall;
   channelKey: ChannelKey;
-  getName: (type: "member" | "agent" | "squad" | null | undefined, id: string | null | undefined) => string;
+  resolveActorName: (
+    type: string | null | undefined,
+    id: string | null | undefined,
+  ) => ActorNameState;
   onDisconnect: () => void;
 }) {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
   const active = install.status === "active";
+  // Decided ONCE, read by both the text and the pending flag — two separate
+  // calls could disagree within a render if the directory settles between
+  // them, which would paint a skeleton and a name in the same frame.
+  const installer = resolveActorName("member", install.installer_user_id);
   const larkRegion =
     channelKey === "lark"
       ? install.region === "lark"
@@ -479,9 +491,16 @@ function ConnectedCard({
       {channelKey === "wecom" ? (
         <InfoRow label={t("agents.integrations.botIdLabel")} value={install.bot_id} mono />
       ) : null}
+      {/* The installer is a property VALUE, so it is subject to the name rule
+       *  the same way a detail page's "Owner" row is: until the MEMBER
+       *  directory answers there is no name to state, and the row draws a
+       *  load mark instead of asserting a person (MYS-2227). Only the member
+       *  list can answer here — `installer_user_id` is always a user id — so
+       *  readiness is taken for `member` alone, not for `resolved`. */}
       <InfoRow
         label={t("agents.integrations.installedByLabel")}
-        value={getName("member", install.installer_user_id)}
+        value={actorNameText(installer)}
+        pending={installer.kind === "unsettled"}
       />
       {install.installed_at ? (
         <InfoRow
@@ -510,25 +529,39 @@ function InfoRow({
   label,
   value,
   mono,
+  pending = false,
 }: {
   label: string;
   value?: string | null;
   mono?: boolean;
+  /** The value exists but may not be stated yet — an actor whose directory
+   *  has not answered (MYS-2227). Drawn as a load mark, NOT as the "—" this
+   *  row uses for an empty field: those are different facts, and a dash would
+   *  claim this installation has no installer. */
+  pending?: boolean;
 }) {
   const { colorScheme } = useColorScheme();
   return (
     <View className="flex-row items-center">
       <Text className="w-20 text-caption text-muted-foreground">{label}</Text>
-      <Text
-        className={cn(
-          "flex-1 text-caption text-foreground",
-          mono && "font-mono",
-        )}
-        numberOfLines={1}
-        style={mono ? { color: THEME[colorScheme].mutedForeground } : undefined}
-      >
-        {value || "—"}
-      </Text>
+      {pending ? (
+        <Skeleton
+          className="h-3 w-16"
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        />
+      ) : (
+        <Text
+          className={cn(
+            "flex-1 text-caption text-foreground",
+            mono && "font-mono",
+          )}
+          numberOfLines={1}
+          style={mono ? { color: THEME[colorScheme].mutedForeground } : undefined}
+        >
+          {value || "—"}
+        </Text>
+      )}
     </View>
   );
 }

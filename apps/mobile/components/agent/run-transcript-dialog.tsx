@@ -27,6 +27,7 @@ import { RunDetailsPanel } from "@/components/agent/run-details-panel";
 import { taskMessagesOptions } from "@/data/queries/chat";
 import { runtimeListOptions } from "@/data/queries/runtimes";
 import { useActorLookup } from "@/data/use-actor-name";
+import { ActorNameText } from "@/components/ui/actor-name";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { attributionShouldRender } from "@/lib/task-attribution";
 import { formatDateTime } from "@/lib/autopilot-format";
@@ -77,7 +78,7 @@ export function RunTranscriptDialog({
   const insets = useSafeAreaInsets();
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   const live = taskStatus === "running";
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
@@ -273,12 +274,16 @@ export function RunTranscriptDialog({
           {task ? (
             <View className="flex-row items-center gap-x-1.5 pl-11">
               <ActorAvatar type="agent" id={task.agent_id} size={16} />
-              <Text
-                numberOfLines={1}
+              {/* This dialog only ever draws the AGENT that ran the task, so
+               *  its name waits on the agent directory alone — a slow member
+               *  list cannot blank the header (MYS-2227). Withheld while
+               *  unread rather than filled with 「Unknown Agent」: the avatar
+               *  beside it is already an empty disc, so the header still
+               *  reads as loading. */}
+              <ActorNameText
+                state={resolveActorName("agent", task.agent_id)}
                 className="shrink text-caption font-medium text-foreground"
-              >
-                {getName("agent", task.agent_id)}
-              </Text>
+              />
               {attributionShouldRender(task.attribution) ? (
                 <>
                   <Text className="shrink-0 text-muted-foreground/70">{" · "}</Text>

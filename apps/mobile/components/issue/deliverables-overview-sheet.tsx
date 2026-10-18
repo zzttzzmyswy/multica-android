@@ -43,6 +43,7 @@ import {
 import { formatBytes } from "@/lib/format-bytes";
 import { useTranslation } from "@/lib/i18n/react";
 import { useActorLookup } from "@/data/use-actor-name";
+import { actorNameText } from "@/lib/actor-name-state";
 import { useTimeAgo } from "@/lib/time-ago";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
@@ -77,7 +78,7 @@ export function DeliverablesOverviewSheet({
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   const timeAgo = useTimeAgo();
   const openFile = useOpenDeliverable(source);
   const [filter, setFilter] = useState<Filter>("all");
@@ -207,22 +208,35 @@ export function DeliverablesOverviewSheet({
                 const actorId = comment?.actor_id ?? first.uploader_id;
                 const at = comment?.created_at ?? first.created_at;
                 // `useActorLookup`'s three lists are member / agent / squad, and
-                // its `getName` has no `system` arm — the string "system" falls
+                // `getName` has no `system` arm — the string "system" falls
                 // through to its squad fallback and would print "Squad" for a
                 // platform-generated comment. comment-card.tsx narrows the same
                 // way, for the same reason.
-                const name = getName(
+                //
+                // A `system` uploader is decided by the resolver's own
+                // constant (`SYSTEM_ACTOR_STATE` → 「Multica」), which is the
+                // name the timeline and the comment cards already print for the
+                // same rows — one actor, one name, across three surfaces
+                // (MYS-2227). For a real actor the resolver withholds while its
+                // directory is unread.
+                const resolved = resolveActorName(
                   actorType as "member" | "agent" | "squad" | null | undefined,
                   actorId,
                 );
+                const name = actorNameText(resolved);
                 return (
                   <View key={group.commentId} className="pt-3">
                     <View className="mb-2 flex-row items-center gap-2">
                       <ActorAvatar type={actorType} id={actorId} size={24} />
                       <Text className="flex-1 text-body font-medium" numberOfLines={1}>
-                        {t("deliverables.groupCommentBy", {
-                          name,
-                        })}
+                        {name
+                          ? t("deliverables.groupCommentBy", { name })
+                          : // Nobody readable yet: the heading names the
+                            // artefact set instead of leaving "Comment by" with
+                            // nothing after it, which is the dangling-
+                            // preposition defect the inbox line avoids the same
+                            // way (MYS-2227).
+                            t("deliverables.sectionTitle")}
                       </Text>
                       <Text className="text-caption text-muted-foreground">
                         {timeAgo(at)}

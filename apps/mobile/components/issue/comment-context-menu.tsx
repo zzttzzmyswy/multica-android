@@ -33,6 +33,7 @@ import { useSourceContextTargetStore } from "@/data/stores/source-context-target
 import { canCreateSubIssueFromComment } from "@/lib/source-context";
 import { getWebBaseUrl } from "@/data/server-config";
 import { useActorLookup } from "@/data/use-actor-name";
+import { actorNameText } from "@/lib/actor-name-state";
 import {
   useDeleteComment,
   useResolveComment,
@@ -60,7 +61,7 @@ export function useCommentLongPress(
   const toggleReaction = useToggleCommentReaction(issueId);
   const deleteComment = useDeleteComment(issueId);
   const resolveComment = useResolveComment(issueId);
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   const { role } = useCurrentMemberRole();
   // Same config cache `useDeleteComment` reads when it runs, so the promise
   // the confirmation makes and the route the delete takes cannot disagree.
@@ -77,10 +78,23 @@ export function useCommentLongPress(
       isOwn || (canModerate && entry.actor_type === "member");
     const canDeleteEntry = isOwn || canModerate;
     // Resolved once — the delete confirmation and the reply target both want
-    // the author's display name.
-    const authorName = getName(
-      entry.actor_type as "member" | "agent" | null | undefined,
-      entry.actor_id,
+    // the author's display name, and they want the SAME one: the user opened
+    // this sheet from a card that drew the author through the read-state-aware
+    // primitive, so a second, raw lookup here could print a different word for
+    // the same person in the same breath (MYS-2227).
+    //
+    // `authorName` stays empty while the directory is unread, and each of the
+    // two consumers has its own honest fallback:
+    //   - the reply chip gets a generic 「comment」, preserving the old
+    //     behaviour for an author this build cannot name;
+    //   - the delete confirmation uses the unqualified title, the same one the
+    //     author's own delete already shows — asking 「Delete 's comment?」 would
+    //     be worse than not naming them.
+    const authorName = actorNameText(
+      resolveActorName(
+        entry.actor_type as "member" | "agent" | null | undefined,
+        entry.actor_id,
+      ),
     );
     const isRoot = !entry.parent_id;
     const resolved = !!entry.resolved_at;
@@ -275,7 +289,11 @@ export function useCommentLongPress(
             // deployment we talk to, is the same class of lie in both
             // directions.
             Alert.alert(
-              isOwn
+              // A moderated delete names the author so an admin working through
+              // a long thread does not have to scroll back — but only when
+              // there IS a name to give. Withheld, the unqualified title is
+              // still true and still asks the same question.
+              isOwn || !authorName
                 ? t("comment.deleteCommentTitle")
                 : t("comment.moderateDeleteTitle", { name: authorName }),
               keepReplies
@@ -304,7 +322,7 @@ export function useCommentLongPress(
     toggleReaction,
     deleteComment,
     resolveComment,
-    getName,
+    resolveActorName,
     role,
     keepReplies,
     onEdit,

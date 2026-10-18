@@ -41,6 +41,7 @@ import { agentListOptions } from "@/data/queries/agents";
 import { useNewIssueDraftStore } from "@/data/stores/new-issue-draft-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
+import { selectedActorLabel } from "@/lib/actor-name-state";
 import { isAgentRuntimeBound } from "@/lib/is-agent-runtime-bound";
 import type { UseMentionInputReturn } from "@/lib/use-mention-input";
 import { useTranslation } from "@/lib/i18n/react";
@@ -66,7 +67,7 @@ export function QuickCreatePanel({
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const actor = useNewIssueDraftStore((s) => s.agentActor);
   const setActor = useNewIssueDraftStore((s) => s.setAgentActor);
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   const { data: agents = [] } = useQuery(agentListOptions(wsId));
 
   // Visible = non-archived AND runtime-bound. Same bar the agent picker
@@ -85,8 +86,22 @@ export function QuickCreatePanel({
     setActor({ type: "agent", id: visibleAgents[0].id });
   }, [actor, visibleAgents, setActor]);
 
+  // ECHO: `actor` is seeded locally (first runtime-bound agent) and then
+  // replaced by whatever the user picks, so it is never a read result. The
+  // 「选择智能体」 placeholder is what an EMPTY selection says — an actor that IS
+  // selected must not borrow it, or the panel would look unconfigured right
+  // after being configured (MYS-2227).
   const actorLabel = actor
-    ? getName(actor.type, actor.id)
+    ? selectedActorLabel({
+        state: resolveActorName(actor.type, actor.id),
+        type: actor.type,
+        // NOT `newIssue.agentSelectAgent` — that is what an EMPTY selection
+        // says, and borrowing it here would make a configured panel look
+        // unconfigured. The type's own noun is the right word for a
+        // set-but-unread actor; this argument is the last-resort override for
+        // a type this build does not recognise.
+        fallback: t("picker.agent"),
+      })
     : t("newIssue.agentSelectAgent");
 
   const openActorPicker = () => {

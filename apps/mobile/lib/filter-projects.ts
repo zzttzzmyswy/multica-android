@@ -103,6 +103,22 @@ export function leadFilterValue(p: Project): string | null {
   return p.lead_type && p.lead_id ? `${p.lead_type}:${p.lead_id}` : null;
 }
 
+/** One lead-filter chip: the composite value it filters by, the name it may
+ *  show, and a key its ORDER can be settled on before any name exists. */
+export interface LeadFilterOption {
+  value: string;
+  /** The lead's name, or `null` while the directory that would answer for it
+   *  has not settled. `null` is not "no lead" — a project with no lead
+   *  contributes no option at all, as in web's loop. */
+  label: string | null;
+  /** Stable per-reference ordering key. Deliberately the composite `value`, not
+   *  the label: sorting by a withholdable string makes the chips reshuffle as
+   *  directories answer, and on a partial cache (members resolved, agents not)
+   *  it actively interleaves them. */
+  sortKey: string;
+  count: number;
+}
+
 // Progress proxy for the progress sort. -1 for an issueless project puts
 // them last in a desc sort (same total-order trick web uses).
 const progressOf = (p: Project) =>
@@ -199,4 +215,53 @@ export function sortProjects(
     return (Date.parse(a.created_at) - Date.parse(b.created_at)) * dir;
   });
   return sorted;
+}
+
+/**
+ * Lead-filter options — web's `leadOptions` memo
+ * (`projects-page.tsx:855-865`), plus the read-state split iteration 256
+ * (MYS-2227) needed.
+ *
+ * Two requirements pull in opposite directions here:
+ *
+ *   - The chip's TEXT is an assertion about a person, so an unread directory
+ *     must withhold it rather than print `getName`'s 「Unknown Agent」.
+ *   - The chip's ORDER must not depend on read progress. `sortKey` is the
+ *     composite `type:id` reference, which exists the moment the option does,
+ *     so the chips are in their final positions on the first paint and stay
+ *     there. Iteration 255 established the same split for the issue table's
+ *     grouped cells: settle the key on ids, never on text a read can withhold.
+ *
+ * The resolver is injected rather than read from a hook so this module stays
+ * React-free and the Node lane can exercise both properties.
+ */
+export function leadFilterOptions(
+  projects: readonly Project[],
+  resolveName: (
+    type: "member" | "agent",
+    id: string,
+  ) => { kind: "name" | "gone"; name: string } | { kind: "unsettled" },
+): LeadFilterOption[] {
+  const byValue = new Map<
+    string,
+    { type: "member" | "agent"; id: string; count: number }
+  >();
+  for (const p of projects) {
+    const v = leadFilterValue(p);
+    if (!v || !p.lead_type || !p.lead_id) continue;
+    const entry = byValue.get(v);
+    if (entry) entry.count += 1;
+    else byValue.set(v, { type: p.lead_type, id: p.lead_id, count: 1 });
+  }
+  return [...byValue.entries()]
+    .map(([value, { type, id, count }]) => {
+      const state = resolveName(type, id);
+      return {
+        value,
+        label: state.kind === "unsettled" ? null : state.name,
+        sortKey: value,
+        count,
+      };
+    })
+    .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
 }

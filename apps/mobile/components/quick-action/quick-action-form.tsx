@@ -40,6 +40,7 @@ import {
   useDeleteQuickAction,
 } from "@/data/mutations/quick-actions";
 import { useActorLookup } from "@/data/use-actor-name";
+import { selectedActorLabel } from "@/lib/actor-name-state";
 import {
   AgentSquadPickerModal,
   type QuickActionAssignee,
@@ -99,7 +100,7 @@ export function QuickActionForm({ action }: { action?: QuickAction | null }) {
   const [prompt, setPrompt] = useState(action?.prompt ?? "");
   const [pickerOpen, setPickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
 
   const create = useCreateQuickAction();
   const update = useUpdateQuickAction();
@@ -190,7 +191,16 @@ export function QuickActionForm({ action }: { action?: QuickAction | null }) {
 
   const assigneeRowLabel = () => {
     if (!assignee) return t("quickActions.selectTarget");
-    return getName(assignee.type, assignee.id);
+    // ECHO: this row shows the form's OWN field — the value it was seeded
+    // with, or the one the user just picked in the sheet it opens. A skeleton
+    // here would read as "the target was lost", and the create/run action is
+    // gated on this value, so the reader needs to see that it is set
+    // (MYS-2227).
+    return selectedActorLabel({
+      state: resolveActorName(assignee.type, assignee.id),
+      type: assignee.type,
+      fallback: t("filter.assignee"),
+    });
   };
 
   return (

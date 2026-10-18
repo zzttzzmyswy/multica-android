@@ -199,6 +199,114 @@ export function isResolvedActorName(name: string): boolean {
 }
 
 /**
+ * The two contexts an actor's name can appear in, and why one decision cannot
+ * serve both.
+ *
+ * Everything above this line answers an **assertion**: the surface is telling
+ * the reader who somebody is — a table cell, a detail page's "Owner" row, a run
+ * record's agent. There, an unread directory must withhold, because 「Unknown
+ * Agent」 is a claim the client cannot back (`actorNameState`'s `unsettled`).
+ *
+ * An **echo** is the opposite situation (iteration 256, MYS-2227). The user has
+ * just picked this actor in a picker, or the field was seeded from a row they
+ * are looking at, so the selection is a LOCAL FACT this client established, not
+ * a read result. Withholding it is worse than naming it wrongly: a picker sheet
+ * whose 「Assign to」 row draws a skeleton for a value the user chose one tap ago
+ * reads as "my choice was lost", and a confirmation dialog that blanks the
+ * name it is asking about ("Assign this issue to ." ) is unusable.
+ *
+ * So an echo never withholds. It degrades to the type's generic noun — 「Agent」
+ * / 「成员」 — which is true (the type IS known from the selection), occupies the
+ * line, and keeps the sentence grammatical. When the directory answers, the
+ * same expression starts returning the real name with no state change of its
+ * own.
+ *
+ * The one case that is still nominally an assertion inside an echo — the
+ * settled-but-gone actor — reads the same in both contexts: the id fragment
+ * (`ActorNameState`'s `gone` branch), because it names *which* actor is gone.
+ */
+export type ActorNameContext = "assert" | "echo";
+
+/** The generic noun an echo falls back to while the directory for `type` has
+ *  not answered. Deliberately the same vocabulary the pickers already use for
+ *  their type headings (`picker.agent` / `picker.people` / `picker.squad`), so
+ *  the chip and the sheet it opens cannot describe the same actor differently.
+ *
+ *  Not an i18n key: this module is framework-free and runs in the Node lane
+ *  with no locale loaded. Surfaces that echo pass their translated noun in;
+ *  `selectedActorLabel` only needs A word, and the exported constants are what
+ *  a caller without a translation layer (a test, a store, a log line) uses. */
+export const ECHO_FALLBACK_BY_TYPE: Record<ActorType, string> = {
+  member: "Member",
+  agent: "Agent",
+  squad: "Squad",
+};
+
+/**
+ * What an ECHO may show for one actor reference.
+ *
+ * Same three states as `actorNameState`, different resolution of `unsettled`:
+ *
+ *   - `name`      → the real name (settled and present), or the id fragment
+ *                   (settled and gone).
+ *   - `unsettled` → `fallback`, or the type's noun when none was given — but
+ *                   never nothing.
+ *
+ * `fallback` WINS when supplied, and that ordering is deliberate. The caller is
+ * the only one that knows which word its surface already uses: a filter chip
+ * says 「经办人」/「Assignee」 where a picker says 「智能体」/「Agent」, and forcing them
+ * all onto `ECHO_FALLBACK_BY_TYPE` would put a second vocabulary beside the one
+ * the sheet the chip opens already speaks. `ECHO_FALLBACK_BY_TYPE` is therefore
+ * the *default*, not the authority.
+ *
+ * What a fallback must never be is the caller's EMPTY-state copy. 「Unassigned」
+ * and 「Choose an agent」 describe a field with no value; echoing one over a
+ * value that IS set makes the sheet read as unconfigured immediately after the
+ * user configured it. Callers that have an empty case branch on it before
+ * calling this (`echoLabelOrEmpty` exists for exactly that), so what arrives
+ * here is always a noun for a real selection.
+ */
+export function selectedActorLabel(input: {
+  state: ActorNameState;
+  type: ActorType | string | null | undefined;
+  /** The caller's own generic noun for a set-but-unread selection. Never an
+   *  empty-state prompt, and never a name. */
+  fallback?: string;
+}): string {
+  const { state, type, fallback } = input;
+  if (state.kind !== "unsettled") return state.name;
+  return (
+    fallback || ECHO_FALLBACK_BY_TYPE[type as ActorType] || ECHO_UNKNOWN_NOUN
+  );
+}
+
+/** Last resort for a caller that supplied no noun AND named a type this build
+ *  does not know — an actor kind invented after this release. A generic word,
+ *  because the alternative is the string "undefined" in a picker. */
+export const ECHO_UNKNOWN_NOUN = "—";
+
+/**
+ * The same decision for a reference the surface KNOWS is meaningless when
+ * empty — an unset field, not an unread directory.
+ *
+ * A picker's "no value" row is a measurement of the row's own field
+ * (`Issue.assignee_id === null`), not of a directory, so it keeps its
+ * 「Unassigned」 even while the directories are still loading. Splitting it out
+ * means a call site can say which of the two it has rather than encoding both
+ * in one conditional that reads the same either way.
+ */
+export function echoLabelOrEmpty(input: {
+  state: ActorNameState;
+  type: ActorType | string | null | undefined;
+  empty: boolean;
+  emptyLabel: string;
+  fallback?: string;
+}): string {
+  if (input.empty) return input.emptyLabel;
+  return selectedActorLabel(input);
+}
+
+/**
  * What a `system` actor is called.
  *
  * The platform writes timeline entries and comments with
