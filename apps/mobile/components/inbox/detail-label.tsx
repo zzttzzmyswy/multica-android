@@ -22,6 +22,7 @@ import { Text } from "@/components/ui/text";
 import { StatusIcon } from "@/components/ui/status-icon";
 import { PriorityIcon } from "@/components/ui/priority-icon";
 import { useActorLookup } from "@/data/use-actor-name";
+import { actorNameText } from "@/lib/actor-name-state";
 import { cn } from "@/lib/utils";
 import { issuePriorityLabel } from "@/lib/issue-status";
 import { useStatusLabel } from "@/lib/status-options";
@@ -52,7 +53,7 @@ export function InboxDetailLabel({
   item: InboxItem;
   className?: string;
 }) {
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   const { t } = useTranslation();
   const intlLocale = useIntlLocale();
   const statusLabel = useStatusLabel();
@@ -96,15 +97,25 @@ export function InboxDetailLabel({
   const text = (() => {
     switch (item.type) {
       case "issue_assigned":
-      case "assignee_changed":
-        if (details.new_assignee_id) {
-          const name = getName(
+      case "assignee_changed": {
+        if (!details.new_assignee_id) return typeLabel(t, item.type);
+        // A name nested inside a SENTENCE ("Assigned to {{name}}") cannot take
+        // a skeleton: a load mark mid-sentence tears the sentence apart, and
+        // the template would read "Assigned to" with nothing after it. So the
+        // whole clause is withheld and the row falls back to the item-type
+        // label — 「Assigned」 — which is true on its own and is exactly what
+        // the unassigned branch below already shows for the same event with no
+        // actor. Chosen over inventing an anonymous phrasing ("Assigned to
+        // someone") because that would assert a count of one actor the client
+        // has not verified.
+        const name = actorNameText(
+          resolveActorName(
             (details.new_assignee_type ?? "member") as "member" | "agent",
             details.new_assignee_id,
-          );
-          return t("inbox.assignedTo", { name });
-        }
-        return typeLabel(t, item.type);
+          ),
+        );
+        return name ? t("inbox.assignedTo", { name }) : typeLabel(t, item.type);
+      }
       case "unassigned":
         return t("inbox.removedAssignee");
       case "start_date_changed":

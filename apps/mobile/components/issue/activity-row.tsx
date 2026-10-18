@@ -30,6 +30,7 @@ import { Text } from "@/components/ui/text";
 import { StatusIcon } from "@/components/ui/status-icon";
 import { PriorityIcon } from "@/components/ui/priority-icon";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
+import { Skeleton } from "@/components/ui/skeleton";
 import { activityRowText } from "@/lib/activity-search";
 import { useStatusLabel } from "@/lib/status-options";
 import { useIssueStatuses } from "@/data/queries/issue-statuses";
@@ -132,24 +133,25 @@ export function ActivityRow({
    *  takes the same bit `CommentCard` does. */
   highlighted?: boolean;
 }) {
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   const { colorScheme } = useColorScheme();
   const timeAgo = useTimeAgo();
   const mutedFg = THEME[colorScheme].mutedForeground;
   const statusLabel = useStatusLabel();
-  const resolveName = (
-    type: string | null | undefined,
-    id: string | null | undefined,
-  ): string =>
-    getName(type as "member" | "agent" | null | undefined, id);
   // The text comes from `lib/activity-search.ts` — the SAME call in-page find's
   // index makes. Rendering and searching must not be able to drift: if this row
   // drew its own sentence, find would report words that are not on screen (or
   // miss ones that are), which is the entire class of bug this row is now part
   // of. See that module for what is deliberately left out (the ×N chip and the
   // timestamp).
+  //
+  // The resolver is `resolveActorName`, not `getName`: while the actor's
+  // directory has not answered this row must paint a load state rather than
+  // print 「Unknown」 as if it were the actor's name (MYS-2215's rule, wired to
+  // this surface in MYS-2219). `actor` therefore arrives empty in exactly the
+  // case the skeleton is drawn, and find's index for this row is empty with it.
   const { actor: actorName, verb } = activityRowText(entry, {
-    resolveActorName: resolveName,
+    resolveActorName,
     statusLabel,
   });
   const showCoalesceBadge =
@@ -168,9 +170,24 @@ export function ActivityRow({
             className="text-caption text-muted-foreground flex-1"
             numberOfLines={1}
           >
-            <Text className="text-caption text-muted-foreground font-medium">
-              {actorName}
-            </Text>
+            {/* The name run, or a load state where the name would be. Drawn as
+             *  a skeleton rather than omitted: the verb starts with a space, so
+             *  an empty run would leave the line reading 「 changed status …」
+             *  with a hole at the head and nothing explaining it. The verb
+             *  already tolerates a missing name (`formatActivity`'s `|| id`
+             *  fallbacks), so the sentence still identifies which actor it is
+             *  about while the row withholds the name itself. */}
+            {actorName ? (
+              <Text className="text-caption text-muted-foreground font-medium">
+                {actorName}
+              </Text>
+            ) : (
+              <Skeleton
+                className="h-3 w-14"
+                accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants"
+              />
+            )}
             {verb ? (
               <Text className="text-caption text-muted-foreground"> {verb}</Text>
             ) : null}

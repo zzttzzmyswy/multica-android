@@ -4183,5 +4183,12 @@
   "workspaceSettings.saving": "保存中…",
   "workspaceSettings.slug": "标识",
   "workspaceSettings.typeToConfirmPrefix": "输入",
-  "workspaceSettings.typeToConfirmSuffix": "以确认"
+  "workspaceSettings.typeToConfirmSuffix": "以确认",
+  "comment.collapseAriaNoName": "收起评论",
+  "comment.expandAriaNoName": "展开评论",
+  "comment.foldBarNoAuthors": "{{count}} {{messageCount}}",
+  "comment.foldBarNoAuthorsLabel": "{{count}} {{messageCount}}。点按展开。",
+  "comment.resolvedBarNoAuthors": "已解决 · {{count}} {{messageCount}}",
+  "comment.resolvedBarNoAuthorsLabel": "已解决主题，{{count}} {{messageCount}}。点按展开。",
+  "comment.resolvedNoName": "已解决"
 }

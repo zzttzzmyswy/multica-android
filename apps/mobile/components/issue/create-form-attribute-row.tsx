@@ -40,6 +40,7 @@ import { ProjectIcon } from "@/components/ui/project-icon";
 import { StatusIcon } from "@/components/ui/status-icon";
 import { ISSUE_DATE_SHORT, formatIssueDate } from "@/lib/format-date";
 import { useActorLookup } from "@/data/use-actor-name";
+import { actorNameText } from "@/lib/actor-name-state";
 import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { useStatusLabel } from "@/lib/status-options";
 import { useNewIssueDraftStore } from "@/data/stores/new-issue-draft-store";
@@ -128,9 +129,14 @@ export function CreateFormAttributeRow({ fields = ALL_FIELDS, mode }: Props) {
   const labels = useNewIssueDraftStore((s) => s.labels);
   const project = useNewIssueDraftStore((s) => s.project);
 
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
+  // The draft's actor is one the member just picked, so it is a real reference —
+  // but this client still has to be able to NAME it, and while the directory is
+  // unread it cannot. `null` makes the chip draw a load mark instead of
+  // 「Unknown」; the empty-slot wording is kept for the genuinely-no-assignee
+  // case, which is measured from the draft itself.
   const assigneeLabel = assignee
-    ? getName(assignee.type, assignee.id)
+    ? actorNameText(resolveActorName(assignee.type, assignee.id)) || null
     : t("attr.assignee");
   const priorityLabel =
     priority === "none" ? t("attr.priority") : t(`enum.priority.${priority}`);

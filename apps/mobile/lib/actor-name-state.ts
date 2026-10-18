@@ -197,3 +197,113 @@ export function actorNameText(state: ActorNameState): string {
 export function isResolvedActorName(name: string): boolean {
   return name.length > 0 && !UNRESOLVED_ACTOR_NAMES.has(name);
 }
+
+/**
+ * What a `system` actor is called.
+ *
+ * The platform writes timeline entries and comments with
+ * `actor_type: "system"` (`server/migrations/001_init.up.sql` has it in the
+ * CHECK constraint; a child-done comment and a failed-run notice are the two
+ * a reader meets most). No workspace directory answers for it — there is no
+ * row to be missing — so its name is a constant, not a read result, and it may
+ * be stated at any time.
+ *
+ * `"Multica"` for the same reason web's `buildActorNameResolver`
+ * (`packages/core/workspace/hooks.ts`) returns it: the name is the product's,
+ * not a person's, so it is not translated.
+ *
+ * This constant matters beyond cosmetics: without it, a system row reaching a
+ * read-state-aware resolver falls through `isActorTypeResolved` as "no
+ * directory can answer" and is withheld forever — i.e. wiring a surface to
+ * the primitive would silently blank every platform notice. `getName` already
+ * conflates the case, answering "Squad" for a system reference (its final
+ * `return` is the squad fallback), which is a wrong name rather than a
+ * withheld one.
+ */
+export const SYSTEM_ACTOR_NAME = "Multica";
+
+/** The `ActorNameState` for a `system` reference. A frozen constant so a
+ *  memoised resolver can return one stable object. */
+export const SYSTEM_ACTOR_STATE: ActorNameState = {
+  kind: "name",
+  name: SYSTEM_ACTOR_NAME,
+};
+
+/** How a folded thread's author list spells its "and N more" tail. Matches the
+ *  `+N` both mobile bars already use, and web's `bar_authors_more` carries the
+ *  same count in prose. */
+export function authorsMoreSuffix(remaining: number): string {
+  return remaining > 0 ? `+${remaining}` : "";
+}
+
+/**
+ * The author line the two folded-thread bars draw: up to `maxNamed` resolved
+ * names, joined with ", ", plus ` +N` for the rest.
+ *
+ * Two failure modes this exists to rule out, both of which the pre-255 bars
+ * had once names could be withheld:
+ *
+ *   1. **Empty segments.** Those bars mapped every author through
+ *      `actorNameText(...).join(", ")`. With an `unsettled` author the result is
+ *      `"Ada, , Grace"` — a separator with no word on either side of the gap,
+ *      which a reader takes for a name they are expected to know. An unsettled
+ *      author contributes NOTHING and its separator goes with it.
+ *   2. **`+N` counting authors it never named.** `remaining` was
+ *      `ordered.length - MAX_NAMED`, computed over the full author list before
+ *      any name was withheld — so "Ada, +3" could stand for three people of
+ *      whom the line named none. The tail counts what is genuinely left out of
+ *      the string.
+ *
+ * `unsettled` and `gone` are counted differently on purpose. A `gone` author is
+ * a *measured* participant (the directory answered and does not hold them), so
+ * they fill one of the named slots with their id fragment — exactly what
+ * `actorNameState`'s `gone` branch decides for a whole cell. An `unsettled`
+ * author is not yet known to have taken part at all, so they name nothing and
+ * are not counted in the tail either: that tail's job is to account for
+ * participants the line chose to abbreviate, and there is nothing to abbreviate
+ * about a name nobody has read.
+ *
+ * The empty-string case is therefore reachable and correct: a thread whose
+ * authors are all unsettled has nothing to say about who took part yet. `""` —
+ * not a bare "+5" — is what lets the bars withhold the whole clause and fall
+ * back to a sentence that names nobody, the same call
+ * `components/inbox/detail-label.tsx` makes for a name embedded mid-sentence.
+ */
+export function joinedActorNames(
+  entries: readonly { type: ActorType | string | null | undefined; id: string | null | undefined }[],
+  resolve: (
+    type: ActorType | string | null | undefined,
+    id: string | null | undefined,
+  ) => ActorNameState,
+  maxNamed: number,
+): string {
+  // Distinct by the reference, first-seen order — the dedupe both bars did
+  // before calling this, moved in so the count and the list come from one walk.
+  const seen = new Set<string>();
+  const unique: { type: ActorType | string | null | undefined; id: string | null | undefined }[] = [];
+  for (const entry of entries) {
+    const key = `${entry.type}:${entry.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(entry);
+  }
+
+  const named: string[] = [];
+  let abbreviated = 0;
+  for (const entry of unique) {
+    const state = resolve(entry.type, entry.id);
+    // Not known to have taken part yet: no name, and nothing for `+N` to
+    // stand for. See the docblock.
+    if (state.kind === "unsettled") continue;
+    const text = actorNameText(state);
+    if (named.length < maxNamed) named.push(text);
+    else abbreviated += 1;
+  }
+
+  const head = named.join(", ");
+  // No name at all means no clause at all: " +3" on its own states a count of
+  // people the line cannot identify, which is the same unbacked claim in a
+  // shorter form.
+  if (head.length === 0) return "";
+  return head + (abbreviated > 0 ? ` +${abbreviated}` : "");
+}

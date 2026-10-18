@@ -39,7 +39,14 @@ describe("the issue-detail chip row renders actor values", () => {
   });
 
   it("names the referenced member rather than printing the reference", () => {
-    expect(row).toMatch(/getName\(\s*["']member["']|getName\(ref\.kind/);
+    // Iteration 255 moved this call from `getName` (a string, subject to the
+    // 「Unknown」 fallback) to `resolveActorName` (the read-state decision), so
+    // the assertion follows the call — the INVARIANT it guards is unchanged: the
+    // chip is handed a resolved name for the reference, never the raw
+    // `member:<uuid>` string.
+    expect(row).toMatch(
+      /resolveActorName\(\s*ref\.kind,\s*ref\.id\)|resolveActorName\(\s*["']member["']/,
+    );
   });
 });
 

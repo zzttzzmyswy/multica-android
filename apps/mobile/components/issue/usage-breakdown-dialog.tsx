@@ -29,6 +29,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import type { AgentTask } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
+import { ActorNameText, actorNameText } from "@/components/ui/actor-name";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useTranslation } from "@/lib/i18n/react";
 import { formatTokens } from "@/lib/usage-format";
@@ -313,7 +314,7 @@ function CostByAgent({
   agentIds: string[];
 }) {
   const { t } = useTranslation();
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   // Per-agent costs are priced too, so a saved override has to re-render them
   // (web CostByAgent subscribes for the same reason).
   const pricings = useCustomPricingStore((s) => s.pricings);
@@ -337,9 +338,17 @@ function CostByAgent({
       </Text>
       {rows.map((row) => (
         <View key={row.agentId} className="flex-row items-center gap-2">
-          <Text numberOfLines={1} className="w-24 text-caption text-foreground">
-            {getName("agent", row.agentId)}
-          </Text>
+          {/* Agent-only surface: readiness is keyed on the agent directory
+           *  alone (`resolveActorName`), so a slow members read cannot blank
+           *  this label — the reason iteration 254 split the flag per type
+           *  (MYS-2219). The bar beside it is scaled by cost, which is measured
+           *  from the tasks, so it keeps rendering while the name is withheld. */}
+          <View className="w-24">
+            <ActorNameText
+              state={resolveActorName("agent", row.agentId)}
+              className="text-caption text-foreground"
+            />
+          </View>
           <View className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
             <View
               className="h-full rounded-full bg-brand"
@@ -363,10 +372,11 @@ function CostByAgent({
 // here (filtered by the parent).
 function RunUsageCard({ task, maxTokens }: { task: AgentTask; maxTokens: number }) {
   const { t } = useTranslation();
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   // Each card's cost is priced from the store too (web RunTable reads the same
   // snapshot), so an override saved while this sheet is open repaints the row.
   const pricings = useCustomPricingStore((s) => s.pricings);
+  const agentName = actorNameText(resolveActorName("agent", task.agent_id));
   const summary = useMemo(
     () => summarizeTaskUsage(task.usage),
     [task.usage, pricings],
@@ -392,8 +402,17 @@ function RunUsageCard({ task, maxTokens }: { task: AgentTask; maxTokens: number 
           numberOfLines={1}
           className="flex-1 min-w-0 text-label font-medium text-foreground"
         >
-          {getName("agent", task.agent_id)}
-          {trigger ? ` · ${trigger}` : ""}
+          {/* Inline at the head of a sentence, so the name and its separator
+           *  are withheld together rather than marked — see the same call in
+           *  `run-row.tsx`. The trigger that follows is the run's own field. */}
+          {agentName ? (
+            <>
+              <Text className="font-medium">{agentName}</Text>
+              {trigger ? <Text> · {trigger}</Text> : null}
+            </>
+          ) : (
+            <Text>{trigger}</Text>
+          )}
         </Text>
         {duration ? (
           <Text className="text-micro tabular-nums text-muted-foreground">

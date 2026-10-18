@@ -30,6 +30,7 @@ import { PriorityIcon } from "@/components/ui/priority-icon";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { ProjectIcon } from "@/components/ui/project-icon";
 import { AttributeChip } from "./attribute-chip";
+import { actorNameText } from "@/lib/actor-name-state";
 import { useActorLookup } from "@/data/use-actor-name";
 import { findProject, projectListOptions } from "@/data/queries/projects";
 import { useIssueStatuses } from "@/data/queries/issue-statuses";
@@ -53,7 +54,7 @@ function formatDueDate(iso: string | null, locale: string): string | null {
 export function AttributeRow({ issue }: { issue: Issue }) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   const { t } = useTranslation();
   const intlLocale = useIntlLocale();
   const statusLabel = useStatusLabel(wsId);
@@ -74,8 +75,13 @@ export function AttributeRow({ issue }: { issue: Issue }) {
       ? { type: issue.assignee_type, id: issue.assignee_id }
       : null;
 
+  // The chip's text, or `null` while the actor's directory has not answered.
+  // `attr.unknown` is NOT the answer here: it spells the same 「Unknown」 the
+  // lookup's fallback does, so printing it asserts that this assignee is gone
+  // when all the client knows is that it has not finished reading (MYS-2219).
   const assigneeName = assigneeValue
-    ? getName(assigneeValue.type, assigneeValue.id)
+    ? actorNameText(resolveActorName(assigneeValue.type, assigneeValue.id)) ||
+      null
     : null;
   const dueLabel = formatDueDate(issue.due_date, intlLocale);
   const startLabel = formatDueDate(issue.start_date, intlLocale);
@@ -124,7 +130,7 @@ export function AttributeRow({ issue }: { issue: Issue }) {
               showPresence
             />
           }
-          label={assigneeName ?? t("attr.unknown")}
+          label={assigneeName}
           variant="filled"
           onPress={() => openPicker("assignee")}
         />

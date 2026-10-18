@@ -151,20 +151,21 @@ export default function IssueDetail() {
   // target the list cannot scroll to; and it needs no new request, because the
   // timeline is already here.
   //
-  // Both resolvers are memoised at their source: `useActorLookup`'s `getName`
-  // is a `useCallback` on its lookup maps, and `useStatusLabel`'s resolver is a
-  // `useCallback` on the (now memoised) status catalog. That matters — this
-  // memo must rebuild when the workspace member / agent / status lists land, or
-  // the haystack would keep the pre-load "Unknown" fallbacks the rows have
-  // since replaced. The cast is the same one `ActivityRow` makes: the timeline
-  // wire type is a plain string, while the lookup is keyed by the three actor
-  // kinds it knows.
-  const { getName } = useActorLookup();
-  const resolveActorName = useCallback(
-    (type: string | null | undefined, id: string | null | undefined) =>
-      getName(type as "member" | "agent" | "squad" | null | undefined, id),
-    [getName],
-  );
+  // Both resolvers are memoised at their source: `useActorLookup`'s
+  // `resolveActorName` is a `useCallback` on its lookup maps AND the per-type
+  // settle flags, and `useStatusLabel`'s resolver is a `useCallback` on the
+  // (now memoised) status catalog. That matters — this memo must rebuild when
+  // the workspace member / agent / status lists land, or the haystack would
+  // keep the pre-load state the rows have since replaced. It must ALSO rebuild
+  // when only the settle flags change with the maps unchanged (a failed read
+  // settling into `error`), which is why the resolver itself is the dep rather
+  // than the maps behind it.
+  //
+  // `resolveActorName` (not `getName`) is what the activity row draws through,
+  // so it is what the index must use too: while a directory is unread the row
+  // paints a skeleton and says no name, and find must have nothing to match
+  // for that run (MYS-2219).
+  const { resolveActorName } = useActorLookup();
   const statusLabel = useStatusLabel(wsId);
   const activityBlocks = useMemo(
     () => activityBlockIndex(timeline.data, { resolveActorName, statusLabel }),

@@ -59,9 +59,23 @@ function statusChange(
   };
 }
 
+/**
+ * A resolver in the shape `useActorLookup().resolveActorName` returns: the
+ * three-state decision, not a string. `byname` maps an id to its name; an id
+ * the map does not hold is `gone` when `settled` and `unsettled` when not —
+ * the same fold `lib/actor-name-state.ts` performs.
+ */
+function resolver(byname: Record<string, string>, settled = true) {
+  return (_type: string | null | undefined, id: string | null | undefined) => {
+    if (!settled) return { kind: "unsettled" } as const;
+    const name = id ? byname[id] : undefined;
+    if (name) return { kind: "name", name } as const;
+    return { kind: "gone", name: (id ?? "").slice(0, 8) } as const;
+  };
+}
+
 const deps = {
-  resolveActorName: (type: string | null | undefined, id: string | null | undefined) =>
-    type && id ? (id === "u1" ? "Ada" : id) : "System",
+  resolveActorName: resolver({ u1: "Ada", a1: "Atlas" }),
   statusLabel: (key: string) =>
     ({
       todo: "Todo",
@@ -259,5 +273,76 @@ describe("activityBlockIndex", () => {
     );
     expect(index.get("a1")).toEqual(["Ada", "changed status: Todo → In Progress"]);
     expect(index.get("a2")).toEqual(["Ada", "updated description"]);
+  });
+});
+
+/**
+ * The rule iteration 255 wired onto this surface (MYS-2219): the drawn run and
+ * the indexed block move together. These pin the JOIN, not either half — the
+ * row's skeleton and find's empty block are two consequences of one decision,
+ * and a change that fixed one and not the other is exactly the drift
+ * `lib/activity-search.ts` exists to make impossible.
+ */
+describe("an unsettled actor contributes no name to the haystack", () => {
+  it("draws no name and indexes none while the directory is unread", async () => {
+    const { activityRowText, activityBlockIndex } = await load();
+    const i18n = await loadI18n();
+    i18n.resetI18nForTests();
+    i18n.setLocale("en");
+
+    const unread = { ...deps, resolveActorName: resolver({ u1: "Ada" }, false) };
+    const entry = statusChange("a1", "todo", "in_progress");
+
+    // The row's `font-medium` run is empty — that is what makes it draw a
+    // skeleton instead of a name.
+    expect(activityRowText(entry, unread).actor).toBe("");
+    // …so find must not be able to match one. The fallback `getName` would have
+    // returned here is 「Unknown」; a haystack holding it reports a word that is
+    // nowhere on screen.
+    const blocks = activityBlockIndex([entry], unread).get("a1");
+    expect(blocks).toEqual(["changed status: Todo → In Progress"]);
+    expect(blocks?.join(" ")).not.toContain("Unknown");
+  });
+
+  it("still names the actor in the sentence when the run is withheld", async () => {
+    // The asymmetric half, and the reason it is not a bug: an
+    // `assignee_changed` row says WHO the issue went to inside its verb. With
+    // no name read, that slot falls back to the id — a hole ("assigned to ")
+    // would be less informative, and the id at least says which actor is meant.
+    // The row's own name run stays empty either way, so this is not a name
+    // being asserted: it is the sentence identifying its own subject.
+    const { activityRowText } = await load();
+    const i18n = await loadI18n();
+    i18n.resetI18nForTests();
+    i18n.setLocale("en");
+
+    const unread = { ...deps, resolveActorName: resolver({ u1: "Ada" }, false) };
+    const entry = {
+      type: "activity",
+      id: "a1",
+      actor_type: "member",
+      actor_id: "u1",
+      created_at: "2026-01-01T00:00:00Z",
+      action: "assignee_changed",
+      details: { from_id: "u1", from_type: "member", to_id: "agent-7", to_type: "agent" },
+    } as TimelineEntry;
+
+    const text = activityRowText(entry, unread);
+    expect(text.actor).toBe("");
+    expect(text.verb).toBe("assigned to agent-7");
+    expect(text.verb).not.toContain("assigned to  ");
+  });
+
+  it("indexes the name again once the directory settles", async () => {
+    // The other direction of the same lock: the index follows the READ, not
+    // the first render. If readiness stopped being a dependency of the
+    // resolver, this would stay on the unsettled answer forever.
+    const { activityBlockIndex } = await load();
+    const entry = statusChange("a1", "todo", "in_progress");
+    expect(activityBlockIndex([entry], deps).get("a1")?.[0]).toBe("Ada");
+    expect(
+      activityBlockIndex([entry], { ...deps, resolveActorName: resolver({ u1: "Ada" }, false) })
+        .get("a1"),
+    ).not.toContain("Ada");
   });
 });
