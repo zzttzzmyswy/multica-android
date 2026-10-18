@@ -43,6 +43,7 @@ import { Pressable, ScrollView, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { IssuePriority } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { PriorityIcon } from "@/components/ui/priority-icon";
 import { StatusIcon } from "@/components/ui/status-icon";
@@ -55,12 +56,12 @@ import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useStatusOptions } from "@/lib/status-options";
 import {
-  inboxActorKeyParts,
   INBOX_PRIORITY_FILTER_ORDER,
   showsPriorityFilter,
   type InboxFilters,
   type InboxPriorityFilterSupport,
 } from "@/lib/inbox-filters";
+import { archivedActorFilterRows } from "@/lib/inbox-archive-view";
 
 interface Props {
   visible: boolean;
@@ -121,7 +122,7 @@ export function InboxArchiveFilterSheet({
   const theme = THEME[colorScheme];
   const { options: statusOptions } = useStatusOptions(wsId);
   const statusCatalog = useIssueStatuses(wsId);
-  const { getName } = useActorLookup();
+  const { getName, resolvedBy } = useActorLookup();
 
   // The status rows are the catalog's options UNION whatever the facets
   // counted and whatever is already selected. Taking only the catalog would
@@ -140,24 +141,19 @@ export function InboxArchiveFilterSheet({
     (a, b) => (statusOrder.get(a) ?? 999) - (statusOrder.get(b) ?? 999),
   );
 
-  // Actors come from the facet universe unioned with any current selection,
-  // so picking one actor never removes the others from the list offering them.
-  // Sorted by resolved name so the rows do not reshuffle as counts change.
-  const actorKeys = [
-    ...new Set<string>([...Object.keys(facets?.actors ?? {}), ...filters.actors]),
-  ];
-  const actorRows = actorKeys
-    .map((key) => {
-      const { type, id } = inboxActorKeyParts(key);
-      return {
-        key,
-        type,
-        id,
-        name:
-          type === "system" ? t("inbox.archivedFiltersFrom") : getName(type as "member" | "agent" | "squad", id),
-      };
-    })
-    .sort((a, b) => a.name.localeCompare(b.name));
+  // Actors come from the facet universe unioned with any current selection, so
+  // picking one actor never removes the others from the list offering them.
+  // The decision lives in `archivedActorFilterRows` (Node-testable): the label
+  // is withheld until the directory that answers for it settles, while the
+  // ORDER is taken from the stable `type:id` key so the rows do not reshuffle
+  // as directories land (MYS-2228).
+  const actorRows = archivedActorFilterRows({
+    facetActors: facets?.actors,
+    selected: filters.actors,
+    readiness: resolvedBy,
+    nameOf: (type, id) => getName(type as "member" | "agent" | "squad", id),
+    systemLabel: t("inbox.archivedFiltersFrom"),
+  });
 
   const section = (title: string) => (
     <View className="bg-muted/40 px-4 py-1.5">
@@ -170,13 +166,21 @@ export function InboxArchiveFilterSheet({
   const row = ({
     key,
     label,
+    unreadAccessibilityName,
     count,
     checked,
     onPress,
     leading,
   }: {
     key: string;
-    label: string;
+    /** The row's visible text, or `null` when it may not be stated yet (an
+     *  actor whose directory has not answered). */
+    label: string | null;
+    /** What a screen reader says when `label` is `null` — the row still has to
+     *  say WHAT it filters, because a reader that heard only 「, 12」 would not
+     *  know. It is NOT consulted once the name is known: a settled row
+     *  announces its own actor, exactly as it did before this change. */
+    unreadAccessibilityName?: string;
     count: number;
     checked: boolean;
     onPress: () => void;
@@ -187,7 +191,12 @@ export function InboxArchiveFilterSheet({
       onPress={onPress}
       accessibilityRole="checkbox"
       accessibilityState={{ checked }}
-      accessibilityLabel={`${label}, ${count}`}
+      // The count is a measurement of the ARCHIVE, so it is announced either
+      // way; only the name can be withheld. An unread row announces its
+      // SECTION instead of guessing — the same call
+      // `components/ui/actor-avatar.tsx` makes when it falls back to the
+      // generic profile title rather than putting 「Unknown」 in the tree.
+      accessibilityLabel={`${label ?? unreadAccessibilityName ?? ""}, ${count}`}
       className="flex-row items-center gap-3 px-4 py-3 active:bg-secondary"
     >
       <Ionicons
@@ -196,9 +205,20 @@ export function InboxArchiveFilterSheet({
         color={checked ? theme.primary : theme.mutedForeground}
       />
       {leading}
-      <Text className="flex-1 text-body text-foreground" numberOfLines={1}>
-        {label}
-      </Text>
+      {label === null ? (
+        // A load mark where the name would be: it occupies the line so the
+        // row does not reflow when the directory lands, and it stays out of
+        // the accessibility tree (a load state is not a value).
+        <Skeleton
+          className="h-3.5 w-28"
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        />
+      ) : (
+        <Text className="flex-1 text-body text-foreground" numberOfLines={1}>
+          {label}
+        </Text>
+      )}
       {/* Zero-count options stay visible but print nothing: "0" beside a row
           the user cannot reach reads as broken, while an absent number reads
           as "none right now". The checkbox stays so a selection made under a
@@ -312,8 +332,9 @@ export function InboxArchiveFilterSheet({
             actorRows.map((actor) =>
               row({
                 key: `actor:${actor.key}`,
-                label: actor.name,
-                count: facets?.actors?.[actor.key] ?? 0,
+                label: actor.label,
+                unreadAccessibilityName: t("inbox.archivedFiltersFrom"),
+                count: actor.count,
                 checked: filters.actors.includes(actor.key),
                 onPress: () => onToggleActor(actor.key),
                 leading: (

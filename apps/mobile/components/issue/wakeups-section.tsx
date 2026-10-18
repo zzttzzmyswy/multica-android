@@ -98,11 +98,14 @@ interface Props {
 function useWakeupText(): WakeupTextDeps {
   const { t } = useTranslation();
   const statusLabel = useStatusLabel();
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   return {
     t,
     statusLabel,
-    actorName: (type: string, id: string) => getName(type as "agent", id),
+    // ASSERT: every line this bundle draws is a rule read back from the
+    // server. An unread directory must retreat to a sentence that names
+    // nobody rather than print a fallback name inside the template (MYS-2228).
+    actorName: (type: string, id: string) => resolveActorName(type, id),
   };
 }
 

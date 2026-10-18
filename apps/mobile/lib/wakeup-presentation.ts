@@ -33,6 +33,11 @@ import type {
   WakeupPreview,
 } from "@multica/core/types";
 import { issueStatusCategoryOfIssue } from "./issue-status-catalog";
+import {
+  selectedActorLabel,
+  type ActorNameContext,
+  type ActorNameState,
+} from "./actor-name-state";
 
 /** One rule's lifecycle state, as the section and the chip read it. The keys
  *  are the `wakeups.ruleStates.*` i18n ids. */
@@ -274,8 +279,51 @@ export interface WakeupTextDeps {
   property?: (id: string) =>
     | { name: string; config?: { options?: { id: string; name: string }[] } }
     | undefined;
-  /** Resolve an actor id to its display name. */
-  actorName?: (type: string, id: string) => string;
+  /**
+   * Resolve an actor id to WHAT THIS CLIENT MAY SAY about it — the three-state
+   * decision, not a string.
+   *
+   * Iteration 257 (MYS-2228). This dep used to be `(type, id) => string`, i.e.
+   * exactly `getName`, whose answer for "the directory has not answered" and
+   * for "this actor is genuinely gone" is the same sentinel. A `string` here
+   * forces the "name or nothing" decision to be made at each of the five call
+   * sites that build this bundle — and "made separately at each call site" is
+   * the mechanism `lib/actor-name-state.ts` was built to retire, because the
+   * screen text and the search index drift apart the moment two sites answer
+   * differently.
+   *
+   * Carrying the state instead makes the compiler force the decision here, in
+   * `conditionSentence`, where the SENTENCE is built: a name is not a
+   * standalone text node on these surfaces, it is an argument inside a
+   * template, so 「当此任务指派给 时」 — a hole where the name belongs — is
+   * worse than a sentence that names nobody. See the whole-sentence fallback
+   * keys `wakeups.{cond,wait}.assigneeUnread`.
+   */
+  actorName?: (type: string, id: string) => ActorNameState;
+  /**
+   * Whether the sentence being built is an ASSERTION or an ECHO, when that is
+   * not already implied by the voice.
+   *
+   * The two contexts are defined once in `lib/actor-name-state.ts` and the rule
+   * they imply is not symmetric:
+   *
+   *   - **assert** — the sentence states a fact about a rule this client read
+   *     back from the server (`wakeupTrigger`, `wakeupWaitingText`,
+   *     `wakeupHeadlineText` on the section / chip / workspace table). An
+   *     unread directory must not become a name, so the WHOLE sentence retreats
+   *     to a form that names nobody.
+   *   - **echo** — the sentence restates a value the user just chose in this
+   *     form (`SubPickerSheet`'s event list, whose only variable actor is the
+   *     agent the draft will wake). Withholding would read as "my choice was
+   *     lost", so it degrades to the type's noun and keeps the sentence
+   *     grammatical.
+   *
+   * A wakeup rule's own `agent_name` arrives on the RULE (`IssueWakeup
+   * .agent_name`, written server-side), not from a client directory read — so
+   * these sentences have exactly one directory-derived actor: the assignee in a
+   * `issue_field/assignee` condition. That is the slot this dep governs.
+   */
+  actorNameContext?: ActorNameContext;
 }
 
 /** "In Review" for a built-in status key, else the raw key. */
@@ -297,12 +345,44 @@ function conditionSentence(
       switch (c.field) {
         case "status":
           return t(`${K}.status`, { status: statusText(deps, c.value) });
-        case "assignee":
-          return t(`${K}.assignee`, {
-            name: deps.actorName
-              ? deps.actorName(c.assignee_type, c.assignee_id)
-              : c.assignee_id,
-          });
+        case "assignee": {
+          // The whole sentence retreats, not the name slot. `actorNameText`
+          // would leave 「当此任务指派给 时」 — a template with its argument
+          // missing, which reads as a rendering fault rather than as "this
+          // client has not read the directory yet".
+          //
+          // Why not the ready-made `wakeups.conditions.assigneeChanged`
+          // (「当此任务的负责人变化时」): it is NOT the same rule. This
+          // condition is `issue_field/assignee` with a specific
+          // `assignee_id`, so it fires when the field becomes THAT actor and
+          // stays out of the way when it becomes a different one;
+          // `assigneeChanged` fires on any change. Swapping them would trade
+          // one unbacked claim (a name) for a worse one (a broader rule than
+          // the one actually stored) — so each voice gets a sentence that
+          // names nobody AND narrows nothing: "assigned to someone".
+          const state = deps.actorName
+            ? deps.actorName(c.assignee_type, c.assignee_id)
+            : null;
+          if (!state) {
+            // No resolver at all: the id is the only honest reference, the
+            // behaviour this dep had before it carried a state.
+            return t(`${K}.assignee`, { name: c.assignee_id });
+          }
+          if (state.kind === "unsettled") {
+            // ECHO (the create form's own readback): keep the sentence whole
+            // and put the type's noun where the name goes. ASSERT (anything
+            // read back from the server): retreat to the sentence that names
+            // nobody — a noun there would read as "assigned to some agent",
+            // which is a fact about the rule this client has not verified.
+            if (deps.actorNameContext === "echo") {
+              return t(`${K}.assignee`, {
+                name: selectedActorLabel({ state, type: c.assignee_type }),
+              });
+            }
+            return t(`${K}.assigneeUnread`);
+          }
+          return t(`${K}.assignee`, { name: state.name });
+        }
         case "label":
           return t(`${K}.label`, {
             label:

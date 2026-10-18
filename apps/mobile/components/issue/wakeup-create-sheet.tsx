@@ -649,7 +649,7 @@ function SubPickerSheet({
   const { t } = useTranslation();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const statusLabel = useStatusLabel(wsId);
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   // The status catalog's ACTIVE entries — the same set every status picker
   // offers. A condition that could name an archived status would describe a
   // transition nothing can reach.
@@ -671,9 +671,16 @@ function SubPickerSheet({
     () => ({
       t,
       statusLabel,
-      actorName: (type, id) => getName(type as "agent", id),
+      // ECHO: this bundle only draws `wakeupEventName` — the per-event rows of
+      // the picker — and its `{{agent}}` comes from the RULE's own
+      // `agent_name`, so a directory read never reaches these strings. The
+      // one actor slot a condition could add (`issue_field/assignee`) is a
+      // value the user picked in this very form, so if it ever becomes unread
+      // it degrades to the type noun instead of withdrawing (MYS-2228).
+      actorNameContext: "echo",
+      actorName: (type, id) => resolveActorName(type, id),
     }),
-    [t, statusLabel, getName],
+    [t, statusLabel, resolveActorName],
   );
 
   if (picker === "condition") {

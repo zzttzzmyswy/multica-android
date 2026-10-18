@@ -20,6 +20,12 @@
 import type { ArchivedInboxPage, InboxItem } from "@multica/core/types";
 import { deduplicateArchivedInboxItems } from "@/lib/inbox-display";
 import type { InboxPriorityFilterSupport } from "@/lib/inbox-filters";
+import {
+  actorNameState,
+  SYSTEM_ACTOR_STATE,
+  type ActorNameState,
+  type ActorReadiness,
+} from "@/lib/actor-name-state";
 
 /**
  * Every archived row fetched so far, deduplicated by issue across pages.
@@ -161,4 +167,101 @@ export function archivedEmptyReason(input: {
 }): "none" | "filtered" | "archive" {
   if (input.visibleCount > 0) return "none";
   return input.activeFilterCount > 0 ? "filtered" : "archive";
+}
+
+/**
+ * One row of the archived filters' "From" section — the actor facet chips.
+ *
+ * Iteration 257 (MYS-2228). This section used to print `getName(...)` straight
+ * into the row's label, which on a cold start meant every actor chip read
+ * 「Unknown」. The same string was ALSO the sort key
+ * (`.sort((a, b) => a.name.localeCompare(b.name))`), which made the two
+ * failures arrive together: a fallback word asserted as a fact, and a list
+ * whose ORDER depended on which directories had answered — on a partial cache
+ * (members resolved, agents not) the resolved and unread rows interleave, and
+ * every directory that lands reshuffles the sheet under the user's finger.
+ *
+ * So the two are split, exactly as iteration 256 split them for the projects
+ * list's lead chips (`leadFilterOptions`, `lib/filter-projects.ts`):
+ *
+ *   - `label` is what may be SAID — `null` while the directory that would
+ *     answer for this actor has not settled. The row then draws a load mark
+ *     where the name goes (`AttributeChip`'s convention), because a chip is a
+ *     standalone text node: nothing forces the whole row to retreat, and the
+ *     count beside it is a measurement of the archive rather than of a
+ *     directory, so it stays true and stays visible.
+ *   - `sortKey` is a stable per-reference key — the actor's own `type:id`,
+ *     never the label. Readiness cannot touch it, so all three snapshots
+ *     (cold / half-read / fully-read) order the rows identically.
+ *
+ * `system` is a constant, not a read: no directory can ever answer for it
+ * (`SYSTEM_ACTOR_NAME`), and its rows must not wait on one.
+ */
+export interface ArchivedActorFilterRow {
+  /** The facet's composite `type:id` key — also the filter's own value. */
+  key: string;
+  type: string;
+  id: string;
+  /** The name to print, or `null` while it may not be stated. Never a
+   *  fallback word: 「Unknown」 is the claim this exists to withhold. */
+  label: string | null;
+  /** Stable ordering key. Deliberately `key`, not `label`. */
+  sortKey: string;
+  /** The facet's count, or 0 when the facets have not answered. Always a fact
+   *  about the archive — never about a directory. */
+  count: number;
+}
+
+/**
+ * The "From" section's rows: the facet universe UNION the current selection
+ * (so picking one actor never removes the others from the list offering them),
+ * resolved through the read-state decision and sorted on a stable key.
+ *
+ * The union is taken on the composite key, which is what the facets endpoint
+ * and the filter store both use (`lib/inbox-filters.ts`), so a selected actor
+ * whose count has since dropped to zero still gets a row — the checkbox has to
+ * stay reachable to switch it off.
+ */
+export function archivedActorFilterRows(input: {
+  /** Facet counts by actor key; `undefined` while the facets are in flight. */
+  facetActors: Record<string, number> | undefined;
+  /** The current selection's actor keys. */
+  selected: readonly string[];
+  readiness: ActorReadiness;
+  /** The directory lookup, in `getName`'s shape. Only consulted for a type
+   *  whose directory settled — `actorNameState` decides that. */
+  nameOf: (type: string, id: string) => string;
+  /** The `system` bucket's label ("From"). A constant, so it is stated at any
+   *  time. */
+  systemLabel: string;
+}): ArchivedActorFilterRow[] {
+  const { facetActors, selected, readiness, nameOf, systemLabel } = input;
+  const keys = [
+    ...new Set<string>([...Object.keys(facetActors ?? {}), ...selected]),
+  ];
+
+  return keys
+    .map((key) => {
+      const separator = key.indexOf(":");
+      const type = separator === -1 ? key : key.slice(0, separator);
+      const id = separator === -1 ? "" : key.slice(separator + 1);
+      const state: ActorNameState =
+        type === "system"
+          ? SYSTEM_ACTOR_STATE
+          : actorNameState({ type, id, name: nameOf(type, id), readiness });
+      const settled = state.kind !== "unsettled";
+      return {
+        key,
+        type,
+        id,
+        label: !settled
+          ? null
+          : type === "system"
+            ? systemLabel
+            : state.name,
+        sortKey: key,
+        count: facetActors?.[key] ?? 0,
+      };
+    })
+    .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
 }
