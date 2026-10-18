@@ -26,6 +26,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
+import { ActorNameText } from "@/components/ui/actor-name";
 import { PresenceDot } from "@/components/ui/presence-dot";
 import { AgentDetailActions } from "@/components/agent/agent-detail-actions";
 import { AgentMcpSection } from "@/components/agent/agent-mcp-section";
@@ -92,7 +93,7 @@ export default function AgentDetailPage() {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   const queryClient = useQueryClient();
 
   const agents = useQuery(agentListAllOptions(wsId));
@@ -362,9 +363,15 @@ export default function AgentDetailPage() {
             </PropertyRow>
             {agent.owner_id ? (
               <PropertyRow label={t("agents.detail.fieldOwner")} icon="person-outline">
-                <Text className="flex-1 text-body text-foreground">
-                  {getName("member", agent.owner_id)}
-                </Text>
+                {/* An owner is an identity printed as a property value: until
+                 *  the MEMBER directory answers there is no name to state
+                 *  (MYS-2227). Only that one directory can answer — an owner
+                 *  is always a user id — so this waits on `member` alone and
+                 *  is unaffected by a slow agent list. */}
+                <ActorNameText
+                  state={resolveActorName("member", agent.owner_id)}
+                  className="flex-1 text-body text-foreground"
+                />
               </PropertyRow>
             ) : null}
             {agent.created_at ? (

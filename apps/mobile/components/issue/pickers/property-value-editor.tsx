@@ -53,6 +53,7 @@ import {
 } from "@/data/mutations/properties";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
+import { joinedActorNames } from "@/lib/actor-name-state";
 import {
   formatPropertyValue,
   propertyOptions,
@@ -102,7 +103,7 @@ export function PropertyValueEditor({ issueId, propertyId, onClose }: Props) {
   // Names an actor reference for the read-only label (an archived definition,
   // or a single `actor` this build cannot parse). Without it that path prints
   // the stored `member:<uuid>` — the same defect the editable path fixes.
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
 
   const { data: issue } = useQuery(issueDetailOptions(wsId, issueId));
   // Four-state read (MYS-1892): `isLoading` alone cannot separate "failed"
@@ -184,9 +185,29 @@ export function PropertyValueEditor({ issueId, propertyId, onClose }: Props) {
             : display.kind === "unknownActors"
               ? t("properties.value.unknown")
               : display.kind === "actors"
-                ? display.refs
-                    .map((ref) => getName(ref.kind, ref.id))
-                    .join(", ")
+                ? // The editor's field echo, through the SAME folding the
+                  // folded-thread bars use (`joinedActorNames`): a withheld ref
+                  // contributes nothing rather than an empty segment between
+                  // two commas, and the `+N` tail only ever counts names the
+                  // line actually left out. Reusing it means the "Ada, , Grace"
+                  // and "" +3"" defects stay fixed in one place, and the
+                  // behaviour is unit-tested in the Node lane
+                  // (`lib/actor-name-state.test.ts`) rather than only asserted
+                  // as source text (MYS-2227).
+                  //
+                  // No cap: a property value's whole list is the value, so
+                  // `maxNamed` is unbounded and the tail never appears. If
+                  // nothing at all is readable the field keeps its own
+                  // 「value.empty」 copy — a load mark in a text field's value
+                  // would read as an unfilled form.
+                  joinedActorNames(
+                    display.refs.map((ref) => ({
+                      type: ref.kind,
+                      id: ref.id,
+                    })),
+                    resolveActorName,
+                    Number.MAX_SAFE_INTEGER,
+                  ) || t("properties.value.empty")
                 : display.text;
   const hasValue = value !== undefined;
 

@@ -72,6 +72,7 @@ import { useActivePropertyCatalog } from "@/data/queries/properties";
 import { memberListOptions } from "@/data/queries/members";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
+import { selectedActorLabel } from "@/lib/actor-name-state";
 import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
@@ -466,9 +467,24 @@ function ConditionParams({
   labelName: (id: string) => string | undefined;
 }) {
   const { t } = useTranslation();
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
+  // ECHO: every branch below reads a value the draft already holds — the user
+  // picked it in the sheet this Pill opens. The Pill's `placeholder` styling is
+  // driven by the DRAFT being empty, not by a read, so a skeleton would fight
+  // the caller's own placeholder logic; the type's noun is the honest word
+  // while the directory is unread (MYS-2227).
   const actorLabel = (actor: { type: string; id: string }) =>
-    getName(actor.type as "member" | "agent" | "squad", actor.id);
+    selectedActorLabel({
+      state: resolveActorName(
+        actor.type as "member" | "agent" | "squad",
+        actor.id,
+      ),
+      type: actor.type,
+      // A noun, not the 「choose …」 prompt: the Pill's `placeholder` styling is
+      // already driven by whether the DRAFT is set, so this word must describe
+      // a value that exists.
+      fallback: t("filter.assignee"),
+    });
 
   switch (draft.condition) {
     case "at":

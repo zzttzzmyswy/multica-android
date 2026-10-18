@@ -32,6 +32,7 @@ import { labelListOptions } from "@/data/queries/labels";
 import { propertyActiveOptions } from "@/data/queries/properties";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
+import { actorNameText, selectedActorLabel } from "@/lib/actor-name-state";
 import { useStatusLabel } from "@/lib/status-options";
 import {
   type IssueFilterState,
@@ -296,7 +297,7 @@ export function ActiveFilterChips({
   onClearProperty: (id: string) => void;
   onClearDate: () => void;
 }) {
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const statusLabel = useStatusLabel(wsId);
   const { data: projects = [] } = useQuery(projectListOptions(wsId));
@@ -354,7 +355,16 @@ export function ActiveFilterChips({
   for (const a of delta.assignees) {
     chips.push({
       key: `a-${a.type}:${a.id}`,
-      label: getName(a.type, a.id),
+      // ECHO, not assertion: this chip stands for a filter value the user
+      // picked themselves, so there is no "not yet known" reading that would
+      // justify hiding it — a chip that vanished until some directory answered
+      // would look like the filter had been cleared (MYS-2227). It falls back
+      // to the type's noun, which is what the picker that set it said.
+      label: selectedActorLabel({
+        state: resolveActorName(a.type, a.id),
+        type: a.type,
+        fallback: translate("filter.assignee"),
+      }),
       onClear: remove("assignee", () => onClearAssignee(a)),
     });
   }
@@ -368,7 +378,12 @@ export function ActiveFilterChips({
   for (const c of delta.creators) {
     chips.push({
       key: `c-${c.type}:${c.id}`,
-      label: getName(c.type, c.id),
+      // Same echo rule as the assignee chip above.
+      label: selectedActorLabel({
+        state: resolveActorName(c.type, c.id),
+        type: c.type,
+        fallback: translate("filter.creator"),
+      }),
       onClear: remove("creator", () => onClearCreator(c)),
     });
   }
@@ -507,7 +522,7 @@ export function IssueSectionHeader({
   collapsed?: boolean;
   onToggle?: () => void;
 }) {
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   const statusLabel = useStatusLabel();
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
@@ -545,11 +560,22 @@ export function IssueSectionHeader({
         id={section.assigneeId}
         size={18}
       />
+      {/* A section header names an actor, so it is an ASSERTION — but unlike a
+       *  cell it has nowhere to put a skeleton without changing the row's
+       *  height, and a blank header leaves the lane unlabelled. So the
+       *  unsettled case gets the same neutral "reading" mark the board's
+       *  assignee columns and the swimlane headers use (MYS-2227).
+       *
+       *  The group KEY is untouched: it is built from the issue rows
+       *  (`assigneeGroupKey` → `"type:id"`, `lib/filter-issues.ts`), never from
+       *  this text, so withholding cannot reorder or merge lanes. */}
       <Text
         numberOfLines={1}
         className="flex-1 text-caption font-medium text-muted-foreground"
       >
-        {getName(section.assigneeType, section.assigneeId)}
+        {actorNameText(
+          resolveActorName(section.assigneeType, section.assigneeId),
+        ) || t("issues.boardReadingAssignee")}
       </Text>
     </>
   );

@@ -32,6 +32,7 @@ import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { PickerSheet } from "./pickers/picker-sheet";
 import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { useActorLookup } from "@/data/use-actor-name";
+import { actorNameText } from "@/lib/actor-name-state";
 import { useAuthStore } from "@/data/auth-store";
 import {
   buildThreadNavThreads,
@@ -89,7 +90,7 @@ export function ThreadNavSheet({
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ThreadNavFilter>("all");
@@ -120,19 +121,32 @@ export function ThreadNavSheet({
     () =>
       prepareThreads(
         threads,
+        // `prepareThreads` folds this straight into the row's author line AND
+        // its search haystack. Both must agree about a withheld name: a blank
+        // author line above an index that still holds 「Unknown」 makes the
+        // query match a word nobody can see, which is the defect iteration 255
+        // fixed for the activity timeline's index (MYS-2227).
+        //
+        // The empty string is the right answer for BOTH here, unlike a picker
+        // echo: this is an assertion about who wrote a comment the reader has
+        // never seen an identity for, and `title` already falls back from an
+        // empty preview to the author — so an empty author leaves the row
+        // labelled by its preview, which is true on its own.
         (entry) =>
-          getName(
-            entry.actor_type as
-              | "member"
-              | "agent"
-              | "squad"
-              | null
-              | undefined,
-            entry.actor_id,
+          actorNameText(
+            resolveActorName(
+              entry.actor_type as
+                | "member"
+                | "agent"
+                | "squad"
+                | null
+                | undefined,
+              entry.actor_id,
+            ),
           ),
         Date.now(),
       ),
-    [threads, getName],
+    [threads, resolveActorName],
   );
 
   const rows = useMemo(
@@ -268,9 +282,16 @@ function ThreadRow({
           </Text>
         </View>
         <View className="mt-0.5 flex-row items-center gap-2">
-          <Text className="text-caption text-muted-foreground" numberOfLines={1}>
-            {authorName}
-          </Text>
+          {/* Withheld author → the sub-line drops entirely. A blank caption
+           *  leaves the same height with nothing in it, which reads as a
+           *  rendering fault; the row still carries the timestamp above and the
+           *  preview as its title, so nothing the reader needs is lost
+           *  (MYS-2227). */}
+          {authorName ? (
+            <Text className="text-caption text-muted-foreground" numberOfLines={1}>
+              {authorName}
+            </Text>
+          ) : null}
           {thread.replyCount > 0 ? (
             <View className="flex-row items-center gap-0.5">
               <Ionicons name="chatbubble-outline" size={11} color={muted} />

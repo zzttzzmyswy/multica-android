@@ -20,6 +20,7 @@ import { isPastDateOnly } from "@multica/core/issues/date";
 import { formatIssueDate } from "@/lib/format-date";
 import type { Project } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { ProjectStatusIcon } from "@/components/ui/project-status-icon";
 import { ProjectPriorityIcon } from "@/components/ui/project-priority-icon";
@@ -28,6 +29,8 @@ import {
   projectStatusLabel,
 } from "@/lib/project-status";
 import { useActorLookup } from "@/data/use-actor-name";
+import { isActorTypeResolved } from "@/lib/actor-name-state";
+import { projectLeadCell } from "@/lib/project-inline-edit";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
 import { THEME } from "@/lib/theme";
@@ -51,11 +54,24 @@ export function ProjectPropertiesSection({
 }: Props) {
   const { t } = useTranslation();
   const intlLocale = useIntlLocale();
-  const { getName } = useActorLookup();
-  const leadName =
-    project.lead_type && project.lead_id
-      ? getName(project.lead_type, project.lead_id)
-      : null;
+  const { getName, resolvedBy } = useActorLookup();
+  // The lead is printed as a property value, so it is an ASSERTION and goes
+  // through the same tested decision the projects list's lead column uses
+  // (`projectLeadCell`, iteration 253) rather than a bare `getName` — which
+  // answers 「Unknown」 both while the directory is in flight and when the lead
+  // is genuinely gone (MYS-2227).
+  //
+  // Readiness is taken for the lead's OWN type, not the combined flag: a
+  // `lead_type` of "member" has nothing to learn from the agent directory, and
+  // waiting on both would keep the row pending for a read it cannot use.
+  const leadCell = projectLeadCell({
+    leadType: project.lead_type,
+    leadId: project.lead_id,
+    catalogsResolved: isActorTypeResolved(resolvedBy, project.lead_type),
+    resolveName: getName,
+  });
+  const leadName = leadCell.kind === "none" ? null : leadCell;
+  const leadKnown = leadCell.kind === "name";
 
   return (
     <View className="border-y border-border bg-background">
@@ -97,15 +113,30 @@ export function ProjectPropertiesSection({
           )
         }
         right={
-          <Text
-            className={
-              leadName
-                ? "text-body text-foreground"
-                : "text-body text-muted-foreground"
-            }
-          >
-            {leadName ?? t("picker.unassigned")}
-          </Text>
+          /* Three states, three renderings. `pending` draws the load mark
+           * where the name goes — the row keeps its shape and claims nothing;
+           * `none` keeps 「未指派」, which is a measurement of the project's own
+           * `lead_id` field and stays true even mid-read. The AVATAR follows
+           * `none` alone: a lead the client cannot name yet still has a face
+           * to load, and swapping it for the placeholder would claim there is
+           * no lead. */
+          leadCell.kind === "pending" ? (
+            <Skeleton
+              className="h-3.5 w-16"
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            />
+          ) : (
+            <Text
+              className={
+                leadKnown
+                  ? "text-body text-foreground"
+                  : "text-body text-muted-foreground"
+              }
+            >
+              {leadKnown ? leadCell.name : t("picker.unassigned")}
+            </Text>
+          )
         }
       />
       <Separator />

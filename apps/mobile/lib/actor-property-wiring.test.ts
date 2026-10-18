@@ -95,7 +95,12 @@ describe("the property-value editor can edit actor values", () => {
     // the value — through the same resolver as the editable list. Printing
     // `ref.id` there would put the raw uuid back on screen through the one
     // path this iteration did not otherwise touch.
-    const roster = editor.match(/const \{ getName \} = useActorLookup\(\)/);
+    // Iteration 256 moved this path onto the read-state-aware resolver: an
+    // archived definition still renders its value, but it may no longer print
+    // a sentinel while the members directory is unread (MYS-2227).
+    const roster = editor.match(
+      /const \{ resolveActorName \} = useActorLookup\(\)/,
+    );
     expect(roster, "editor must resolve actor names").not.toBeNull();
     expect(editor).not.toMatch(/refs\.map\(\(ref\) => ref\.id\)/);
   });

@@ -48,6 +48,7 @@ import { commentSubIssuePreviewOptions } from "@/data/queries/issues";
 import { useCreateCommentSubIssue } from "@/data/mutations/issues";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
+import { ActorNameText } from "@/components/ui/actor-name";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
@@ -75,7 +76,7 @@ export function SourceContextCreateBody({
   const theme = THEME[colorScheme];
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const create = useCreateCommentSubIssue();
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
 
   const [mode, setMode] = useState<CommentSubIssueMode>("manual");
   const [title, setTitle] = useState("");
@@ -254,12 +255,32 @@ export function SourceContextCreateBody({
                   size={16}
                 />
                 <View className="flex-1">
-                  <Text
-                    className="text-caption font-medium text-foreground"
-                    numberOfLines={1}
-                  >
-                    {c.author.name || getName(c.author.type as "member" | "agent", c.author.id)}
-                  </Text>
+                  {c.author.name ? (
+                    /* The snapshot's own name is a FACT, not a read: the server
+                     * resolved it at capture time and froze it with the rest of
+                     * the context. Re-resolving a live directory could even
+                     * disagree with the frozen copy — the very thing the
+                     * 「已冻结」 note above warns about (MYS-2227). */
+                    <Text
+                      className="text-caption font-medium text-foreground"
+                      numberOfLines={1}
+                    >
+                      {c.author.name}
+                    </Text>
+                  ) : (
+                    /* The capture carried no name, so this is a live lookup and
+                     * it follows the read-state rule. Empty → the line drops;
+                     * the comment's own text below already identifies the row,
+                     * and the avatar beside it is an empty disc until the
+                     * directory answers. */
+                    <ActorNameText
+                      state={resolveActorName(
+                        c.author.type as "member" | "agent",
+                        c.author.id,
+                      )}
+                      className="text-caption font-medium text-foreground"
+                    />
+                  )}
                   <Text className="text-caption text-muted-foreground" numberOfLines={3}>
                     {c.content}
                   </Text>

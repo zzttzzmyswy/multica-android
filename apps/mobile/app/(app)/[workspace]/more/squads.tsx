@@ -59,6 +59,8 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorProfileStore } from "@/data/stores/actor-profile-store";
 import { useAuthStore } from "@/data/auth-store";
 import { useActorLookup } from "@/data/use-actor-name";
+import type { ActorNameState } from "@/lib/actor-name-state";
+import { ActorNameText } from "@/components/ui/actor-name";
 import { useSquadsView, useSquadsViewStore } from "@/data/stores/squads-view-store";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
@@ -102,7 +104,7 @@ export default function SquadsPage() {
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const muted = THEME[colorScheme].mutedForeground;
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
 
   const { data, isLoading, error, refetch, isRefetching } = useQuery(
     squadListOptions(wsId),
@@ -388,7 +390,12 @@ export default function SquadsPage() {
                 renderItem={({ item }) => (
                   <SquadRow
                     squad={item}
-                    leaderName={getName("agent", item.leader_id)}
+                    // A squad's leader is always an agent, so the name waits
+                    // on the AGENT directory alone (MYS-2227). The row passes
+                    // the whole state, not a string: the sub-line under the
+                    // squad's title is the only place the leader is named, and
+                    // an empty string there would read as "no leader".
+                    leaderName={resolveActorName("agent", item.leader_id)}
                     currentRole={currentMember?.role}
                     currentUserId={user?.id}
                     onPress={() => openDetail(item)}
@@ -731,7 +738,9 @@ function SquadRow({
   onArchive,
 }: {
   squad: Squad;
-  leaderName: string;
+  /** The leader's name decision, not a string — an unsettled agent directory
+   *  must withhold, and only the state can say so (MYS-2227). */
+  leaderName: ActorNameState;
   /** Role of the current user's own workspace membership row — the admin half
    *  of web's per-row gate. */
   currentRole: "owner" | "admin" | "member" | null | undefined;
@@ -780,9 +789,10 @@ function SquadRow({
           </View>
           <View className="flex-row items-center gap-1.5">
             <Ionicons name="medal-outline" size={12} color={muted} />
-            <Text className="text-caption text-muted-foreground" numberOfLines={1}>
-              {leaderName}
-            </Text>
+            <ActorNameText
+              state={leaderName}
+              className="shrink text-caption text-muted-foreground"
+            />
           </View>
           <Text className="text-caption text-muted-foreground/70">
             {t("squads.memberCount", { count })}

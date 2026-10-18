@@ -6,7 +6,11 @@ import {
   isActorTypeResolved,
   isResolvedActorName,
   joinedActorNames,
+  echoLabelOrEmpty,
+  ECHO_FALLBACK_BY_TYPE,
+  ECHO_UNKNOWN_NOUN,
   GONE_ID_FRAGMENT,
+  selectedActorLabel,
   SYSTEM_ACTOR_NAME,
   SYSTEM_ACTOR_STATE,
   UNRESOLVED_ACTOR_NAMES,
@@ -402,5 +406,142 @@ describe("a folded thread's author line", () => {
       id === "a" ? ({ kind: "unsettled" } as const) : state({ c: "Cleo" })(type, id);
     expect(joinedActorNames([ref("a"), ref("c")], half, 2)).toBe("Cleo");
     expect(joinedActorNames([ref("a")], half, 2)).toBe("");
+  });
+});
+
+/**
+ * The echo context (iteration 256, MYS-2227).
+ *
+ * Everything above decides what an ASSERTION may say: a surface telling the
+ * reader who somebody is. This block decides what an ECHO may say — a value the
+ * user picked one tap ago, or that a row already holds. The two must differ in
+ * exactly one branch (`unsettled`), and the difference is the whole reason this
+ * module grew a context at all.
+ */
+describe("an echo never withholds the selection it is echoing", () => {
+  const unsettled = { kind: "unsettled" } as const;
+  const named = (name: string) => ({ kind: "name", name }) as const;
+  const gone = (name: string) => ({ kind: "gone", name }) as const;
+
+  it("names a resolved actor exactly as the assertion context does", () => {
+    for (const type of ["member", "agent", "squad"] as const) {
+      expect(
+        selectedActorLabel({ state: named("Ada"), type, fallback: "…" }),
+      ).toBe("Ada");
+    }
+  });
+
+  it("identifies a settled-but-gone actor by its id fragment", () => {
+    // The one branch both contexts share. A selection that points at a
+    // deleted agent is still a selection — 「Agent」 would hide WHICH one.
+    expect(
+      selectedActorLabel({ state: gone("99999999"), type: "agent", fallback: "…" }),
+    ).toBe("99999999");
+  });
+
+  it("falls back to a generic noun, never to nothing, while unread", () => {
+    // THE contract. A skeleton or an empty string in a picker's "Assign to"
+    // row reads as "your choice was lost"; any true noun is better, because it
+    // occupies the line and keeps the sheet's sentence grammatical.
+    //
+    // With no override the type noun answers…
+    for (const type of ["member", "agent", "squad"] as const) {
+      expect(selectedActorLabel({ state: unsettled, type })).toBe(
+        ECHO_FALLBACK_BY_TYPE[type],
+      );
+    }
+    // …and the result is never empty, whichever path it took.
+    for (const type of ["member", "agent", "squad", "plugin", null] as const) {
+      expect(selectedActorLabel({ state: unsettled, type }).length).toBeGreaterThan(0);
+      expect(
+        selectedActorLabel({ state: unsettled, type, fallback: "Assignee" })
+          .length,
+      ).toBeGreaterThan(0);
+    }
+  });
+
+  it("uses the caller's own word over the type noun when it supplies one", () => {
+    // The caller is the only one that knows which word its surface speaks: a
+    // filter chip says 「经办人」/「Assignee」 where a picker says 「智能体」/「Agent」.
+    // Forcing every echo onto `ECHO_FALLBACK_BY_TYPE` would put a second
+    // vocabulary beside the one the sheet the chip opens already uses.
+    for (const type of ["member", "agent", "squad"] as const) {
+      expect(
+        selectedActorLabel({ state: unsettled, type, fallback: "Assignee" }),
+      ).toBe("Assignee");
+    }
+  });
+
+  it("falls back to the type noun when the caller supplies no word", () => {
+    // The shared constants are the default, not a dead branch: a caller with no
+    // translation layer (a store, a log line) still gets a real noun.
+    for (const type of ["member", "agent", "squad"] as const) {
+      expect(selectedActorLabel({ state: unsettled, type })).toBe(
+        ECHO_FALLBACK_BY_TYPE[type],
+      );
+    }
+  });
+
+  it("uses the caller's own word when the type is unknown to this build", () => {
+    // An actor kind invented after this build must not echo as "undefined".
+    for (const type of ["plugin", "system", null, undefined]) {
+      expect(
+        selectedActorLabel({ state: unsettled, type, fallback: "Choose" }),
+      ).toBe("Choose");
+    }
+    // …and with no word either, a generic mark — still not "undefined".
+    for (const type of ["plugin", null, undefined]) {
+      expect(selectedActorLabel({ state: unsettled, type })).toBe(
+        ECHO_UNKNOWN_NOUN,
+      );
+    }
+  });
+
+  it("keeps an unset field's own label rather than inventing a type", () => {
+    // 「Unassigned」 is a measurement of the ROW's field (assignee_id is null),
+    // not of a directory — so it survives even before any read answers. This is
+    // the same call `table-view.tsx`'s assignee cell already makes with
+    // `empty={empty}`.
+    expect(
+      echoLabelOrEmpty({
+        state: unsettled,
+        type: null,
+        empty: true,
+        emptyLabel: "Unassigned",
+        fallback: "…",
+      }),
+    ).toBe("Unassigned");
+  });
+
+  it("still echoes a selection through echoLabelOrEmpty when there is one", () => {
+    expect(
+      echoLabelOrEmpty({
+        state: named("Ada"),
+        type: "member",
+        empty: false,
+        emptyLabel: "Unassigned",
+        fallback: "…",
+      }),
+    ).toBe("Ada");
+    // Set-but-unread keeps a noun (the caller's, when it has one) and never
+    // borrows the EMPTY label — that distinction is the whole reason
+    // `echoLabelOrEmpty` takes both.
+    expect(
+      echoLabelOrEmpty({
+        state: unsettled,
+        type: "member",
+        empty: false,
+        emptyLabel: "Unassigned",
+      }),
+    ).toBe("Member");
+    expect(
+      echoLabelOrEmpty({
+        state: unsettled,
+        type: "member",
+        empty: false,
+        emptyLabel: "Unassigned",
+        fallback: "Assignee",
+      }),
+    ).toBe("Assignee");
   });
 });

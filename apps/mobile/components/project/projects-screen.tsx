@@ -76,7 +76,7 @@ import {
   PROJECT_SORT_DEFAULT_DIRECTION,
   PROJECT_SORT_FIELDS,
   PROJECT_STATUSES,
-  leadFilterValue,
+  leadFilterOptions,
   sortProjects,
   toggleInList,
   type ProjectListFilters,
@@ -155,7 +155,7 @@ export function ProjectsScreen({
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
 
   const { data = [], isLoading, error, refetch, isRefetching } = useQuery(
     projectListOptions(wsId),
@@ -235,33 +235,15 @@ export function ProjectsScreen({
   // nothing, which is why there is no "unassigned" chip: web's loop
   // `continue`s on the same condition.
   //
-  // `getName` is a per-render closure from `useActorLookup`, so this memo
-  // recomputes on every render of the list — cheap at project-list scale
-  // (one pass over `data`) and the alternative is an unstable-dependency
-  // lint escape hatch.
-  const leadOptions = useMemo(() => {
-    const byValue = new Map<
-      string,
-      { type: "member" | "agent"; id: string; count: number }
-    >();
-    for (const p of data) {
-      const v = leadFilterValue(p);
-      if (!v || !p.lead_type || !p.lead_id) continue;
-      const entry = byValue.get(v);
-      if (entry) entry.count += 1;
-      else byValue.set(v, { type: p.lead_type, id: p.lead_id, count: 1 });
-    }
-    return [...byValue.entries()]
-      .map(([value, { type, id, count }]) => ({
-        value,
-        // Named through the shared resolver, which falls back to the same
-        // "Unknown Agent" / "Unknown" copy web's useActorName uses — a lead
-        // held by an archived agent must not render as a raw UUID.
-        label: getName(type, id),
-        count,
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-  }, [data, getName]);
+  // Reads through the shared decision (`filter-projects.ts:leadFilterOptions`):
+  // the chip's TEXT is withheld while its directory is unread, but its ORDER is
+  // settled on the composite reference so the chips do not reshuffle as
+  // directories answer (MYS-2227 — the same split iteration 255 made for the
+  // issue table's grouped cells).
+  const leadOptions = useMemo(
+    () => leadFilterOptions(data, resolveActorName),
+    [data, resolveActorName],
+  );
 
   const activeFilterCount = countActiveProjectFilters(filters);
 
@@ -512,7 +494,12 @@ export function ProjectsScreen({
                 onToggle={(v) => toggleFilter("leads", v)}
                 labelFor={(v) => {
                   const opt = leadOptions.find((o) => o.value === v);
-                  return opt ? `${opt.label} (${opt.count})` : v;
+                  if (!opt) return v;
+                  // Withheld name: the count is still true (it comes from the
+                  // project rows, not a directory), so the chip keeps it and
+                  // only the name is replaced.
+                  const name = opt.label ?? "";
+                  return name ? `${name} (${opt.count})` : `(${opt.count})`;
                 }}
               />
             ) : null}

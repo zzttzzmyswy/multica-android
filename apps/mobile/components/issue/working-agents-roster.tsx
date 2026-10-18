@@ -28,6 +28,7 @@ import type { WorkingAgentSummary } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { useActorLookup } from "@/data/use-actor-name";
+import { ActorNameText } from "@/components/ui/actor-name";
 import { useTranslation } from "@/lib/i18n/react";
 import { countLabelKey } from "@/lib/actor-profile";
 
@@ -40,7 +41,7 @@ export function WorkingAgentsRoster({
   agents: readonly WorkingAgentSummary[] | undefined;
 }) {
   const { t } = useTranslation();
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
 
   if (agents === undefined) {
     return (
@@ -78,12 +79,14 @@ export function WorkingAgentsRoster({
             className="flex-row items-center gap-2 px-4 py-2"
           >
             <ActorAvatar type="agent" id={agent.id} size={22} />
-            <Text
-              numberOfLines={1}
+            {/* The roster lists agents and nothing else, so the name is gated
+             *  on the AGENT directory only (MYS-2227). Its rows come from the
+             *  working-agents read, but the NAME comes from the directory —
+             *  and those are two different reads that can settle apart. */}
+            <ActorNameText
+              state={resolveActorName("agent", agent.id)}
               className="min-w-0 flex-1 text-caption font-medium text-foreground"
-            >
-              {getName("agent", agent.id)}
-            </Text>
+            />
             <Text className="shrink-0 text-caption text-muted-foreground tabular-nums">
               {t(countLabelKey("issue.agentsWorkingTasks", agent.running_task_count), {
                 count: agent.running_task_count,

@@ -57,6 +57,7 @@ import {
   handoffVerdict,
 } from "@/lib/run-confirm";
 import { useActorLookup } from "@/data/use-actor-name";
+import { selectedActorLabel } from "@/lib/actor-name-state";
 import { useTranslation } from "@/lib/i18n/react";
 
 const TOAST_MS = 3000;
@@ -84,7 +85,7 @@ type ToastState = {
 export function BatchActionBar({ issues }: Props) {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   const selectionMode = useIssueBatchSelectionStore((s) => s.selectionMode);
   const selectedIds = useIssueBatchSelectionStore((s) => s.selectedIds);
   const clear = useIssueBatchSelectionStore((s) => s.clear);
@@ -392,7 +393,14 @@ export function BatchActionBar({ issues }: Props) {
       </PickerSheet>
       <AssignConfirmDialog
         visible={assignTarget !== null}
-        name={getName(assignTarget?.type, assignTarget?.id)}
+        // Same echo rule as the single-issue picker: the target was chosen one
+        // tap ago in this sheet, so the confirmation states it in the type's
+        // own words until the directory can give a name (MYS-2227).
+        name={selectedActorLabel({
+          state: resolveActorName(assignTarget?.type, assignTarget?.id),
+          type: assignTarget?.type,
+          fallback: t("filter.assignee"),
+        })}
         count={count}
         note={note}
         onNoteChange={setNote}

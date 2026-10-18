@@ -40,6 +40,7 @@ import { squadListOptions } from "@/data/queries/squads";
 import { useUpdateIssue } from "@/data/mutations/issues";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
+import { selectedActorLabel } from "@/lib/actor-name-state";
 import { usePickerSearch } from "@/lib/use-picker-search";
 import {
   assignConfirmPayload,
@@ -56,7 +57,7 @@ export default function IssueAssigneePickerRoute() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { data: issue } = useQuery(issueDetailOptions(wsId, id));
   const updateIssue = useUpdateIssue(id);
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   const search = usePickerSearch(t("picker.searchPeople"), {
     autoFocus: true,
     nativeHeader: true,
@@ -125,7 +126,16 @@ export default function IssueAssigneePickerRoute() {
       </PickerBodyShell>
       <AssignConfirmDialog
         visible={assignTarget !== null}
-        name={getName(assignTarget?.type, assignTarget?.id)}
+        // ECHO: `assignTarget` is the picker's own just-made selection, so the
+        // confirmation must name SOMETHING even before the directory answers —
+        // a dialog reading 「Assign this issue to .」 is unusable, and a
+        // skeleton in a question reads as a bug. Falls back to the type's noun
+        // (MYS-2227).
+        name={selectedActorLabel({
+          state: resolveActorName(assignTarget?.type, assignTarget?.id),
+          type: assignTarget?.type,
+          fallback: t("filter.assignee"),
+        })}
         // One issue, so the singular sentence — the batch toolbar passes its
         // selection size through the same dialog.
         count={1}

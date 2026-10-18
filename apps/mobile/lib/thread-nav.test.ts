@@ -332,6 +332,39 @@ describe("prepareThreads", () => {
     expect(rows[0]!.group).toBe("earlier");
   });
 
+  it("indexes exactly what the row draws when the author is withheld", () => {
+    // Iteration 256 (MYS-2227): a comment's author may be withheld while the
+    // directory that would name them is unread. The row and the search index
+    // must then agree — a blank author line above a haystack that still held
+    // 「Unknown」 would let the query match a word nobody can see, which is the
+    // defect iteration 255 fixed for the activity timeline's index.
+    //
+    // Asserted at this layer, not as source text, because the two failure
+    // shapes are semantic: a fallback word sneaking into the index, or the
+    // author surviving in the haystack after the row dropped it.
+    const withheld = prepareThreads(
+      built({ content: "Deploy failed" }),
+      () => "",
+      now,
+    )[0]!;
+    expect(withheld.authorName).toBe("");
+    expect(withheld.haystack).not.toMatch(/unknown/i);
+    // The haystack is the row's own words, lowercased — no separator-only
+    // residue, and every indexed term is visible somewhere in the row.
+    expect(withheld.haystack.trim()).toBe("deploy failed");
+    expect(withheld.title).toBe("Deploy failed");
+  });
+
+  it("keeps the author out of the title fallback when it is withheld", () => {
+    // The empty-body fallback is `title = preview.title || authorName`. With
+    // the author withheld that leaves an empty title — correct (nothing true to
+    // say), and NOT a sentinel. A mutation that defaulted the fallback would
+    // put a name back on the row and in the index.
+    const [row] = prepareThreads(built({ content: "   " }), () => "", now);
+    expect(row!.title).toBe("");
+    expect(row!.haystack.trim()).toBe("");
+  });
+
   it("puts title, excerpt and author all in the search haystack", () => {
     const [row] = prepareThreads(
       built({ content: "Deploy failed\nbecause the token expired" }),

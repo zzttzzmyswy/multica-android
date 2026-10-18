@@ -41,6 +41,7 @@ import { Switch } from "@/components/ui/switch";
 import { IconButton } from "@/components/ui/icon-button";
 import { HeaderSearchGroup } from "@/components/ui/header-search-button";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
+import { ActorNameText } from "@/components/ui/actor-name";
 import { MultiSelectSheet } from "@/components/agent/multi-select-sheet";
 import { DeliveriesSection } from "@/components/autopilot/deliveries-section";
 import { RunTranscriptDialog } from "@/components/agent/run-transcript-dialog";
@@ -152,7 +153,7 @@ export default function AutopilotDetailPage() {
   const deleteTrigger = useDeleteAutopilotTrigger();
   const grantAccess = useGrantAutopilotAccess();
   const revokeAccess = useRevokeAutopilotAccess();
-  const { getName } = useActorLookup();
+  const { resolveActorName } = useActorLookup();
   const [accessPickerOpen, setAccessPickerOpen] = useState(false);
 
   const autopilot = detail.data?.autopilot;
@@ -484,9 +485,17 @@ export default function AutopilotDetailPage() {
       <SectionTitle>{t("autopilots.detail.properties")}</SectionTitle>
       <View className="px-4 gap-3">
         <PropertyRow label={t("autopilots.detail.fieldAssignee")} icon="person-outline">
-          <Text className="text-body text-foreground">
-            {getName(autopilot.assignee_type, autopilot.assignee_id)}
-          </Text>
+          {/* `AutopilotAssigneeType` is `agent | squad`, so readiness comes from
+           *  whichever of those two directories this row actually names — the
+           *  per-type flag `useActorLookup` already exposes. A slow member list
+           *  cannot blank it (MYS-2227). */}
+          <ActorNameText
+            state={resolveActorName(
+              autopilot.assignee_type,
+              autopilot.assignee_id,
+            )}
+            className="text-body text-foreground"
+          />
         </PropertyRow>
         <PropertyRow label={t("autopilots.detail.fieldMode")} icon="git-branch-outline">
           <Text className="text-body text-foreground">
@@ -552,9 +561,14 @@ export default function AutopilotDetailPage() {
                 className="flex-row items-center gap-1 rounded-full border border-border bg-secondary/60 px-2 py-1"
               >
                 <ActorAvatar type="member" id={s.user_id} size={18} />
-                <Text className="text-caption text-foreground">
-                  {getName("member", s.user_id)}
-                </Text>
+                {/* A subscriber is always a member, so only that directory
+                 *  gates the name (MYS-2227). The avatar is already an empty
+                 *  disc until it answers, so the chip still reads as loading
+                 *  while its text is withheld. */}
+                <ActorNameText
+                  state={resolveActorName("member", s.user_id)}
+                  className="text-caption text-foreground"
+                />
               </View>
             ))}
           </View>
@@ -588,9 +602,12 @@ export default function AutopilotDetailPage() {
               className="flex-row items-center gap-2 rounded-md border border-border px-3 py-2"
             >
               <ActorAvatar type="member" id={c.user_id} size={24} />
-              <Text className="flex-1 text-body text-foreground">
-                {getName("member", c.user_id)}
-              </Text>
+              {/* Explicit access is granted to members only — same per-type
+               *  gate as the subscriber chips above (MYS-2227). */}
+              <ActorNameText
+                state={resolveActorName("member", c.user_id)}
+                className="flex-1 text-body text-foreground"
+              />
               {canManageAccess ? (
                 <Pressable
                   onPress={() => handleAccessToggle(c.user_id)}
