@@ -30,6 +30,7 @@ import {
   propertyIdFromDimension,
   type ActorFilterValue,
   type FilterDimension,
+  type IssueDateFilterValue,
   type IssueFilterSnapshot,
   type IssueFilterSlice,
   type IssueGrouping,
@@ -574,4 +575,151 @@ export function viewMatchesSlice(
 /** Same eight keys, same values — order-independent by construction. */
 function sameCardProperties(a: CardProperties, b: CardProperties): boolean {
   return CARD_PROPERTY_KEYS.every((key) => a[key] === b[key]);
+}
+// ---------------------------------------------------------------------------
+// "Is anything the user added on top of the open view?" (iteration 258)
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether a dimension's live selection holds anything the open view does not
+ * already fix. Without a baseline every non-empty selection counts; with one,
+ * values the view itself fixes do not.
+ *
+ * This is web's `delta()` inside `getActiveFilterCount`
+ * (`issues-header.tsx:132-170`) — the predicate that decides both whether the
+ * Reset entry is offered and (on the phone) whether a dimension row's
+ * "fixed by this view" state applies.
+ */
+function exceedsBaseline(
+  values: readonly string[],
+  fixed: ReadonlySet<string> | undefined,
+): boolean {
+  if (values.length === 0) return false;
+  if (!fixed) return true;
+  return values.some((v) => !fixed.has(v));
+}
+
+/**
+ * The set of filter dimensions the user has changed BEYOND the open saved
+ * view — web's `getActiveFilterCount(...) > 0`, stated as the set so a caller
+ * can also ask "is THIS dimension changed".
+ *
+ * The distinction is what makes Reset mean the right thing: inside a view the
+ * view's own conditions are not "active filtering", so a Reset that treated
+ * them as such either offered itself when nothing was added, or (the defect
+ * this replaces) wiped the view's definition when something was.
+ *
+ * `workingOnly` and `dateFilter` are user layers no view carries
+ * (`issue-filter-slice.ts:282-286`), so they always count on their own.
+ */
+export function activeFilterDimensions(
+  state: IssueFilterDims & { workingOnly?: boolean },
+  baseline: IssueViewBaseline | null,
+): ActiveFilterDimension[] {
+  const out: ActiveFilterDimension[] = [];
+  if (exceedsBaseline(state.statusFilters, baseline?.status)) out.push("status");
+  if (exceedsBaseline(state.priorityFilters, baseline?.priority)) {
+    out.push("priority");
+  }
+  if (
+    exceedsBaseline(
+      state.assigneeFilters.map(actorBaselineKey),
+      baseline?.assignee,
+    ) ||
+    (state.includeNoAssignee && !(baseline?.includeNoAssignee ?? false))
+  ) {
+    out.push("assignee");
+  }
+  if (
+    exceedsBaseline(
+      state.creatorFilters.map(actorBaselineKey),
+      baseline?.creator,
+    )
+  ) {
+    out.push("creator");
+  }
+  if (
+    exceedsBaseline(state.projectFilters, baseline?.project) ||
+    (state.includeNoProject && !(baseline?.includeNoProject ?? false))
+  ) {
+    out.push("project");
+  }
+  if (exceedsBaseline(state.labelFilters, baseline?.label)) out.push("label");
+  for (const [id, selected] of Object.entries(state.propertyFilters)) {
+    if (exceedsBaseline(selected, baseline?.property.get(id))) {
+      out.push(`property:${id}` as FilterDimension);
+    }
+  }
+  if (state.dateFilter) out.push("date");
+  if (state.workingOnly) out.push("workingOnly");
+  return out;
+}
+
+/**
+ * The snapshot a Reset must leave the store in.
+ *
+ * Web's rule (`issues-header.tsx:1513-1527`): inside a saved view, reset
+ * returns to the VIEW's conditions; outside one it clears everything. The
+ * date window is handled separately by the caller because it is not part of
+ * `IssueFilterSnapshot` — web calls `onDateFilterChange?.(null)` right after
+ * the same branch. `workingOnly` is likewise outside the snapshot and is left
+ * to the caller for the same reason.
+ *
+ * Returned as a discriminated result rather than "a snapshot or null" so a
+ * caller cannot accidentally treat a null view as "nothing to do".
+ */
+/**
+ * A dimension the user can have changed beyond an open view. Extends the
+ * store's `FilterDimension` (which the chip bar clears) with `workingOnly` —
+ * a quick filter that has no chip and therefore no store-level dimension,
+ * but which a Reset must still turn off.
+ */
+export type ActiveFilterDimension = FilterDimension | "workingOnly";
+
+export type FilterResetPlan =
+  | { kind: "to-view"; snapshot: IssueFilterSnapshot }
+  | { kind: "clear" };
+
+export function planFilterReset(
+  baseline: IssueViewBaseline | null,
+): FilterResetPlan {
+  return baseline
+    ? { kind: "to-view", snapshot: baseline.raw }
+    : { kind: "clear" };
+}
+
+/** The store actions one Reset touches. Structural, so the callers' three
+ *  concrete zustand stores all satisfy it without a cast. */
+export interface FilterResetActions {
+  resetFiltersTo: (snapshot: IssueFilterSnapshot) => void;
+  clearFilters: () => void;
+  setDateFilter: (value: IssueDateFilterValue | null) => void;
+  toggleWorkingOnly: () => void;
+}
+
+/**
+ * Perform a Reset in full — the ONE place the semantics live.
+ *
+ * Web's handler (`issues-header.tsx:1513-1527`) is a branch plus a trailing
+ * `onDateFilterChange?.(null)`; the date is outside the snapshot because
+ * views never carry one, and mobile's `workingOnly` quick filter is outside
+ * it for a third reason (`issue-filter-slice.ts:143-152`: it is deliberately
+ * neither persisted nor saved, and `clearFilters` is the only thing that
+ * turns it off). Both have to be undone on EVERY path, which is why they are
+ * written here once rather than repeated at the call site where one branch
+ * could quietly lose them.
+ *
+ * `state` is read only for `workingOnly` — the store exposes a toggle, not a
+ * setter, so "turn it off" has to be conditional to stay idempotent.
+ */
+export function applyFilterReset(
+  state: { workingOnly: boolean },
+  baseline: IssueViewBaseline | null,
+  actions: FilterResetActions,
+): void {
+  const plan = planFilterReset(baseline);
+  if (plan.kind === "to-view") actions.resetFiltersTo(plan.snapshot);
+  else actions.clearFilters();
+  actions.setDateFilter(null);
+  if (state.workingOnly) actions.toggleWorkingOnly();
 }

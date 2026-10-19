@@ -38,6 +38,14 @@ import { Switch } from "@/components/ui/switch";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { PresenceDot } from "@/components/ui/presence-dot";
 import { RuntimeProfilesDialog } from "@/components/runtimes/runtime-profiles-dialog";
+import {
+  DeleteRuntimeProfileDialog,
+  type ProfileDeleteSubject,
+} from "@/components/runtimes/delete-runtime-profile-dialog";
+import {
+  dispatchRuntimeDelete,
+  runtimeDeleteTarget,
+} from "@/lib/runtime-profile-delete";
 import { UpdateSection } from "@/components/runtimes/update-section";
 import { RuntimeUsageSection } from "@/components/runtimes/runtime-usage-section";
 import { runtimeListOptions } from "@/data/queries/runtimes";
@@ -359,7 +367,7 @@ export default function RuntimeDetailPage() {
   // confirmation and its two conflict retries exist once (iteration 167).
   // Called before the loading/not-found returns because hooks may not be
   // conditional; a null runtime makes `requestDelete` a no-op.
-  const { requestDelete: handleDeletePress, isPending: deletePending } =
+  const { requestDelete: requestRuntimeDelete, isPending: deletePending } =
     useRuntimeDeleteFlow({
       runtime: runtime ?? null,
       displayName: runtime ? runtimeDisplayLabel(runtime) : "",
@@ -368,6 +376,13 @@ export default function RuntimeDetailPage() {
       onDeleted: () => router.back(),
       confirmLabel: t("runtimes.detail.deleteButton"),
     });
+
+  // A custom runtime's delete entry removes its PROFILE, not the instance —
+  // the same split web's detail page makes (`runtime-detail.tsx:216-228`).
+  // Both entries are held here because hooks cannot be conditional; which one
+  // runs is decided by `runtimeDeleteTarget`, which the unit test pins.
+  const [deletingProfile, setDeletingProfile] =
+    useState<ProfileDeleteSubject | null>(null);
 
   if (isLoading) {
     return (
@@ -821,19 +836,36 @@ export default function RuntimeDetailPage() {
               </View>
             ) : null}
 
-            {/* Delete */}
+            {/* Delete — two objects, two labels (iteration 258, MYS-2236).
+                A custom runtime's entry removes the workspace PROFILE, which
+                is what the "Delete from workspace" label names; a built-in
+                runtime's entry removes this machine's instance. The label and
+                the request come from the same decision (`runtimeDeleteTarget`)
+                so they cannot describe different objects again. */}
             {access.canDelete ? (
               <View className="border-t border-border pt-3">
                 <Button
                   variant="ghost"
                   size="sm"
                   className="h-8 justify-start gap-2 px-0"
-                  onPress={handleDeletePress}
+                  onPress={() => {
+                    const target = runtimeDeleteTarget(runtime);
+                    if (!target) return;
+                    dispatchRuntimeDelete(target, {
+                      deleteProfile: (profileId) =>
+                        setDeletingProfile({ id: profileId, displayName }),
+                      deleteRuntime: () => requestRuntimeDelete(),
+                    });
+                  }}
                   disabled={deletePending}
                 >
                   <Ionicons name="trash-outline" size={14} color={theme.destructive} />
                   <Text className="text-caption text-destructive">
-                    {t("runtimes.detail.deleteButton")}
+                    {t(
+                      isCustom
+                        ? "runtimes.row.deleteProfile"
+                        : "runtimes.detail.deleteButton",
+                    )}
                   </Text>
                 </Button>
               </View>
@@ -841,6 +873,18 @@ export default function RuntimeDetailPage() {
           </View>
         </View>
       </View>
+      <DeleteRuntimeProfileDialog
+        subject={deletingProfile}
+        onClose={() => setDeletingProfile(null)}
+        onDeleted={() => {
+          setDeletingProfile(null);
+          // The page's subject is gone — web replaces the route rather than
+          // staying on a record that no longer exists.
+          Alert.alert(t("runtimes.profiles.deleteDialog.deleted"), undefined, [
+            { text: t("common.done"), onPress: () => router.back() },
+          ]);
+        }}
+      />
     </ScrollView>
   );
 }

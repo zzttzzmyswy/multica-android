@@ -50,6 +50,7 @@ import { buildIssueWindow } from "@/data/stores/issue-filter-slice";
 import type { IssueProperty } from "@multica/core/types";
 import type { ActorFilterValue } from "@/data/stores/issue-filter-slice";
 import { useTranslation } from "@/lib/i18n/react";
+import { useFilterSheetBaseline } from "@/lib/use-filter-sheet-baseline";
 
 type Scope = IssueFilterScope;
 export type FilterDim =
@@ -88,6 +89,11 @@ export default function IssuesFilterPickerRoute() {
       : "assignee";
 
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  // The open saved view's baseline, resolved exactly the way the panel above
+  // resolves it — same helper, same active-view store — so a value the sheet
+  // shows as view-fixed is a value the panel shows as view-fixed
+  // (iteration 258, MYS-2236).
+  const baseline = useFilterSheetBaseline(resolvedScope, projectIdParam ?? null);
   // Four-state read (MYS-1892): resolving `propertyDef` out of a `= []`
   // default made an in-flight or failed catalog look like a definition that
   // no longer exists, so this sheet answered 「无匹配结果」 for a property that
@@ -149,6 +155,9 @@ export default function IssuesFilterPickerRoute() {
           dim={resolvedDim}
           scope={resolvedScope}
           searchPlaceholder={t("picker.searchPeople")}
+          fixedKeys={
+            resolvedDim === "assignee" ? baseline?.assignee : baseline?.creator
+          }
           counts={
             resolvedDim === "assignee"
               ? facetValuesFor(facetCounts, { kind: "assignee" })
@@ -164,6 +173,8 @@ export default function IssuesFilterPickerRoute() {
       <PickerChrome title={t(titleKey!)} onDone={close} t={t}>
         <ProjectPickerBody
           scope={resolvedScope}
+          fixedIds={baseline?.project}
+          noProjectFixed={baseline?.includeNoProject === true}
           counts={facetValuesFor(facetCounts, { kind: "project" })}
         />
       </PickerChrome>
@@ -175,6 +186,7 @@ export default function IssuesFilterPickerRoute() {
       <PickerChrome title={t(titleKey!)} onDone={close} t={t}>
         <LabelPickerBody
           scope={resolvedScope}
+          fixedIds={baseline?.label}
           counts={facetValuesFor(facetCounts, { kind: "label" })}
         />
       </PickerChrome>
@@ -194,6 +206,7 @@ export default function IssuesFilterPickerRoute() {
         <PropertyPickerBody
           property={propertyDef}
           scope={resolvedScope}
+          fixedIds={baseline?.property.get(propertyDef.id)}
         />
       ) : catalog.isResolved ? (
         // Settled, and the definition is not in it: archived or deleted since
@@ -225,11 +238,13 @@ function ActorPickerBody({
   scope,
   searchPlaceholder,
   counts,
+  fixedKeys,
 }: {
   dim: "assignee" | "creator";
   scope: Scope;
   searchPlaceholder: string;
   counts?: ReadonlyMap<string, number>;
+  fixedKeys?: ReadonlySet<string>;
 }) {
   const s = issueFilterStoreForScope(scope)();
   const selected = dim === "assignee" ? s.assigneeFilters : s.creatorFilters;
@@ -244,6 +259,7 @@ function ActorPickerBody({
       onToggle={toggle}
       searchPlaceholder={searchPlaceholder}
       counts={counts}
+      fixedKeys={fixedKeys}
     />
   );
 }
@@ -252,9 +268,13 @@ function ActorPickerBody({
 function ProjectPickerBody({
   scope,
   counts,
+  fixedIds,
+  noProjectFixed,
 }: {
   scope: Scope;
   counts?: ReadonlyMap<string, number>;
+  fixedIds?: ReadonlySet<string>;
+  noProjectFixed?: boolean;
 }) {
   const s = issueFilterStoreForScope(scope)();
   return (
@@ -262,6 +282,8 @@ function ProjectPickerBody({
       selected={s.projectFilters}
       includeNoProject={s.includeNoProject}
       counts={counts}
+      fixedIds={fixedIds}
+      noProjectFixed={noProjectFixed}
       onToggle={(id) =>
         issueFilterStoreForScope(scope).getState().toggleProjectFilter(id)
       }
@@ -276,15 +298,18 @@ function ProjectPickerBody({
 function LabelPickerBody({
   scope,
   counts,
+  fixedIds,
 }: {
   scope: Scope;
   counts?: ReadonlyMap<string, number>;
+  fixedIds?: ReadonlySet<string>;
 }) {
   const s = issueFilterStoreForScope(scope)();
   return (
     <FilterLabelPickerBody
       selected={s.labelFilters}
       counts={counts}
+      fixedIds={fixedIds}
       onToggle={(id) =>
         issueFilterStoreForScope(scope).getState().toggleLabelFilter(id)
       }
@@ -297,15 +322,18 @@ function LabelPickerBody({
 function PropertyPickerBody({
   property,
   scope,
+  fixedIds,
 }: {
   property: IssueProperty;
   scope: Scope;
+  fixedIds?: ReadonlySet<string>;
 }) {
   const s = issueFilterStoreForScope(scope)();
   return (
     <FilterPropertyPickerBody
       property={property}
       selected={s.propertyFilters[property.id] ?? []}
+      fixedIds={fixedIds}
       onToggle={(optionId) =>
         issueFilterStoreForScope(scope)
           .getState()

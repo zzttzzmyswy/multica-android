@@ -42,7 +42,6 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import {
   ISSUE_GROUPING_OPTIONS,
   ISSUE_SORT_OPTIONS,
-  hasActiveIssueFilters,
   propertyViewKey,
   type CardProperties,
   type IssueDateFilterValue,
@@ -61,6 +60,11 @@ import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/react";
 import { buildIssueWindow } from "@/data/stores/issue-filter-slice";
+import {
+  activeFilterDimensions,
+  applyFilterReset,
+} from "@/data/stores/issue-view-codec";
+import { useFilterSheetBaseline } from "@/lib/use-filter-sheet-baseline";
 import { useFilterSheetFacetCounts } from "@/data/queries/issue-facets";
 import { useRunningIssueIds } from "@/data/queries/agent-task-snapshot";
 import {
@@ -182,8 +186,6 @@ export default function IssuesFilterRoute() {
     IssueDateFilterValue["field"]
   >(dateFilter?.field ?? "created_at");
 
-  const hasActive = hasActiveIssueFilters(s);
-
   // Action dispatcher — pick the matching store's imperative API.
   const act = () => issueFilterStoreForScope(resolvedScope).getState();
 
@@ -191,6 +193,26 @@ export default function IssuesFilterRoute() {
   // filterable-property set web uses (issues-header.tsx:1175-1181).
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
+  // The open saved view, when there is one (iteration 258, MYS-2236). Inside
+  // a view the view's own conditions are not "active filtering": Reset returns
+  // to them instead of wiping them, and the options they fix render selected
+  // and unremovable — web's `resetFiltersTo(viewBaseline.raw)` /
+  // `disabled={fixed}` pair (issues-header.tsx:1513-1527, :1256-1264).
+  // Resolved from the same active-view store the list surfaces write to, so
+  // the sheet and the chip bar behind it cannot disagree.
+  const baseline = useFilterSheetBaseline(resolvedScope, projectIdParam ?? null);
+  // The dimensions the user has changed ON TOP of the view — web's
+  // `getActiveFilterCount(...) > 0`. Outside a view every active dimension
+  // counts, which is what the old unconditional `hasActiveIssueFilters` said.
+  const activeDimensions = activeFilterDimensions(s, baseline);
+  const hasActive = activeDimensions.length > 0;
+  const resetFilters = () =>
+    applyFilterReset(s, baseline, {
+      resetFiltersTo: act().resetFiltersTo,
+      clearFilters: act().clearFilters,
+      setDateFilter: act().setDateFilter,
+      toggleWorkingOnly: act().toggleWorkingOnly,
+    });
   const statusOptions = useStatusOptions(wsId);
   // Four-state read (MYS-1892). The `= []` default this replaced folded
   // "loading" and "request failed" into "the workspace has none", which is
@@ -324,7 +346,7 @@ export default function IssuesFilterRoute() {
         <Text className="text-title-sm font-semibold text-foreground">{t("filter.title")}</Text>
         {hasActive ? (
           <Pressable
-            onPress={() => act().clearFilters()}
+            onPress={resetFilters}
             hitSlop={8}
             className="px-2 py-1 active:opacity-60"
           >
@@ -363,13 +385,21 @@ export default function IssuesFilterRoute() {
             {group.options.map((option) => {
               const checked = statusFilters.includes(option.key);
               const count = countFor({ kind: "status" }, option.key);
+              // A value the open view fixes is shown selected and cannot be
+              // toggled off: the view, not this sheet, is where it is defined
+              // (web `disabled={fixed}`, issues-header.tsx:1267-1273).
+              const fixed = baseline?.status.has(option.key) === true;
               return (
                 <Pressable
                   key={option.key}
                   onPress={() => act().toggleStatusFilter(option.key)}
+                  disabled={fixed}
+                  accessibilityState={{ checked, disabled: fixed }}
+                  accessibilityHint={fixed ? t("filter.fixedByView") : undefined}
                   className={cn(
                     "flex-row items-center gap-3 px-4 py-2.5 active:bg-secondary",
                     checked && "bg-secondary/60",
+                    fixed && "opacity-60",
                   )}
                 >
                   <StatusIcon
@@ -394,13 +424,18 @@ export default function IssuesFilterRoute() {
         {PRIORITY_ORDER.map((priority) => {
           const checked = priorityFilters.includes(priority);
           const count = countFor({ kind: "priority" }, priority);
+          const fixed = baseline?.priority.has(priority) === true;
           return (
             <Pressable
               key={priority}
               onPress={() => act().togglePriorityFilter(priority)}
+              disabled={fixed}
+              accessibilityState={{ checked, disabled: fixed }}
+              accessibilityHint={fixed ? t("filter.fixedByView") : undefined}
               className={cn(
                 "flex-row items-center gap-3 px-4 py-2.5 active:bg-secondary",
                 checked && "bg-secondary/60",
+                fixed && "opacity-60",
               )}
             >
               <PriorityIcon priority={priority} />
@@ -428,6 +463,7 @@ export default function IssuesFilterRoute() {
           count={countFor({ kind: "assignee" }, NO_VALUE_KEY)}
           checked={includeNoAssignee}
           onToggle={() => act().toggleNoAssignee()}
+          fixed={baseline?.includeNoAssignee === true}
           t={t}
         />
 
@@ -463,6 +499,7 @@ export default function IssuesFilterRoute() {
           count={countFor({ kind: "project" }, NO_VALUE_KEY)}
           checked={includeNoProject}
           onToggle={() => act().toggleNoProject()}
+          fixed={baseline?.includeNoProject === true}
           t={t}
         />
 
@@ -873,6 +910,7 @@ function BoolRow({
   count,
   checked,
   onToggle,
+  fixed = false,
   t,
 }: {
   label: string;
@@ -883,6 +921,10 @@ function BoolRow({
   count?: number;
   checked: boolean;
   onToggle: () => void;
+  /** The open saved view fixes this flag — render it checked and refuse the
+   *  toggle, like web's `disabled={noAssigneeFixed}`
+   *  (issues-header.tsx:366-367). */
+  fixed?: boolean;
   t: (id: string, params?: Record<string, string | number>) => string;
 }) {
   const { colorScheme } = useColorScheme();
@@ -890,7 +932,13 @@ function BoolRow({
   return (
     <Pressable
       onPress={onToggle}
-      className="flex-row items-center gap-3 px-4 py-2.5 active:bg-secondary"
+      disabled={fixed}
+      accessibilityState={{ checked, disabled: fixed }}
+      accessibilityHint={fixed ? t("filter.fixedByView") : undefined}
+      className={cn(
+        "flex-row items-center gap-3 px-4 py-2.5 active:bg-secondary",
+        fixed && "opacity-60",
+      )}
     >
       <View className="w-[18px]" />
       <View className="flex-1 min-w-0">
