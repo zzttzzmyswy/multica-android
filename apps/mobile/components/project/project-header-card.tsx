@@ -10,11 +10,20 @@
  * horizontal bar driven by `Project.done_count / Project.issue_count` plus a
  * "X / Y" label and a percentage. Hidden when there are zero issues — empty
  * bar gives no information and creates a divide-by-zero hazard.
+ *
+ * The description is Markdown, rendered through the shared `lib/markdown`
+ * pipeline — web's project description is a `ContentEditor` (a real markdown
+ * editor, `project-detail.tsx:453-465`), so a project written on the web with
+ * headings, lists, links or code arrives here as markdown source. Rendering it
+ * as a plain `<Text>` showed that source verbatim ("## Goals", literal
+ * brackets around links) and would have round-tripped the raw text back on the
+ * next mobile save.
  */
 import { Pressable, View } from "react-native";
 import type { Project } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ProjectIcon } from "@/components/ui/project-icon";
+import { Markdown } from "@/lib/markdown";
 import { useTranslation } from "@/lib/i18n/react";
 
 interface Props {
@@ -39,12 +48,9 @@ export function ProjectHeaderCard({ project, onEdit }: Props) {
           {project.title}
         </Text>
         {project.description ? (
-          <Text
-            className="text-body text-muted-foreground"
-            selectable
-          >
-            {project.description}
-          </Text>
+          <View className="w-full">
+            <Markdown content={project.description} />
+          </View>
         ) : onEdit ? (
           <Text className="text-body text-muted-foreground/60 italic">
             {t("project.addDescription")}

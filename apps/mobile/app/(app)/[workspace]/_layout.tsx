@@ -424,6 +424,12 @@ export default function WorkspaceLayout() {
           name="new-issue-picker/start-date"
           options={SHEET_OPTIONS}
         />
+        {/* Sub-issue stage on the draft — reachable only while the form has a
+            parent (the attribute row gates the chip), same sheet pattern. */}
+        <Stack.Screen
+          name="new-issue-picker/stage"
+          options={SHEET_OPTIONS}
+        />
         {/* Workspace custom properties on the draft (MYS-2245) — same sheet
             pattern as the standard pickers above. `properties` is the "add a
             property" list; `property` is the value editor for one of them. */}
@@ -447,6 +453,19 @@ export default function WorkspaceLayout() {
         />
         <Stack.Screen
           name="new-project-picker/priority"
+          options={SHEET_OPTIONS}
+        />
+        {/* Lead + the two dates, matching web's create-project pills. */}
+        <Stack.Screen
+          name="new-project-picker/lead"
+          options={SHEET_OPTIONS}
+        />
+        <Stack.Screen
+          name="new-project-picker/start-date"
+          options={SHEET_OPTIONS}
+        />
+        <Stack.Screen
+          name="new-project-picker/due-date"
           options={SHEET_OPTIONS}
         />
         {/* Shared filter sheet for My Issues and the workspace Issues page —

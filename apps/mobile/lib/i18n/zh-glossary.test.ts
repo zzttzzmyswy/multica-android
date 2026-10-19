@@ -128,6 +128,13 @@ const RUN_SENSE_KEYS = [
   "notif.groupAgentActivityDesc",
   "plugins.disabled",
   "profile.aboutHint",
+  // "Shared with agents as context for every task in this project" — the `task`
+  // an agent RUNS in the project, not an issue filed into it. Upstream's own
+  // zh-Hans renders the web string with 任务
+  // (`locales/zh-Hans/modals.json` → `create_project.description_hint`), which
+  // would fail this list; the mobile bundle says `每次 task` instead, keeping
+  // the run term the glossary pins while naming the same fact.
+  "project.descriptionHint",
   "resource.localRuntimeHint",
   "resource.modeDescription",
   "resource.modeInPlaceDescription",

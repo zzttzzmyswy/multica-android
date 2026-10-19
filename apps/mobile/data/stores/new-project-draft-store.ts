@@ -23,23 +23,54 @@ import { useEffect, useRef } from "react";
 import { create } from "zustand";
 import type { ProjectPriority, ProjectStatus } from "@multica/core/types";
 
+/**
+ * Lead as a PAIR, never a bare id: the server distinguishes a member lead from
+ * an agent lead by `lead_type`, so writing `lead_id` alone leaves it unable to
+ * resolve the actor. Web's create dialog keeps the same pair
+ * (`create-project.tsx` `leadType` + `leadId`, written by one `updateLead`), and
+ * "no lead" is BOTH fields null — not an omitted id.
+ */
+export interface ProjectLeadValue {
+  /** Mirrors `Project["lead_type"]`'s non-null members. */
+  type: "member" | "agent";
+  id: string;
+}
+
 interface NewProjectDraftState {
   status: ProjectStatus;
   priority: ProjectPriority;
+  /** null = no lead chosen yet (web's `no_lead`). */
+  lead: ProjectLeadValue | null;
+  /** Calendar day "YYYY-MM-DD", or null when unset — web's start date pill. */
+  startDate: string | null;
+  /** Calendar day "YYYY-MM-DD", or null when unset. */
+  dueDate: string | null;
   setStatus: (next: ProjectStatus) => void;
   setPriority: (next: ProjectPriority) => void;
+  setLead: (next: ProjectLeadValue | null) => void;
+  setStartDate: (next: string | null) => void;
+  setDueDate: (next: string | null) => void;
   reset: () => void;
 }
 
-const INITIAL: Pick<NewProjectDraftState, "status" | "priority"> = {
+const INITIAL: Pick<
+  NewProjectDraftState,
+  "status" | "priority" | "lead" | "startDate" | "dueDate"
+> = {
   status: "planned",
   priority: "none",
+  lead: null,
+  startDate: null,
+  dueDate: null,
 };
 
 export const useNewProjectDraftStore = create<NewProjectDraftState>((set) => ({
   ...INITIAL,
   setStatus: (next) => set({ status: next }),
   setPriority: (next) => set({ priority: next }),
+  setLead: (next) => set({ lead: next }),
+  setStartDate: (next) => set({ startDate: next }),
+  setDueDate: (next) => set({ dueDate: next }),
   reset: () => set({ ...INITIAL }),
 }));
 

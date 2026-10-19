@@ -58,6 +58,7 @@ import { classifyCreateFailure } from "@/lib/duplicate-issue-error";
 import { duplicateCreatePrompt } from "@/lib/create-failure-prompts";
 import { projectDetailOptions } from "@/data/queries/projects";
 import { useNewIssueDraftStore } from "@/data/stores/new-issue-draft-store";
+import { useNewIssueStagePickStore } from "@/data/stores/new-issue-stage-pick-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
 import { selectedActorLabel } from "@/lib/actor-name-state";
@@ -154,9 +155,19 @@ export default function NewIssueModal() {
     parentIssueId,
     parentIssueIdentifier,
     parentProjectId,
+    seedAgentId,
   } = useLocalSearchParams<{
     seedDescription?: string;
     seedAssigneeId?: string;
+    /**
+     * Agent detail's "Assign work" → open the AGENT-MODE form pointed at this
+     * agent (web `open("quick-create-issue", { agent_id })`,
+     * `agent-detail-page.tsx:293-300`). Separate from `seedAssigneeId`, which
+     * presets the MANUAL form's assignee: the two are different products of
+     * the same intent and writing one into the other would silently switch the
+     * user's editor mode.
+     */
+    seedAgentId?: string;
     /** Parent preset by the issue table's row-level "+" (web createSubIssue). */
   } & Partial<SubIssueRouteParams>>();
   const [parentCleared, setParentCleared] = useState(false);
@@ -194,6 +205,10 @@ export default function NewIssueModal() {
   const setAssignee = useNewIssueDraftStore((s) => s.setAssignee);
   const dueDate = useNewIssueDraftStore((s) => s.dueDate);
   const startDate = useNewIssueDraftStore((s) => s.startDate);
+  // Stage is the one manual field web does not persist — see the pick store's
+  // module doc. Reading it through `stageFor(parent)` also keeps a value
+  // chosen under a different parent from riding along.
+  const stage = useNewIssueStagePickStore((s) => s.stageFor(parent));
   const labels = useNewIssueDraftStore((s) => s.labels);
   const project = useNewIssueDraftStore((s) => s.project);
   const agentActor = useNewIssueDraftStore((s) => s.agentActor);
@@ -229,6 +244,23 @@ export default function NewIssueModal() {
     descriptionTextSetter(String(seedDescription));
     if (seedAssigneeId) setAssignee({ type: "agent", id: String(seedAssigneeId) });
   }, [seedDescription, seedAssigneeId, descriptionTextSetter, setAssignee]);
+
+  // "Assign work" from an agent's detail page: switch to agent mode and point
+  // it at that agent. Runs once per id — re-applying on every render would
+  // overwrite an agent the user has since picked in the panel.
+  const setAgentActor = useNewIssueDraftStore((s) => s.setAgentActor);
+  const appliedSeedAgentRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!seedAgentId) {
+      appliedSeedAgentRef.current = null;
+      return;
+    }
+    const id = String(seedAgentId);
+    if (appliedSeedAgentRef.current === id) return;
+    appliedSeedAgentRef.current = id;
+    setAgentActor({ type: "agent", id });
+    setMode("agent");
+  }, [seedAgentId, setAgentActor, setMode]);
 
   // A sub-issue inherits its parent's project (web `createSubIssue` passes
   // `project_id: issue.project_id`). One detail fetch for the one id the
@@ -364,6 +396,10 @@ export default function NewIssueModal() {
         ...(labels.length > 0 ? { label_ids: labels.map((l) => l.id) } : {}),
         ...(project ? { project_id: project.id } : {}),
         ...(parent ? { parent_issue_id: parent } : {}),
+        // Stage is a sub-issue ordering: without a parent it would be a
+        // meaningless write the detail page can never show. Web uses the same
+        // conjunction (`create-issue.tsx:479`).
+        ...(parent && stage != null ? { stage } : {}),
         ...(uploadedAttachmentIds.length > 0
           ? { attachment_ids: uploadedAttachmentIds }
           : {}),
@@ -441,6 +477,10 @@ export default function NewIssueModal() {
     labels,
     project,
     parent,
+    // The stage the user picked for this sub-issue. Omitting it would make the
+    // callback capture a stale value and send the wrong stage (or none) after
+    // the picker writes a new one.
+    stage,
     uploadedAttachmentIds,
     propertyValues,
     createIssue,
@@ -557,7 +597,7 @@ export default function NewIssueModal() {
                 onAttachmentUploaded={collectAttachment}
                 onUploadingChange={setUploadsPending}
               />
-              <CreateFormAttributeRow mode="manual" />
+              <CreateFormAttributeRow mode="manual" parentIssueId={parent ?? null} />
               {/* Workspace-defined properties (MYS-2245). A sibling row rather
                   than a member of the standard field pool: that pool is a
                   closed union, while the property set is per-workspace and

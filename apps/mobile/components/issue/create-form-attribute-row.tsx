@@ -44,6 +44,7 @@ import { actorNameText } from "@/lib/actor-name-state";
 import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { useStatusLabel } from "@/lib/status-options";
 import { useNewIssueDraftStore } from "@/data/stores/new-issue-draft-store";
+import { useNewIssueStagePickStore } from "@/data/stores/new-issue-stage-pick-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import {
   useIssueCreateSettings,
@@ -109,9 +110,28 @@ interface Props {
    *  with a trailing ⋯ overflow for hidden fields. Legacy call sites
    *  omit it and keep rendering `fields` unchanged. */
   mode?: CreateFormMode;
+  /**
+   * The parent issue chosen for the sub-issue being created, if any.
+   *
+   * **Deliberately not part of `NewIssuePickerField`.** Every member of that
+   * union is a field in web's manual-create settings pool — configurable,
+   * hideable in ⋯, and present whether or not the issue has a parent. Stage
+   * is none of those: web renders its `StagePicker` behind a bare
+   * `parentIssueId &&` guard (`create-issue.tsx:957`), never consults the
+   * settings pool, and withdraws it entirely for a root issue. Folding it into
+   * the union would make it a hideable preference and offer it on root issues,
+   * which is the opposite of web's contract.
+   *
+   * When null/undefined no stage chip renders at all.
+   */
+  parentIssueId?: string | null;
 }
 
-export function CreateFormAttributeRow({ fields = ALL_FIELDS, mode }: Props) {
+export function CreateFormAttributeRow({
+  fields = ALL_FIELDS,
+  mode,
+  parentIssueId,
+}: Props) {
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const settings = useIssueCreateSettings(mode ? wsId : null);
@@ -128,6 +148,10 @@ export function CreateFormAttributeRow({ fields = ALL_FIELDS, mode }: Props) {
   const startDate = useNewIssueDraftStore((s) => s.startDate);
   const labels = useNewIssueDraftStore((s) => s.labels);
   const project = useNewIssueDraftStore((s) => s.project);
+  // Stage comes from the ephemeral pick store, not the draft: it is the one
+  // manual field web does NOT persist, because it only means anything
+  // relative to one specific parent. See the store's module doc.
+  const stage = useNewIssueStagePickStore((s) => s.stageFor(parentIssueId));
 
   const { resolveActorName } = useActorLookup();
   // The draft's actor is one the member just picked, so it is a real reference —
@@ -152,6 +176,22 @@ export function CreateFormAttributeRow({ fields = ALL_FIELDS, mode }: Props) {
   const openFieldSettings = () => {
     if (!wsSlug) return;
     router.push(`/${wsSlug}/more/settings/issues`);
+  };
+
+  // Stage rides the parent id along because the draft store does not hold it —
+  // `new-issue.tsx` owns the parent (it arrives from the route params that
+  // opened the modal). Without it the sheet cannot fetch the sibling ceiling,
+  // and the option list would floor back to Stage 1–3.
+  const openStage = () => {
+    if (!wsSlug || !parentIssueId) return;
+    // Record which parent the sheet is open for BEFORE pushing it — the sheet
+    // reads the id from the route param, but writes the pick back through this
+    // store so the value stays tagged with its parent.
+    useNewIssueStagePickStore.getState().openFor(parentIssueId);
+    router.push({
+      pathname: "/[workspace]/new-issue-picker/stage",
+      params: { workspace: wsSlug, parentId: parentIssueId },
+    });
   };
 
   // A field holds a value when it deviates from its empty draft default —
@@ -368,6 +408,27 @@ export function CreateFormAttributeRow({ fields = ALL_FIELDS, mode }: Props) {
         {visibleFieldsFor.map((field) => (
           <View key={field}>{renderChip(field)}</View>
         ))}
+        {/* Stage — sub-issues only, and outside the settings-driven pool on
+            purpose (see the `parentIssueId` prop doc). Placed after the
+            configured chips and before ⋯ so it cannot be hidden. */}
+        {parentIssueId ? (
+          <View>
+            <AttributeChip
+              icon={
+                <Ionicons
+                  name="flag-outline"
+                  size={14}
+                  color={stage == null ? "#a1a1aa" : muted}
+                />
+              }
+              label={
+                stage == null ? t("attr.stage") : t("stage.value", { n: stage })
+              }
+              variant={stage == null ? "dimmed" : "filled"}
+              onPress={openStage}
+            />
+          </View>
+        ) : null}
         {mode ? (
           <View>
             <AttributeChip

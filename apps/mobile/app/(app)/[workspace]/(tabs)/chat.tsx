@@ -44,7 +44,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, View } from "react-native";
 import { KeyboardStickyView } from "react-native-keyboard-controller";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
@@ -145,6 +145,11 @@ export default function ChatTab() {
 
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  // Deep link from an agent's detail page ("Chat with this agent"). Web's
+  // equivalent is `${paths.chat()}?agent=<id>` (`agent-detail-page.tsx:313`);
+  // this tab had no param reader, so that link landed on a blank conversation
+  // with whichever agent happened to sort first.
+  const { agent: agentParam } = useLocalSearchParams<{ agent?: string }>();
   const [agentPickerOpen, setAgentPickerOpen] = useState(false);
   // Rename / pin / archive / delete menu — shares its action sheet + rename
   // dialog with the session-switch sheet (components/chat/session-actions).
@@ -773,6 +778,27 @@ export default function ChatTab() {
     setSelectedAgentId(agent.id);
     setActiveSessionId(null);
   }, []);
+
+  // Apply an `?agent=<id>` deep link exactly once per distinct id, through the
+  // SAME path `handlePickAgent` uses (select the agent, drop to a blank
+  // conversation). Gated on `availableAgents` so the id is only honoured for an
+  // agent this viewer can actually start a run with — an archived agent, a
+  // private one they cannot assign, or a stale id from an old link must not
+  // leave the composer pointed at an actor that will fail on send. When the
+  // gate never passes (e.g. archived agent), the tab keeps its normal default
+  // rather than sticking on an empty selection.
+  const appliedAgentParamRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!agentParam) {
+      appliedAgentParamRef.current = null;
+      return;
+    }
+    if (appliedAgentParamRef.current === agentParam) return;
+    if (!availableAgents.some((a) => a.id === agentParam)) return;
+    appliedAgentParamRef.current = agentParam;
+    setSelectedAgentId(agentParam);
+    setActiveSessionId(null);
+  }, [agentParam, availableAgents]);
 
   // Apply the user's pick from the chat-sessions route (or "no session"
   // when they delete the active one in the sheet).
