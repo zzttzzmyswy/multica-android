@@ -150,10 +150,15 @@ export function FilterActorPickerBody({
   onToggle,
   searchPlaceholder,
   counts,
+  fixedKeys,
 }: {
   selected: ActorFilterValue[];
   onToggle: (value: ActorFilterValue) => void;
   searchPlaceholder: string;
+  /** Actor keys (`type:id`) the open saved view fixes. Those rows render
+   *  selected and cannot be toggled — web's `disabled={fixedKeys?.has(...)}`
+   *  (issues-header.tsx:392-455). */
+  fixedKeys?: ReadonlySet<string>;
   /** Server facet `key -> count`, or undefined when there is nothing exact to
    *  show. Keys are the server's own (`member:<uuid>`, `agent:<uuid>`,
    *  `squad:<uuid>`, `__none__`) — the same strings `ActorFilterValue`
@@ -224,13 +229,19 @@ export function FilterActorPickerBody({
               : item.kind === "agent"
                 ? { type: "agent", id: item.agent.id }
                 : { type: "squad", id: item.squad.id };
-          const isSelected = selectedKeys.has(`${value.type}:${value.id}`);
+          const actorKey = `${value.type}:${value.id}`;
+          const isSelected = selectedKeys.has(actorKey);
+          const fixed = fixedKeys?.has(actorKey) === true;
           return (
             <Pressable
               onPress={() => onToggle(value)}
+              disabled={fixed}
+              accessibilityState={{ selected: isSelected, disabled: fixed }}
+              accessibilityHint={fixed ? t("filter.fixedByView") : undefined}
               className={cn(
                 "flex-row items-center gap-3 px-4 py-3 active:bg-secondary",
                 isSelected && "bg-secondary/60",
+                fixed && "opacity-60",
               )}
             >
               <ActorAvatar type={value.type} id={value.id} size={AVATAR_SIZE} />
@@ -281,11 +292,18 @@ export function FilterProjectPickerBody({
   onToggle,
   onToggleNoProject,
   counts,
+  fixedIds,
+  noProjectFixed = false,
 }: {
   selected: string[];
   includeNoProject: boolean;
   onToggle: (projectId: string) => void;
   onToggleNoProject: () => void;
+  /** Project ids the open saved view fixes (web `fixedIds`,
+   *  issues-header.tsx:536-560). */
+  fixedIds?: ReadonlySet<string>;
+  /** The view also fixes "no project". */
+  noProjectFixed?: boolean;
   /** Facet counts by project id; `undefined` renders no badges (see
    *  `lib/issue-facet-counts.ts`). */
   counts?: ReadonlyMap<string, number>;
@@ -322,9 +340,18 @@ export function FilterProjectPickerBody({
         ListHeaderComponent={
           <Pressable
             onPress={onToggleNoProject}
+            disabled={noProjectFixed}
+            accessibilityState={{
+              selected: includeNoProject,
+              disabled: noProjectFixed,
+            }}
+            accessibilityHint={
+              noProjectFixed ? t("filter.fixedByView") : undefined
+            }
             className={cn(
               "flex-row items-center gap-3 px-4 py-3 active:bg-secondary",
               includeNoProject && "bg-secondary/60",
+              noProjectFixed && "opacity-60",
             )}
           >
             <Ionicons
@@ -344,12 +371,17 @@ export function FilterProjectPickerBody({
         keyExtractor={(row) => `p:${row.project.id}`}
         renderItem={({ item }) => {
           const isSelected = selected.includes(item.project.id);
+          const fixed = fixedIds?.has(item.project.id) === true;
           return (
             <Pressable
               onPress={() => onToggle(item.project.id)}
+              disabled={fixed}
+              accessibilityState={{ selected: isSelected, disabled: fixed }}
+              accessibilityHint={fixed ? t("filter.fixedByView") : undefined}
               className={cn(
                 "flex-row items-center gap-3 px-4 py-3 active:bg-secondary",
                 isSelected && "bg-secondary/60",
+                fixed && "opacity-60",
               )}
             >
               <ProjectIcon icon={item.project.icon} size="md" />
@@ -385,11 +417,15 @@ export function FilterLabelPickerBody({
   selected,
   onToggle,
   counts,
+  fixedIds,
 }: {
   selected: string[];
   onToggle: (labelId: string) => void;
   /** Facet counts by label id; `undefined` renders no badges. */
   counts?: ReadonlyMap<string, number>;
+  /** Label ids the open saved view fixes (web `fixedIds`,
+   *  issues-header.tsx:631-632). */
+  fixedIds?: ReadonlySet<string>;
 }) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { t } = useTranslation();
@@ -417,12 +453,17 @@ export function FilterLabelPickerBody({
         keyExtractor={(label) => `l:${label.id}`}
         renderItem={({ item }) => {
           const isSelected = selected.includes(item.id);
+          const fixed = fixedIds?.has(item.id) === true;
           return (
             <Pressable
               onPress={() => onToggle(item.id)}
+              disabled={fixed}
+              accessibilityState={{ selected: isSelected, disabled: fixed }}
+              accessibilityHint={fixed ? t("filter.fixedByView") : undefined}
               className={cn(
                 "flex-row items-center gap-3 px-4 py-3 active:bg-secondary",
                 isSelected && "bg-secondary/60",
+                fixed && "opacity-60",
               )}
             >
               <View
@@ -470,6 +511,7 @@ export function FilterPropertyPickerBody({
   onToggle,
   onSetValues,
   counts,
+  fixedIds,
 }: {
   property: IssueProperty;
   selected: string[];
@@ -486,6 +528,10 @@ export function FilterPropertyPickerBody({
   onSetValues: (values: string[]) => void;
   /** Facet counts by option key; `undefined` renders no badges. */
   counts?: ReadonlyMap<string, number>;
+  /** Option ids this definition's filter selection inherits from the open
+   *  saved view (web `fixedIds={viewBaseline?.property.get(property.id)}`,
+   *  issues-header.tsx:1502). Note this is per-DEFINITION, not global. */
+  fixedIds?: ReadonlySet<string>;
 }) {
   const { t } = useTranslation();
   const checkColor = useCheckColor();
@@ -537,6 +583,7 @@ export function FilterPropertyPickerBody({
         selected={selected}
         onSetValues={onSetValues}
         counts={counts}
+        fixedIds={fixedIds}
       />
     );
   }
@@ -558,12 +605,17 @@ export function FilterPropertyPickerBody({
         keyExtractor={(option) => `v:${option.id}`}
         renderItem={({ item }) => {
           const isSelected = selected.includes(item.id);
+          const fixed = fixedIds?.has(item.id) === true;
           return (
             <Pressable
               onPress={() => onToggle(item.id)}
+              disabled={fixed}
+              accessibilityState={{ selected: isSelected, disabled: fixed }}
+              accessibilityHint={fixed ? t("filter.fixedByView") : undefined}
               className={cn(
                 "flex-row items-center gap-3 px-4 py-3 active:bg-secondary",
                 isSelected && "bg-secondary/60",
+                fixed && "opacity-60",
               )}
             >
               {item.color ? (
@@ -647,11 +699,17 @@ function ScalarPropertyFilterBody({
   selected,
   onSetValues,
   counts,
+  fixedIds,
 }: {
   property: IssueProperty;
   selected: string[];
   onSetValues: (values: string[]) => void;
   counts?: ReadonlyMap<string, number>;
+  /** Values the open saved view fixes. A scalar carries at most one committed
+   *  value plus the No-value sentinel, so a fixed value makes the input
+   *  read-only and the sentinel row untouchable — the same "the view defines
+   *  this, not the sheet" rule the list dimensions follow. */
+  fixedIds?: ReadonlySet<string>;
 }) {
   const { t } = useTranslation();
   const { colorScheme } = useSystemColorScheme();
@@ -660,6 +718,12 @@ function ScalarPropertyFilterBody({
   // A value member is any selection that is not the sentinel.
   const committed = selected.find((v) => v !== NO_VALUE_KEY);
   const hasNoValue = selected.includes(NO_VALUE_KEY);
+  // Whether the view rather than this sheet owns the selection (iteration
+  // 258). A scalar is one committed value plus the sentinel, so the two are
+  // checked separately: fixing "no value" must not freeze a typed value too.
+  const valueFixed =
+    committed !== undefined && fixedIds?.has(committed) === true;
+  const noValueFixed = fixedIds?.has(NO_VALUE_KEY) === true;
   // Draft syncs to the committed value, so a filter cleared or rewritten
   // elsewhere cannot be written back from a stale input (same rule as web's
   // `useEffect(() => setDraft(committedScalar))`).
@@ -686,11 +750,17 @@ function ScalarPropertyFilterBody({
   return (
     <View className="flex-1">
       <View className="px-4 pt-3 pb-1">
-        <View className="flex-row items-center gap-2 rounded-xl px-3 py-2 border border-border bg-secondary/40">
+        <View
+          className={cn(
+            "flex-row items-center gap-2 rounded-xl px-3 py-2 border border-border bg-secondary/40",
+            valueFixed && "opacity-60",
+          )}
+        >
           <Ionicons name="search" size={16} color={theme.mutedForeground} />
           <TextInput
             value={draft}
             onChangeText={setDraft}
+            editable={!valueFixed}
             onSubmitEditing={() => commitValue(draft)}
             onBlur={() => commitValue(draft)}
             returnKeyType="done"
@@ -717,9 +787,15 @@ function ScalarPropertyFilterBody({
       </View>
       <Pressable
         onPress={toggleNoValue}
+        disabled={noValueFixed}
+        accessibilityState={{ selected: hasNoValue, disabled: noValueFixed }}
+        accessibilityHint={
+              noValueFixed ? t("filter.fixedByView") : undefined
+            }
         className={cn(
           "flex-row items-center gap-3 px-4 py-3 active:bg-secondary",
           hasNoValue && "bg-secondary/60",
+          noValueFixed && "opacity-60",
         )}
       >
         <Ionicons

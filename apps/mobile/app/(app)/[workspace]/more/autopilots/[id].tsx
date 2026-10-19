@@ -82,6 +82,12 @@ import {
   splitAutopilotRuns,
 } from "@/lib/autopilot-runs";
 import { runNowToastKind, runNowBlockedKey } from "@/lib/autopilot-run-toast";
+import {
+  canJumpToRuntimeBinding,
+  isRuntimeRequiredPause,
+  pauseBannerCopy,
+  runtimeBindingHref,
+} from "@/lib/autopilot-pause";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
@@ -414,6 +420,21 @@ export default function AutopilotDetailPage() {
 
   const archived = autopilot.status === "archived";
   const runningNow = triggerAutopilot.isPending;
+  // A system pause is not the user's pause (iteration 258, MYS-2236). The
+  // schema has parsed `pause_reason` since iteration 82 but nothing read it,
+  // so an autopilot the server stopped because its assignee lost its runtime
+  // was indistinguishable from one a person switched off — and the phone had
+  // no way to reach the binding that would fix it.
+  const runtimeRequired = isRuntimeRequiredPause(autopilot);
+  const canBindRuntime =
+    runtimeRequired && canJumpToRuntimeBinding(autopilot) && !!wsSlug;
+  // The assignee's name is a directory read that may not have settled; the
+  // sentence names it only when it has (`resolveActorName` returns a state,
+  // not a string — MYS-2227's rule).
+  const assigneeName = resolveActorName(
+    autopilot.assignee_type,
+    autopilot.assignee_id,
+  );
 
   return (
     <>
@@ -439,6 +460,48 @@ export default function AutopilotDetailPage() {
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
       >
+      {/* System pause banner (iteration 258, MYS-2236). Web puts the same
+          amber strip above the page body with a deep link to the assignee
+          (`autopilot-detail-page.tsx:829-848`). Without it the phone showed
+          「已暂停」 beside a switch that says the automation is off — the one
+          control a reader would try, and not the one that fixes anything. */}
+      {runtimeRequired ? (
+        <View
+          accessibilityRole="alert"
+          className="mx-4 mt-3 flex-row items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2"
+        >
+          <Ionicons
+            name="hardware-chip-outline"
+            size={14}
+            color="#d97706"
+            style={{ marginTop: 2 }}
+          />
+          <View className="flex-1 gap-1">
+            <Text className="text-caption text-amber-900 dark:text-amber-100">
+              {(() => {
+                const copy = pauseBannerCopy(assigneeName);
+                return t(copy.key, copy.params);
+              })()}
+            </Text>
+            {canBindRuntime ? (
+              <Pressable
+                onPress={() =>
+                  router.push(
+                    runtimeBindingHref(wsSlug, autopilot.assignee_id),
+                  )
+                }
+                hitSlop={6}
+                className="self-start active:opacity-60"
+              >
+                <Text className="text-caption font-medium text-amber-900 dark:text-amber-100 underline">
+                  {t("autopilots.detail.bindRuntime")}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
+
       {/* Status switch + run-now actions */}
       <View className="px-4 pt-3 flex-row items-center justify-between">
         <View className="flex-row items-center gap-2">

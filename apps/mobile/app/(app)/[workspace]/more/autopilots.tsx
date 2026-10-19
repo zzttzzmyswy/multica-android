@@ -103,6 +103,7 @@ import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { ActionSheet } from "@/lib/action-sheet";
 import { catalogRead, retryCatalogs } from "@/lib/catalog-read";
+import { pauseStatusLabelKey } from "@/lib/autopilot-pause";
 import { aggregateCatalogState } from "@/lib/catalog-state";
 import type { CatalogState } from "@/lib/catalog-state";
 import { cn } from "@/lib/utils";
@@ -129,6 +130,25 @@ function statusPill(status: string | undefined) {
     label: status ?? "",
     className: "bg-muted text-muted-foreground",
   };
+}
+
+/**
+ * The pill a ROW renders.
+ *
+ * A system pause reads differently from a user pause (iteration 258,
+ * MYS-2236): the row says 「已暂停——执行智能体需绑定运行时」 instead of the bare
+ * status word, because the two states look identical on a phone and only one
+ * of them is fixed by the switch on the detail page. Web makes the same split
+ * for the paused marker's tooltip (`autopilots-page.tsx:255-256`); a phone has
+ * no tooltip, so the distinction has to be in the visible text.
+ *
+ * The amber colour is shared with the ordinary paused pill — it is still a
+ * pause, and colouring it as an error would misstate who caused it.
+ */
+function rowStatusPill(autopilot: Autopilot) {
+  const base = statusPill(autopilot.status);
+  const pauseKey = pauseStatusLabelKey(autopilot);
+  return pauseKey ? { ...base, label: pauseKey } : base;
 }
 
 // Trigger glyph per kind — mirrors web TRIGGER_ICONS. Unknown kinds get the
@@ -959,7 +979,7 @@ function AutopilotRow({
   const theme = THEME[colorScheme];
   const muted = theme.mutedForeground;
   const timeAgo = useTimeAgo();
-  const pill = statusPill(autopilot.status);
+  const pill = rowStatusPill(autopilot);
   const kinds = autopilot.trigger_kinds ?? [];
   const lastRun = lastRunCell(autopilot, timeAgo);
 
