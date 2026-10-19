@@ -68,9 +68,10 @@ export type CreateFailure =
 /**
  * Classify a failed create.
  *
- * `parse` is injected so the zod validation stays in one place (`zod`'s
- * `safeParse` never throws, which is what makes this safe to call on an
- * arbitrary server body).
+ * `DuplicateIssueErrorBodySchema.safeParse` never throws, which is what makes
+ * this safe to call on an arbitrary server body: a 409 carrying HTML (a proxy
+ * error page), an array, or a body with a renamed `code` all come back as
+ * `{success: false}` and fall through to the generic failure path.
  */
 export function classifyCreateFailure(
   error: DuplicateCandidate | null | undefined,
