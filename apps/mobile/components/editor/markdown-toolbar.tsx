@@ -22,8 +22,10 @@ import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/react";
 
 export interface MarkdownToolbarProps {
-  /** Toolbar `@` button → hook.handlers.onAtButtonPress. */
-  onAt: () => void;
+  /** Toolbar `@` button → hook.handlers.onAtButtonPress. Omit to hide the
+   *  button entirely — a body with no mention namespace (a project
+   *  description) has nothing for an inserted `@name` token to resolve to. */
+  onAt?: () => void;
   /** Insert `- ` at the start of the current line. */
   onList: () => void;
   /** Insert `- [ ] ` at the start of the current line. */
@@ -55,13 +57,15 @@ export function MarkdownToolbar({
   const { t } = useTranslation();
   return (
     <View className="flex-row items-center gap-1 px-2 py-1.5 border-t border-border bg-background">
-      <ToolbarButton
-        accessibilityLabel={t("a11y.mention")}
-        onPress={onAt}
-        disabled={disabled}
-      >
-        <Text className="text-title-sm text-muted-foreground leading-none">@</Text>
-      </ToolbarButton>
+      {onAt ? (
+        <ToolbarButton
+          accessibilityLabel={t("a11y.mention")}
+          onPress={onAt}
+          disabled={disabled}
+        >
+          <Text className="text-title-sm text-muted-foreground leading-none">@</Text>
+        </ToolbarButton>
+      ) : null}
       <ToolbarButton
         accessibilityLabel={t("a11y.bulletList")}
         onPress={onList}

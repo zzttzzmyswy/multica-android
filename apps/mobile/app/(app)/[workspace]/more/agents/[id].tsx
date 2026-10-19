@@ -29,6 +29,7 @@ import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { ActorNameText } from "@/components/ui/actor-name";
 import { PresenceDot } from "@/components/ui/presence-dot";
 import { AgentDetailActions } from "@/components/agent/agent-detail-actions";
+import { AgentPrimaryActions } from "@/components/agent/agent-primary-actions";
 import { AgentMcpSection } from "@/components/agent/agent-mcp-section";
 import { AgentSkillsSection } from "@/components/agent/agent-skills-section";
 import { AgentAccessPicker } from "@/components/agent/agent-access-picker";
@@ -303,6 +304,14 @@ export default function AgentDetailPage() {
               </Pressable>
             </View>
           ) : null}
+
+          {/* Chat / Assign work — web's two primary detail actions
+              (`agent-detail-page.tsx:521-542`). Placed above the profile block
+              because they are the reason most people open this screen; the
+              ⋯ management menu in the header row sits beside them without
+              competing. The component owns its own gating (mounted vs. denied)
+              — see its module doc. */}
+          <AgentPrimaryActions agent={agent} />
 
           {/* Profile */}
           <SectionTitle>{t("agents.detail.properties")}</SectionTitle>

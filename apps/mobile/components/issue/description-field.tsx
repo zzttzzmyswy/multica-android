@@ -41,6 +41,7 @@ export function DescriptionField({
   issueId,
   onAttachmentUploaded,
   onUploadingChange,
+  showMentionButton = true,
 }: {
   description: UseMentionInputReturn;
   disabled: boolean;
@@ -49,6 +50,16 @@ export function DescriptionField({
   issueId?: string;
   /** Reports a freshly uploaded attachment id for `attachment_ids`. */
   onAttachmentUploaded?: (id: string) => void;
+  /**
+   * Whether the toolbar offers the `@` mention button.
+   *
+   * False for bodies that are not issues or comments: a project description
+   * has no mention namespace (web's project `ContentEditor` has no mention
+   * affordance either — `project-detail.tsx:453-465`), so offering `@` would
+   * insert a token nothing can resolve. Defaults true so the issue and comment
+   * surfaces are unchanged.
+   */
+  showMentionButton?: boolean;
   /** Mirrors the in-flight upload flag so callers can gate submit — an
    *  attachment picked but not yet uploaded must never be left dangling. */
   onUploadingChange?: (uploading: boolean) => void;
@@ -119,7 +130,9 @@ export function DescriptionField({
         editable={!disabled}
       />
       <MarkdownToolbar
-        onAt={description.handlers.onAtButtonPress}
+        {...(showMentionButton
+          ? { onAt: description.handlers.onAtButtonPress }
+          : {})}
         onList={() => applyMarkdown("list")}
         onCheckbox={() => applyMarkdown("checkbox")}
         onCode={() => applyMarkdown("code")}

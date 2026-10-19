@@ -5,6 +5,19 @@
  *
  * Cancel/dismiss flow: header Cancel + iOS drag-down gesture both check
  * dirty state and pop an Alert if there are unsaved edits.
+ *
+ * The description is a MARKDOWN body, not a plain text field: web edits it
+ * through `ContentEditor` and stores markdown (`project-detail.tsx:453-465`),
+ * and the detail screen now renders it through the markdown pipeline. A plain
+ * `AutosizeTextArea` here would show the stored markdown as source while the
+ * detail screen showed it rendered, and a save-all would rewrite the body as
+ * whatever literal text the user saw. So this reuses the same
+ * `DescriptionField` (editor + markdown toolbar) the issue forms use, with the
+ * mention button off — a project has no mention namespace.
+ *
+ * Uploads go through the workspace-level `/api/upload-file` with NO issue
+ * context (`useFileAttach`'s `UploadContext` only carries issue/comment ids):
+ * the inserted image link is durable, but it is not bound to an issue.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -18,14 +31,12 @@ import {
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { Text } from "@/components/ui/text";
-import { AutosizeTextArea } from "@/components/ui/autosize-textarea";
-import {
-  MIN_BODY_INPUT_HEIGHT_PX,
-  MOBILE_PLACEHOLDER_COLOR,
-} from "@/components/ui/input-tokens";
+import { DescriptionField } from "@/components/issue/description-field";
+import { MOBILE_PLACEHOLDER_COLOR } from "@/components/ui/input-tokens";
 import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { projectDetailOptions } from "@/data/queries/projects";
 import { useUpdateProject } from "@/data/mutations/projects";
+import { useMentionInput } from "@/lib/use-mention-input";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { recordRead } from "@/lib/catalog-read";
 import { keyboardBehavior } from "@/lib/keyboard";
@@ -51,7 +62,14 @@ export default function EditProject() {
   const read = recordRead(record, [detail]);
 
   const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  // The description body lives in a mention-input instance because
+  // `DescriptionField` owns text + caret + selection as one unit (the markdown
+  // toolbar's inserts are all caret-relative). Nothing here mentions — the
+  // mention button is off — but the same control keeps this editor identical
+  // to the issue forms.
+  const descriptionInput = useMentionInput();
+  const description = descriptionInput.text;
+  const setDescription = descriptionInput.setText;
   const [icon, setIcon] = useState("");
   const [seeded, setSeeded] = useState(false);
 
@@ -66,7 +84,7 @@ export default function EditProject() {
     setDescription(record.description ?? "");
     setIcon(record.icon ?? "");
     setSeeded(true);
-  }, [record, seeded]);
+  }, [record, seeded, setDescription]);
 
   const dirty = useMemo(() => {
     if (!record) return false;
@@ -190,13 +208,20 @@ export default function EditProject() {
               </Field>
 
               <Field label={t("editProject.description")}>
-                <AutosizeTextArea
-                  value={description}
-                  onChangeText={setDescription}
+                <DescriptionField
+                  description={descriptionInput}
+                  disabled={update.isPending}
                   placeholder={t("newProject.descriptionPlaceholder")}
-                  className="bg-secondary/50 rounded-md px-3 py-2"
-                  minHeight={MIN_BODY_INPUT_HEIGHT_PX}
+                  // A project body has no mention namespace — see the module
+                  // doc. Uploads still work (they carry no issue context).
+                  showMentionButton={false}
                 />
+                {/* Web shows the same sentence under its project
+                    ContentEditor (`project-detail.tsx:474`: `description_hint`),
+                    so the author knows the body is agent context. */}
+                <Text className="text-caption text-muted-foreground">
+                  {t("project.descriptionHint")}
+                </Text>
               </Field>
             </>
           )}
