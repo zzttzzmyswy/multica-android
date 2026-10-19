@@ -149,6 +149,19 @@ describe("#1 custom properties on create", () => {
     expect(back).toBeGreaterThan(fanout);
   });
 
+  it("dismisses the modal BEFORE the partial-failure alert", () => {
+    // The reverse order tears down the alert's host window in the same frame
+    // on Android. Scoped to the manual submit's success path.
+    const start = screen.indexOf("const outcome = await writeCreatePropertyValues(");
+    const end = screen.indexOf("} catch (err) {", start);
+    const block = screen.slice(start, end);
+    const back = block.indexOf("router.back();");
+    const alert = block.indexOf('t("newIssue.propertiesPartialTitle")');
+    expect(back).toBeGreaterThan(-1);
+    expect(alert).toBeGreaterThan(-1);
+    expect(back).toBeLessThan(alert);
+  });
+
   it("reports partial failure separately from a failed create", () => {
     expect(screen).toContain("propertyWriteFailureMessage(outcome, t)");
     expect(screen).toContain('t("newIssue.propertiesPartialTitle")');

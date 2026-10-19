@@ -381,6 +381,13 @@ export default function NewIssueModal() {
       // Spent draft — see submitAgentMode. Cleared before `router.back()` so
       // the unmount never races the write.
       resetDraft();
+      // Dismiss the modal BEFORE raising the partial-failure notice. The
+      // reverse order puts a native dialog on screen and then tears its host
+      // screen down in the same frame, which on Android leaves the alert
+      // owned by a dying window. Navigating first also matches what the user
+      // sees on the happy path — the form closes either way, and only then
+      // does the app say what did not save.
+      router.back();
       if (outcome.failed.length > 0) {
         // The issue EXISTS. Saying "creation failed" here would send the user
         // back to a form that would produce a duplicate, so the two outcomes
@@ -392,7 +399,6 @@ export default function NewIssueModal() {
         const message = propertyWriteFailureMessage(outcome, t);
         if (message) Alert.alert(t("newIssue.propertiesPartialTitle"), message);
       }
-      router.back();
     } catch (err) {
       // A structured 409 duplicate refusal (MYS-2245) is recognised BEFORE the
       // generic alert: its whole value is naming the issue that blocked the

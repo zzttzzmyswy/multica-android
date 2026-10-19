@@ -183,6 +183,13 @@ MUTATIONS: list[tuple[str, Path, str, str]] = [
         "      false,",
     ),
     (
+        "4b. the partial-failure alert is raised before dismissing the modal, so "
+        "on Android its host window is torn down in the same frame",
+        SCREEN,
+        '      router.back();\n      if (outcome.failed.length > 0) {',
+        '      if (outcome.failed.length > 0) { Alert.alert(t("newIssue.propertiesPartialTitle"), ""); }\n      router.back();\n      if (false) {',
+    ),
+    (
         "16b. the shared body stops reporting typed text, so both headers commit "
         "the value the field held on OPEN and silently drop the edit",
         APP / "components" / "issue" / "pickers" / "property-value-body.tsx",
