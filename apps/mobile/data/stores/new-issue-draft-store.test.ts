@@ -160,6 +160,10 @@ describe("new-issue-draft-store", () => {
         "priority",
         "project",
         "prompt",
+        // Added in iteration 259 (MYS-2245): a create form's custom-property
+        // choices ride the draft, so they must survive a reopen like every
+        // other attribute.
+        "propertyValues",
         "startDate",
         "status",
         "title",

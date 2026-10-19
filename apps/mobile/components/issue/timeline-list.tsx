@@ -105,6 +105,7 @@ import { DeliverablesSection } from "./deliverables-section";
 import { QuickActionsSection } from "@/components/quick-action/quick-actions-section";
 import { WakeupsSection } from "./wakeups-section";
 import { isClosedIssue } from "@/lib/wakeup-presentation";
+import { IssueDetailsSection } from "./issue-details-section";
 import { IssueMetadataSection } from "./issue-metadata-section";
 import { SubscriptionControl } from "./subscription-control";
 import { ActivityRow } from "./activity-row";
@@ -872,6 +873,14 @@ export function TimelineList({
             : undefined
         }
       />
+      {/* Details — creator and the two timestamps (MYS-2245). Web puts this
+          directly below its execution-log section and immediately above the
+          metadata bag (`issue-detail.tsx:2337-2393`), and the same
+          Details → Metadata order is kept here. Mobile has no execution-log
+          block on this screen (runs live on their own route), so it lands
+          after the wakeup rules. Always renders: an issue always has a creator
+          and timestamps, unlike the metadata bag below it. */}
+      <IssueDetailsSection issue={issue} />
       {/* Raw metadata bag (G26) — renders null when the issue has none, so an
           issue that never used metadata gains no row. Read-only: the bag is
           the agents' channel and web has no write path either. */}

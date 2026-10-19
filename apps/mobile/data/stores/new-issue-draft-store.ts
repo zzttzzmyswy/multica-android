@@ -45,6 +45,8 @@ import { create } from "zustand";
 import { Paths, File } from "expo-file-system";
 import type {
   IssuePriority,
+  IssuePropertyValue,
+  IssuePropertyValues,
   IssueStatus,
   Label,
   Project,
@@ -67,8 +69,9 @@ export type AgentActorValue = {
 export type CreateMode = "manual" | "agent";
 
 /** The persisted half of the draft — everything a reopen must restore, and
- *  nothing derived. Mirrors web's `IssueCreateDraft` minus the fields mobile
- *  has no equivalent for (property values, the upload pool). */
+ *  nothing derived. Mirrors web's `IssueCreateDraft` minus the upload pool
+ *  (uploaded attachment ids belong to a live upload session, not to a draft
+ *  that may be reopened days later). */
 export interface NewIssueDraftValues {
   title: string;
   /** Markdown, as web stores it. The screen owns the mention-input instance
@@ -90,6 +93,16 @@ export interface NewIssueDraftValues {
   labels: Label[];
   project: Project | null;
   agentActor: AgentActorValue;
+  /**
+   * Workspace-defined property values chosen for the not-yet-created issue.
+   * Web keeps the same map in its draft (`create-issue.tsx:257`,
+   * `draft.manual.propertyValues`) and replays it as one PUT per property
+   * AFTER the issue exists (`:483-508`) — the server has nowhere to put these
+   * on `POST /api/issues`.
+   *
+   * Keyed by property id; a missing key means "no value", which is distinct
+   * from a stored `false` / `0` / `""` the user picked deliberately. */
+  propertyValues: IssuePropertyValues;
 }
 
 interface NewIssueDraftState extends NewIssueDraftValues {
@@ -114,6 +127,9 @@ interface NewIssueDraftState extends NewIssueDraftValues {
   detachLabel: (labelId: string) => void;
   setProject: (next: Project | null) => void;
   setAgentActor: (next: AgentActorValue) => void;
+  /** Set or clear one property value. `undefined` REMOVES the key rather than
+   *  storing a null — the create fan-out keys off presence. */
+  setPropertyValue: (propertyId: string, value: IssuePropertyValue | undefined) => void;
   /**
    * Seed the draft from a board column's implied defaults before opening the
    * modal (web `onCreateIssue(group.createData)` — board-column.tsx:226-246).
@@ -142,6 +158,7 @@ export const EMPTY_NEW_ISSUE_DRAFT: NewIssueDraftValues = {
   labels: [],
   project: null,
   agentActor: null,
+  propertyValues: {},
 };
 
 /** Workspace the store is currently bound to, or null before the workspace
@@ -220,7 +237,27 @@ export function normalizeNewIssueDraft(raw: unknown): NewIssueDraftValues {
       d.agentActor && typeof d.agentActor === "object"
         ? (d.agentActor as AgentActorValue)
         : null,
+    // A persisted map whose entries are not property-value scalars cannot be
+    // rendered by any of the value editors, so it is dropped wholesale rather
+    // than half-restored into the form.
+    propertyValues: asPropertyValues(d.propertyValues),
   };
+}
+
+/** Property values are `string | number | boolean | string[]`. Anything else in
+ *  a hand-edited or future-shaped file is discarded per entry, so one bad key
+ *  does not cost the user the rest of their draft. */
+function asPropertyValues(raw: unknown): IssuePropertyValues {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: IssuePropertyValues = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+      out[key] = value;
+    } else if (Array.isArray(value) && value.every((v) => typeof v === "string")) {
+      out[key] = value as string[];
+    }
+  }
+  return out;
 }
 
 /**
@@ -244,7 +281,8 @@ export function draftHasContent(values: NewIssueDraftValues): boolean {
       values.startDate ||
       values.labels.length > 0 ||
       values.project ||
-      values.agentActor,
+      values.agentActor ||
+      Object.keys(values.propertyValues).length > 0,
   );
 }
 
@@ -281,6 +319,12 @@ export const useNewIssueDraftStore = create<NewIssueDraftState>((set, get) => {
     },
     setProject: (next) => commit({ project: next }),
     setAgentActor: (next) => commit({ agentActor: next }),
+    setPropertyValue: (propertyId, value) => {
+      const next = { ...get().propertyValues };
+      if (value === undefined) delete next[propertyId];
+      else next[propertyId] = value;
+      commit({ propertyValues: next });
+    },
     seedFromColumn: ({ status, assignee }) =>
       commit({
         ...(status !== undefined ? { status } : {}),
@@ -312,6 +356,7 @@ export function snapshot(state: NewIssueDraftValues): NewIssueDraftValues {
     labels: state.labels,
     project: state.project,
     agentActor: state.agentActor,
+    propertyValues: state.propertyValues,
   };
 }
 

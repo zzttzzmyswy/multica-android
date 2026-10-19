@@ -59,7 +59,17 @@ describe("the issue-table cell renders actor values", () => {
 });
 
 describe("the property-value editor can edit actor values", () => {
-  const editor = code("components/issue/pickers/property-value-editor.tsx");
+  // Iteration 259 (MYS-2245) moved the value bodies — and the commit-type set
+  // they are gated by — into `property-value-body.tsx`, which the issue-bound
+  // editor, the create form's draft editor and the table cell editor now share.
+  // The guard follows the code: reading only the old host would pass a deleted
+  // entry as long as its own import line survived, and the shared module is the
+  // one whose literal decides editability.
+  const body = code("components/issue/pickers/property-value-body.tsx");
+  const host = code("components/issue/pickers/property-value-editor.tsx");
+  /** Kept as `editor` so the assertions below that still target the read-only
+   *  host do not each have to name it. */
+  const editor = host;
 
   it("offers both actor types as commit types", () => {
     // Without them the editor marks the property read-only and the value can
@@ -67,8 +77,8 @@ describe("the property-value editor can edit actor values", () => {
     // COMMIT_TYPES literal itself: a loose "actor appears somewhere in the
     // file" match still passes when the entry is deleted but a comment or a
     // string mentions it elsewhere.
-    const literal = editor.match(/const COMMIT_TYPES = new Set\(\[([\s\S]*?)\]\)/);
-    expect(literal, "COMMIT_TYPES literal must exist").not.toBeNull();
+    const literal = body.match(/const PROPERTY_COMMIT_TYPES = new Set\(\[([\s\S]*?)\]\)/);
+    expect(literal, "PROPERTY_COMMIT_TYPES literal must exist").not.toBeNull();
     expect(literal![1]).toMatch(/"actor"/);
     expect(literal![1]).toMatch(/"multi_actor"/);
   });
@@ -80,14 +90,24 @@ describe("the property-value editor can edit actor values", () => {
     // and the flag feeding the readOnly decision. A loose
     // `readOnly = ... hasUnknownActorRef(value)` match would also accept a
     // commented-out or dead assignment anywhere earlier in the file.
+    //
+    // Iteration 259 split these across two files and each half is asserted
+    // where it now lives: the FLAG is computed by the host (it also decides
+    // what the read-only label says), while the READ-ONLY DECISION is taken by
+    // the host too — the shared body never sees an archived/unreadable
+    // property because the host refuses to mount it. Asserting both halves in
+    // one file would now be a match against a module that no longer holds them.
     expect(editor).toMatch(
       /const unknownActorRef =\s*\n?\s*property\.type === "actor" \u0026\u0026 hasUnknownActorRef\(value\)/,
     );
     expect(editor).toMatch(/const readOnly =[\s\S]{0,120}unknownActorRef/);
+    // …and the shared body is only reached on the editable branch.
+    expect(editor).toMatch(/\{readOnly \?[\s\S]{0,900}<PropertyValueBody/);
   });
 
   it("reads the workspace member directory", () => {
-    expect(editor).toContain("memberListOptions");
+    // The actor list is one of the bodies that moved (iteration 259).
+    expect(body).toContain("memberListOptions");
   });
 
   it("names actor refs on the read-only path too", () => {
@@ -98,18 +118,21 @@ describe("the property-value editor can edit actor values", () => {
     // Iteration 256 moved this path onto the read-state-aware resolver: an
     // archived definition still renders its value, but it may no longer print
     // a sentinel while the members directory is unread (MYS-2227).
-    const roster = editor.match(
+    // The read-only branch (and therefore its label) stayed in the host
+    // editor; only the editable bodies moved into `property-value-body.tsx`.
+    const roster = host.match(
       /const \{ resolveActorName \} = useActorLookup\(\)/,
     );
     expect(roster, "editor must resolve actor names").not.toBeNull();
-    expect(editor).not.toMatch(/refs\.map\(\(ref\) => ref\.id\)/);
+    expect(host).not.toMatch(/refs\.map\(\(ref\) => ref\.id\)/);
+    expect(host).toContain("joinedActorNames");
   });
 
   it("round-trips unknown refs through the raw list, not the parsed one", () => {
     // `actorRefsFromValue` drops kinds this build cannot parse; using it as
     // the toggle's `current` would delete them on the first tick.
-    expect(editor).toContain("actorRefValuesFromValue");
-    expect(editor).toContain("toggleActorRefValue");
+    expect(body).toContain("actorRefValuesFromValue");
+    expect(body).toContain("toggleActorRefValue");
   });
 });
 
