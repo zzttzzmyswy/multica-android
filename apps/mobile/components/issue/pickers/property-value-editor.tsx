@@ -19,33 +19,14 @@
  * inside the issue table's cell editor, where the write has to land without
  * leaving the workbench.
  */
-import { useEffect, useState } from "react";
-import {
-  FlatList,
-  KeyboardAvoidingView,
-  Pressable,
-  TextInput,
-  View,
-} from "react-native";
+import { useState, useEffect } from "react";
+import { KeyboardAvoidingView, Pressable, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import type {
-  IssueProperty,
-  IssuePropertyValue,
-} from "@multica/core/types";
-import {
-  MAX_ISSUE_PROPERTY_ACTOR_VALUES,
-  actorRefValuesFromValue,
-  formatActorRef,
-  hasUnknownActorRef,
-  isActorPropertyType,
-} from "@multica/core/types";
+import { hasUnknownActorRef } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
-import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { PropertyCatalogStatus } from "@/components/property/property-catalog-status";
 import { issueDetailOptions } from "@/data/queries/issues";
-import { memberListOptions } from "@/data/queries/members";
 import { usePropertyCatalog } from "@/data/queries/properties";
 import {
   useSetIssueProperty,
@@ -54,37 +35,15 @@ import {
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
 import { joinedActorNames } from "@/lib/actor-name-state";
-import {
-  formatPropertyValue,
-  propertyOptions,
-  propertyTypeIcon,
-  toggleActorRefValue,
-} from "@/lib/issue-properties";
-import { toDateOnly, dateOnlyToLocalDate } from "@multica/core/issues/date";
-import { matchesNameOrPinyin } from "@/lib/name-search";
-import { CatalogEmptySlot } from "@/components/catalog/catalog-status";
-import { catalogRead, retryCatalogs } from "@/lib/catalog-read";
+import { formatPropertyValue, propertyTypeIcon } from "@/lib/issue-properties";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
-import { cn } from "@/lib/utils";
-
-const COMMIT_TYPES = new Set([
-  "select",
-  "multi_select",
-  "date",
-  "checkbox",
-  "text",
-  "number",
-  "url",
-  // Actor properties are editable: the phone writes `member:<user_id>` refs
-  // through the same PUT the other types use. Leaving them out of this set
-  // marked them read-only, so a member-valued property could be read but
-  // never set from the app.
-  "actor",
-  "multi_actor",
-]);
-const TEXTISH_TYPES = new Set(["text", "number", "url"]);
+import {
+  PROPERTY_COMMIT_TYPES,
+  propertyBodyHasDone,
+  PropertyValueBody,
+} from "./property-value-body";
 
 interface Props {
   issueId: string;
@@ -124,7 +83,7 @@ export function PropertyValueEditor({ issueId, propertyId, onClose }: Props) {
   const textishValue = typeof value === "string" ? value : undefined;
   useEffect(() => {
     if (
-      TEXTISH_TYPES.has(property?.type ?? "") &&
+      propertyBodyHasDone(property?.type ?? "") &&
       draft === "" &&
       textishValue
     ) {
@@ -168,7 +127,7 @@ export function PropertyValueEditor({ issueId, propertyId, onClose }: Props) {
   const unknownActorRef =
     property.type === "actor" && hasUnknownActorRef(value);
   const readOnly =
-    property.archived || !COMMIT_TYPES.has(property.type) || unknownActorRef;
+    property.archived || !PROPERTY_COMMIT_TYPES.has(property.type) || unknownActorRef;
 
   const display = formatPropertyValue(property, value);
   const valueLabel =
@@ -252,7 +211,7 @@ export function PropertyValueEditor({ issueId, propertyId, onClose }: Props) {
               <Text className="text-body text-destructive">{t("common.clear")}</Text>
             </Pressable>
           ) : null}
-          {TEXTISH_TYPES.has(property.type) && (
+          {propertyBodyHasDone(property.type) && (
             <Pressable
               onPress={() => {
                 const trimmed = draft.trim();
@@ -289,296 +248,16 @@ export function PropertyValueEditor({ issueId, propertyId, onClose }: Props) {
               : t("properties.value.archivedHint")}
           </Text>
         </View>
-      ) : property.type === "select" || property.type === "multi_select" ? (
-        <FlatList
-          data={propertyOptions(property)}
-          keyExtractor={(option) => option.id}
-          className="flex-1"
-          contentInsetAdjustmentBehavior="automatic"
-          renderItem={({ item: option }) => {
-            const multi = property.type === "multi_select";
-            const list = Array.isArray(value) ? value : [];
-            const selected = multi ? list.includes(option.id) : value === option.id;
-            return (
-              <Pressable
-                onPress={() => {
-                  if (multi) {
-                    const next = selected
-                      ? list.filter((v) => v !== option.id)
-                      : [...list, option.id];
-                    // Unsetting to empty = clear (web's toggle→clear).
-                    if (next.length === 0) clear();
-                    else commit(next);
-                  } else {
-                    commit(option.id);
-                  }
-                }}
-                className="flex-row items-center gap-3 px-4 py-3 active:bg-secondary"
-              >
-                <View
-                  className="size-3 shrink-0 rounded-full"
-                  style={{ backgroundColor: option.color }}
-                />
-                <Text
-                  className={cn(
-                    "flex-1 text-title-sm",
-                    selected ? "text-foreground font-medium" : "text-foreground",
-                  )}
-                  numberOfLines={1}
-                >
-                  {option.name}
-                </Text>
-                {selected ? (
-                  <Ionicons name="checkmark" size={20} color={theme.primary} />
-                ) : null}
-              </Pressable>
-            );
-          }}
-        />
-      ) : property.type === "checkbox" ? (
-        <View className="flex-1">
-          <CheckRow
-            label={t("properties.value.true")}
-            selected={value === true}
-            onPress={() => commit(true)}
-          />
-          <View className="h-px bg-border ml-4" />
-          <CheckRow
-            label={t("properties.value.false")}
-            selected={value === false}
-            onPress={() => commit(false)}
-          />
-        </View>
-      ) : isActorPropertyType(property.type) ? (
-        <ActorRefBody
+      ) : (
+        <PropertyValueBody
           property={property}
           value={value}
           onCommit={commit}
           onClear={clear}
+          initialDraft={draft}
+          onDraftChange={setDraft}
         />
-      ) : property.type === "date" ? (
-        <DateBody
-          value={typeof value === "string" ? value : null}
-          onDone={(iso) => commit(iso)}
-        />
-      ) : (
-        // text / number / url
-        <View className="flex-1 px-4 pt-2">
-          <TextInput
-            autoFocus
-            value={draft}
-            onChangeText={setDraft}
-            keyboardType={
-              property.type === "number"
-                ? "decimal-pad"
-                : property.type === "url"
-                  ? "url"
-                  : "default"
-            }
-            returnKeyType="done"
-            onSubmitEditing={() => {
-              const trimmed = draft.trim();
-              if (!trimmed) return;
-              if (property.type === "number") {
-                const parsed = Number(trimmed);
-                if (Number.isNaN(parsed)) return;
-                commit(parsed);
-              } else {
-                commit(trimmed);
-              }
-            }}
-            placeholder={
-              property.type === "url"
-                ? t("properties.value.urlPlaceholder")
-                : property.type === "number"
-                  ? t("properties.value.numberPlaceholder")
-                  : t("properties.value.valuePlaceholder")
-            }
-            placeholderTextColor={theme.mutedForeground}
-            className="border border-border rounded-md px-3 py-2.5 text-body text-foreground"
-            style={{ fontSize: 14, includeFontPadding: false, textAlignVertical: "center" }}
-          />
-        </View>
       )}
     </KeyboardAvoidingView>
-  );
-}
-
-function CheckRow({
-  label,
-  selected,
-  onPress,
-}: {
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
-  return (
-    <Pressable onPress={onPress} className="flex-row items-center gap-3 px-4 py-3 active:bg-secondary">
-      <Text className="flex-1 text-title-sm text-foreground">{label}</Text>
-      {selected ? <Ionicons name="checkmark" size={20} color={theme.primary} /> : null}
-    </Pressable>
-  );
-}
-
-function DateBody({
-  value,
-  onDone,
-}: {
-  value: string | null;
-  onDone: (iso: string) => void;
-}) {
-  const { t } = useTranslation();
-  const [draft, setDraft] = useState(() => dateOnlyToLocalDate(value) ?? new Date());
-  return (
-    <View className="flex-1 items-center pt-2">
-      <DateTimePicker
-        value={draft}
-        mode="date"
-        display="inline"
-        onChange={(_event, selected) => {
-          if (selected) setDraft(selected);
-        }}
-        maximumDate={new Date(9999, 11, 31)}
-      />
-      <Pressable
-        onPress={() => onDone(toDateOnly(draft))}
-        className="mt-2 rounded-md px-4 py-2 active:bg-secondary"
-      >
-        <Text className="text-body font-medium text-primary">{t("common.done")}</Text>
-      </Pressable>
-    </View>
-  );
-}
-
-/**
- * Actor / multi_actor value body — the workspace member directory as a
- * selectable list, mirroring web's `ActorPropertyPicker`
- * (packages/views/issues/components/pickers/actor-property-picker.tsx):
- *
- *   actor        → tapping a member commits `member:<user_id>` and closes
- *   multi_actor  → tapping toggles in place and keeps the sheet open; the
- *                  value becomes `undefined` (= clear) when the last member
- *                  is unticked, matching web's `toggleActorRefValue`
- *
- * Members are the only kind either type accepts: web deliberately excludes
- * agents and squads here (an agent reference would drag in agent-visibility
- * rules, and a squad is a routing target rather than a person), so the list is
- * the member directory alone.
- *
- * Search runs through `matchesNameOrPinyin`, the same helper the assignee
- * picker uses, so a Chinese name is reachable by full pinyin, initials or
- * hybrid input.
- */
-function ActorRefBody({
-  property,
-  value,
-  onCommit,
-  onClear,
-}: {
-  property: IssueProperty;
-  value: IssuePropertyValue | undefined;
-  onCommit: (next: IssuePropertyValue) => void;
-  onClear: () => void;
-}) {
-  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
-  const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
-  const [query, setQuery] = useState("");
-
-  const members = catalogRead(useQuery(memberListOptions(wsId)));
-  const multiple = property.type === "multi_actor";
-
-  // Raw strings, not parsed refs: an entry whose kind this build cannot
-  // resolve has to survive a toggle instead of being deleted when the user
-  // ticks a member it does understand.
-  const selected = actorRefValuesFromValue(value);
-  const selectedKeys = new Set(selected);
-  const atCapacity = multiple && selected.length >= MAX_ISSUE_PROPERTY_ACTOR_VALUES;
-
-  const q = query.trim();
-  const rows = members.items.filter(
-    (member) => !q || matchesNameOrPinyin(member.name, q),
-  );
-
-  const commitMember = (userId: string) => {
-    const key = formatActorRef("member", userId);
-    if (!multiple) {
-      onCommit(key);
-      return;
-    }
-    const next = toggleActorRefValue(selected, key);
-    if (next === undefined) onClear();
-    else onCommit(next);
-  };
-
-  return (
-    <View className="flex-1">
-      <View className="px-4 pb-2">
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder={t("properties.value.actorSearchPlaceholder")}
-          placeholderTextColor={theme.mutedForeground}
-          autoCorrect={false}
-          className="border border-border rounded-md px-3 py-2 text-body text-foreground"
-          style={{ fontSize: 14, includeFontPadding: false, textAlignVertical: "center" }}
-        />
-        {atCapacity ? (
-          <Text className="mt-2 text-caption text-muted-foreground">
-            {t("properties.value.actorLimit", {
-              count: MAX_ISSUE_PROPERTY_ACTOR_VALUES,
-            })}
-          </Text>
-        ) : null}
-      </View>
-      <FlatList
-        data={rows}
-        className="flex-1"
-        keyExtractor={(member) => member.user_id}
-        keyboardShouldPersistTaps="handled"
-        contentInsetAdjustmentBehavior="automatic"
-        renderItem={({ item: member }) => {
-          const key = formatActorRef("member", member.user_id);
-          const isSelected = selectedKeys.has(key);
-          const disabled = atCapacity && !isSelected;
-          return (
-            <Pressable
-              onPress={() => commitMember(member.user_id)}
-              disabled={disabled}
-              className={cn(
-                "flex-row items-center gap-3 px-4 py-3 active:bg-secondary",
-                disabled && "opacity-40",
-              )}
-            >
-              <ActorAvatar type="member" id={member.user_id} size={28} />
-              <Text
-                className={cn(
-                  "flex-1 text-title-sm",
-                  isSelected ? "text-foreground font-medium" : "text-foreground",
-                )}
-                numberOfLines={1}
-              >
-                {member.name}
-              </Text>
-              {isSelected ? (
-                <Ionicons name="checkmark" size={20} color={theme.primary} />
-              ) : null}
-            </Pressable>
-          );
-        }}
-        ListEmptyComponent={
-          <CatalogEmptySlot
-            states={[members.state]}
-            onRetry={() => retryCatalogs(members)}
-            emptyMessage={t("properties.value.actorSearchEmpty")}
-            query={query}
-          />
-        }
-      />
-    </View>
   );
 }

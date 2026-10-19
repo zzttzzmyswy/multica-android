@@ -41,6 +41,7 @@ import { useQuery } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { SubmitIssueButton } from "@/components/issue/submit-issue-button";
 import { CreateFormAttributeRow } from "@/components/issue/create-form-attribute-row";
+import { CreateFormPropertyRow } from "@/components/issue/create-form-property-row";
 import { CreateRunHint } from "@/components/issue/create-run-hint";
 import { MentionSuggestionBar } from "@/components/issue/mention-suggestion-bar";
 import { DescriptionField } from "@/components/issue/description-field";
@@ -48,6 +49,13 @@ import { QuickCreatePanel } from "@/components/issue/quick-create-panel";
 import { Text } from "@/components/ui/text";
 import { MOBILE_PLACEHOLDER_COLOR } from "@/components/ui/input-tokens";
 import { useCreateIssue, useQuickCreateIssue } from "@/data/mutations/issues";
+import { ApiError, api } from "@/data/api";
+import {
+  propertyWriteFailureMessage,
+  writeCreatePropertyValues,
+} from "@/lib/create-property-writes";
+import { classifyCreateFailure } from "@/lib/duplicate-issue-error";
+import { duplicateCreatePrompt } from "@/lib/create-failure-prompts";
 import { projectDetailOptions } from "@/data/queries/projects";
 import { useNewIssueDraftStore } from "@/data/stores/new-issue-draft-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
@@ -231,6 +239,9 @@ export default function NewIssueModal() {
   const projectSetter = useNewIssueDraftStore((s) => s.setProject);
   const parentProjectIdValue = parentProjectId ? String(parentProjectId) : null;
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  // The duplicate prompt's "View issue" button builds `/[workspace]/issue/[id]`
+  // from the SLUG, not the id — see `lib/duplicate-issue-error.ts`.
+  const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const { data: parentProject } = useQuery(
     projectDetailOptions(wsId, parentProjectIdValue ?? ""),
   );
@@ -239,6 +250,10 @@ export default function NewIssueModal() {
     projectSetter(parentProject);
   }, [parentProjectIdValue, parentProject, projectSetter]);
 
+  // Values the user picked for workspace custom properties. Kept in the draft
+  // store (web keeps them in dialog state) and replayed after the create —
+  // see `lib/create-property-writes.ts`.
+  const propertyValues = useNewIssueDraftStore((s) => s.propertyValues);
   const createIssue = useCreateIssue();
   const quickCreate = useQuickCreateIssue();
   // Loading state follows the ACTIVE mode — the header button must show a
@@ -331,8 +346,12 @@ export default function NewIssueModal() {
     const trimmedTitle = title.trim();
     if (trimmedTitle.length === 0) return;
     const finalDescription = description.serialize().trim();
+    // Snapshot the property values BEFORE the await: `resetDraft()` below clears
+    // the store, and the fan-out has to run against what the user actually
+    // picked. Reading it after the create would send an empty map.
+    const pendingPropertyValues = propertyValues;
     try {
-      await createIssue.mutateAsync({
+      const created = await createIssue.mutateAsync({
         title: trimmedTitle,
         description: finalDescription || undefined,
         status,
@@ -349,11 +368,57 @@ export default function NewIssueModal() {
           ? { attachment_ids: uploadedAttachmentIds }
           : {}),
       });
+      // Property values can only be addressed once the issue has an id — see
+      // `lib/create-property-writes.ts` for why they cannot ride the create
+      // payload. Awaited here, before `resetDraft()`/`router.back()`, so the
+      // writes are not cut off by the unmount: the sheet's dismissal is not a
+      // cancellation signal, and a dropped write is silent data loss.
+      const outcome = await writeCreatePropertyValues(
+        api,
+        created.id,
+        pendingPropertyValues,
+      );
       // Spent draft — see submitAgentMode. Cleared before `router.back()` so
       // the unmount never races the write.
       resetDraft();
+      if (outcome.failed.length > 0) {
+        // The issue EXISTS. Saying "creation failed" here would send the user
+        // back to a form that would produce a duplicate, so the two outcomes
+        // are reported separately (web's `toast_set_properties_failed`).
+        console.error(
+          "[new-issue] custom property set failed",
+          outcome.firstError,
+        );
+        const message = propertyWriteFailureMessage(outcome, t);
+        if (message) Alert.alert(t("newIssue.propertiesPartialTitle"), message);
+      }
       router.back();
     } catch (err) {
+      // A structured 409 duplicate refusal (MYS-2245) is recognised BEFORE the
+      // generic alert: its whole value is naming the issue that blocked the
+      // create, and the raw server sentence gives the reader nothing to open.
+      // `classifyCreateFailure` owns the guard (status, schema, usable id); a
+      // drifted or unparsable body comes back as `other` and falls through.
+      const failure = classifyCreateFailure(
+        err instanceof ApiError ? err : null,
+      );
+      if (failure.kind === "duplicate") {
+        const prompt = duplicateCreatePrompt(failure.issue, {
+          t,
+          wsSlug,
+          // `replace`, not `push`: see `lib/create-failure-prompts.ts` — the
+          // create screen is a modal, and back from the issue must land where
+          // the user started rather than on a form for an issue that exists.
+          navigate: (path) => router.replace(path),
+        });
+        Alert.alert(
+          prompt.title,
+          prompt.message,
+          prompt.buttons,
+          { cancelable: true },
+        );
+        return;
+      }
       Alert.alert(
         t("newIssue.failedTitle"),
         err instanceof Error ? err.message : t("newIssue.unknownError"),
@@ -371,9 +436,11 @@ export default function NewIssueModal() {
     project,
     parent,
     uploadedAttachmentIds,
+    propertyValues,
     createIssue,
     resetDraft,
     t,
+    wsSlug,
   ]);
 
   const onSubmit = useCallback(() => {
@@ -485,6 +552,12 @@ export default function NewIssueModal() {
                 onUploadingChange={setUploadsPending}
               />
               <CreateFormAttributeRow mode="manual" />
+              {/* Workspace-defined properties (MYS-2245). A sibling row rather
+                  than a member of the standard field pool: that pool is a
+                  closed union, while the property set is per-workspace and
+                  unbounded. Values chosen here are written onto the issue
+                  AFTER it exists — `POST /api/issues` has no field for them. */}
+              <CreateFormPropertyRow />
               {/* Pre-trigger caption — a passive line saying whether saving
                   will start a run, asked of the backend's own predicate
                   (web CreateRunHint). Renders nothing until it has an

@@ -424,6 +424,21 @@ export default function WorkspaceLayout() {
           name="new-issue-picker/start-date"
           options={SHEET_OPTIONS}
         />
+        {/* Workspace custom properties on the draft (MYS-2245) — same sheet
+            pattern as the standard pickers above. `properties` is the "add a
+            property" list; `property` is the value editor for one of them. */}
+        <Stack.Screen
+          name="new-issue-picker/properties"
+          options={{
+            ...SHEET_OPTIONS,
+            headerShown: true,
+            title: t("newIssue.propertiesAdd"),
+          }}
+        />
+        <Stack.Screen
+          name="new-issue-picker/property"
+          options={SHEET_OPTIONS}
+        />
         {/* New-project draft formSheet pickers — same pattern as
             new-issue-picker/*. Stacked on top of `project/new` (a modal). */}
         <Stack.Screen
