@@ -15,21 +15,24 @@
  *
  *   1. a property with a value is ALWAYS drawn — a hidden choice the user made
  *      is worse than a crowded row;
- *   2. a property without a value is drawn only while the picker for it is the
- *      active one — i.e. never, on first open;
- *   3. the rest are reachable from an overflow entry (`onOpenOverflow`).
+ *   2. properties without a value are NOT drawn inline at all — there is one
+ *      trailing「添加属性」entry that opens their full list;
+ *   3. that list excludes properties which already hold a value, because those
+ *      already have a chip behind it and a second entry point to the same
+ *      editor would be indistinguishable to the reader.
  *
- * Together these mean a fresh form shows a single compact「自定义属性」entry
- * rather than one chip per workspace property, which is what keeps a workspace
- * with twenty properties usable on a phone.
+ * Together these mean a fresh form shows a single compact entry rather than one
+ * chip per workspace property, which is what keeps a workspace with twenty
+ * properties usable on a phone.
  *
  * ## Load state
  *
  * The catalog is read through `useActivePropertyCatalog`, whose four-state
- * contract (MYS-1892) is the reason this row renders NOTHING while the read is
- * unresolved rather than an empty row: an empty row would say "this workspace
- * has no custom properties", which the client does not know yet. A failed read
- * gets a retry affordance instead of that false claim.
+ * contract (MYS-1892) is why an unresolved read draws no property chips: an
+ * empty row would say "this workspace has no custom properties", which the
+ * client does not know yet. A FAILED read gets a retry chip making the same
+ * point in the opposite direction — the user can act, and nothing claims the
+ * workspace is empty.
  */
 import { View } from "react-native";
 import { router } from "expo-router";
