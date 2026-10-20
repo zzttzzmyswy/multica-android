@@ -113,6 +113,17 @@ export function applySavedView({
     // the custom properties its cards showed. A view saved before the key
     // existed reads back as the empty default (`sanitizeCardPropertyIds`).
     cardPropertyIds: display.cardPropertyIds,
+    // The canvas-shape dimensions. Each is a display default a view fixes, not
+    // a session preference — web stores all three on the view
+    // (`save-view-dialog.tsx:606-613`) and seeds them on first open. Without
+    // these writes, opening a web-saved view on the phone restored its filters
+    // but left the surface on mobile's own swimlane dimension / column set /
+    // table grouping, so the view looked "half applied" and the next save
+    // wrote those defaults back over the view for every client.
+    swimlaneGrouping: display.swimlaneGrouping,
+    tableColumns: display.tableColumns,
+    tableColumnWidths: display.tableColumnWidths,
+    tableGrouping: display.tableGrouping,
     view: display.viewMode,
   });
   useActiveIssueViewStore.getState().setActive(containerKey, view.id);

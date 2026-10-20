@@ -13,6 +13,12 @@ import {
   type IssueFilterSlice,
   type IssueViewMode,
 } from "./issue-filter-slice";
+import type {
+  TableColumnKey,
+  TableColumnWidths,
+} from "./issue-table-columns";
+import type { IssueTableGrouping } from "@/lib/issue-table-groups";
+import type { SwimlaneGrouping } from "@/lib/swimlane";
 
 /** Web's default for all eight card properties (view-store.ts:287-296). */
 const ALL_CARD_PROPERTIES_ON = {
@@ -26,7 +32,12 @@ const ALL_CARD_PROPERTIES_ON = {
   labels: true,
 };
 
-const SLICE: IssueFilterSlice = {
+const SLICE: IssueFilterSlice & {
+  swimlaneGrouping: SwimlaneGrouping;
+  tableColumns: TableColumnKey[];
+  tableColumnWidths: TableColumnWidths;
+  tableGrouping: IssueTableGrouping;
+} = {
   statusFilters: ["todo", "in_progress"],
   priorityFilters: ["high"],
   assigneeFilters: [{ type: "agent", id: "ag-1" }],
@@ -49,6 +60,13 @@ const SLICE: IssueFilterSlice = {
   // pre-key view restores to and the legacy-view cases below keep their
   // meaning.
   cardPropertyIds: [],
+  // The canvas-shape dimensions a saved view also fixes (web
+  // save-view-dialog.tsx:606-613). Deliberately non-default values so a
+  // round-trip test can tell "restored" from "happened to match the default".
+  swimlaneGrouping: "parent",
+  tableColumns: ["title", "status", "due_date"],
+  tableColumnWidths: { status: 120 },
+  tableGrouping: "status",
   toggleStatusFilter: () => {},
   hideStatus: () => {},
   showStatus: () => {},
@@ -95,10 +113,37 @@ describe("viewQueryFromSnapshot", () => {
   });
 });
 
+/** The canvas-shape slice of SLICE, spread into every `viewDisplayFromState`
+ *  call so each case states only what it is actually about. */
+const CANVAS = {
+  swimlaneGrouping: SLICE.swimlaneGrouping,
+  tableColumns: SLICE.tableColumns,
+  tableColumnWidths: SLICE.tableColumnWidths,
+  tableGrouping: SLICE.tableGrouping,
+};
+
+/** What `sanitizeViewDisplay` produces for a blob that carries none of the
+ *  canvas-shape keys — the store defaults, in web's vocabulary
+ *  (`view-store.ts:302、:305-306`). */
+const CANVAS_DEFAULTS = {
+  swimlaneGrouping: "assignee" as const,
+  tableColumns: [
+    "title",
+    "identifier",
+    "status",
+    "priority",
+    "assignee",
+    "due_date",
+  ] as TableColumnKey[],
+  tableColumnWidths: {} as TableColumnWidths,
+  tableGrouping: "none" as IssueTableGrouping,
+};
+
 describe("viewDisplayFromState", () => {
   it("serializes viewMode/grouping/sortBy/sortDirection/showSubIssues/tableHierarchy + cardProperties", () => {
     expect(
       viewDisplayFromState({
+      ...CANVAS,
         view: "board",
         grouping: "assignee",
         sortBy: "priority",
@@ -117,12 +162,25 @@ describe("viewDisplayFromState", () => {
       tableHierarchy: true,cardProperties: SLICE.cardProperties,
 
       cardPropertyIds: SLICE.cardPropertyIds,
+      // The canvas-shape dimensions web also saves
+      // (save-view-dialog.tsx:606-613). `tableColumns` is written in WEB's
+      // `{ key, width? }[]` shape, with a width only where the user pinned
+      // one — an untouched column keeps no entry so a future default change
+      // still reaches it.
+      swimlaneGrouping: "parent",
+      tableColumns: [
+        { key: "title" },
+        { key: "status", width: 120 },
+        { key: "due_date" },
+      ],
+      tableGrouping: "status",
     });
   });
 
   it("keeps sub-issues visible when the display preference is on", () => {
     expect(
       viewDisplayFromState({
+      ...CANVAS,
         view: "list",
         grouping: "status",
         sortBy: "position",
@@ -140,6 +198,7 @@ describe("viewDisplayFromState", () => {
     // childProgress) still have to be WRITTEN, or a web-saved view would lose
     // them the moment mobile re-saved it.
     const display = viewDisplayFromState({
+      ...CANVAS,
       view: "board",
       grouping: "status",
       sortBy: "position",
@@ -218,18 +277,18 @@ describe("sanitizeViewDisplay", () => {
   it("passes known values through and defaults garbage", () => {
     expect(
       sanitizeViewDisplay({ viewMode: "board", grouping: "assignee" }, "position"),
-    ).toEqual({ viewMode: "board", grouping: "assignee", sortBy: "position", sortDirection: "asc", showSubIssues: true, tableHierarchy: true, cardProperties: ALL_CARD_PROPERTIES_ON, cardPropertyIds: [] });
+    ).toEqual({ viewMode: "board", grouping: "assignee", sortBy: "position", sortDirection: "asc", showSubIssues: true, tableHierarchy: true, cardProperties: ALL_CARD_PROPERTIES_ON, cardPropertyIds: [], ...CANVAS_DEFAULTS });
     expect(
       sanitizeViewDisplay({ viewMode: "calendar", grouping: "nope", sortBy: "weird", sortDirection: "sideways" }, "created_at"),
-    ).toEqual({ viewMode: "list", grouping: "status", sortBy: "created_at", sortDirection: "asc", showSubIssues: true, tableHierarchy: true, cardProperties: ALL_CARD_PROPERTIES_ON, cardPropertyIds: [] });
+    ).toEqual({ viewMode: "list", grouping: "status", sortBy: "created_at", sortDirection: "asc", showSubIssues: true, tableHierarchy: true, cardProperties: ALL_CARD_PROPERTIES_ON, cardPropertyIds: [], ...CANVAS_DEFAULTS });
     // "gantt" is a valid mobile mode since iter-118 — passes through.
     expect(
       sanitizeViewDisplay({ viewMode: "gantt" }, "created_at"),
-    ).toEqual({ viewMode: "gantt", grouping: "status", sortBy: "created_at", sortDirection: "asc", showSubIssues: true, tableHierarchy: true, cardProperties: ALL_CARD_PROPERTIES_ON, cardPropertyIds: [] });
+    ).toEqual({ viewMode: "gantt", grouping: "status", sortBy: "created_at", sortDirection: "asc", showSubIssues: true, tableHierarchy: true, cardProperties: ALL_CARD_PROPERTIES_ON, cardPropertyIds: [], ...CANVAS_DEFAULTS });
     // "swimlane" is a valid mobile mode since iter-122 — passes through.
     expect(
       sanitizeViewDisplay({ viewMode: "swimlane" }, "created_at"),
-    ).toEqual({ viewMode: "swimlane", grouping: "status", sortBy: "created_at", sortDirection: "asc", showSubIssues: true, tableHierarchy: true, cardProperties: ALL_CARD_PROPERTIES_ON, cardPropertyIds: [] });
+    ).toEqual({ viewMode: "swimlane", grouping: "status", sortBy: "created_at", sortDirection: "asc", showSubIssues: true, tableHierarchy: true, cardProperties: ALL_CARD_PROPERTIES_ON, cardPropertyIds: [], ...CANVAS_DEFAULTS });
     expect(sanitizeViewDisplay({}, "due_date")).toEqual({
       viewMode: "list",
       grouping: "status",
@@ -239,6 +298,7 @@ describe("sanitizeViewDisplay", () => {
       tableHierarchy: true,
       cardProperties: ALL_CARD_PROPERTIES_ON,
       cardPropertyIds: [],
+      ...CANVAS_DEFAULTS,
     });
   });
 
@@ -265,6 +325,7 @@ describe("viewMatchesSlice", () => {
   const VIEW = {
     query: viewQueryFromSnapshot(SLICE),
     display: viewDisplayFromState({
+      ...CANVAS,
       view: "board" as IssueViewMode,
       grouping: "assignee",
       sortBy: "priority",
@@ -284,7 +345,7 @@ describe("viewMatchesSlice", () => {
     expect(
       viewMatchesSlice(
         VIEW,
-        { ...SLICE, dateFilter: { field: "created_at", from: "2026-08-01", to: "2026-08-18" } } as unknown as IssueFilterSlice,
+        { ...SLICE, dateFilter: { field: "created_at", from: "2026-08-01", to: "2026-08-18" } } as unknown as typeof SLICE,
         "board",
       ),
     ).toBe(true);
@@ -537,6 +598,7 @@ describe("cardProperties round-trip", () => {
   it("is lossless: serialize then read back yields the same eight keys", () => {
     const original = { ...ALL_CARD_PROPERTIES_ON, description: false, childProgress: false };
     const display = viewDisplayFromState({
+      ...CANVAS,
       view: "board",
       grouping: "status",
       sortBy: "position",
@@ -555,6 +617,7 @@ describe("cardProperties round-trip", () => {
     const view = {
       query: viewQueryFromSnapshot(SLICE),
       display: viewDisplayFromState({
+      ...CANVAS,
         view: "board" as IssueViewMode,
         grouping: "assignee",
         sortBy: "priority",
@@ -602,6 +665,7 @@ describe("cardProperties round-trip", () => {
 describe("cardPropertyIds round-trip", () => {
   it("serializes the ids verbatim, order included", () => {
     const display = viewDisplayFromState({
+      ...CANVAS,
       view: "board",
       grouping: "status",
       sortBy: "position",
@@ -655,6 +719,7 @@ describe("cardPropertyIds round-trip", () => {
     const view = {
       query: viewQueryFromSnapshot(SLICE),
       display: viewDisplayFromState({
+      ...CANVAS,
         view: "board" as IssueViewMode,
         grouping: "assignee",
         sortBy: "priority",
@@ -686,6 +751,7 @@ describe("cardPropertyIds round-trip", () => {
     const view = {
       query: viewQueryFromSnapshot(slice),
       display: viewDisplayFromState({
+      ...CANVAS,
         view: "board" as IssueViewMode,
         grouping: "assignee",
         sortBy: "priority",
@@ -702,6 +768,7 @@ describe("cardPropertyIds round-trip", () => {
     const sameOrder = {
       query: view.query,
       display: viewDisplayFromState({
+      ...CANVAS,
         view: "board" as IssueViewMode,
         grouping: "assignee",
         sortBy: "priority",
@@ -732,5 +799,276 @@ describe("cardPropertyIds round-trip", () => {
     expect(
       viewMatchesSlice(legacy, { ...SLICE, cardPropertyIds: [] }, "board"),
     ).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Canvas-shape display dimensions (MYS-2255, iteration 261)
+//
+// Web saves swimlaneGrouping / tableColumns / tableGrouping on the view
+// (`save-view-dialog.tsx:606-613`) and seeds them back on open. Mobile wrote
+// none of the three, so a phone open-and-re-save silently flattened a web
+// view's swimlane dimension, column set/order and table grouping to mobile's
+// defaults — for every client, because the view blob is server-owned.
+// ---------------------------------------------------------------------------
+describe("canvas-shape display dimensions", () => {
+  const VIEW_WITH_CANVAS = {
+    query: viewQueryFromSnapshot(SLICE),
+    display: viewDisplayFromState({
+      ...CANVAS,
+      view: "table",
+      grouping: "assignee",
+      sortBy: "priority",
+      sortDirection: "desc",
+      showSubIssues: false,
+      tableHierarchy: true,
+      cardProperties: SLICE.cardProperties,
+      cardPropertyIds: SLICE.cardPropertyIds,
+    }),
+  };
+
+  it("writes all three dimensions into the save payload", () => {
+    expect(VIEW_WITH_CANVAS.display.swimlaneGrouping).toBe("parent");
+    expect(VIEW_WITH_CANVAS.display.tableGrouping).toBe("status");
+    expect(VIEW_WITH_CANVAS.display.tableColumns).toEqual([
+      { key: "title" },
+      { key: "status", width: 120 },
+      { key: "due_date" },
+    ]);
+  });
+
+  it("round-trips without loss — the case the bug was", () => {
+    const patch = sanitizeViewDisplay(VIEW_WITH_CANVAS.display, "priority");
+    expect(patch.swimlaneGrouping).toBe("parent");
+    expect(patch.tableGrouping).toBe("status");
+    expect(patch.tableColumns).toEqual(["title", "status", "due_date"]);
+    // Only the column the user actually dragged carries an override.
+    expect(patch.tableColumnWidths).toEqual({ status: 120 });
+  });
+
+  it("does not read a view that predates these keys as permanently modified", () => {
+    // Same contract `showSubIssues` / `tableHierarchy` already follow: a view
+    // that never fixed a dimension leaves the live surface free. Without this,
+    // every pre-0.6.96 view would open with the unsaved-changes dot lit.
+    const legacy = {
+      query: viewQueryFromSnapshot(SLICE),
+      display: viewDisplayFromState({
+        ...CANVAS,
+        view: "board" as IssueViewMode,
+        grouping: "assignee",
+        sortBy: "priority",
+        sortDirection: "desc",
+        showSubIssues: false,
+        tableHierarchy: true,
+        cardProperties: SLICE.cardProperties,
+        cardPropertyIds: SLICE.cardPropertyIds,
+      }),
+    };
+    const stripped = { ...legacy.display } as Record<string, unknown>;
+    delete stripped.swimlaneGrouping;
+    delete stripped.tableColumns;
+    delete stripped.tableGrouping;
+    expect(
+      viewMatchesSlice(
+        { query: legacy.query, display: stripped },
+        { ...SLICE, swimlaneGrouping: "project", tableGrouping: "none", tableColumns: ["title"] },
+        "board",
+      ),
+    ).toBe(true);
+  });
+
+  it("lights the modified dot for each dimension a view DOES fix", () => {
+    expect(
+      viewMatchesSlice(VIEW_WITH_CANVAS, { ...SLICE, swimlaneGrouping: "project" }, "table"),
+    ).toBe(false);
+    expect(
+      viewMatchesSlice(VIEW_WITH_CANVAS, { ...SLICE, tableGrouping: "none" }, "table"),
+    ).toBe(false);
+    expect(
+      viewMatchesSlice(
+        VIEW_WITH_CANVAS,
+        { ...SLICE, tableColumns: ["title", "status"] },
+        "table",
+      ),
+    ).toBe(false);
+    // A reorder is a real change: the array IS the display order.
+    expect(
+      viewMatchesSlice(
+        VIEW_WITH_CANVAS,
+        { ...SLICE, tableColumns: ["title", "due_date", "status"] },
+        "table",
+      ),
+    ).toBe(false);
+    // A width drag is a real change too, or the resize could never be saved.
+    expect(
+      viewMatchesSlice(
+        VIEW_WITH_CANVAS,
+        { ...SLICE, tableColumnWidths: { status: 200 } },
+        "table",
+      ),
+    ).toBe(false);
+    expect(viewMatchesSlice(VIEW_WITH_CANVAS, SLICE, "table")).toBe(true);
+  });
+
+  describe("sanitizeViewDisplay: tableColumns", () => {
+    it("pins title first even when the blob lists it later or omits it", () => {
+      expect(
+        sanitizeViewDisplay(
+          { tableColumns: [{ key: "status" }, { key: "title" }, { key: "priority" }] },
+          "position",
+        ).tableColumns,
+      ).toEqual(["title", "status", "priority"]);
+      expect(
+        sanitizeViewDisplay({ tableColumns: [{ key: "status" }] }, "position")
+          .tableColumns,
+      ).toEqual(["title", "status"]);
+    });
+
+    it("drops a column this build cannot render", () => {
+      // `child_progress` is web-only (mobile's `Issue` has no such field), and
+      // an unknown key would paint an empty cell forever.
+      expect(
+        sanitizeViewDisplay(
+          {
+            tableColumns: [
+              { key: "title" },
+              { key: "child_progress" },
+              { key: "not_a_column" },
+              { key: "property:p-1" },
+            ],
+          },
+          "position",
+        ).tableColumns,
+      ).toEqual(["title", "property:p-1"]);
+    });
+
+    it("keeps the first occurrence of a duplicated column", () => {
+      expect(
+        sanitizeViewDisplay(
+          { tableColumns: [{ key: "title" }, { key: "status" }, { key: "status" }] },
+          "position",
+        ).tableColumns,
+      ).toEqual(["title", "status"]);
+    });
+
+    it("clamps a width outside the draggable range", () => {
+      // A width saved by another client must not make a phone column unusable.
+      const { tableColumnWidths } = sanitizeViewDisplay(
+        {
+          tableColumns: [
+            { key: "title" },
+            { key: "status", width: 5 },
+            { key: "priority", width: 99_999 },
+          ],
+        },
+        "position",
+      );
+      expect(tableColumnWidths.status).toBe(64);
+      expect(tableColumnWidths.priority).toBe(360);
+    });
+
+    it("falls back to the default set when nothing usable survived", () => {
+      // An empty column set is not a state the table can render, and "only
+      // columns this build dropped" means "no preference to honour".
+      expect(
+        sanitizeViewDisplay({ tableColumns: [{ key: "nope" }] }, "position")
+          .tableColumns,
+      ).toEqual(CANVAS_DEFAULTS.tableColumns);
+      expect(
+        sanitizeViewDisplay({ tableColumns: "nope" }, "position").tableColumns,
+      ).toEqual(CANVAS_DEFAULTS.tableColumns);
+    });
+
+    it("ignores a malformed entry rather than dropping the whole set", () => {
+      expect(
+        sanitizeViewDisplay(
+          { tableColumns: [null, 42, { key: "title" }, { key: "status" }] },
+          "position",
+        ).tableColumns,
+      ).toEqual(["title", "status"]);
+    });
+  });
+
+  describe("sanitizeViewDisplay: enum dimensions", () => {
+    it("passes the three swimlane values and defaults the rest", () => {
+      for (const v of ["assignee", "project", "parent"] as const) {
+        expect(
+          sanitizeViewDisplay({ swimlaneGrouping: v }, "position").swimlaneGrouping,
+        ).toBe(v);
+      }
+      for (const garbage of ["nope", 42, null, undefined, ["parent"]]) {
+        expect(
+          sanitizeViewDisplay({ swimlaneGrouping: garbage }, "position")
+            .swimlaneGrouping,
+        ).toBe("assignee");
+      }
+    });
+
+    it("passes the table groupings, including a property: dimension", () => {
+      for (const v of ["none", "status", "assignee", "property:p-1"]) {
+        expect(
+          sanitizeViewDisplay({ tableGrouping: v }, "position").tableGrouping,
+        ).toBe(v);
+      }
+      for (const garbage of ["nope", "property:", 42, null, undefined]) {
+        expect(
+          sanitizeViewDisplay({ tableGrouping: garbage }, "position").tableGrouping,
+        ).toBe("none");
+      }
+    });
+  });
+});
+
+describe("canvas-shape round trip: the title column's width", () => {
+  it("keeps web's title width even though the phone pins that column", () => {
+    // The phone renders `title` as a pinned, non-resizable column, so it never
+    // writes a width into its own sparse bag — but WEB's title is resizable.
+    // Dropping the width on read would make one mobile open-and-re-save reset
+    // it to web's default for every client.
+    const { tableColumns, tableColumnWidths } = sanitizeViewDisplay(
+      {
+        tableColumns: [
+          { key: "title", width: 320 },
+          { key: "status", width: 140 },
+        ],
+      },
+      "position",
+    );
+    expect(tableColumns).toEqual(["title", "status"]);
+    expect(tableColumnWidths).toEqual({ title: 320, status: 140 });
+  });
+
+  it("clamps a width beyond the phone's ceiling, including on title", () => {
+    // Deliberate, documented loss: mobile's COLUMN_WIDTH_MAX is 360, so a web
+    // title wider than that re-saves narrower. The alternative — carrying a
+    // width the phone cannot lay out — makes the column unusable here, and
+    // `clampColumnWidth` is the same bound the resize gesture applies.
+    expect(
+      sanitizeViewDisplay(
+        { tableColumns: [{ key: "title", width: 900 }] },
+        "position",
+      ).tableColumnWidths,
+    ).toEqual({ title: 360 });
+  });
+});
+
+describe("canvas-shape round trip: a title-only column set", () => {
+  it("keeps a title-only column set rather than re-expanding to the defaults", () => {
+    // A legitimate (if stark) web state: only the pinned column is visible.
+    // Re-expanding it would silently show the user six columns they had hidden.
+    expect(
+      sanitizeViewDisplay({ tableColumns: [{ key: "title", width: 300 }] }, "position"),
+    ).toMatchObject({
+      tableColumns: ["title"],
+      tableColumnWidths: { title: 300 },
+    });
+  });
+
+  it("still falls back to the defaults when nothing renderable survived", () => {
+    // Distinguishable from the case above only by whether `title` was present.
+    expect(
+      sanitizeViewDisplay({ tableColumns: [{ key: "nope" }] }, "position")
+        .tableColumns,
+    ).toEqual(CANVAS_DEFAULTS.tableColumns);
   });
 });

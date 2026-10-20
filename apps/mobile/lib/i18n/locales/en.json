@@ -4228,5 +4228,10 @@
   "comment.foldBarNoAuthorsLabel": "{{count}} {{messageCount}}. Tap to expand.",
   "comment.resolvedBarNoAuthors": "Resolved · {{count}} {{messageCount}}",
   "comment.resolvedBarNoAuthorsLabel": "Resolved thread, {{count}} {{messageCount}}. Tap to expand.",
-  "comment.resolvedNoName": "Resolved"
+  "comment.resolvedNoName": "Resolved",
+  "squads.picker.roleTitle": "Add member",
+  "squads.picker.roleLabel": "Role (optional)",
+  "squads.picker.back": "Back",
+  "squads.picker.confirmAdd": "Add",
+  "filter.display.cardProject": "Project"
 }

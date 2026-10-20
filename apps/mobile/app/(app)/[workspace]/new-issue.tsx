@@ -58,7 +58,10 @@ import { classifyCreateFailure } from "@/lib/duplicate-issue-error";
 import { duplicateCreatePrompt } from "@/lib/create-failure-prompts";
 import { projectDetailOptions } from "@/data/queries/projects";
 import { useNewIssueDraftStore } from "@/data/stores/new-issue-draft-store";
-import { useNewIssueStagePickStore } from "@/data/stores/new-issue-stage-pick-store";
+import {
+  useNewIssueStagePick,
+  useNewIssueStagePickStore,
+} from "@/data/stores/new-issue-stage-pick-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
 import { selectedActorLabel } from "@/lib/actor-name-state";
@@ -209,6 +212,12 @@ export default function NewIssueModal() {
   // module doc. Reading it through `stageFor(parent)` also keeps a value
   // chosen under a different parent from riding along.
   const stage = useNewIssueStagePickStore((s) => s.stageFor(parent));
+  // ...and this scopes the pick to THIS form. The pick store is module-level
+  // (the picker is its own route), so without this the stage picked for parent
+  // A survives the form and is already on the chip — and in the payload — the
+  // next time "+" is tapped under the SAME parent. The `stageFor` parent tag
+  // only stops the cross-parent case (MYS-2255).
+  useNewIssueStagePick();
   const labels = useNewIssueDraftStore((s) => s.labels);
   const project = useNewIssueDraftStore((s) => s.project);
   const agentActor = useNewIssueDraftStore((s) => s.agentActor);

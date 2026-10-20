@@ -4228,5 +4228,10 @@
   "comment.foldBarNoAuthorsLabel": "{{count}} {{messageCount}}。点按展开。",
   "comment.resolvedBarNoAuthors": "已解决 · {{count}} {{messageCount}}",
   "comment.resolvedBarNoAuthorsLabel": "已解决主题，{{count}} {{messageCount}}。点按展开。",
-  "comment.resolvedNoName": "已解决"
+  "comment.resolvedNoName": "已解决",
+  "squads.picker.roleTitle": "添加成员",
+  "squads.picker.roleLabel": "角色（可选）",
+  "squads.picker.back": "返回",
+  "squads.picker.confirmAdd": "添加",
+  "filter.display.cardProject": "项目"
 }

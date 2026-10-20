@@ -21,7 +21,22 @@
  * reads it through `stageFor(parentId)`, so a stage left behind by a previous
  * parent (or by a form since reset) reads back as unstaged rather than being
  * silently applied to a different issue.
+ *
+ * **Lifetime.** Web's `stage` is `useState` inside the create dialog
+ * (`create-issue.tsx:270-271`): it dies with the dialog. This store is
+ * module-level instead (the picker is a separate route, not a child of the
+ * form), so the lifetime has to be restored by hand — `useNewIssueStagePick`
+ * below does it, and `new-issue.tsx` calls it. The `stageFor` parent tag is
+ * NOT a substitute: it stops a cross-parent leak but not the far more common
+ * same-parent case, where reopening "+" under the SAME parent found the
+ * previous form's pick still sitting in the chip. That was the defect fixed
+ * here (MYS-2255).
+ *
+ * An explicit "no stage" pick and "nothing picked" are the same value (`null`)
+ * on purpose: the create payload sends `stage` only when it is non-null, so
+ * the two are indistinguishable at the one place that matters.
  */
+import { useEffect } from "react";
 import { create } from "zustand";
 
 interface NewIssueStagePickState {
@@ -56,3 +71,28 @@ export const useNewIssueStagePickStore = create<NewIssueStagePickState>(
     reset: () => set({ parentId: null, picked: null }),
   }),
 );
+
+/**
+ * Scope the picked stage to one form's lifetime: clear on unmount.
+ *
+ * "Unmount" and not "submit" because the form closes down four different ways
+ * — submit, cancel, swipe-down on the sheet, and a router dismiss from a
+ * nested route — and a per-button reset would have to be re-added every time
+ * a fifth appears. The form instance dying is the one event all four share.
+ *
+ * Deliberately NOT resetting on mount: `openFor` + `setStage` happen in the
+ * picker sheet, which is pushed ON TOP of this form. The form does not
+ * remount across that push (the sheet is a sibling route and the form is
+ * still mounted underneath), which is exactly why the pick survives the round
+ * trip at all. A mount-time reset would still be correct here, but it would
+ * also wipe a pick whenever the screen is re-created mid-flight — e.g. a
+ * Fast Refresh during development, or the router re-keying the stack — for no
+ * additional safety. Unmount is the narrower, sufficient hook.
+ *
+ * This store is not a user-facing surface, so it is not persisted and has no
+ * cross-workspace state to reconcile — a workspace switch unmounts the form
+ * too, and the reset rides along.
+ */
+export function useNewIssueStagePick(): void {
+  useEffect(() => () => useNewIssueStagePickStore.getState().reset(), []);
+}

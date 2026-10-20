@@ -50,6 +50,8 @@ import {
   IssueSurfaceScopeToolbar,
   SurfaceEmptyState,
 } from "@/components/issue/issue-surface-chrome";
+import { projectListOptions } from "@/data/queries/projects";
+import { findRowProject } from "@/lib/issue-row-project";
 import { ganttIssuesOptions, issueListOptions } from "@/data/queries/issues";
 import { workingAgentsFacetOptions } from "@/data/queries/working-agents";
 import { readIssueRows } from "@/data/queries/issue-list-cache";
@@ -154,6 +156,10 @@ export default function IssuesPage() {
   const workingOnly = useIssuesViewStore((s) => s.workingOnly);
   const showSubIssues = useIssuesViewStore((s) => s.showSubIssues);
   const cardProperties = useIssuesViewStore((s) => s.cardProperties);
+  // The workspace project catalog, read here so each list row can name the
+  // project its issue belongs to (web `list-view.tsx:483`). The same query
+  // entry already backs the filter chips below, so this adds no request.
+  const { data: projects = [] } = useQuery(projectListOptions(wsId));
   // The custom-property ids a card draws — web's second card display
   // dimension, saved with the view like `cardProperties` above.
   const cardPropertyIds = useIssuesViewStore((s) => s.cardPropertyIds);
@@ -259,6 +265,10 @@ export default function IssuesPage() {
       tableHierarchy,
       cardProperties,
       cardPropertyIds,
+      swimlaneGrouping,
+      tableColumns,
+      tableColumnWidths,
+      tableGrouping,
     }),
     [
       filterState,
@@ -269,6 +279,10 @@ export default function IssuesPage() {
       tableHierarchy,
       cardProperties,
       cardPropertyIds,
+      swimlaneGrouping,
+      tableColumns,
+      tableColumnWidths,
+      tableGrouping,
     ],
   );
   const modifiedActive = useMemo(
@@ -773,6 +787,8 @@ export default function IssuesPage() {
           renderItem={({ item }) => (
             <IssueSelectionRow
               issue={item}
+              project={findRowProject(projects, item.project_id)}
+              cardProperties={cardProperties}
               onOpen={() => {
                 if (wsSlug) router.push(`/${wsSlug}/issue/${item.id}`);
               }}
