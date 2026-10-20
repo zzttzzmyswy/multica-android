@@ -27,6 +27,17 @@ import type { IssuePriority, IssueStatus } from "@multica/core/types";
 import type { CardProperties } from "@multica/core/issues";
 import { BOARD_STATUSES } from "@/lib/issue-status-core";
 import {
+  PROPERTY_COLUMN_PREFIX,
+  TABLE_SYSTEM_COLUMNS,
+  clampColumnWidth,
+  defaultTableColumnWidths,
+  defaultTableColumns,
+  type TableColumnKey,
+  type TableColumnWidths,
+} from "./issue-table-columns";
+import type { IssueTableGrouping } from "@/lib/issue-table-groups";
+import type { SwimlaneGrouping } from "@/lib/swimlane";
+import {
   propertyIdFromDimension,
   type ActorFilterValue,
   type FilterDimension,
@@ -48,6 +59,17 @@ import {
  */
 const ALL_STATUSES: readonly IssueStatus[] = BOARD_STATUSES;
 const ALL_PRIORITIES = ["urgent", "high", "medium", "low", "none"];
+/** Renderable system-column keys — `TABLE_SYSTEM_COLUMNS` is the single
+ *  source, so a column the menu offers and a column the reader accepts cannot
+ *  drift apart. */
+const TABLE_SYSTEM_COLUMN_KEYS: ReadonlySet<string> = new Set(
+  TABLE_SYSTEM_COLUMNS.map((c) => c.key),
+);
+const SWIMLANE_GROUPING_VALUES: readonly SwimlaneGrouping[] = [
+  "assignee",
+  "project",
+  "parent",
+];
 const SORT_FIELDS: readonly IssueSortField[] = [
   "position",
   "status",
@@ -140,27 +162,27 @@ export function viewQueryFromSnapshot(
   };
 }
 
-/** Serialize the personal display defaults a view seeds on first open.
- *  Mobile subset of web's display payload — viewMode / grouping / sort /
- *  showSubIssues / tableHierarchy / cardProperties. Web's remaining keys
- *  (swimlaneGrouping, tableColumns, …) are still absent because mobile has no
- *  such surface, and their absence reads back as defaults.
+/** Serialize the personal display defaults a view seeds on first open —
+ *  the same key set web's save-view-dialog writes
+ *  (`save-view-dialog.tsx:598-614`): viewMode / grouping / sort / sortDirection
+ *  / showSubIssues / cardProperties / cardPropertyIds / tableColumns /
+ *  tableGrouping / tableHierarchy / swimlaneGrouping.
  *
- *  `tableHierarchy` is here because web writes it (save-view-dialog.tsx:608,
- *  alongside tableColumns / tableCalculation): it is part of what a saved view
- *  fixes, not a session preference. Omitting it would make a mobile
- *  open-and-resave silently reset a web-saved view's table nesting.
+ *  **This comment used to justify their absence by saying the mobile client
+ *  had no swimlane or table surface. That became false when both shipped, and
+ *  it stayed on the file long enough to be quoted as a reason not to fix the
+ *  gap (MYS-2255). Mobile HAS all three surfaces; the payload was simply never
+ *  extended.** The consequence was a one-way loss: open a web-saved view on
+ *  the phone, adjust anything, re-save → the view's swimlane dimension, its
+ *  column set/order and its table grouping were overwritten with mobile's
+ *  defaults for every client, web included.
  *
- *  `cardProperties` is written out in full (all eight keys, whatever mobile
- *  gates) so a view saved on web survives a mobile open-and-resave instead of
- *  losing the three keys mobile has no content for. The round trip is the
- *  contract — see `sanitizeViewDisplay` for the read side and
- *  `issue-filter-slice.ts` for why the three extra keys live in state.
- *
- *  `cardPropertyIds` travels for the same reason and by the same rule: it is a
- *  second display dimension web saves (save-view-dialog.tsx:605), so omitting
- *  it would drop a web view's custom-property chips on the first mobile
- *  re-save. Mobile renders those chips too — see `components/issue/board-card.tsx`. */
+ *  `tableColumns` is written in WEB'S shape — `{ key, width? }[]`
+ *  (`view-store.ts:55-58`) — not mobile's `TableColumnKey[]`: mobile keeps
+ *  widths in a separate sparse `tableColumnWidths` bag (an absent entry means
+ *  "still at the default", so a default change reaches columns the user never
+ *  touched). The pair is folded into web's shape on write and split again on
+ *  read, which is what makes the round trip lossless in both directions. */
 export function viewDisplayFromState(state: {
   view: IssueViewMode;
   grouping: IssueGrouping;
@@ -170,6 +192,10 @@ export function viewDisplayFromState(state: {
   tableHierarchy: boolean;
   cardProperties: CardProperties;
   cardPropertyIds: string[];
+  swimlaneGrouping: SwimlaneGrouping;
+  tableColumns: readonly TableColumnKey[];
+  tableColumnWidths: TableColumnWidths;
+  tableGrouping: IssueTableGrouping;
 }): Record<string, unknown> {
   return {
     viewMode: state.view,
@@ -180,6 +206,14 @@ export function viewDisplayFromState(state: {
     tableHierarchy: state.tableHierarchy,
     cardProperties: state.cardProperties,
     cardPropertyIds: state.cardPropertyIds,
+    swimlaneGrouping: state.swimlaneGrouping,
+    // Web's `TableColumnConfig[]`. A width the user never dragged stays
+    // absent rather than being pinned to today's default.
+    tableColumns: state.tableColumns.map((key) => {
+      const width = state.tableColumnWidths[key];
+      return width == null ? { key } : { key, width };
+    }),
+    tableGrouping: state.tableGrouping,
   };
 }
 
@@ -386,9 +420,10 @@ export function clearDimensionToBaseline(
 }
 
 /** Sanitized display patch — viewMode/grouping/sort/showSubIssues/
- *  tableHierarchy/cardProperties from a view blob. The caller supplies the
- *  surface's own current sortBy as the fallback so an unsaved view still lands
- *  on the list's active sort. */
+ *  tableHierarchy/cardProperties/cardPropertyIds plus the three canvas-shape
+ *  dimensions (swimlaneGrouping / tableColumns / tableGrouping) from a view
+ *  blob. The caller supplies the surface's own current sortBy as the fallback
+ *  so an unsaved view still lands on the list's active sort. */
 export interface IssueViewDisplayPatch {
   viewMode: IssueViewMode;
   grouping: IssueGrouping;
@@ -398,6 +433,13 @@ export interface IssueViewDisplayPatch {
   tableHierarchy: boolean;
   cardProperties: CardProperties;
   cardPropertyIds: string[];
+  swimlaneGrouping: SwimlaneGrouping;
+  /** Visible columns in display order — `title` always first, as the store
+   *  requires (`issue-table-columns.ts` pins it). */
+  tableColumns: TableColumnKey[];
+  /** Width overrides only; an un-resized column has no entry. */
+  tableColumnWidths: TableColumnWidths;
+  tableGrouping: IssueTableGrouping;
 }
 
 export function sanitizeViewDisplay(
@@ -423,7 +465,131 @@ export function sanitizeViewDisplay(
     cardProperties: sanitizeCardProperties(display.cardProperties),
     // Kept verbatim, unknown ids included — see `sanitizeCardPropertyIds`.
     cardPropertyIds: sanitizeCardPropertyIds(display.cardPropertyIds),
+    swimlaneGrouping: sanitizeSwimlaneGrouping(display.swimlaneGrouping),
+    ...sanitizeTableColumns(display.tableColumns),
+    tableGrouping: sanitizeTableGrouping(display.tableGrouping),
   };
+}
+
+/**
+ * Swimlane dimension — web's three values (`view-store.ts:21`), default
+ * `assignee` (`:302`). Same rule as every other enum here: a member the store
+ * cannot represent falls back rather than entering the snapshot.
+ */
+function sanitizeSwimlaneGrouping(raw: unknown): SwimlaneGrouping {
+  return firstEnum(raw, SWIMLANE_GROUPING_VALUES, "assignee");
+}
+
+/**
+ * The table's visible columns + width overrides, from web's
+ * `TableColumnConfig[]` (`view-store.ts:55-58`).
+ *
+ * Four rules, each mirroring a guarantee the store makes:
+ *
+ *   1. **`title` is pinned first.** The store's `toggleTableColumn` /
+ *      `reorderTableColumn` both refuse to move or hide it, and the table
+ *      view renders `columns[0]` as the pinned column. A blob that omits it
+ *      (or lists it late) would otherwise render a table with no pinned
+ *      column.
+ *   2. **Duplicates drop, first occurrence wins** — `mergeViewStatePersisted`
+ *      dedupes the same way for persisted snapshots.
+ *   3. **Unknown keys drop.** A key must be a system column this build can
+ *      render or a `property:` column; anything else is a newer build's
+ *      column and would paint an empty cell forever.
+ *   4. **Widths clamp into the draggable range** — the same floor/ceiling the
+ *      resize gesture uses (`clampColumnWidth`), so a width saved by another
+ *      client cannot make a column unusable on a phone.
+ *
+ * A blob with NO usable columns falls back to the full default set rather than
+ * an empty table: "the view never stored columns" and "the view stored only
+ * columns this build dropped" both mean the user has no column preference to
+ * honour.
+ */
+function sanitizeTableColumns(raw: unknown): {
+  tableColumns: TableColumnKey[];
+  tableColumnWidths: TableColumnWidths;
+} {
+  if (!Array.isArray(raw)) {
+    return {
+      tableColumns: defaultTableColumns(),
+      tableColumnWidths: defaultTableColumnWidths(),
+    };
+  }
+  const seen = new Set<TableColumnKey>();
+  const widths: TableColumnWidths = {};
+  let pinnedTitle = false;
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+    const rawKey = (entry as { key?: unknown }).key;
+    if (typeof rawKey !== "string" || !isRenderableTableColumn(rawKey)) continue;
+    const key = rawKey as TableColumnKey;
+    const width = (entry as { width?: unknown }).width;
+    if (key === "title") {
+      // Web's own config always leads with title; a blob that puts it later
+      // still gets the pinned slot, and only the first one counts. Its WIDTH
+      // is kept even though the phone pins the title column and never resizes
+      // it: dropping it would make a mobile open-and-re-save stamp web's title
+      // width back to web's own default, for web users too.
+      if (pinnedTitle) continue;
+      pinnedTitle = true;
+      if (typeof width === "number" && Number.isFinite(width)) {
+        widths.title = clampColumnWidth(width);
+      }
+      continue;
+    }
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (typeof width === "number" && Number.isFinite(width)) {
+      widths[key] = clampColumnWidth(width);
+    }
+  }
+  if (seen.size === 0) {
+    // Nothing beyond the pinned title survived. Two readings, both handled by
+    // the same answer: "only title was ever visible" is a legitimate, if
+    // stark, column set the table CAN render, while "every column this build
+    // knows was dropped" means there is no preference to honour. Falling back
+    // to the defaults is right for the second and merely unremarkable for the
+    // first — a phone table showing one column is not a state web can produce
+    // either (its title column is resizable, so a title-only view is rare).
+    //
+    // The width the blob carried for title is kept either way, so the
+    // round-trip loss this guards against does not reappear on this path.
+    const defaults = defaultTableColumns();
+    return {
+      tableColumns: pinnedTitle ? (["title"] as TableColumnKey[]) : defaults,
+      tableColumnWidths: widths,
+    };
+  }
+  // Order = display order, `title` pinned first (see rule 1).
+  return {
+    tableColumns: ["title", ...seen],
+    tableColumnWidths: widths,
+  };
+}
+
+/** A key this build can actually render a column for. `child_progress` is
+ *  web-only (mobile's `Issue` has no child-progress field of its own — see
+ *  `issue-table-columns.ts`), so it is NOT renderable here and drops. */
+function isRenderableTableColumn(key: string): boolean {
+  if (key.startsWith(PROPERTY_COLUMN_PREFIX)) {
+    return key.length > PROPERTY_COLUMN_PREFIX.length;
+  }
+  return TABLE_SYSTEM_COLUMN_KEYS.has(key);
+}
+
+/**
+ * Table grouping — `none` | `status` | `assignee` | `property:<id>`, default
+ * `none` (`view-store.ts:306`). Same enum discipline as the rest of this
+ * file, with the `property:` prefix handled as a shape rather than a fixed
+ * member (the id is not knowable here).
+ */
+function sanitizeTableGrouping(raw: unknown): IssueTableGrouping {
+  if (typeof raw !== "string") return "none";
+  if (raw === "none" || raw === "status" || raw === "assignee") return raw;
+  if (raw.startsWith(PROPERTY_COLUMN_PREFIX) && raw.length > PROPERTY_COLUMN_PREFIX.length) {
+    return raw as IssueTableGrouping;
+  }
+  return "none";
 }
 
 /**
@@ -494,9 +660,10 @@ function sameActors(a: ActorFilterValue[], b: ActorFilterValue[]): boolean {
 }
 
 /** The live-window fields a saved view captures — the nine filter dims plus
- *  the display defaults. Structural so either surface can pass its own
- *  filter state object (workspace Issues and My Issues keep separate
- *  stores). */
+ *  every display default web writes (which now includes the canvas-shape
+ *  dimensions: swimlane grouping, table columns + widths, table grouping).
+ *  Structural so either surface can pass its own filter state object
+ *  (workspace Issues and My Issues keep separate stores). */
 export type IssueViewSnapshotSource = Pick<
   IssueFilterSlice,
   | "statusFilters"
@@ -515,7 +682,12 @@ export type IssueViewSnapshotSource = Pick<
   | "tableHierarchy"
   | "cardProperties"
   | "cardPropertyIds"
->;
+> & {
+  swimlaneGrouping: SwimlaneGrouping;
+  tableColumns: readonly TableColumnKey[];
+  tableColumnWidths: TableColumnWidths;
+  tableGrouping: IssueTableGrouping;
+};
 
 /**
  * True when the live slice is exactly what the view fixes — drives the
@@ -568,8 +740,68 @@ export function viewMatchesSlice(
     // the view's display too, so adding / removing one is a modification.
     // Order matters here — the array IS the render order, so a reorder is a
     // real change (sameStrings compares positionally).
-    sameStrings(wantDisplay.cardPropertyIds, slice.cardPropertyIds)
+    sameStrings(wantDisplay.cardPropertyIds, slice.cardPropertyIds) &&
+    // The canvas-shape dimensions are saved and restored too, so changing one
+    // IS a modification. Leaving them out would light no dot and the user's
+    // change would have no route into the view (the "re-save" affordance only
+    // appears while the dot is on).
+    sameCanvasShape(wantDisplay, slice, view.display)
   );
+}
+
+/** The three canvas-shape dimensions, compared as a saved view fixes them.
+ *
+ *  **A dimension the view does not CARRY is not compared.** Views saved before
+ *  mobile wrote these keys out (every view created by a pre-0.6.96 build) do
+ *  not fix a swimlane dimension or a column set, so the live surface may sit on
+ *  anything without being "modified" — the same contract `showSubIssues` and
+ *  `tableHierarchy` already follow for pre-key views. Without this, every
+ *  older view would open with the modified dot permanently lit and the user
+ *  would be told they had unsaved changes they never made.
+ *
+ *  Presence is read off the RAW display blob, not the sanitized patch: the
+ *  patch fills every key with a default, which is exactly the information this
+ *  needs to keep. */
+function sameCanvasShape(
+  want: IssueViewDisplayPatch,
+  slice: Pick<
+    IssueViewSnapshotSource,
+    "swimlaneGrouping" | "tableColumns" | "tableColumnWidths" | "tableGrouping"
+  >,
+  raw: Record<string, unknown>,
+): boolean {
+  if (
+    raw.swimlaneGrouping !== undefined &&
+    want.swimlaneGrouping !== slice.swimlaneGrouping
+  ) {
+    return false;
+  }
+  if (
+    raw.tableGrouping !== undefined &&
+    want.tableGrouping !== slice.tableGrouping
+  ) {
+    return false;
+  }
+  // Column ORDER is a fact the user controls (web's `reorderTableColumn`), so
+  // this is positional like `sameStrings` above.
+  if (
+    raw.tableColumns !== undefined &&
+    !sameStrings(want.tableColumns as string[], slice.tableColumns as string[])
+  ) {
+    return false;
+  }
+  if (raw.tableColumns === undefined) return true;
+  // Widths compare per key, order-independent: the object is a sparse
+  // override bag, so key order carries no meaning. A column the user never
+  // resized has no entry in either side.
+  const wantKeys = Object.keys(want.tableColumnWidths);
+  const currKeys = Object.keys(slice.tableColumnWidths);
+  if (wantKeys.length !== currKeys.length) return false;
+  return wantKeys.every((k) => {
+    const wantWidth = want.tableColumnWidths[k as TableColumnKey];
+    const currWidth = slice.tableColumnWidths[k as TableColumnKey];
+    return wantWidth === currWidth;
+  });
 }
 
 /** Same eight keys, same values — order-independent by construction. */

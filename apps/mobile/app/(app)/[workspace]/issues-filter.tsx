@@ -110,13 +110,25 @@ function shortDate(dateOnly: string): string {
 
 /**
  * The card-property switches this screen offers, in web's
- * `CARD_PROPERTY_OPTIONS` order (`view-store.ts:161-170`) filtered to the five
- * keys a mobile board card actually draws. Labels follow web's
- * `display.card_*` strings — see the locale file.
+ * `CARD_PROPERTY_OPTIONS` order (`view-store.ts:161-170`) filtered to the keys
+ * a mobile surface actually draws. Labels follow web's `display.card_*`
+ * strings — see the locale file.
  *
- * Keep this list in sync with `components/issue/board-card.tsx`: a key here
- * with nothing to gate is a dead switch, and a field there that is missing
- * here is a setting the user cannot reach.
+ * Keep this list in sync with what actually renders: a key here with nothing to
+ * gate is a dead switch, and a field that renders without a key here is a
+ * setting the user cannot reach.
+ *
+ *   - `priority` / `labels` / `assignee` / `startDate` / `dueDate` gate the
+ *     board card (`components/issue/board-card.tsx`).
+ *   - `project` gates the project chip on every list ROW
+ *     (`components/issue/issue-row.tsx` via `lib/issue-row-project.ts`) —
+ *     added in iteration 261 with the chip itself. It still gates nothing on a
+ *     board card, which has no room for it; web's card does draw one, so this
+ *     is a mobile density divergence, not a missing feature.
+ *
+ * `description` and `childProgress` stay out: neither client's phone card draws
+ * either, so a switch for them would visibly do nothing. Both keys still ride
+ * the view codec untouched, so a web-saved view stays lossless.
  */
 const CARD_PROPERTY_TOGGLES: {
   key: keyof CardProperties;
@@ -127,6 +139,7 @@ const CARD_PROPERTY_TOGGLES: {
   { key: "assignee", labelKey: "filter.display.cardAssignee" },
   { key: "startDate", labelKey: "filter.display.cardStartDate" },
   { key: "dueDate", labelKey: "filter.display.cardDueDate" },
+  { key: "project", labelKey: "filter.display.cardProject" },
 ];
 
 export default function IssuesFilterRoute() {
@@ -765,14 +778,12 @@ export default function IssuesFilterRoute() {
             (issues-header.tsx:1996-2010) over `CARD_PROPERTY_OPTIONS`
             (packages/core/issues/stores/view-store.ts:161-170).
 
-            Only the FIVE keys mobile's board card has content for are offered
-            here: priority, labels, assignee, startDate, dueDate
-            (components/issue/board-card.tsx). The remaining three —
-            description, project, childProgress — are carried in state and
-            round-tripped through the view codec (so a web-saved view stays
-            lossless) but gate nothing, because a mobile card draws no
-            description, no project and no sub-issue progress. Offering
-            switches for them would be switches that visibly do nothing. */}
+            The list is `CARD_PROPERTY_TOGGLES` above — every key a mobile
+            surface has content for, including `project`, which gates the
+            new list-row chip. `description` / `childProgress` stay out
+            because nothing on a phone draws them; they are still carried in
+            state and round-tripped through the view codec so a web-saved view
+            stays lossless. */}
         <SectionLabel>{t("filter.display.cardFieldsTitle")}</SectionLabel>
         {CARD_PROPERTY_TOGGLES.map(({ key, labelKey }) => (
           <BoolRow

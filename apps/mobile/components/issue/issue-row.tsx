@@ -41,6 +41,12 @@ import { actorNameText } from "@/components/ui/actor-name";
 import { useActorProfileStore } from "@/data/stores/actor-profile-store";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import type { CardProperties } from "@/data/stores/issue-filter-slice";
+import {
+  issueRowProjectChip,
+  type RowProject,
+} from "@/lib/issue-row-project";
+import { ProjectIcon } from "@/components/ui/project-icon";
 import { CustomStatusChip } from "./custom-status-chip";
 import { IssueDuplicateOfMarker } from "./issue-duplicates";
 import { IssueAgentActivityIndicator } from "./issue-agent-activity-indicator";
@@ -85,6 +91,17 @@ interface Props {
    * DueDatePicker renders a dashed placeholder for the same reason).
    */
   dueDate?: string | null;
+  /**
+   * The project this issue belongs to, already resolved by the hosting
+   * surface from its project catalog. Web's row takes exactly this prop
+   * (`list-view.tsx:483`/`:492` → `list-row.tsx:60`) and draws the chip only
+   * when `cardProperties.project` is on; `lib/issue-row-project.ts` owns the
+   * gate. Omit it and the row draws nothing — which is the correct pixel for
+   * "no project" and for "the catalog has not answered" alike.
+   */
+  project?: RowProject | null;
+  /** The hosting surface's display toggles. Only `project` is read here. */
+  cardProperties?: CardProperties;
 }
 
 export function IssueRow({
@@ -99,6 +116,8 @@ export function IssueRow({
   onPressAssignee,
   onPressDueDate,
   dueDate,
+  project,
+  cardProperties,
 }: Props) {
   const { colorScheme } = useColorScheme();
   // Subscribes, so a language switch re-renders the due-date chip below.
@@ -118,6 +137,10 @@ export function IssueRow({
   const checkColor = THEME[colorScheme].primary;
   const showChildProgress = childProgress && childProgress.total > 0;
   const dueLabel = formatIssueDate(dueDate ?? null, ISSUE_DATE_SHORT, intlLocale);
+  // Web's `showProject` slot (`list-row.tsx:60`、`:151-156`): icon + title,
+  // before the dates. Silence when the project is unknown — see
+  // `lib/issue-row-project.ts` for why that is the honest pixel.
+  const projectChip = issueRowProjectChip({ issue, project, cardProperties });
   return (
     <Pressable
       onPress={onPress}
@@ -178,6 +201,23 @@ export function IssueRow({
             <ProgressRing done={childProgress.done} total={childProgress.total} size={11} />
             <Text className="text-micro text-muted-foreground tabular-nums font-medium">
               {childProgress.done}/{childProgress.total}
+            </Text>
+          </View>
+        ) : null}
+        {/* Project chip, in web's relative slot: after the title-side group
+         *  and before the date / assignee affordances, so those two keep
+         *  their positions whether or not this issue has a project. Capped
+         *  and ellipsised because a phone row is already carrying the
+         *  identifier, title, progress and a date — an unbounded project name
+         *  would push the title to nothing. */}
+        {projectChip ? (
+          <View className="flex-row items-center gap-1 shrink max-w-[92px]">
+            <ProjectIcon icon={projectChip.icon} size="sm" />
+            <Text
+              className="text-micro text-muted-foreground shrink"
+              numberOfLines={1}
+            >
+              {projectChip.title}
             </Text>
           </View>
         ) : null}

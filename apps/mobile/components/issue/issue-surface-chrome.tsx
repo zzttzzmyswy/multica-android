@@ -44,10 +44,12 @@ import {
   type IssueViewBaseline,
 } from "@/data/stores/issue-view-codec";
 import type {
+  CardProperties,
   FilterDimension,
   IssueFilterSlice,
   IssueViewMode,
 } from "@/data/stores/issue-filter-slice";
+import type { RowProject } from "@/lib/issue-row-project";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
@@ -77,9 +79,20 @@ export type IssueSection = {
 export function IssueSelectionRow({
   issue,
   onOpen,
+  project,
+  cardProperties,
 }: {
   issue: Issue;
   onOpen: () => void;
+  /**
+   * The project this issue belongs to, resolved by the surface from its own
+   * project read (`lib/issue-row-project.ts` owns the gate; `null` covers both
+   * "no project" and "the catalog has not answered" — the chip is silent in
+   * both). Web threads exactly this prop through `list-view.tsx:483`.
+   */
+  project?: RowProject | null;
+  /** The hosting surface's display toggles — only `project` is read. */
+  cardProperties?: CardProperties;
 }) {
   const selectionMode = useIssueBatchSelectionStore((s) => s.selectionMode);
   const selected = useIssueBatchSelectionStore((s) =>
@@ -92,6 +105,8 @@ export function IssueSelectionRow({
       issue={issue}
       selectionMode={selectionMode}
       selected={selected}
+      project={project}
+      cardProperties={cardProperties}
       onPress={() => {
         if (selectionMode) toggle(issue.id);
         else onOpen();

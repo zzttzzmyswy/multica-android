@@ -58,6 +58,8 @@ import { readIssueRows } from "@/data/queries/issue-list-cache";
 import { hasMoreIssues, issueListTotal } from "@/lib/issue-pagination";
 import { useDrainIssuePages } from "@/lib/use-drain-issue-pages";
 import { issueViewListOptions } from "@/data/queries/issue-views";
+import { projectListOptions } from "@/data/queries/projects";
+import { findRowProject } from "@/lib/issue-row-project";
 import type { MyIssuesScope } from "@/data/queries/issue-keys";
 import { useIssueBatchSelectionStore } from "@/data/stores/issue-batch-selection-store";
 import { useAuthStore } from "@/data/auth-store";
@@ -163,6 +165,9 @@ export default function MyIssues() {
   const workingOnly = useMyIssuesViewStore((s) => s.workingOnly);
   const showSubIssues = useMyIssuesViewStore((s) => s.showSubIssues);
   const cardProperties = useMyIssuesViewStore((s) => s.cardProperties);
+  // The workspace project catalog, so each row can name its issue's project
+  // (web `list-view.tsx:483`). Shared cache entry with the filter chips.
+  const { data: projects = [] } = useQuery(projectListOptions(wsId));
   // The custom-property ids a card draws — web's second card display
   // dimension, saved with the view like `cardProperties` above.
   const cardPropertyIds = useMyIssuesViewStore((s) => s.cardPropertyIds);
@@ -273,6 +278,10 @@ export default function MyIssues() {
       tableHierarchy,
       cardProperties,
       cardPropertyIds,
+      swimlaneGrouping,
+      tableColumns,
+      tableColumnWidths,
+      tableGrouping,
     }),
     [
       filterState,
@@ -283,6 +292,10 @@ export default function MyIssues() {
       tableHierarchy,
       cardProperties,
       cardPropertyIds,
+      swimlaneGrouping,
+      tableColumns,
+      tableColumnWidths,
+      tableGrouping,
     ],
   );
   const modifiedActive = useMemo(
@@ -782,6 +795,8 @@ export default function MyIssues() {
           renderItem={({ item }) => (
             <IssueSelectionRow
               issue={item}
+              project={findRowProject(projects, item.project_id)}
+              cardProperties={cardProperties}
               onOpen={() => openIssue(item)}
             />
           )}

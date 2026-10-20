@@ -261,6 +261,14 @@ export function IssueViewBar({
           // The custom-property selection is part of what a view fixes, so a
           // re-save has to write it back or a web view loses its chips.
           cardPropertyIds: slice.cardPropertyIds,
+          // The canvas-shape dimensions. Web saves all three
+          // (save-view-dialog.tsx:606-613), so omitting them made a mobile
+          // re-save silently flatten a web view's swimlane dimension, column
+          // set and table grouping to mobile's defaults — for every client.
+          swimlaneGrouping: slice.swimlaneGrouping,
+          tableColumns: slice.tableColumns,
+          tableColumnWidths: slice.tableColumnWidths,
+          tableGrouping: slice.tableGrouping,
         }),
       },
       {

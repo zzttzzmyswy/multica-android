@@ -49,3 +49,43 @@ describe("useNewIssueStagePickStore", () => {
     expect(useNewIssueStagePickStore.getState().parentId).toBeNull();
   });
 });
+
+/**
+ * The MYS-2255 regression: the store had a `reset()` that the production code
+ * never called, so the same-parent case leaked — tap "+" under issue A, pick
+ * Stage 3, submit or cancel, tap "+" under A again: the chip already read
+ * "Stage 3" and the payload carried `stage: 3` the user never chose.
+ *
+ * `stageFor`'s parent tag only ever covered the CROSS-parent path (the case the
+ * original tests here pinned). These assertions cover the same-parent path,
+ * which is the far more common one, plus the exact places the reset is wired.
+ */
+describe("useNewIssueStagePickStore: same-parent leak (MYS-2255)", () => {
+  beforeEach(() => {
+    useNewIssueStagePickStore.getState().reset();
+  });
+
+  it("a form that resets does not reseed the next form under the SAME parent", () => {
+    const first = useNewIssueStagePickStore.getState();
+    first.openFor("parent-a");
+    first.setStage("parent-a", 3);
+    expect(useNewIssueStagePickStore.getState().stageFor("parent-a")).toBe(3);
+
+    // This is what the form's unmount cleanup runs.
+    useNewIssueStagePickStore.getState().reset();
+
+    // The SECOND form, pointed at the same parent, must start unstaged.
+    expect(useNewIssueStagePickStore.getState().stageFor("parent-a")).toBeNull();
+  });
+
+  it("the chips still isolate parents WITHOUT a reset (the 260 contract)", () => {
+    // Keeping this next to the leak case documents that the parent tag is not
+    // a substitute: it fixes one path, the lifetime hook fixes the other, and
+    // both are needed.
+    const s = useNewIssueStagePickStore.getState();
+    s.setStage("parent-a", 4);
+    expect(useNewIssueStagePickStore.getState().stageFor("parent-b")).toBeNull();
+    // ...while the leak is still reachable without a reset:
+    expect(useNewIssueStagePickStore.getState().stageFor("parent-a")).toBe(4);
+  });
+});

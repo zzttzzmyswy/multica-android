@@ -52,7 +52,11 @@ import {
   IssueSurfaceScopeToolbar,
   SurfaceEmptyState,
 } from "@/components/issue/issue-surface-chrome";
-import { projectIssuesOptions } from "@/data/queries/projects";
+import {
+  projectIssuesOptions,
+  projectListOptions,
+} from "@/data/queries/projects";
+import { findRowProject } from "@/lib/issue-row-project";
 import { issueRowNarrowing } from "@/lib/issue-row-narrowing";
 import { readIssueRows } from "@/data/queries/issue-list-cache";
 import { hasMoreIssues, issueListTotal } from "@/lib/issue-pagination";
@@ -143,6 +147,12 @@ export function ProjectIssueSurface({
   const showSubIssues = useProjectIssuesViewStore((s) => s.showSubIssues);
   const tableHierarchy = useProjectIssuesViewStore((s) => s.tableHierarchy);
   const cardProperties = useProjectIssuesViewStore((s) => s.cardProperties);
+  // Every issue on THIS surface belongs to `projectId` by construction, so the
+  // project catalog here is one row — but the row still renders through the
+  // same gate every other surface uses, so a sub-issue pointed at a different
+  // project (possible: a child can be filed under any project) is labelled
+  // correctly instead of being stamped with the host project.
+  const { data: projects = [] } = useQuery(projectListOptions(wsId));
   // The custom-property ids a card draws — web's second card display
   // dimension, saved with the view like `cardProperties` above.
   const cardPropertyIds = useProjectIssuesViewStore((s) => s.cardPropertyIds);
@@ -313,6 +323,10 @@ export function ProjectIssueSurface({
       tableHierarchy,
       cardProperties,
       cardPropertyIds,
+      swimlaneGrouping,
+      tableColumns,
+      tableColumnWidths,
+      tableGrouping,
     }),
     [
       filterState,
@@ -323,6 +337,10 @@ export function ProjectIssueSurface({
       tableHierarchy,
       cardProperties,
       cardPropertyIds,
+      swimlaneGrouping,
+      tableColumns,
+      tableColumnWidths,
+      tableGrouping,
     ],
   );
   const modifiedActive = useMemo(
@@ -682,6 +700,8 @@ export function ProjectIssueSurface({
           renderItem={({ item }) => (
             <IssueSelectionRow
               issue={item}
+              project={findRowProject(projects, item.project_id)}
+              cardProperties={cardProperties}
               onOpen={() => navigateToIssue(item.id)}
             />
           )}

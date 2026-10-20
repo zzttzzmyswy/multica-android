@@ -56,7 +56,11 @@ import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorProfileStore } from "@/data/stores/actor-profile-store";
 import { ActionSheet } from "@/lib/action-sheet";
-import { squadManageGuards, squadMemberActionGuards } from "@/lib/squad-guards";
+import {
+  squadManageGuards,
+  squadMemberActionGuards,
+  squadMemberRoleField,
+} from "@/lib/squad-guards";
 import { catalogRead, recordRead } from "@/lib/catalog-read";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
@@ -224,6 +228,20 @@ export default function SquadDetailPage() {
         currentUserId: user?.id,
         leaderId: squad?.leader_id,
         target: member,
+        // Web hides "make leader" for an archived agent but keeps remove
+        // (squad-detail-page.tsx:1254 vs :1272) — see the guard's own doc.
+        // Two sources, because neither alone is sufficient:
+        //   - the agent directory knows `archived_at`, but it EXCLUDES
+        //     archived agents (`agentListOptions`), so an archived member has
+        //     no row there at all;
+        //   - the squad status endpoint reports `archived` directly and is
+        //     what the roster's 「已归档」 pill already reads.
+        // Device verification caught this: the first cut read only the
+        // directory, so an archived member still offered "make leader".
+        targetArchived:
+          member.member_type === "agent" &&
+          !!agentsById.get(member.member_id)?.archived,
+        targetStatus: statusById.get(member.member_id)?.status,
       });
       const name = getMemberName(member);
       if (!g.canRemove && !g.canSetLeader && !g.canEditRole) return;
@@ -297,15 +315,21 @@ export default function SquadDetailPage() {
         },
       );
     },
-    [canManage, user?.id, squad, removeMember, updateSquad, t, getMemberName],
+    [canManage, user?.id, squad, removeMember, updateSquad, t, getMemberName, agentsById, statusById],
   );
 
   const onAddMemberPick = useCallback(
-    (target: { member_type: "agent" | "member"; member_id: string }) => {
+    (
+      target: { member_type: "agent" | "member"; member_id: string },
+      role: string,
+    ) => {
       addMember.mutate(
         {
           member_type: target.member_type,
           member_id: target.member_id,
+          // Omitted when blank rather than written as "" — see
+          // `squadMemberRoleField`.
+          ...squadMemberRoleField(role),
         },
         {
           onSuccess: () => Alert.alert(t("squads.detail.memberAdded")),
