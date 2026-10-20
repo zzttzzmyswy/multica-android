@@ -36,6 +36,7 @@ import {
   isActorPropertyType,
 } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
+import { TextField } from "@/components/ui/text-field";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { CatalogEmptySlot } from "@/components/catalog/catalog-status";
 import { memberListOptions } from "@/data/queries/members";
@@ -46,6 +47,11 @@ import {
   propertyTypeIcon,
   toggleActorRefValue,
 } from "@/lib/issue-properties";
+import {
+  filterPropertyOptions,
+  hasNoPropertyOptionMatch,
+  shouldSearchPropertyOptions,
+} from "@/lib/property-option-search";
 import { matchesNameOrPinyin } from "@/lib/name-search";
 import { toDateOnly, dateOnlyToLocalDate } from "@multica/core/issues/date";
 import { useTranslation } from "@/lib/i18n/react";
@@ -114,6 +120,10 @@ export function PropertyValueBody({
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
   const [draft, setDraft] = useState(initialDraft);
+  // Option search for select / multi_select (web parity — the field appears
+  // only past `PROPERTY_OPTION_SEARCH_THRESHOLD`). Page-local and NOT reported
+  // to the host: it narrows what is visible, it is not part of the value.
+  const [optionQuery, setOptionQuery] = useState("");
 
   /** Keep the host's copy in step. Called on every keystroke, so the host's
    *  state stays a mirror rather than a second source of truth. */
@@ -138,52 +148,80 @@ export function PropertyValueBody({
   };
 
   if (property.type === "select" || property.type === "multi_select") {
+    // Web shows an option search field once the list outgrows one screen
+    // (`custom-property-picker.tsx:175`/`:211`, `searchable={options.length > 7}`).
+    // The threshold lives in `lib/property-option-search.ts` so the parity
+    // number is one constant rather than a literal repeated per branch.
+    const searchable = shouldSearchPropertyOptions(property);
+    const matched = filterPropertyOptions(propertyOptions(property), optionQuery);
     return (
-      <FlatList
-        data={propertyOptions(property)}
-        keyExtractor={(option) => option.id}
-        className="flex-1"
-        contentInsetAdjustmentBehavior="automatic"
-        renderItem={({ item: option }) => {
-          const multi = property.type === "multi_select";
-          const list = Array.isArray(value) ? value : [];
-          const selected = multi ? list.includes(option.id) : value === option.id;
-          return (
-            <Pressable
-              onPress={() => {
-                if (multi) {
-                  const next = selected
-                    ? list.filter((v) => v !== option.id)
-                    : [...list, option.id];
-                  // Unsetting to empty = clear (web's toggle→clear).
-                  if (next.length === 0) onClear();
-                  else onCommit(next);
-                } else {
-                  onCommit(option.id);
-                }
-              }}
-              className="flex-row items-center gap-3 px-4 py-3 active:bg-secondary"
-            >
-              <View
-                className="size-3 shrink-0 rounded-full"
-                style={{ backgroundColor: option.color }}
-              />
-              <Text
-                className={cn(
-                  "flex-1 text-title-sm",
-                  selected ? "text-foreground font-medium" : "text-foreground",
-                )}
-                numberOfLines={1}
-              >
-                {option.name}
+      <View className="flex-1">
+        {searchable ? (
+          <View className="px-3 pt-2 pb-1">
+            <TextField
+              value={optionQuery}
+              onChangeText={setOptionQuery}
+              placeholder={t("properties.optionSearchPlaceholder")}
+              accessibilityLabel={t("properties.optionSearchPlaceholder")}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+        ) : null}
+        <FlatList
+          data={matched}
+          keyExtractor={(option) => option.id}
+          className="flex-1"
+          contentInsetAdjustmentBehavior="automatic"
+          keyboardShouldPersistTaps="handled"
+          ListEmptyComponent={
+            hasNoPropertyOptionMatch(matched.length) ? (
+              <Text className="px-4 py-6 text-center text-body text-muted-foreground">
+                {t("properties.optionSearchEmpty")}
               </Text>
-              {selected ? (
-                <Ionicons name="checkmark" size={20} color={theme.primary} />
-              ) : null}
-            </Pressable>
-          );
-        }}
-      />
+            ) : null
+          }
+          renderItem={({ item: option }) => {
+            const multi = property.type === "multi_select";
+            const list = Array.isArray(value) ? value : [];
+            const selected = multi ? list.includes(option.id) : value === option.id;
+            return (
+              <Pressable
+                onPress={() => {
+                  if (multi) {
+                    const next = selected
+                      ? list.filter((v) => v !== option.id)
+                      : [...list, option.id];
+                    // Unsetting to empty = clear (web's toggle→clear).
+                    if (next.length === 0) onClear();
+                    else onCommit(next);
+                  } else {
+                    onCommit(option.id);
+                  }
+                }}
+                className="flex-row items-center gap-3 px-4 py-3 active:bg-secondary"
+              >
+                <View
+                  className="size-3 shrink-0 rounded-full"
+                  style={{ backgroundColor: option.color }}
+                />
+                <Text
+                  className={cn(
+                    "flex-1 text-title-sm",
+                    selected ? "text-foreground font-medium" : "text-foreground",
+                  )}
+                  numberOfLines={1}
+                >
+                  {option.name}
+                </Text>
+                {selected ? (
+                  <Ionicons name="checkmark" size={20} color={theme.primary} />
+                ) : null}
+              </Pressable>
+            );
+          }}
+        />
+      </View>
     );
   }
 

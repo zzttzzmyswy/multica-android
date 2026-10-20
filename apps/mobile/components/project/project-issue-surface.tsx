@@ -43,6 +43,7 @@ import { IssueViewBar } from "@/components/issue/issue-view-bar";
 import { IssueTableView } from "@/components/issue/table-view";
 import { IssuesLoading } from "@/components/issue/issues-loading";
 import { IssueListFooter } from "@/components/issue/issue-list-footer";
+import { useChipSaveHint } from "@/lib/use-chip-save-hint";
 import {
   ActiveFilterChips,
   useFilterChipBaseline,
@@ -316,6 +317,9 @@ export function ProjectIssueSurface({
     resetDimension: resetChipDimension,
     clearAllChips,
   } = useFilterChipBaseline(activeView?.query ?? null, useProjectIssuesViewStore);
+  // Chip-bar save shortcut (iteration 263) — see my-issues.tsx for why this is
+  // a request token rather than a second dialog.
+  const chipSave = useChipSaveHint(projectScope);
   const snapshotSource = useMemo(
     () => ({
       ...filterState,
@@ -584,6 +588,8 @@ export function ProjectIssueSurface({
           onClearDate={() =>
             useProjectIssuesViewStore.getState().setDateFilter(null)
           }
+          onSave={chipSave.visible ? chipSave.onPress : undefined}
+          saveLabel={chipSave.visible ? chipSave.label : undefined}
           onClearAll={() => {
             clearAllChips();
             useProjectIssuesViewStore.getState().setDateFilter(null);

@@ -56,6 +56,7 @@ import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { formatDateTime } from "@/lib/autopilot-format";
 import { isArchivedAgent as isArchived } from "@/lib/filter-agents";
+import { openclawRoutingAvailability } from "@/lib/openclaw-routing-availability";
 import { hasSystemPromptLayer, systemPromptLayer } from "@/lib/agent-system-prompt";
 import { cn } from "@/lib/utils";
 
@@ -178,6 +179,21 @@ export default function AgentDetailPage() {
   const runtime = runtimes.data?.find((r) => r.id === agent?.runtime_id) ?? null;
   const runtimeBound = runtime != null;
 
+  // Whether the OpenClaw routing surface applies. Resolved here rather than in
+  // the menu because this is the surface holding both reads, and because the
+  // answer has to distinguish "the runtime is not OpenClaw" from "the runtime
+  // read has not answered" — passing the raw `runtime` down would let a slow
+  // read render as a provider verdict (see lib/openclaw-routing-availability).
+  const routingAvailability = agent
+    ? openclawRoutingAvailability({
+        agent,
+        runtime,
+        runtimesSettled: runtimes.isSuccess,
+        runtimesFailed: runtimes.isError,
+      })
+    : null;
+  const showRouting = routingAvailability?.state === "shown";
+
   if (!read.isResolved) {
     return (
       <View className="flex-1 justify-center bg-background">
@@ -277,7 +293,11 @@ export default function AgentDetailPage() {
               </View>
             ) : null}
             {/* presence drives "Cancel all tasks" visibility (running + queued > 0) */}
-            <AgentDetailActions agent={agent} presence={detail} />
+            <AgentDetailActions
+              agent={agent}
+              presence={detail}
+              showRouting={showRouting}
+            />
           </View>
           {agent.description ? (
             <Text className="px-4 pt-2 text-body text-muted-foreground">

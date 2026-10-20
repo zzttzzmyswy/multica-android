@@ -1,8 +1,15 @@
 /**
  * Agent detail action menu — the "⋯" entry in the detail header row. Mirrors
  * web's `agent-detail-page.tsx` management surface: Edit / Environment /
- * Archive|Restore, with an archive confirmation dialog (web's archive_dialog)
- * and the archived→restore flip.
+ * Routing / Archive|Restore, with an archive confirmation dialog (web's
+ * archive_dialog) and the archived→restore flip.
+ *
+ * "Routing" (`runtime_config`) is offered only for OpenClaw agents. Web gates
+ * the corresponding tab on `runtime?.provider === "openclaw"`
+ * (`agent-overview-pane.tsx:223`); the caller owns that decision because it is
+ * the one holding the runtime read, and it passes the resolved answer as
+ * `showRouting` rather than the raw runtime — a loading read must not read as
+ * "not an OpenClaw agent" (see `lib/openclaw-routing-availability.ts`).
  *
  * "Cancel all tasks" (web parity: agent-row-actions showStop) appears while
  * the agent has active work (running + queued > 0, read from the workspace
@@ -36,6 +43,7 @@ type DetailAction =
   | "edit"
   | "env"
   | "args"
+  | "routing"
   | "integrations"
   | "duplicate"
   | "archive"
@@ -46,9 +54,14 @@ type DetailAction =
 export function AgentDetailActions({
   agent,
   presence,
+  showRouting = false,
 }: {
   agent: Agent;
   presence?: AgentPresenceDetail;
+  /** The bound runtime's provider is openclaw — resolved by the caller, which
+   *  is the surface holding the runtime read. Defaults to false so a caller
+   *  that has not answered yet offers no dead entry point. */
+  showRouting?: boolean;
 }) {
   const { t } = useTranslation();
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
@@ -73,6 +86,9 @@ export function AgentDetailActions({
     push(t("agents.detail.menu.edit"), "edit");
     push(t("agents.detail.menu.env"), "env");
     push(t("agents.detail.menu.args"), "args");
+    // Routing sits beside the other per-agent configuration entries, gated on
+    // the provider the caller resolved (web's runtime_config tab gate).
+    if (showRouting) push(t("agents.detail.menu.routing"), "routing");
     push(t("agents.detail.menu.integrations"), "integrations");
     // Web parity: agent-row-actions showDuplicate — any workspace member may
     // duplicate a non-archived agent; the copies land in the manual create
@@ -103,8 +119,9 @@ export function AgentDetailActions({
         const action = actions[index];
         if (!action || action === "cancel" || !wsSlug) return;
 
-        const nav = (route: "edit" | "env" | "custom-args" | "integrations") =>
-          router.push(`/${wsSlug}/more/agents/${agent.id}/${route}`);
+        const nav = (
+          route: "edit" | "env" | "custom-args" | "routing" | "integrations",
+        ) => router.push(`/${wsSlug}/more/agents/${agent.id}/${route}`);
 
         switch (action) {
           case "edit":
@@ -115,6 +132,9 @@ export function AgentDetailActions({
             return;
           case "args":
             nav("custom-args");
+            return;
+          case "routing":
+            nav("routing");
             return;
           case "integrations":
             nav("integrations");
@@ -192,7 +212,7 @@ export function AgentDetailActions({
         }
       },
     );
-  }, [t, wsSlug, agent, archived, runningCount, queuedCount, hasActiveWork, archiveAgent, restoreAgent, cancelTasks]);
+  }, [t, wsSlug, agent, archived, runningCount, queuedCount, hasActiveWork, showRouting, archiveAgent, restoreAgent, cancelTasks]);
 
   return (
     <IconButton

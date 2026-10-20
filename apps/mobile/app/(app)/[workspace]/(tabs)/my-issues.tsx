@@ -34,6 +34,7 @@ import { GanttView } from "@/components/issue/gantt-view";
 import { SwimlaneView } from "@/components/issue/swimlane-view";
 import { IssueViewBar } from "@/components/issue/issue-view-bar";
 import { IssueTableView } from "@/components/issue/table-view";
+import { useChipSaveHint } from "@/lib/use-chip-save-hint";
 import { IssuesLoading } from "@/components/issue/issues-loading";
 import { IssueListFooter } from "@/components/issue/issue-list-footer";
 import {
@@ -271,6 +272,10 @@ export default function MyIssues() {
     resetDimension: resetChipDimension,
     clearAllChips,
   } = useFilterChipBaseline(activeView?.query ?? null, useMyIssuesViewStore);
+  // Chip-bar save shortcut (iteration 263). The dialog lives in the saved-views
+  // bar; this raises the request it consumes, so all three surfaces share one
+  // create/update implementation instead of copying the payload builder.
+  const chipSave = useChipSaveHint(myScope);
   const snapshotSource = useMemo(
     () => ({
       ...filterState,
@@ -667,6 +672,8 @@ export default function MyIssues() {
           onClearDate={() =>
             useMyIssuesViewStore.getState().setDateFilter(null)
           }
+          onSave={chipSave.visible ? chipSave.onPress : undefined}
+          saveLabel={chipSave.visible ? chipSave.label : undefined}
           onClearAll={() => {
             clearAllChips();
             // The date window lives outside the filter snapshot, so the hook
