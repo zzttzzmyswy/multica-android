@@ -143,6 +143,19 @@ interface NewIssueDraftState extends NewIssueDraftValues {
   }) => void;
   /** Drop the draft and clear its backing file. Web's `clearDraft`. */
   reset: () => void;
+  /**
+   * Reset for the NEXT issue in a "create another" batch — web's
+   * `resetForNextIssue` (`packages/views/modals/create-issue.tsx:391-424`).
+   *
+   * Differs from `reset` in exactly one field: the ASSIGNEE survives. Web
+   * keeps it deliberately (`:404-414`, "keep the just-used assignee for the
+   * next issue in the batch") because filing several tasks for the same
+   * person is the reason the feature exists. Everything that describes THIS
+   * issue — title, bodies, status, priority, dates, labels, project, property
+   * values, agent actor — goes back to its create default. The parent is not
+   * a draft field on mobile (it rides the route), so the screen clears it.
+   */
+  resetForNextIssue: () => void;
 }
 
 export const EMPTY_NEW_ISSUE_DRAFT: NewIssueDraftValues = {
@@ -339,6 +352,15 @@ export const useNewIssueDraftStore = create<NewIssueDraftState>((set, get) => {
       // race a queued persist and resurrect the draft.
       writeThrough(EMPTY_NEW_ISSUE_DRAFT);
       set({ ...EMPTY_NEW_ISSUE_DRAFT });
+    },
+    resetForNextIssue: () => {
+      // Same write-through discipline as `reset`. The assignee is read from
+      // the live state rather than the constant so a pick made during the
+      // submit request is not thrown away.
+      const { assignee } = get();
+      const next: NewIssueDraftValues = { ...EMPTY_NEW_ISSUE_DRAFT, assignee };
+      writeThrough(next);
+      set(next);
     },
   };
 });

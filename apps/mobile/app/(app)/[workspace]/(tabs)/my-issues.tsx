@@ -266,8 +266,11 @@ export default function MyIssues() {
   // The chips bar works against the open view's baseline: it shows only the
   // user's additions and a chip's removal falls back to the view's own
   // values (web filter-chips-bar semantics).
-  const { baseline: chipBaseline, resetDimension: resetChipDimension } =
-    useFilterChipBaseline(activeView?.query ?? null, useMyIssuesViewStore);
+  const {
+    baseline: chipBaseline,
+    resetDimension: resetChipDimension,
+    clearAllChips,
+  } = useFilterChipBaseline(activeView?.query ?? null, useMyIssuesViewStore);
   const snapshotSource = useMemo(
     () => ({
       ...filterState,
@@ -664,6 +667,13 @@ export default function MyIssues() {
           onClearDate={() =>
             useMyIssuesViewStore.getState().setDateFilter(null)
           }
+          onClearAll={() => {
+            clearAllChips();
+            // The date window lives outside the filter snapshot, so the hook
+            // cannot clear it — web pairs every clearAll branch with this
+            // (`filter-chips-bar.tsx:709、:714`).
+            useMyIssuesViewStore.getState().setDateFilter(null);
+          }}
         />
       ) : null}
       {surfaceLoading ? (

@@ -252,8 +252,11 @@ export default function IssuesPage() {
   // The chips bar works against the open view's baseline: it shows only the
   // user's additions and a chip's removal falls back to the view's own
   // values (web filter-chips-bar semantics).
-  const { baseline: chipBaseline, resetDimension: resetChipDimension } =
-    useFilterChipBaseline(activeView?.query ?? null, useIssuesViewStore);
+  const {
+    baseline: chipBaseline,
+    resetDimension: resetChipDimension,
+    clearAllChips,
+  } = useFilterChipBaseline(activeView?.query ?? null, useIssuesViewStore);
   // Union of the filter dims + display defaults the views save/compare.
   const snapshotSource = useMemo(
     () => ({
@@ -650,6 +653,10 @@ export default function IssuesPage() {
           onClearDate={() =>
             useIssuesViewStore.getState().setDateFilter(null)
           }
+          onClearAll={() => {
+            clearAllChips();
+            useIssuesViewStore.getState().setDateFilter(null);
+          }}
         />
       ) : null}
       {surfaceLoading ? (

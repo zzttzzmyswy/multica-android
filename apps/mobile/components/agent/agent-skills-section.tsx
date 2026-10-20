@@ -30,7 +30,13 @@ import { Button } from "@/components/ui/button";
 import { MultiSelectSheet } from "@/components/agent/multi-select-sheet";
 import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { catalogRead } from "@/lib/catalog-read";
-import { skillListOptions } from "@/data/queries/skills";
+import { skillListOptions, skillDetailOptions } from "@/data/queries/skills";
+import { AgentSkillDetailSheet } from "@/components/agent/agent-skill-detail-sheet";
+import {
+  runtimeSkillSelection,
+  workspaceSkillSelection,
+  type SelectedAgentSkill,
+} from "@/lib/agent-skill-detail";
 import {
   runtimeCapabilitiesOptions,
   isRuntimeSkillDisabled,
@@ -68,6 +74,20 @@ export function AgentSkillsSection({
 
   const [addOpen, setAddOpen] = useState(false);
   const [addSelection, setAddSelection] = useState<Set<string>>(new Set());
+  /**
+   * The skill whose detail sheet is open, if any. Web keeps the same
+   * discriminated selection (`skills-tab.tsx:70`); the two kinds differ in
+   * whether a read is involved — see `lib/agent-skill-detail.ts`.
+   */
+  const [selected, setSelected] = useState<SelectedAgentSkill>(null);
+  const selectedWorkspaceId =
+    selected?.kind === "workspace" ? selected.id : "";
+  // Enabled only for a workspace selection: a runtime skill has no workspace
+  // id, and the endpoint would 404 on the discovery key.
+  const selectedDetail = useQuery({
+    ...skillDetailOptions(wsId, selectedWorkspaceId),
+    enabled: !!wsId && selectedWorkspaceId !== "",
+  });
 
   const addSkills = useAddAgentSkills(agent.id);
   const setEnabled = useSetAgentSkillEnabled(agent.id);
@@ -216,26 +236,37 @@ export function AgentSkillsSection({
                       : "px-3 py-2.5 flex-row items-center gap-3"
                   }
                 >
-                  <Ionicons
-                    name="extension-puzzle-outline"
-                    size={16}
-                    color={enabled ? muted : THEME[colorScheme].mutedForeground}
-                  />
-                  <View className="flex-1 min-w-0 gap-0.5">
-                    <Text
-                      className={
-                        enabled
-                          ? "text-body font-medium text-foreground"
-                          : "text-body font-medium text-muted-foreground"
-                      }
-                      numberOfLines={1}
-                    >
-                      {skill.name}
-                    </Text>
-                    <Text className="text-micro text-muted-foreground" numberOfLines={1}>
-                      {skill.description || t("agents.skills.noDescription")}
-                    </Text>
-                  </View>
+                  <Pressable
+                    onPress={() =>
+                      setSelected(workspaceSkillSelection(skill))
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel={t("agents.skills.openDetailAria", {
+                      name: skill.name,
+                    })}
+                    className="flex-1 min-w-0 flex-row items-center gap-3 active:opacity-70"
+                  >
+                    <Ionicons
+                      name="extension-puzzle-outline"
+                      size={16}
+                      color={enabled ? muted : THEME[colorScheme].mutedForeground}
+                    />
+                    <View className="flex-1 min-w-0 gap-0.5">
+                      <Text
+                        className={
+                          enabled
+                            ? "text-body font-medium text-foreground"
+                            : "text-body font-medium text-muted-foreground"
+                        }
+                        numberOfLines={1}
+                      >
+                        {skill.name}
+                      </Text>
+                      <Text className="text-micro text-muted-foreground" numberOfLines={1}>
+                        {skill.description || t("agents.skills.noDescription")}
+                      </Text>
+                    </View>
+                  </Pressable>
                   <Switch
                     checked={enabled}
                     disabled={busy}
@@ -331,26 +362,35 @@ export function AgentSkillsSection({
                       : "px-3 py-2.5 flex-row items-center gap-3"
                   }
                 >
-                  <Ionicons
-                    name="server-outline"
-                    size={16}
-                    color={muted}
-                  />
-                  <View className="flex-1 min-w-0 gap-0.5">
-                    <Text
-                      className={
-                        disabled
-                          ? "text-body font-medium text-muted-foreground"
-                          : "text-body font-medium text-foreground"
-                      }
-                      numberOfLines={1}
-                    >
-                      {skill.name}
-                    </Text>
-                    <Text className="text-micro text-muted-foreground" numberOfLines={1}>
-                      {skill.description || skill.source_path}
-                    </Text>
-                  </View>
+                  <Pressable
+                    onPress={() => setSelected(runtimeSkillSelection(skill))}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("agents.skills.openDetailAria", {
+                      name: skill.name,
+                    })}
+                    className="flex-1 min-w-0 flex-row items-center gap-3 active:opacity-70"
+                  >
+                    <Ionicons
+                      name="server-outline"
+                      size={16}
+                      color={muted}
+                    />
+                    <View className="flex-1 min-w-0 gap-0.5">
+                      <Text
+                        className={
+                          disabled
+                            ? "text-body font-medium text-muted-foreground"
+                            : "text-body font-medium text-foreground"
+                        }
+                        numberOfLines={1}
+                      >
+                        {skill.name}
+                      </Text>
+                      <Text className="text-micro text-muted-foreground" numberOfLines={1}>
+                        {skill.description || skill.source_path}
+                      </Text>
+                    </View>
+                  </Pressable>
                   {toggleable ? (
                     <Switch
                       checked={!disabled}
@@ -411,6 +451,35 @@ export function AgentSkillsSection({
           if (addSelection.size > 0) confirmAdd();
         }}
       />
+
+      {/* Read-only detail peek (web `SkillDetailDialog`). Mounted only while a
+          row is selected so the query below never runs for a closed sheet. */}
+      {selected ? (
+        <AgentSkillDetailSheet
+          selection={selected}
+          workspaceSkill={
+            selected.kind === "workspace" && selectedDetail.data
+              ? selectedDetail.data
+              : null
+          }
+          workspaceName={
+            selected.kind === "workspace"
+              ? (agent.skills.find((s) => s.id === selected.id)?.name ?? null)
+              : null
+          }
+          // Three states, never collapsed: a read still in flight is not an
+          // empty skill, and a failed read is not either (MYS-1908 line).
+          workspaceReadState={
+            selectedDetail.isError
+              ? "failed"
+              : selectedDetail.data
+                ? "ready"
+                : "loading"
+          }
+          onRetry={() => void selectedDetail.refetch()}
+          onClose={() => setSelected(null)}
+        />
+      ) : null}
     </View>
   );
 }
