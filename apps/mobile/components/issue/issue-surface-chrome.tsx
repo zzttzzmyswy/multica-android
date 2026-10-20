@@ -296,6 +296,8 @@ export function ActiveFilterChips({
   onClearProperty,
   onClearDate,
   onClearAll,
+  onSave,
+  saveLabel,
 }: {
   filterState: IssueFilterState;
   /** The open saved view's own conditions; null when no view is open. */
@@ -333,6 +335,21 @@ export function ActiveFilterChips({
    * nine dims in the view store, the date window in the surface's own state.
    */
   onClearAll: () => void;
+  /**
+   * Opens the save-view dialog — web's `onSave` on the chip bar
+   * (`filter-chips-bar.tsx:537-546`). Optional so a surface without saved
+   * views (web's `actor-issues-panel.tsx:103` passes nothing) simply omits the
+   * control instead of rendering one that does nothing.
+   *
+   * Placement matters: this sits beside Clear because that is where the user
+   * is standing when they finish stacking filters. The saved-views bar's "+"
+   * is the same action, but it lives above the filter row and scrolls out of
+   * reach exactly when the chip bar has the most to say.
+   */
+  onSave?: () => void;
+  /** Three-way label from `lib/chip-save-view.ts` — "Save" / "Edit" / "Save
+   *  as". Resolved by the caller, which is the surface holding the open view. */
+  saveLabel?: string;
 }) {
   const { resolveActorName } = useActorLookup();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
@@ -482,10 +499,25 @@ export function ActiveFilterChips({
       {chips.map((chip) => (
         <Chip key={chip.key} label={chip.label} onClear={chip.onClear} />
       ))}
-      {/* Pushed to the trailing edge so it never competes with the chips for
+      {/* Pushed to the trailing edge so they never compete with the chips for
           the first screenful — web does the same with `ml-auto`
-          (`filter-chips-bar.tsx:684`). */}
-      <View className="ml-auto">
+          (`filter-chips-bar.tsx:684`). Save leads and Clear trails, matching
+          web's DOM order, so the destructive control is never the one under a
+          thumb reaching for the right edge. */}
+      <View className="ml-auto flex-row items-center gap-1">
+        {onSave ? (
+          <Pressable
+            onPress={onSave}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={saveLabel ?? translate("issueViews.saveView")}
+            className="px-2 py-1 rounded-md border border-border active:opacity-70"
+          >
+            <Text className="text-caption text-foreground">
+              {saveLabel ?? translate("issueViews.saveView")}
+            </Text>
+          </Pressable>
+        ) : null}
         <Pressable
           onPress={onClearAll}
           hitSlop={8}

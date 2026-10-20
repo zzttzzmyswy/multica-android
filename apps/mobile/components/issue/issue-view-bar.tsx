@@ -31,7 +31,7 @@
  * Date and scope remain user layers on top of a view (web semantics) — the
  * save dialog only captures the nine filter dims + display defaults.
  */
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Modal, Pressable, ScrollView, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
@@ -68,6 +68,12 @@ import {
   useUpdateIssueView,
 } from "@/data/mutations/issue-views";
 import { pinListOptions } from "@/data/queries/pins";
+import {
+  issueViewContainerKey,
+  useActiveIssueViewStore,
+} from "@/data/stores/active-issue-view-store";
+import { useSaveViewRequestStore } from "@/data/stores/save-view-request-store";
+
 import { useCreatePin, useDeletePin } from "@/data/mutations/pins";
 import { memberListOptions } from "@/data/queries/members";
 import {
@@ -113,6 +119,17 @@ export function IssueViewBar({
   const { data: members = [] } = useQuery(memberListOptions(wsId));
   const currentRole =
     members.find((m) => m.user_id === user?.id)?.role ?? null;
+
+  // Container key / open view, read here (not passed in) so the chip-bar
+  // shortcut and the bar's own dialog agree on which view is "the" view. The
+  // host already keyed the same container when it listed these views.
+  const containerKey = useMemo(
+    () => issueViewContainerKey(wsId, scope),
+    [wsId, scope],
+  );
+  const activeViewIdInStore = useActiveIssueViewStore(
+    (s) => s.active[containerKey] ?? null,
+  );
 
   // `viewsReady` gate for the preference write — web's `viewsReady`
   // (`packages/core/issue-views/use-active-view.ts:62`). The list read feeds the
@@ -214,7 +231,46 @@ export function IssueViewBar({
     [user, currentRole],
   );
 
-  const openSaveDialog = () => setDialog({ mode: "create" });
+  // The open saved view, resolved against THIS bar's list — a stale id (the
+  // view was deleted on another device) resolves to null, which is the same
+  // "no view open" the rest of the bar already acts on.
+  const activeView = useMemo(
+    () => views.find((v) => v.id === activeViewIdInStore) ?? null,
+    [views, activeViewIdInStore],
+  );
+
+  /**
+   * Open the dialog the way web's chip-bar `onSave` does: edit the open view
+   * when the user may manage it, otherwise start a fresh create ("Save as").
+   * Opening `create` unconditionally — the obvious wiring — files a
+   * near-duplicate every time a view owner tries to keep an edit.
+   */
+  const openSaveDialog = useCallback(() => {
+    if (activeView && canManage(activeView)) {
+      setDialog({ mode: "edit", view: activeView });
+      return;
+    }
+    setDialog({ mode: "create" });
+  }, [activeView, canManage]);
+
+  // The chip bar cannot reach this bar's dialog state, so it raises a request
+  // token instead and this effect consumes it (see
+  // data/stores/save-view-request-store.ts for why a counter, not a flag).
+  const saveRequestToken = useSaveViewRequestStore(
+    (s) => s.tokens[containerKey] ?? 0,
+  );
+  const consumedSaveToken = useRef(saveRequestToken);
+  useEffect(() => {
+    if (saveRequestToken === consumedSaveToken.current) return;
+    consumedSaveToken.current = saveRequestToken;
+    openSaveDialog();
+  }, [saveRequestToken, openSaveDialog]);
+
+  /**
+   * Label for the chip bar's shortcut, and whether it points at the open view.
+   * Exported through `chipSaveHint` so a host can render the control without
+   * re-deriving the three-way rule (web issues-header.tsx:1088-1095).
+   */
 
   const submitSave = (
     name: string,

@@ -61,6 +61,7 @@ import {
 } from "@/lib/issue-pagination";
 import { useDrainIssuePages } from "@/lib/use-drain-issue-pages";
 import { issueViewListOptions } from "@/data/queries/issue-views";
+import { useChipSaveHint } from "@/lib/use-chip-save-hint";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import {
   useIssuesViewStore,
@@ -257,6 +258,9 @@ export default function IssuesPage() {
     resetDimension: resetChipDimension,
     clearAllChips,
   } = useFilterChipBaseline(activeView?.query ?? null, useIssuesViewStore);
+  // Chip-bar save shortcut (iteration 263) — see my-issues.tsx for why this is
+  // a request token rather than a second dialog.
+  const chipSave = useChipSaveHint(issueScope);
   // Union of the filter dims + display defaults the views save/compare.
   const snapshotSource = useMemo(
     () => ({
@@ -653,6 +657,8 @@ export default function IssuesPage() {
           onClearDate={() =>
             useIssuesViewStore.getState().setDateFilter(null)
           }
+          onSave={chipSave.visible ? chipSave.onPress : undefined}
+          saveLabel={chipSave.visible ? chipSave.label : undefined}
           onClearAll={() => {
             clearAllChips();
             useIssuesViewStore.getState().setDateFilter(null);

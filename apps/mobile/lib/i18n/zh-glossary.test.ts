@@ -272,6 +272,11 @@ const CONCEPT_CODE_REFERENCES = [
   "onboarding.runtime.step2", // "multica daemon" — the CLI subcommand
   "resource.modeWorktreeDescription", // "agent/…" — git branch prefix
   "runtimes.profiles.form.commandPlaceholder", // "agent --model …" — CLI example
+  // "openclaw agent --local …" — the literal argv the daemon spawns. The
+  // concept scan sees `agent` inside it; translating the command would make
+  // the copy name a program that does not exist (web's own zh bundle keeps
+  // this string identical, `locales/zh-Hans/agents.json`).
+  "agents.routing.modeLocalHint",
 ];
 
 /**
