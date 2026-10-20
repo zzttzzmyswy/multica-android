@@ -119,6 +119,7 @@ import {
 import { useUpdateIssue } from "@/data/mutations/issues";
 import { api } from "@/data/api";
 import { ActionSheet } from "@/lib/action-sheet";
+import { searchTableColumns } from "@/lib/table-column-search";
 import {
   buildIssuesCsv,
   csvExportFileName,
@@ -1919,6 +1920,12 @@ function ColumnMenu({
   onResetColumns: () => void;
 }) {
   const { t } = useTranslation();
+  const { colorScheme } = useColorScheme();
+  // Web's picker carries a search box (`table-view.tsx:491-506`) because a
+  // workspace with many properties makes the flat list a scroll hunt. The
+  // query lives here, not in the store: it is a view of the list, not a
+  // persisted preference — closing the sheet forgets it, exactly like web.
+  const [search, setSearch] = useState("");
 
   /** Position of a visible column in the display order, or -1. */
   const positionOf = (column: TableColumnKey) => columns.indexOf(column);
@@ -1943,6 +1950,28 @@ function ColumnMenu({
       label,
     };
   };
+
+  // The labels are resolved through `t()` HERE, before filtering: the search
+  // matches what the row will display, so a user typing the word they can see
+  // is guaranteed to find the row. Filtering on `def.key` or on the raw
+  // `labelKey` would match text that is nowhere on screen.
+  const matched = useMemo(
+    () =>
+      searchTableColumns(
+        TABLE_SYSTEM_COLUMNS.map((def) => ({
+          def,
+          key: def.key,
+          label: t(def.labelKey),
+        })),
+        properties.map((property) => ({
+          property,
+          id: property.id,
+          name: property.name,
+        })),
+        search,
+      ),
+    [properties, search, t],
+  );
 
   return (
     <Modal
@@ -1976,6 +2005,18 @@ function ColumnMenu({
                 </Pressable>
               </View>
             </View>
+            <View className="px-4 py-2 border-b border-border">
+              <TextInput
+                value={search}
+                onChangeText={setSearch}
+                placeholder={t("table.columnsSearch")}
+                placeholderTextColor={THEME[colorScheme].mutedForeground}
+                className="h-8 rounded-md border border-border bg-background px-2 text-body text-foreground"
+                autoCorrect={false}
+                autoCapitalize="none"
+                accessibilityLabel={t("table.columnsSearch")}
+              />
+            </View>
             <ScrollView className="max-h-[55vh]">
               {/* Current display order, so a move is visible without closing
                   the sheet — the move rows themselves only say what they will
@@ -1986,25 +2027,38 @@ function ColumnMenu({
               >
                 {columns.map((c) => columnLabel(c)).join(" › ")}
               </Text>
-              <Text className="px-4 pt-3 pb-1 text-caption uppercase tracking-wider text-muted-foreground font-medium">
-                {t("table.columnsSystem")}
-              </Text>
-              {TABLE_SYSTEM_COLUMNS.map((def) => (
-                <MenuRow
-                  key={def.key}
-                  label={t(def.labelKey)}
-                  active={columns.includes(def.key)}
-                  disabled={def.key === "title"}
-                  onPress={() => onToggleColumn(def.key)}
-                  order={movableOrder(def.key, t(def.labelKey))}
-                />
-              ))}
-              {properties.length > 0 ? (
+              {/* Both sections filter on the same query and each disappears
+                  independently (web `:524`、`:541`). A query that selects
+                  nothing says so once, rather than leaving a sheet with a
+                  search box and two absent sections. */}
+              {matched.empty ? (
+                <Text className="px-4 py-6 text-body text-muted-foreground text-center">
+                  {t("table.columnsNoMatch")}
+                </Text>
+              ) : null}
+              {matched.columns.length > 0 ? (
+                <>
+                  <Text className="px-4 pt-3 pb-1 text-caption uppercase tracking-wider text-muted-foreground font-medium">
+                    {t("table.columnsSystem")}
+                  </Text>
+                  {matched.columns.map((column) => (
+                    <MenuRow
+                      key={column.key}
+                      label={column.label}
+                      active={columns.includes(column.key)}
+                      disabled={column.key === "title"}
+                      onPress={() => onToggleColumn(column.key)}
+                      order={movableOrder(column.key, column.label)}
+                    />
+                  ))}
+                </>
+              ) : null}
+              {matched.properties.length > 0 ? (
                 <>
                   <Text className="px-4 pt-3 pb-1 text-caption uppercase tracking-wider text-muted-foreground font-medium">
                     {t("table.columnsProperties")}
                   </Text>
-                  {properties.map((property) => {
+                  {matched.properties.map((property) => {
                     const key: TableColumnKey = `property:${property.id}`;
                     return (
                       <MenuRow

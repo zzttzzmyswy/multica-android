@@ -295,6 +295,7 @@ export function ActiveFilterChips({
   onClearNoProject,
   onClearProperty,
   onClearDate,
+  onClearAll,
 }: {
   filterState: IssueFilterState;
   /** The open saved view's own conditions; null when no view is open. */
@@ -311,6 +312,27 @@ export function ActiveFilterChips({
   onClearNoProject: () => void;
   onClearProperty: (id: string) => void;
   onClearDate: () => void;
+  /**
+   * Drop every chip at once — web's `clearAll` (`filter-chips-bar.tsx:706-716`).
+   *
+   * The two branches are NOT the same operation, and web spells out why:
+   *
+   *  - **Inside a view** it returns to the view's own conditions
+   *    (`resetFiltersTo(baseline.raw)`), never to empty. Clearing to empty
+   *    would silently edit the view the user opened — the view's name in the
+   *    bar would keep claiming conditions the list no longer applies.
+   *  - **Outside a view** it is `clearFilters()`.
+   *
+   * Either way the DATE window is cleared explicitly: it is a user layer no
+   * view carries (`IssueFilterSnapshot` has no date field), so
+   * `resetFiltersTo` structurally cannot restore or drop it, and web pairs
+   * every `clearAll` branch with `onDateFilterChange?.(null)` (`:709`, `:714`).
+   * Without that line the bar goes empty while the list stays date-filtered.
+   *
+   * The surface owns both halves because they live in different places: the
+   * nine dims in the view store, the date window in the surface's own state.
+   */
+  onClearAll: () => void;
 }) {
   const { resolveActorName } = useActorLookup();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
@@ -456,10 +478,26 @@ export function ActiveFilterChips({
   if (chips.length === 0) return null;
 
   return (
-    <View className="flex-row flex-wrap gap-1.5 px-4 pb-2">
+    <View className="flex-row flex-wrap items-center gap-1.5 px-4 pb-2">
       {chips.map((chip) => (
         <Chip key={chip.key} label={chip.label} onClear={chip.onClear} />
       ))}
+      {/* Pushed to the trailing edge so it never competes with the chips for
+          the first screenful — web does the same with `ml-auto`
+          (`filter-chips-bar.tsx:684`). */}
+      <View className="ml-auto">
+        <Pressable
+          onPress={onClearAll}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={translate("filter.clearAll")}
+          className="px-2 py-1 active:opacity-70"
+        >
+          <Text className="text-caption text-muted-foreground">
+            {translate("filter.clearAll")}
+          </Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -479,6 +517,8 @@ export function useFilterChipBaseline(
 ): {
   baseline: IssueViewBaseline | null;
   resetDimension: (dimension: FilterDimension) => void;
+  /** Drop every chip — see `ActiveFilterChips.onClearAll` for the two branches. */
+  clearAllChips: () => void;
 } {
   const baseline = useMemo(
     () => (viewQuery ? baselineFromViewQuery(viewQuery) : null),
@@ -494,7 +534,21 @@ export function useFilterChipBaseline(
     },
     [baseline, store],
   );
-  return { baseline, resetDimension };
+  // Web's `clearAll` (`filter-chips-bar.tsx:706-716`). The date window is NOT
+  // in `IssueFilterSnapshot`, so neither branch below touches it — the caller
+  // pairs this with its own `setDateFilter(null)`. Keeping the date half at
+  // the call site is deliberate: the hook cannot know which store field the
+  // surface wired to `onClearDate`.
+  const clearAllChips = useCallback(() => {
+    const state = store.getState();
+    if (baseline) {
+      // Back to exactly the view's own conditions — NOT to empty.
+      state.resetFiltersTo(baseline.raw);
+      return;
+    }
+    state.clearFilters();
+  }, [baseline, store]);
+  return { baseline, resetDimension, clearAllChips };
 }
 
 function Chip({ label, onClear }: { label: string; onClear: () => void }) {

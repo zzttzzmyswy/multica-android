@@ -136,30 +136,45 @@ describe("#1 custom properties on create", () => {
     // half, deleting the snapshot line still passes (the store read is in
     // scope) while the fan-out would run against the post-reset store.
     expect(screen).toContain("        pendingPropertyValues,");
+    // Iteration 262 moved the post-create exit behind `finishCreate()`, which
+    // owns BOTH branches (stay-and-reset vs. reset-and-pop). The invariant
+    // this test guards is unchanged — the fan-out must finish before whatever
+    // consumes the draft — so the anchor follows the call, not the old
+    // literal `resetDraft();`.
     const fanout = screen.indexOf("await writeCreatePropertyValues(");
-    const reset = screen.indexOf("resetDraft();", screen.indexOf("const submitManualMode"));
-    expect(fanout).toBeLessThan(reset);
+    const exit = screen.indexOf("finishCreate();", fanout);
+    expect(fanout).toBeGreaterThan(-1);
+    expect(exit).toBeGreaterThan(fanout);
   });
 
   it("awaits the fan-out before navigating away", () => {
-    // A write cut off by the unmount is silent data loss.
+    // A write cut off by the unmount is silent data loss. The navigation now
+    // lives inside `finishCreate`'s close branch (iteration 262), so the
+    // assertion is that the pop still happens there AND that the fan-out
+    // precedes the call which can pop.
     const fanout = screen.indexOf("await writeCreatePropertyValues(");
-    const back = screen.lastIndexOf("router.back();");
+    const exit = screen.indexOf("finishCreate();", fanout);
     expect(fanout).toBeGreaterThan(-1);
-    expect(back).toBeGreaterThan(fanout);
+    expect(exit).toBeGreaterThan(fanout);
+    const finish = screen.indexOf("const finishCreate = useCallback(");
+    const back = screen.indexOf("router.back();", finish);
+    expect(back).toBeGreaterThan(finish);
   });
 
   it("dismisses the modal BEFORE the partial-failure alert", () => {
     // The reverse order tears down the alert's host window in the same frame
-    // on Android. Scoped to the manual submit's success path.
+    // on Android. Scoped to the manual submit's success path. `finishCreate`
+    // is the dismissal now — it pops on the close branch and leaves the form
+    // mounted (already reset) on the keep-open branch, which is a live host
+    // for the alert either way.
     const start = screen.indexOf("const outcome = await writeCreatePropertyValues(");
     const end = screen.indexOf("} catch (err) {", start);
     const block = screen.slice(start, end);
-    const back = block.indexOf("router.back();");
+    const dismiss = block.indexOf("finishCreate();");
     const alert = block.indexOf('t("newIssue.propertiesPartialTitle")');
-    expect(back).toBeGreaterThan(-1);
+    expect(dismiss).toBeGreaterThan(-1);
     expect(alert).toBeGreaterThan(-1);
-    expect(back).toBeLessThan(alert);
+    expect(dismiss).toBeLessThan(alert);
   });
 
   it("reports partial failure separately from a failed create", () => {

@@ -59,11 +59,17 @@ import { duplicateCreatePrompt } from "@/lib/create-failure-prompts";
 import { projectDetailOptions } from "@/data/queries/projects";
 import { useNewIssueDraftStore } from "@/data/stores/new-issue-draft-store";
 import {
+  useNewIssueKeepOpen,
+  useNewIssueKeepOpenStore,
+} from "@/data/stores/new-issue-keep-open-store";
+import {
   useNewIssueStagePick,
   useNewIssueStagePickStore,
 } from "@/data/stores/new-issue-stage-pick-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
+import { useColorScheme } from "@/lib/use-color-scheme";
+import { THEME } from "@/lib/theme";
 import { selectedActorLabel } from "@/lib/actor-name-state";
 import { useMentionInput, type UseMentionInputReturn } from "@/lib/use-mention-input";
 import {
@@ -280,9 +286,19 @@ export default function NewIssueModal() {
   const projectSetter = useNewIssueDraftStore((s) => s.setProject);
   const parentProjectIdValue = parentProjectId ? String(parentProjectId) : null;
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  // "Create another" — a persisted per-workspace preference (web
+  // `quick-create-store.ts` `keepOpen`). When on, a successful submit resets
+  // the form for the next issue instead of closing it.
+  const keepOpen = useNewIssueKeepOpen(wsId);
+  const resetForNextIssue = useNewIssueDraftStore((s) => s.resetForNextIssue);
+  // The parent rides the route, not the draft, so a batch reset clears it
+  // through the existing `setParentCleared` flag below — web clears it in its
+  // own `resetForNextIssue` (`:401`) for the same reason: a batch is not a
+  // sub-task queue.
   // The duplicate prompt's "View issue" button builds `/[workspace]/issue/[id]`
   // from the SLUG, not the id — see `lib/duplicate-issue-error.ts`.
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
+  const { colorScheme } = useColorScheme();
   const { data: parentProject } = useQuery(
     projectDetailOptions(wsId, parentProjectIdValue ?? ""),
   );
@@ -329,6 +345,48 @@ export default function NewIssueModal() {
           uploadsPending,
         });
 
+  /**
+   * Reset the form for the NEXT issue in a "create another" batch — web's
+   * `resetForNextIssue` (`packages/views/modals/create-issue.tsx:391-424`).
+   * The form stays mounted; the caller decides that, not this function.
+   *
+   * Ordering matters: the draft reset runs on a chained promise that writes
+   * through to the persisted file, so doing it after the bodies are blanked
+   * would let a queued write resurrect the submitted issue into the next form.
+   */
+  const resetForNextIssueLocally = useCallback(() => {
+    resetForNextIssue();
+    // The description / prompt mention inputs own their own state (the store
+    // only mirrors them), so a form that stays open needs them cleared too or
+    // the next issue would open carrying the previous body.
+    description.setText("");
+    promptInput.setText("");
+    // The parent rides the route; a batch has no shared parent (web `:401`).
+    setParentCleared(true);
+    // Stage is relative to the parent that was just dropped, and the pick
+    // store is module-level — leaving a stale pick here is the exact bug
+    // MYS-2255 fixed, reintroduced through the keep-open path.
+    useNewIssueStagePickStore.getState().reset();
+    // Uploaded attachments belonged to the issue just created; their ids are
+    // already spent on that issue's payload.
+    setUploadedAttachmentIds([]);
+  }, [description, promptInput, resetForNextIssue]);
+
+  /**
+   * Leave the form after a successful create — web's
+   * `if (keepOpen) resetForNextIssue(); else onClose();`
+   * (`packages/views/modals/create-issue.tsx:675-679`). Both branches consume
+   * the draft; only the close branch pops.
+   */
+  const finishCreate = useCallback(() => {
+    if (keepOpen) {
+      resetForNextIssueLocally();
+      return;
+    }
+    resetDraft();
+    router.back();
+  }, [keepOpen, resetForNextIssueLocally, resetDraft]);
+
   const submitAgentMode = useCallback(async (): Promise<boolean> => {
     // Serialize rather than read the raw body: the prompt can carry @mentions
     // now that it is a real editor, and the agent should receive the canonical
@@ -347,12 +405,15 @@ export default function NewIssueModal() {
         ...(parent ? { parent_issue_id: parent } : {}),
         ...attachmentIdsPayload(uploadedAttachmentIds),
       });
-      // The issue exists, so the draft is spent — clear it before leaving, or
-      // the next open would restore the issue the user just filed. Web runs a
-      // fuller "untouched draft" check here because its dialog can stay open
-      // across a submit and accept more typing; this form always closes, so
-      // clearing unconditionally is the same outcome.
-      resetDraft();
+      // The issue exists, so the draft is spent. Two exits, matching web
+      // (`create-issue.tsx:675-679`) and the manual path below:
+      //  - "create another" on → reset for the NEXT issue and stay;
+      //  - off → plain reset + pop, as before.
+      //
+      // The confirmation is raised FIRST, while `agentActor` is still in
+      // scope as the actor this submit actually used: `finishCreate` clears
+      // the draft, and reading the name after it would name the next issue's
+      // (empty) assignee instead of the one that was just handed the work.
       Alert.alert(
         t("newIssue.agentSentTitle"),
         t("newIssue.agentSentBody", {
@@ -372,7 +433,10 @@ export default function NewIssueModal() {
           }),
         }),
       );
-      router.back();
+      // finishCreate owns both exits (stay-and-reset vs. reset-and-pop) so
+      // the two submit paths cannot disagree about what "create another"
+      // means. The alert above already named the actor this create used.
+      finishCreate();
       return true;
     } catch (err) {
       Alert.alert(
@@ -381,7 +445,7 @@ export default function NewIssueModal() {
       );
       return false;
     }
-  }, [promptInput, agentActor, priority, dueDate, project, parent, uploadedAttachmentIds, quickCreate, resolveActorName, t, resetDraft]);
+  }, [promptInput, agentActor, priority, dueDate, project, parent, uploadedAttachmentIds, quickCreate, resolveActorName, t, finishCreate]);
 
   const submitManualMode = useCallback(async () => {
     const trimmedTitle = title.trim();
@@ -423,16 +487,17 @@ export default function NewIssueModal() {
         created.id,
         pendingPropertyValues,
       );
-      // Spent draft — see submitAgentMode. Cleared before `router.back()` so
-      // the unmount never races the write.
-      resetDraft();
       // Dismiss the modal BEFORE raising the partial-failure notice. The
       // reverse order puts a native dialog on screen and then tears its host
       // screen down in the same frame, which on Android leaves the alert
       // owned by a dying window. Navigating first also matches what the user
       // sees on the happy path — the form closes either way, and only then
       // does the app say what did not save.
-      router.back();
+      //
+      // With "create another" on, `finishCreate` does NOT navigate — the form
+      // is meant to stay. The alert below then lands on the live form, which
+      // is the correct host for "created, but N properties failed".
+      finishCreate();
       if (outcome.failed.length > 0) {
         // The issue EXISTS. Saying "creation failed" here would send the user
         // back to a form that would produce a duplicate, so the two outcomes
@@ -493,7 +558,11 @@ export default function NewIssueModal() {
     uploadedAttachmentIds,
     propertyValues,
     createIssue,
-    resetDraft,
+    // Iteration 262: the success path goes through `finishCreate`, which owns
+    // the "create another" branch (and the `resetDraft` that used to live
+    // here). Omitting it would leave this callback capturing a stale
+    // `keepOpen` — the form would keep closing after the user ticked the box.
+    finishCreate,
     t,
     wsSlug,
   ]);
@@ -635,6 +704,40 @@ export default function NewIssueModal() {
               disabled={isSubmitting}
             />
           )}
+
+          {/* "Create another" — web's `create_issue.create_another` switch
+              (`create-issue.tsx:1275-1278`). A standing per-workspace
+              preference, not a per-submit choice: tick it and every create
+              keeps the form open until it is unticked. Placed at the end of
+              the form, below both modes' bodies, because it applies to
+              whichever mode submits. */}
+          <Pressable
+            onPress={() => {
+              if (wsId) {
+                useNewIssueKeepOpenStore
+                  .getState()
+                  .setKeepOpen(wsId, !keepOpen);
+              }
+            }}
+            disabled={isSubmitting || !wsId}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: keepOpen, disabled: isSubmitting }}
+            accessibilityLabel={t("newIssue.createAnother")}
+            className="flex-row items-center gap-2 pt-1 active:opacity-70"
+          >
+            <Ionicons
+              name={keepOpen ? "checkbox" : "square-outline"}
+              size={18}
+              color={
+                keepOpen
+                  ? THEME[colorScheme].primary
+                  : MOBILE_PLACEHOLDER_COLOR
+              }
+            />
+            <Text className="text-body text-muted-foreground">
+              {t("newIssue.createAnother")}
+            </Text>
+          </Pressable>
         </ScrollView>
 
         {/* Mention suggestions float above the keyboard in BOTH modes — the

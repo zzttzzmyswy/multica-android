@@ -311,8 +311,11 @@ export function ProjectIssueSurface({
   // The chips bar works against the open view's baseline: it shows only the
   // user's additions and a chip's removal falls back to the view's own
   // values (web filter-chips-bar semantics).
-  const { baseline: chipBaseline, resetDimension: resetChipDimension } =
-    useFilterChipBaseline(activeView?.query ?? null, useProjectIssuesViewStore);
+  const {
+    baseline: chipBaseline,
+    resetDimension: resetChipDimension,
+    clearAllChips,
+  } = useFilterChipBaseline(activeView?.query ?? null, useProjectIssuesViewStore);
   const snapshotSource = useMemo(
     () => ({
       ...filterState,
@@ -581,6 +584,10 @@ export function ProjectIssueSurface({
           onClearDate={() =>
             useProjectIssuesViewStore.getState().setDateFilter(null)
           }
+          onClearAll={() => {
+            clearAllChips();
+            useProjectIssuesViewStore.getState().setDateFilter(null);
+          }}
         />
       ) : null}
       {isLoading ? (
