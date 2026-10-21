@@ -17,7 +17,7 @@ import {
 } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useQuery } from "@tanstack/react-query";
-import type { QuickActionAssigneeType } from "@multica/core/types";
+import type { QuickActionBoundAssigneeType } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { agentListOptions } from "@/data/queries/agents";
@@ -30,8 +30,17 @@ import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
+/**
+ * A concrete binding, or `null` for "no target".
+ *
+ * `null` is a VALUE here, not an absence: the quick-action form holds it while
+ * the author has chosen to post the prompt without mentioning anyone, and saves
+ * it as `assignee_type: ""` / `assignee_id: ""`. Modelling it as a null rather
+ * than a `{type: "", id: ""}` object keeps every consumer's call to
+ * `ActorAvatar` and to the name directory honest — those take a real id.
+ */
 export type QuickActionAssignee = {
-  type: QuickActionAssigneeType;
+  type: QuickActionBoundAssigneeType;
   id: string;
 } | null;
 
@@ -43,7 +52,13 @@ export function AgentSquadPickerModal({
 }: {
   visible: boolean;
   value: QuickActionAssignee;
-  onChange: (next: Exclude<QuickActionAssignee, null>) => void;
+  /**
+   * The sheet can clear the selection, so `null` is part of the contract.
+   * Typing it as `Exclude<..., null>` (as this did) made "no target"
+   * unrepresentable at the call site — the author could open the picker and
+   * pick a target, but never un-pick one.
+   */
+  onChange: (next: QuickActionAssignee) => void;
   onClose: () => void;
 }) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
@@ -86,7 +101,7 @@ export function AgentSquadPickerModal({
     ];
   }, [agents, squads, query, value]);
 
-  const isSelected = (type: QuickActionAssigneeType, id: string) =>
+  const isSelected = (type: QuickActionBoundAssigneeType, id: string) =>
     value?.type === type && value?.id === id;
 
   return (
@@ -125,6 +140,41 @@ export function AgentSquadPickerModal({
               keyExtractor={(item) => `${item.kind}-${item.id}`}
               contentContainerClassName="pb-4"
               keyboardShouldPersistTaps="handled"
+              // The "no target" row is a HEADER, not first in `data`: web
+              // renders it above the grouped lists and independently of the
+              // search (`agent-picker.tsx`, `emptyOption` before both
+              // sections), so typing a query that matches nothing must not
+              // take away the one way to clear the binding.
+              ListHeaderComponent={
+                <Pressable
+                  onPress={() => {
+                    onChange(null);
+                    onClose();
+                  }}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: value === null }}
+                  className="flex-row items-center gap-3 border-b border-border px-4 py-3 active:bg-secondary"
+                >
+                  <View className="size-9 items-center justify-center rounded-full bg-secondary">
+                    <Ionicons
+                      name="remove-circle-outline"
+                      size={18}
+                      color={theme.mutedForeground}
+                    />
+                  </View>
+                  <View className="flex-1 min-w-0">
+                    <Text className="text-body font-medium text-foreground">
+                      {t("quickActions.noTarget")}
+                    </Text>
+                    <Text className="text-caption text-muted-foreground">
+                      {t("quickActions.noTargetHint")}
+                    </Text>
+                  </View>
+                  {value === null ? (
+                    <Ionicons name="checkmark" size={18} color={theme.primary} />
+                  ) : null}
+                </Pressable>
+              }
               renderItem={({ item }) => {
                 const disabled =
                   item.kind === "agent" && !item.runtimeBound;

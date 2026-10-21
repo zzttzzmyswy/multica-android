@@ -21,7 +21,18 @@
  */
 export type QuickActionVisibility = "private" | "public";
 
-export type QuickActionAssigneeType = "agent" | "squad";
+/**
+ * What a quick action calls when it runs.
+ *
+ * The empty string is a real, supported value, not a missing one: it means
+ * "post the prompt without mentioning anybody", so the action is a prepared
+ * comment rather than a dispatch. The server accepts `("", "")` as a valid
+ * binding and distinguishes it from an orphaned one — `resolveQuickActionTarget`
+ * returns `Found: true` for it, so `target_missing` stays false.
+ */
+export type QuickActionAssigneeType = "agent" | "squad" | "";
+/** The two values that name a real target — never the empty string. */
+export type QuickActionBoundAssigneeType = Exclude<QuickActionAssigneeType, "">;
 
 export type QuickActionStatus = "active" | "archived";
 
@@ -56,8 +67,13 @@ export interface QuickAction {
 export interface CreateQuickActionRequest {
   name: string;
   description?: string;
-  assignee_type: QuickActionAssigneeType;
-  assignee_id: string;
+  /**
+   * Both optional, and omitted together for a targetless action — or sent as
+   * `("", "")`, which the server treats identically. Web sends the empty pair
+   * (`quick-actions-tab.tsx`: `assignee_type: form.assigneeId ? form.assigneeType : ""`).
+   */
+  assignee_type?: QuickActionAssigneeType;
+  assignee_id?: string;
   prompt: string;
   visibility?: QuickActionVisibility;
 }

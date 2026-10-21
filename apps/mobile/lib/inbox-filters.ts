@@ -38,7 +38,19 @@ export interface InboxFilters {
   /** Actor keys — see `inboxActorKey`. */
   readonly actors: readonly string[];
   readonly unreadOnly: boolean;
+  /** Only issues no agent is running or queued on. Active inbox only. */
+  readonly idleOnly: boolean;
 }
+
+/**
+ * The dimensions the server-filtered archive understands.
+ *
+ * It has no idle dimension — the backend answers no such parameter — so
+ * `idleOnly` never reaches its endpoints or its query keys. Typing that
+ * boundary is what keeps a selection made in the main inbox from silently
+ * narrowing a paged request that cannot honour it.
+ */
+export type ArchivedInboxFilters = Omit<InboxFilters, "idleOnly">;
 
 /**
  * Stable identity for "who this notification came from", used as the value of
@@ -72,6 +84,7 @@ export const EMPTY_INBOX_FILTERS: InboxFilters = Object.freeze({
   priorities: Object.freeze([]) as readonly IssuePriority[],
   actors: Object.freeze([]) as readonly string[],
   unreadOnly: false,
+  idleOnly: false,
 });
 
 /**
@@ -100,8 +113,17 @@ export const INBOX_PRIORITY_FILTER_ORDER: readonly IssuePriority[] = [
  * the user toggles a second box. The server sorts its params the same way
  * (web's `archivedInboxParams`), so this is the client agreeing with the wire
  * format rather than inventing one.
+ *
+ * The four archived dimensions are listed EXPLICITLY, and the return type is
+ * `ArchivedInboxFilters`. That is the whole point of the type: `idleOnly`
+ * carried in from the active inbox must not reach the archive's key or its
+ * request, and a spread (`{...filters}`) would have carried it. Web does the
+ * same thing by hand in `packages/core/inbox/queries.ts`'s
+ * `normalizedInboxFilters` — a dropped field is the bug the shape prevents.
  */
-export function normalizeInboxFilters(filters: InboxFilters): InboxFilters {
+export function normalizeInboxFilters(
+  filters: InboxFilters | ArchivedInboxFilters,
+): ArchivedInboxFilters {
   return {
     statuses: [...filters.statuses].sort(),
     priorities: [...filters.priorities].sort(),
@@ -121,8 +143,47 @@ export function inboxFilterCount(filters: InboxFilters): number {
     filters.statuses.length +
     filters.priorities.length +
     filters.actors.length +
-    (filters.unreadOnly ? 1 : 0)
+    (filters.unreadOnly ? 1 : 0) +
+    (filters.idleOnly ? 1 : 0)
   );
+}
+
+const EMPTY_ISSUE_IDS: ReadonlySet<string> = new Set();
+
+/**
+ * Page state `filterInboxItems` needs beyond the selected filters.
+ *
+ * `activeIssueIds` is `undefined` when the task snapshot has not resolved yet,
+ * and that is NOT the same as an empty set: see `filterInboxItems`.
+ */
+export interface InboxFilterContext {
+  /** Issues an agent is running or queued on. Read only by `idleOnly`. */
+  readonly activeIssueIds?: ReadonlySet<string>;
+  /**
+   * Group key (`issue_id ?? id`) of the notification whose detail is open.
+   * Opening an unread notification marks it read, and replying from it can
+   * start an agent on its issue — either would otherwise delete the row the
+   * user is working in from under the detail pane. Each pin crosses only its
+   * own dimension.
+   */
+  readonly pinnedUnreadKey?: string | null;
+  readonly pinnedIdleKey?: string | null;
+}
+
+/**
+ * The archive is filtered server-side and the backend has no idle dimension,
+ * so a selection kept from the active inbox stays dormant there instead of
+ * narrowing whichever archived pages happen to be loaded.
+ *
+ * The mobile counterpart of web's `inboxFiltersForArchive`
+ * (`packages/core/inbox/filter-store.ts`). The archived screen reaches the
+ * same conclusion by passing `filters` (never `mainFilters`) to the sheet and
+ * the paged query — this function exists for the count that the sheet's Clear
+ * gate reads, so that gate cannot go on advertising a dimension the list
+ * cannot show.
+ */
+export function inboxFiltersForArchive(filters: InboxFilters): InboxFilters {
+  return filters.idleOnly ? { ...filters, idleOnly: false } : filters;
 }
 
 /**
@@ -140,10 +201,30 @@ export function inboxFilterCount(filters: InboxFilters): number {
  * A row whose dimension value is null (an issue-less notification has no
  * status and no priority) never matches a selection on that dimension — it is
  * excluded, not passed through. `unreadOnly` reads the rendered row's `read`.
+ *
+ * `idleOnly` asks about the ISSUE, like status and priority, so a row without
+ * one never matches: a plain notification (a failure alert, an unconfirmed
+ * quick-create) is not "an issue nobody is working on", and letting it through
+ * would fill a list that promises "no agents working" with rows that are not
+ * about work at all. `activeIssueIds` is the running-OR-QUEUED set, matching
+ * web's `new Set(activityByIssueId.keys())` (`inbox-page.tsx`).
+ *
+ * **An unresolved snapshot must not read as "everybody is idle".** Callers
+ * pass `activeIssueIds: undefined` while the task snapshot is loading, and an
+ * empty set is what an unresolved one would degrade to. With the filter on,
+ * that would show the entire inbox for a moment and then throw most of it
+ * away — the same flash `applyIssueFilters` avoids by failing closed. So an
+ * undefined set makes the idle dimension match nothing, and the list shows its
+ * empty/loading state rather than a lie.
  */
 export function filterInboxItems(
   items: InboxItem[],
   filters: InboxFilters,
+  {
+    activeIssueIds,
+    pinnedUnreadKey = null,
+    pinnedIdleKey = null,
+  }: InboxFilterContext = {},
 ): InboxItem[] {
   if (isEmptyInboxFilters(filters)) return items;
 
@@ -152,15 +233,26 @@ export function filterInboxItems(
   const actors = new Set<string>(filters.actors);
   return items.filter((item) => {
     const actor = inboxActorKey(item);
-    return (
+    const matchesOtherDimensions =
       (statuses.size === 0 ||
         (item.issue_status != null && statuses.has(item.issue_status))) &&
       (priorities.size === 0 ||
         (item.issue_priority != null &&
           priorities.has(item.issue_priority))) &&
-      (actors.size === 0 || (actor != null && actors.has(actor))) &&
-      (!filters.unreadOnly || item.read !== true)
-    );
+      (actors.size === 0 || (actor != null && actors.has(actor)));
+    if (!matchesOtherDimensions) return false;
+    const key = item.issue_id ?? item.id;
+    const matchesUnread =
+      !filters.unreadOnly ||
+      item.read !== true ||
+      (pinnedUnreadKey != null && key === pinnedUnreadKey);
+    const matchesIdle =
+      !filters.idleOnly ||
+      (item.issue_id != null &&
+        activeIssueIds != null &&
+        !activeIssueIds.has(item.issue_id)) ||
+      (pinnedIdleKey != null && key === pinnedIdleKey);
+    return matchesUnread && matchesIdle;
   });
 }
 
@@ -204,10 +296,10 @@ export function inboxPriorityFilterSupport(
  * the store still holds the original — so a backend that starts reporting the
  * field brings the selection back rather than having lost it.
  */
-export function inboxFiltersForPrioritySupport(
-  filters: InboxFilters,
+export function inboxFiltersForPrioritySupport<T extends InboxFilters | ArchivedInboxFilters>(
+  filters: T,
   support: InboxPriorityFilterSupport,
-): InboxFilters {
+): T {
   if (support === "supported" || filters.priorities.length === 0) {
     return filters;
   }
@@ -233,6 +325,7 @@ interface InboxFilterState {
   togglePriorityFilter: (wsId: string, priority: IssuePriority) => void;
   toggleActorFilter: (wsId: string, actor: string) => void;
   toggleUnreadOnly: (wsId: string) => void;
+  toggleIdleOnly: (wsId: string) => void;
   clearFilters: (wsId: string) => void;
 }
 
@@ -287,6 +380,16 @@ export const useInboxFilterStore = create<InboxFilterState>()((set) => ({
         filtersByWorkspace: {
           ...state.filtersByWorkspace,
           [wsId]: { ...current, unreadOnly: !current.unreadOnly },
+        },
+      };
+    }),
+  toggleIdleOnly: (wsId) =>
+    set((state) => {
+      const current = state.filtersByWorkspace[wsId] ?? EMPTY_INBOX_FILTERS;
+      return {
+        filtersByWorkspace: {
+          ...state.filtersByWorkspace,
+          [wsId]: { ...current, idleOnly: !current.idleOnly },
         },
       };
     }),

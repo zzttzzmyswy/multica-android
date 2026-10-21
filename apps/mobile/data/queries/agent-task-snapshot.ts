@@ -2,7 +2,10 @@ import { queryOptions, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { api } from "@/data/api";
 import { useWorkspaceStore } from "@/data/workspace-store";
-import { deriveRunningIssueIds } from "@/lib/running-issues";
+import {
+  deriveIssueSurfaceActivity,
+  deriveRunningIssueIds,
+} from "@/lib/running-issues";
 
 // Workspace agent task snapshot — every active task plus each agent's most
 // recent terminal task. Feeds the workload dimension of presence. Mobile
@@ -33,6 +36,34 @@ export function useRunningIssueIds(): ReadonlySet<string> | undefined {
   const { data } = useQuery(agentTaskSnapshotOptions(wsId));
   return useMemo(
     () => (data === undefined ? undefined : deriveRunningIssueIds(data)),
+    [data],
+  );
+}
+
+/**
+ * The RUNNING-OR-QUEUED projection — every issue an agent has a non-terminal
+ * task on, read by the inbox's "no agents working" dimension.
+ *
+ * Deliberately not `useRunningIssueIds` above. That one answers the issue
+ * list's "agents working right now" question, which excludes queued /
+ * dispatched / waiting tasks on purpose. The inbox dimension asks something
+ * else — "is anyone going to work on this?" — and web answers it with the full
+ * `activityByIssueId` key set (`inbox-page.tsx`), queued included. Sharing the
+ * running-only set would make an issue whose task was just dispatched read as
+ * idle on the phone and busy on the web, for the same notification.
+ *
+ * `undefined` while the snapshot is unresolved, for the same reason as above:
+ * `filterInboxItems` fails closed on an unresolved set rather than treating
+ * it as "nobody is working".
+ */
+export function useIssueActivityIssueIds(): ReadonlySet<string> | undefined {
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const { data } = useQuery(agentTaskSnapshotOptions(wsId));
+  return useMemo(
+    () =>
+      data === undefined
+        ? undefined
+        : new Set(deriveIssueSurfaceActivity(data).activityByIssueId.keys()),
     [data],
   );
 }

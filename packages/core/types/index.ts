@@ -121,6 +121,7 @@ export type {
   QuickAction,
   QuickActionVisibility,
   QuickActionAssigneeType,
+  QuickActionBoundAssigneeType,
   QuickActionStatus,
   CreateQuickActionRequest,
   UpdateQuickActionRequest,

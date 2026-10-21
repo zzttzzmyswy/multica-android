@@ -11,3 +11,12 @@
  * the path the app actually uses.
  */
 export { deriveRunningIssueIds } from "@multica/core/issues/surface/issue-activity";
+
+/**
+ * The FULL projection — running and queued alike — for surfaces that ask "is
+ * anyone going to work on this", not "is anyone on it now". The inbox's idle
+ * dimension is the one caller: web reads it off `activityByIssueId`'s key set,
+ * queued included, so sharing the running-only projection above would make a
+ * just-dispatched issue read as idle on the phone.
+ */
+export { deriveIssueSurfaceActivity } from "@multica/core/issues/surface/issue-activity";

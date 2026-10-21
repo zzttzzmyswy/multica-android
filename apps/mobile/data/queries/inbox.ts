@@ -9,6 +9,7 @@ import type { ArchivedInboxPage, InboxItem } from "@multica/core/types";
 import { api } from "@/data/api";
 import {
   normalizeInboxFilters,
+  type ArchivedInboxFilters,
   type InboxFilters,
 } from "@/lib/inbox-filters";
 
@@ -117,7 +118,7 @@ export const archivedInboxListOptions = (wsId: string | null) =>
  */
 export const archivedInboxPagesOptions = (
   wsId: string | null,
-  filters: InboxFilters,
+  filters: ArchivedInboxFilters,
 ) =>
   infiniteQueryOptions({
     queryKey: [...inboxKeys.pages(wsId), normalizeInboxFilters(filters)],
@@ -137,7 +138,7 @@ export const archivedInboxPagesOptions = (
  */
 export const archivedInboxFacetsOptions = (
   wsId: string | null,
-  filters: InboxFilters,
+  filters: ArchivedInboxFilters,
 ) =>
   queryOptions({
     queryKey: [...inboxKeys.archivedFacets(wsId), normalizeInboxFilters(filters)],

@@ -33,6 +33,7 @@ import { quickActionListOptions } from "@/data/queries/quick-actions";
 import { useRunQuickAction } from "@/data/mutations/quick-actions";
 import { quickActionOutcomeMessage } from "@/lib/quick-action-outcome";
 import { isInvocationBlocked } from "@/lib/run-retry";
+import { quickActionShowsRunsAs } from "@/lib/quick-action-target";
 
 export function QuickActionsSection({ issueId }: { issueId: string }) {
   const { t } = useTranslation();
@@ -158,9 +159,13 @@ function QuickActionRow({
       <Text numberOfLines={1} className="min-w-0 flex-1 text-body">
         {action.name}
       </Text>
-      <Text className="shrink-0 text-micro text-muted-foreground">
-        {t("issue.qa.runsAs", { name: targetName })}
-      </Text>
+      {/* No "runs as" line for a targetless action — see
+          `quickActionShowsRunsAs`. */}
+      {quickActionShowsRunsAs(action) ? (
+        <Text className="shrink-0 text-micro text-muted-foreground">
+          {t("issue.qa.runsAs", { name: targetName })}
+        </Text>
+      ) : null}
     </Pressable>
   );
 }

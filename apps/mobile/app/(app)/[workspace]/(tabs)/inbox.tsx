@@ -34,6 +34,7 @@ import {
   useMarkInboxUnread,
   useUnarchiveInbox,
 } from "@/data/mutations/inbox";
+import { useIssueActivityIssueIds as useActivityIssueIds } from "@/data/queries/agent-task-snapshot";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { ActionSheet } from "@/lib/action-sheet";
@@ -61,6 +62,7 @@ import {
   EMPTY_INBOX_FILTERS as EMPTY_FILTERS,
   filterInboxItems,
   inboxFilterCount,
+  inboxFiltersForArchive,
   inboxFiltersForPrioritySupport,
   inboxPriorityFilterSupport,
   useInboxFilterStore,
@@ -101,6 +103,7 @@ export default function Inbox() {
   const togglePriorityFilter = useInboxFilterStore((s) => s.togglePriorityFilter);
   const toggleActorFilter = useInboxFilterStore((s) => s.toggleActorFilter);
   const toggleUnreadOnly = useInboxFilterStore((s) => s.toggleUnreadOnly);
+  const toggleIdleOnly = useInboxFilterStore((s) => s.toggleIdleOnly);
 
   // -- Main list's filter layer -------------------------------------------
   //
@@ -130,20 +133,47 @@ export default function Inbox() {
     [filters, mainPrioritySupport],
   );
   const mainActiveFilterCount = inboxFilterCount(mainFilters);
+  // The issues an agent has in flight — running OR queued — for the "no agents
+  // working" dimension. `undefined` until the task snapshot resolves, which the
+  // predicate reads as "cannot answer yet" rather than "everybody is idle"
+  // (that distinction is the difference between a correct list and the whole
+  // inbox flashing past on every cold open).
+  const activeIssueIds = useActivityIssueIds();
+  // Only an active idle selection reads the snapshot, so task churn leaves the
+  // list alone while the dimension is off. Web narrows the same way
+  // (`inbox-page.tsx:174`, `idleFilterIssueIds`).
+  const idleFilterIssueIds = mainFilters.idleOnly ? activeIssueIds : undefined;
+  const filterContext = useMemo(
+    () => ({ activeIssueIds: idleFilterIssueIds }),
+    [idleFilterIssueIds],
+  );
   // The list the main view DRAWS. Filtering the deduplicated rows rather than
   // the raw response keeps the two in step: dedup drops an issue's older
   // notifications in favour of its newest, and filtering first would let a
   // row that dedup was about to discard decide whether the surviving row
   // matches.
   const visibleData = useMemo(
-    () => filterInboxItems(data, mainFilters),
-    [data, mainFilters],
+    () => filterInboxItems(data, mainFilters, filterContext),
+    [data, mainFilters, filterContext],
   );
+  // The idle dimension is ON but the snapshot has not answered yet. This is
+  // neither "everyone is idle" nor "nothing matches": filtering now would
+  // empty the list over a question still in flight, and pretending it answered
+  // "nobody is working" would show every row. The screen renders its loading
+  // state for the moment it lasts — the same treatment the inbox query itself
+  // gets while it is pending.
+  const idleFilterPending =
+    mainFilters.idleOnly && activeIssueIds === undefined;
   // Counts over the same list, each respecting the other dimensions and
   // ignoring its own — web's main-view rule (`inbox-filter-menu.tsx:139-176`).
+  //
+  // The UNGATED set, unlike the list above: the idle count has to be available
+  // before the dimension is switched on, or the row that offers it would carry
+  // no number until it was already in use. Web reads the same full set for the
+  // count (`:170-173`) while gating only the list (`:174`).
   const mainFacets = useMemo(
-    () => inboxLocalFacets(data, mainFilters),
-    [data, mainFilters],
+    () => inboxLocalFacets(data, mainFilters, { activeIssueIds }),
+    [data, mainFilters, activeIssueIds],
   );
   const mainEmptyReason = mainInboxEmptyReason({
     visibleCount: visibleData.length,
@@ -265,11 +295,22 @@ export default function Inbox() {
   // its place on the edges: an optimistic unarchive lands here before the
   // invalidate refetches, and a filter toggled while a page is in flight must
   // not leave the now-excluded rows on screen.
-  const archivedData = useMemo(
-    () => filterInboxItems(rawArchivedItems, filters),
-    [rawArchivedItems, filters],
+  //
+  // `archivedFilters` is the view's effective selection: `inboxFiltersForArchive`
+  // blanks the idle dimension, because the archive's list cannot honour it —
+  // the store keeps the user's choice for the main inbox, but counting it here
+  // would put a badge on a trigger whose list is not narrowed and enable Clear
+  // for a selection this view cannot show. Web draws the same line with
+  // `effectiveFilters` (`inbox-page.tsx:166-170`).
+  const archivedFilters = useMemo(
+    () => inboxFiltersForArchive(filters),
+    [filters],
   );
-  const activeFilterCount = inboxFilterCount(filters);
+  const archivedActiveFilterCount = inboxFilterCount(archivedFilters);
+  const archivedData = useMemo(
+    () => filterInboxItems(rawArchivedItems, archivedFilters),
+    [rawArchivedItems, archivedFilters],
+  );
   // The archive's real size — the facet total when the facets answered, and a
   // lower bound from the capped list when they could not (see
   // `archivedEntryCount`). Either way it is the archive, not the rows fetched
@@ -286,7 +327,7 @@ export default function Inbox() {
   });
   const emptyReason = archivedEmptyReason({
     visibleCount: archivedData.length,
-    activeFilterCount,
+    activeFilterCount: archivedActiveFilterCount,
   });
 
   // One entry point for "fetch the next page", shared by the footer's press
@@ -524,7 +565,7 @@ export default function Inbox() {
               em dash stands in — inventing a number from the fetched pages
               would be the very conflation this iteration removes. */}
           <Text className="text-body text-muted-foreground tabular-nums">
-            {activeFilterCount > 0
+            {archivedActiveFilterCount > 0
               ? archivedData.length
               : archivedTotal > 0
                 ? archivedTotal
@@ -535,8 +576,10 @@ export default function Inbox() {
             hitSlop={12}
             accessibilityRole="button"
             accessibilityLabel={
-              activeFilterCount > 0
-                ? t("inbox.archivedFiltersActive", { count: activeFilterCount })
+              archivedActiveFilterCount > 0
+                ? t("inbox.archivedFiltersActive", {
+                    count: archivedActiveFilterCount,
+                  })
                 : t("inbox.archivedFilters")
             }
             className="flex-row items-center gap-1 p-0.5"
@@ -545,7 +588,7 @@ export default function Inbox() {
               name="filter-outline"
               size={18}
               color={
-                activeFilterCount > 0
+                archivedActiveFilterCount > 0
                   ? THEME[colorScheme].primary
                   : THEME[colorScheme].mutedForeground
               }
@@ -553,9 +596,9 @@ export default function Inbox() {
             {/* The count beside the glyph, so an active filter is visible
                 without opening the sheet — web puts the same number on its
                 trigger (`inbox-filter-menu.tsx`). */}
-            {activeFilterCount > 0 ? (
+            {archivedActiveFilterCount > 0 ? (
               <Text className="text-caption font-medium text-primary tabular-nums">
-                {activeFilterCount}
+                {archivedActiveFilterCount}
               </Text>
             ) : null}
           </Pressable>
@@ -571,7 +614,8 @@ export default function Inbox() {
           facetsError={facetsError}
           onRetryFacets={() => void refetchFacets()}
           prioritySupport={prioritySupport}
-          activeCount={activeFilterCount}
+          archived
+          activeCount={archivedActiveFilterCount}
           onToggleStatus={(status) => wsId && toggleStatusFilter(wsId, status)}
           onTogglePriority={(priority) =>
             wsId && togglePriorityFilter(wsId, priority)
@@ -722,6 +766,7 @@ export default function Inbox() {
         facets={mainFacets}
         facetsLoading={false}
         prioritySupport={mainPrioritySupport}
+        archived={false}
         activeCount={mainActiveFilterCount}
         onToggleStatus={(status) => wsId && toggleStatusFilter(wsId, status)}
         onTogglePriority={(priority) =>
@@ -729,9 +774,15 @@ export default function Inbox() {
         }
         onToggleActor={(actor) => wsId && toggleActorFilter(wsId, actor)}
         onToggleUnreadOnly={() => wsId && toggleUnreadOnly(wsId)}
+        onToggleIdleOnly={() => wsId && toggleIdleOnly(wsId)}
         onClear={() => wsId && clearFilters(wsId)}
       />
-      {isLoading ? (
+      {isLoading || idleFilterPending ? (
+        // `idleFilterPending` rides the same skeleton as the inbox query
+        // itself: an idle selection whose task snapshot has not answered has
+        // no list to draw yet, and the two wrong answers (draw everything, or
+        // draw nothing and call it "no matches") are both worse than the
+        // loading state the user already understands.
         <InboxLoading />
       ) : error ? (
         <View className="px-4 gap-3 pt-4">

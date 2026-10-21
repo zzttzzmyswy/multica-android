@@ -520,7 +520,7 @@ import {
   clientIdentityHeaders,
   type ClientIdentitySource,
 } from "@/lib/client-identity";
-import type { InboxFilters } from "@/lib/inbox-filters";
+import type { ArchivedInboxFilters } from "@/lib/inbox-filters";
 import { createRequestId } from "@/lib/request-id";
 import { resolveAttachmentUrl } from "@/lib/attachment-url";
 import { sanitizeBasename } from "@/lib/attachment-download";
@@ -1157,7 +1157,7 @@ class ApiClient {
    * `statuses=` and no `statuses` mean the same thing server-side, but only
    * one of them is a stable, minimal URL.
    */
-  private archivedInboxParams(filters: InboxFilters): string {
+  private archivedInboxParams(filters: ArchivedInboxFilters): string {
     const params = new URLSearchParams();
     if (filters.statuses.length) {
       params.set("statuses", [...filters.statuses].sort().join(","));
@@ -1190,7 +1190,7 @@ class ApiClient {
    * the list's error state, which says so and offers a retry.
    */
   async listArchivedInboxPage(
-    filters: InboxFilters,
+    filters: ArchivedInboxFilters,
     options: {
       cursor?: string | null;
       signal?: AbortSignal;
@@ -1228,7 +1228,7 @@ class ApiClient {
    * archive is empty" rather than "the counts failed to load".
    */
   async getArchivedInboxFacets(
-    filters: InboxFilters,
+    filters: ArchivedInboxFilters,
     opts?: { signal?: AbortSignal },
   ): Promise<ArchivedInboxFacets> {
     const query = this.archivedInboxParams(filters);
