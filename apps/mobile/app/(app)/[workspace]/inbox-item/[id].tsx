@@ -20,13 +20,17 @@
  */
 import { View, ScrollView, ActivityIndicator } from "react-native";
 import { Stack, router, useLocalSearchParams } from "expo-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSyncExternalStore } from "react";
 import type { InboxItem } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { typeLabel } from "@/components/inbox/detail-label";
-import { inboxBucketOptions } from "@/data/queries/inbox";
+import {
+  archivedInboxLookupOptions,
+  inboxBucketOptions,
+} from "@/data/queries/inbox";
 import { useArchiveInbox, useUnarchiveInbox } from "@/data/mutations/inbox";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import {
@@ -38,9 +42,48 @@ import {
   inboxItemBuckets,
   inboxItemPhase,
   shouldFetchFallback,
+  shouldLookupArchivedItem,
 } from "@/lib/inbox-item-source";
 import { useTimeAgo } from "@/lib/time-ago";
 import { useTranslation } from "@/lib/i18n/react";
+
+/**
+ * The lookup's filter set is empty on purpose — see the call site. Declared at
+ * module scope so the query key holds a stable shape across renders: a fresh
+ * object literal would still serialize identically (the key is normalized),
+ * but an inline literal next to a `useQuery` reads as "this varies".
+ */
+const EMPTY_ARCHIVED_FILTERS = {
+  statuses: [] as const,
+  priorities: [] as const,
+  actors: [] as const,
+  unreadOnly: false,
+};
+
+/**
+ * True once the cache entry at `queryKey` is in the error state.
+ *
+ * Exists because this screen's lookup gate has to read the lookup's own
+ * failure while BUILDING that lookup — a query object cannot reference itself
+ * in its own initializer (TS7022/TS2448), and hard-coding the flag to `false`
+ * would re-arm a failing request on every render. Subscribing to the key
+ * instead breaks the cycle: the failure lands in the cache, this re-renders,
+ * and the next `enabled` evaluation sees it.
+ *
+ * `queryClient.getQueryCache()`'s notify manager already suppresses
+ * notifications while a render is in flight, so this cannot loop on its own
+ * subscription.
+ */
+function useQueryFailed(queryKey: readonly unknown[]): boolean {
+  const qc = useQueryClient();
+  return useSyncExternalStore(
+    (onChange) => qc.getQueryCache().subscribe(onChange),
+    () => qc.getQueryState(queryKey)?.status === "error",
+    // Server snapshot: this screen has no SSR pass, but supplying one keeps
+    // the hook total and matches how the rest of the app calls it.
+    () => false,
+  );
+}
 
 export default function InboxItemDetail() {
   const { t } = useTranslation();
@@ -72,29 +115,72 @@ export default function InboxItemDetail() {
   });
 
   const activeItem = primaryItem ?? findRow(fallbackQuery.data, id);
+
+  // Third read, for the case both lists miss. Neither is complete: the legacy
+  // archive endpoint caps at 200 GROUPS server-side (314 rows / 200 groups
+  // against 1,287 archived groups on this deployment) and the paged endpoint
+  // is read here only at page one. A notification past either bound is absent
+  // from both, which used to render as 「这条通知已不可用。」 — an absence
+  // asserted from reads that never covered it. `group_id` resolves it
+  // directly. See `shouldLookupArchivedItem` for the gates and the live
+  // evidence.
+  const lookupOptions = archivedInboxLookupOptions(
+    wsId,
+    id,
+    // Unfiltered: this screen has no filter UI, and the server's default (no
+    // dimensions set) matches what the two lists above return. Sending the
+    // inbox tab's live selection instead would make a deep link fail whenever
+    // the reader had a filter on in another tab.
+    EMPTY_ARCHIVED_FILTERS,
+  );
+  // Read BEFORE the query so the gate can see the lookup's own failure without
+  // the query object referring to itself (a self-referential initializer does
+  // not typecheck). React Query keeps an errored entry's state when `enabled`
+  // flips false, so this is what stops the gate re-arming on every render —
+  // and unlike a `useRef` latch it clears by itself when the entry does (a
+  // different notification, or the retry below), which is exactly when a retry
+  // IS wanted.
+  const lookupFailed = useQueryFailed(lookupOptions.queryKey);
+
+  const lookupQuery = useQuery({
+    ...lookupOptions,
+    enabled: shouldLookupArchivedItem({
+      workspaceReady: !!wsId,
+      hasItem: !!activeItem,
+      failed: primaryQuery.isError || fallbackQuery.isError,
+      lookupFailed,
+      notificationId: id,
+    }),
+  });
+
+  const lookedUpItem = lookupQuery.data?.items.find((row) => row.id === id);
+  const resolvedItem = activeItem ?? lookedUpItem;
   const phase = inboxItemPhase({
-    hasItem: !!activeItem,
+    hasItem: !!resolvedItem,
     workspaceReady: !!wsId,
-    fetching: primaryQuery.isFetching || fallbackQuery.isFetching,
+    fetching:
+      primaryQuery.isFetching ||
+      fallbackQuery.isFetching ||
+      lookupQuery.isFetching,
     // A failed list read is a third thing: not "still arriving", not "gone".
     // Without this the screen asserted the notification no longer existed.
-    failed: primaryQuery.isError || fallbackQuery.isError,
+    failed: primaryQuery.isError || fallbackQuery.isError || lookupQuery.isError,
   });
 
   const archive = useArchiveInbox();
   const unarchive = useUnarchiveInbox();
 
-  const editSeed = activeItem ? getQuickCreateEditSeed(activeItem) : null;
+  const editSeed = resolvedItem ? getQuickCreateEditSeed(resolvedItem) : null;
 
   const onToggleArchive = () => {
-    if (!activeItem) return;
+    if (!resolvedItem) return;
     const mutate =
       archiveMode === "archive" ? archive : unarchive;
-    mutate.mutate(activeItem.id, { onSuccess: () => router.back() });
+    mutate.mutate(resolvedItem.id, { onSuccess: () => router.back() });
   };
 
   const onEditAdvanced = () => {
-    if (!activeItem || !editSeed || !wsSlug) return;
+    if (!resolvedItem || !editSeed || !wsSlug) return;
     router.push({
       pathname: "/[workspace]/new-issue",
       params: {
@@ -132,7 +218,7 @@ export default function InboxItemDetail() {
     );
   }
 
-  if (!activeItem) {
+  if (!resolvedItem) {
     return (
       <View className="flex-1 items-center justify-center bg-background px-8 gap-2">
         <Text className="text-body text-muted-foreground text-center">
@@ -149,7 +235,7 @@ export default function InboxItemDetail() {
     <View className="flex-1 bg-background">
       <Stack.Screen
         options={{
-          title: typeLabel(t, activeItem.type),
+          title: typeLabel(t, resolvedItem.type),
           headerBackTitle: t("common.back"),
         }}
       />
@@ -159,17 +245,17 @@ export default function InboxItemDetail() {
         keyboardShouldPersistTaps="handled"
       >
         <Text className="text-title-lg font-semibold text-foreground leading-snug">
-          {getInboxDisplayTitle(activeItem)}
+          {getInboxDisplayTitle(resolvedItem)}
         </Text>
         <Text className="mt-1 text-body text-muted-foreground">
-          {typeLabel(t, activeItem.type)}
+          {typeLabel(t, resolvedItem.type)}
           {" · "}
-          {timeAgo(activeItem.created_at)}
+          {timeAgo(resolvedItem.created_at)}
         </Text>
 
-        {activeItem.body ? (
+        {resolvedItem.body ? (
           <Text className="mt-4 text-body leading-relaxed text-foreground">
-            {activeItem.body}
+            {resolvedItem.body}
           </Text>
         ) : null}
 

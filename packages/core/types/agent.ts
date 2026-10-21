@@ -283,10 +283,19 @@ export interface AgentTask {
   // because another task currently owns the same on-disk path lock.
   // Treated as an active (non-terminal) state alongside queued/dispatched/
   // running by every consumer that buckets tasks into "active vs done".
+  //
+  // `deferred` is a retry parked until a `fire_at` instant — it has NOT been
+  // run, so it is neither active nor terminal, and every "active vs past"
+  // bucketing excludes it on purpose (web's execution log lists it in neither
+  // section and leaves it out of its run count). The server writes it from
+  // `CreateRetryTask`'s final backoff tier, and its CHECK constraint has
+  // carried the value since migration 128, so a client that cannot name it
+  // silently relabels a real row.
   status:
     | "queued"
     | "dispatched"
     | "waiting_local_directory"
+    | "deferred"
     | "running"
     | "completed"
     | "failed"

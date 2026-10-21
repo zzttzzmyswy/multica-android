@@ -41,6 +41,45 @@ describe("isQueuedTaskStatus", () => {
   });
 });
 
+describe("isQueuedTaskStatus — deferred is conditional", () => {
+  it("counts a wakeup-backed deferred task as queued", () => {
+    // A retry parked until `fire_at` by a WAKEUP rule is on its way to running:
+    // the rule will fire. Web draws exactly this line
+    // (`packages/views/issues/surface/activity.ts`:
+    // `status === "deferred" && !!wakeupId`), and the inbox's "no agents
+    // working" dimension is built on the same predicate — so without it an
+    // issue whose retry is waiting on a rule reads as idle on the phone.
+    expect(isQueuedTaskStatus("deferred", "wakeup-1")).toBe(true);
+  });
+
+  it("does NOT count a deferred task with no wakeup behind it", () => {
+    // Nothing will fire for it, so it is not live work. Treating every
+    // `deferred` as queued would leave an orphaned parked row looking like an
+    // agent is about to pick it up — forever.
+    expect(isQueuedTaskStatus("deferred")).toBe(false);
+    expect(isQueuedTaskStatus("deferred", "")).toBe(false);
+  });
+});
+
+describe("selectIssueTasks — deferred", () => {
+  const snapshot = (status: AgentTask["status"], wakeupId?: string) =>
+    ({ ...task("a", status), wakeup_id: wakeupId }) as AgentTask;
+
+  it("buckets a wakeup-backed deferred task as queued, not running", () => {
+    const groups = selectIssueTasks([snapshot("deferred", "w")], "a");
+    expect(groups.queued.map((t) => t.status)).toEqual(["deferred"]);
+    expect(groups.running).toHaveLength(0);
+  });
+
+  it("drops a deferred task that has no wakeup behind it", () => {
+    // The indicator says "an agent is on this". A parked retry nobody will
+    // fire is not that, and listing it would keep the badge alive forever.
+    const groups = selectIssueTasks([snapshot("deferred")], "a");
+    expect(groups.queued).toHaveLength(0);
+    expect(groups.running).toHaveLength(0);
+  });
+});
+
 describe("selectIssueTasks", () => {
   it("keeps only this issue's non-terminal tasks, bucketed", () => {
     const groups = selectIssueTasks(

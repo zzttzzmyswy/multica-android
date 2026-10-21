@@ -56,10 +56,29 @@ const PAST_STATUS_ORDER: Record<AgentTask["status"], number> = {
   cancelled: 1,
   completed: 2,
   queued: 99,
+  // Never ordered in practice: `deferred` is in neither the active nor the past
+  // filter, so this rank is unreachable. It exists because the map is
+  // exhaustive over the status union — the 99s below are the same
+  // "not a past status" marker for the other non-terminal states.
+  deferred: 99,
   dispatched: 99,
   waiting_local_directory: 99,
   running: 99,
 };
+
+/**
+ * The statuses the Active section may show. Deliberately the same four web's
+ * `activeTasks` filter names, and deliberately NOT every non-terminal status:
+ * `deferred` is non-terminal but has never run, so listing it under "Active"
+ * would tell the reader an agent is working on something that is only sitting
+ * in a backoff queue.
+ */
+const ACTIVE_TASK_STATUSES: ReadonlySet<AgentTask["status"]> = new Set([
+  "queued",
+  "dispatched",
+  "waiting_local_directory",
+  "running",
+]);
 
 export default function IssueRunsRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -77,11 +96,17 @@ export default function IssueRunsRoute() {
   const [breakdownOpen, setBreakdownOpen] = useState(false);
   const [timelineOpen, setTimelineOpen] = useState(false);
 
+  // `deferred` is the reason for the local filter: it is a retry parked until
+  // `fire_at` and has not been run, so it belongs in NEITHER section — web's
+  // execution log lists it in neither and leaves it out of its run count. A
+  // server that widened its active query (the workspace snapshot did exactly
+  // that upstream, to keep wakeup-deferred retries visible) must not turn this
+  // sheet into a list of runs that never happened.
   const active = useMemo(
     () =>
-      [...activeTasks].sort((a, b) =>
-        (b.created_at ?? "").localeCompare(a.created_at ?? ""),
-      ),
+      activeTasks
+        .filter((task) => ACTIVE_TASK_STATUSES.has(task.status))
+        .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? "")),
     [activeTasks],
   );
 

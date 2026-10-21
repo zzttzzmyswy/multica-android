@@ -1498,6 +1498,7 @@
   "enum.status.todo": "待处理",
   "enum.taskStatus.cancelled": "已取消",
   "enum.taskStatus.completed": "已完成",
+  "enum.taskStatus.deferred": "等待重试",
   "enum.taskStatus.dispatched": "启动中",
   "enum.taskStatus.failed": "失败",
   "enum.taskStatus.queued": "排队中",

@@ -308,6 +308,15 @@ function fallbackSummary(task: AgentTask, t: (id: string) => string): string {
 
 const STATUS_CLASS: Record<AgentTask["status"], string> = {
   queued: "text-muted-foreground",
+  // A retry parked until its backoff expires. Same "not running yet" weight as
+  // queued but warmer, so the row does not read as a second queued entry —
+  // web's execution log gives it `text-warning` for the same reason. Rows in
+  // this state are excluded from both the active and the past section (see
+  // ACTIVE_STATUSES above and runs.tsx's past filter), so this entry is here
+  // for exhaustiveness: without it the type stops compiling the moment core
+  // names the status, and at runtime the lookup would silently fall through to
+  // the muted default.
+  deferred: "text-warning",
   dispatched: "text-brand",
   waiting_local_directory: "text-muted-foreground",
   running: "text-brand",

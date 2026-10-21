@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-query";
 import type { ArchivedInboxPage, InboxItem } from "@multica/core/types";
 import { api } from "@/data/api";
+import { isIssueUuid } from "@multica/core/issues";
 import {
   normalizeInboxFilters,
   type ArchivedInboxFilters,
@@ -39,6 +40,23 @@ export const inboxKeys = {
    */
   pages: (wsId: string | null) =>
     [...inboxKeys.archived(wsId), "pages"] as const,
+  /**
+   * The archive's DIRECT-LOOKUP entry — one group resolved by id.
+   *
+   * A SIBLING of `pages`, not a child, and that is the whole point: the pages
+   * entry is an infinite-query cursor chain, and a deep-link resolution hung
+   * under it would either join the chain (offering `fetchNextPage` a
+   * `pageParam` it never produced) or, worse, be dropped by any reset of the
+   * chain — taking the already-resolved row with it. Web keys the same way
+   * (`inboxKeys.lookup`, `packages/core/inbox/queries.ts`), and
+   * `inbox-page.tsx` names the hazard: a deep link resolved through the page
+   * list is a cursor-chain member that ends up mistaken for a 404.
+   *
+   * Still under `archived`, so the same prefix invalidations that refresh the
+   * list also drop a resolved lookup.
+   */
+  lookup: (wsId: string | null) =>
+    [...inboxKeys.archived(wsId), "lookup"] as const,
   /**
    * Facet counts. Under `all` rather than under `archived` — again web's
    * shape — because the counts describe the archive as a whole and survive
@@ -131,6 +149,38 @@ export const archivedInboxPagesOptions = (
   });
 
 /**
+ * Resolve ONE archived group by id, for a deep link whose row is not on any
+ * loaded page.
+ *
+ * Separate from `archivedInboxPagesOptions` on purpose — the cursor chain and a
+ * point lookup answer different questions, and hanging a lookup off the chain
+ * pollutes it (see `inboxKeys.lookup`).
+ *
+ * Keyed by the filters as well as the group because the server applies them:
+ * an unfiltered lookup would return a row the reader's current selection
+ * excludes, and the caller would then have to re-apply the filter anyway to
+ * decide whether the notification is genuinely missing or merely filtered out.
+ * The caller DOES re-apply it (lookup rows bypass nothing), but keying by the
+ * selection keeps two selections from sharing one cached answer.
+ */
+export const archivedInboxLookupOptions = (
+  wsId: string | null,
+  groupId: string,
+  filters: ArchivedInboxFilters,
+) =>
+  queryOptions({
+    queryKey: [
+      ...inboxKeys.lookup(wsId),
+      groupId,
+      normalizeInboxFilters(filters),
+    ],
+    queryFn: ({ signal }) =>
+      api.listArchivedInboxPage(filters, { groupId, signal }),
+    enabled: !!wsId && isIssueUuid(groupId),
+    retry: false,
+  });
+
+/**
  * Facet counts for the filter menu, over the current selection. Same key
  * discipline as the pages: the counts depend on which filters are active, so
  * they are keyed by them and refetched when they change — that is what makes
@@ -178,24 +228,35 @@ export function inboxBucketOptions(
 }
 
 /**
- * Whatever the archived sub-view's caches hold: the paged infinite list, or
- * the legacy single-page array. Both live under `inboxKeys.archived(wsId)`,
- * and both have to answer the same patches — an optimistic unarchive that
- * only reached one of them would leave the other showing the row the user
- * just acted on.
+ * Whatever the archived sub-view's caches hold: the paged infinite list, the
+ * legacy single-page array, or a direct lookup's single page.
+ *
+ * All three live under `inboxKeys.archived(wsId)`, so all three have to answer
+ * the same patches — an optimistic unarchive that only reached some of them
+ * would leave the others showing the row the user just acted on. The lookup's
+ * page was added to this union in iteration 265, when the lookup key landed
+ * under the same prefix; it is a SINGLE `ArchivedInboxPage`, not an
+ * `InfiniteData` wrapper, which is why the discriminator below has to test for
+ * `pages` rather than assuming every object-shaped entry has one.
  */
 export type ArchivedInboxCache =
   | InboxItem[]
+  | ArchivedInboxPage
   | InfiniteData<ArchivedInboxPage>;
 
 /**
  * Apply `patch` to archived cache data, whichever shape it is in.
  *
- * The `"pages" in data` test is the discriminator, and it is sound because
- * the two shapes are structurally disjoint: an array is not an object with a
- * `pages` key, and `InfiniteData` always has one. `pageParams` is carried
- * through untouched — it indexes the cursor chain, so rewriting it would
- * break `fetchNextPage` for every subsequent page.
+ * The `"pages" in data` test is the discriminator, and it is now load-bearing
+ * rather than merely sound: the union has TWO object shapes, and only one of
+ * them carries a `pages` array. Assuming it (the pre-265 body did) throws
+ * `Cannot read properties of undefined (reading 'map')` on the first archive
+ * mutation that follows a resolved deep link — a crash in a cache patcher, in
+ * other words, triggered by opening a notification.
+ *
+ * `pageParams` is carried through untouched for the `InfiniteData` branch — it
+ * indexes the cursor chain, so rewriting it would break `fetchNextPage` for
+ * every subsequent page.
  *
  * The patch's `| undefined` return is honoured rather than asserted away: the
  * shared patch helpers (`unarchiveInboxPatch` and friends) are typed over a
@@ -209,10 +270,13 @@ export function mapArchivedInboxCache(
 ): ArchivedInboxCache {
   const apply = (items: InboxItem[]) => patch(items) ?? items;
   if (Array.isArray(data)) return apply(data);
-  return {
-    ...data,
-    pages: data.pages.map((page) => ({ ...page, items: apply(page.items) })),
-  };
+  if ("pages" in data) {
+    return {
+      ...data,
+      pages: data.pages.map((page) => ({ ...page, items: apply(page.items) })),
+    };
+  }
+  return { ...data, items: apply(data.items) };
 }
 
 /**

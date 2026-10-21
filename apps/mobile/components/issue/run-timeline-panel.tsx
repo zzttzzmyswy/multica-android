@@ -969,6 +969,11 @@ function runSummary(run: TimelineRun, t: (id: string, params?: Record<string, st
 
 const STATUS_CLASS: Record<AgentTask["status"], string> = {
   queued: "text-muted-foreground",
+  // Same reasoning as run-row.tsx's map: `deferred` is a retry waiting out its
+  // backoff, and web tones it `text-warning`. The timeline never actually
+  // reaches this key — `toTimelineRun` drops non-active, non-terminal statuses
+  // — but the map is exhaustive over the type, so the key has to exist.
+  deferred: "text-warning",
   dispatched: "text-brand",
   waiting_local_directory: "text-muted-foreground",
   running: "text-brand",

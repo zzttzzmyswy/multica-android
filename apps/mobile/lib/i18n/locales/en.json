@@ -1498,6 +1498,7 @@
   "enum.status.todo": "Todo",
   "enum.taskStatus.cancelled": "Cancelled",
   "enum.taskStatus.completed": "Done",
+  "enum.taskStatus.deferred": "Waiting to retry",
   "enum.taskStatus.dispatched": "Starting",
   "enum.taskStatus.failed": "Failed",
   "enum.taskStatus.queued": "Queued",

@@ -1193,6 +1193,20 @@ class ApiClient {
     filters: ArchivedInboxFilters,
     options: {
       cursor?: string | null;
+      /**
+       * Resolve ONE group directly instead of walking the cursor chain. The
+       * server narrows to `issue_id = group_id`, or to the row's own id when
+       * the notification has no issue (`ListArchivedInboxPage`'s
+       * `sqlc.narg(group_id)` clause), so this answers "where is THIS
+       * notification" from anywhere in the archive — which a cursor page
+       * cannot, because it only ever describes the newest N groups.
+       *
+       * Only ever set with a canonical UUID: the handler runs the value
+       * through `parseUUIDOrBadRequest` and answers 400 otherwise, so a
+       * caller passing "" or a slug would turn a deep link into a guaranteed
+       * failure. The query layer gates on the UUID and never reaches here.
+       */
+      groupId?: string | null;
       signal?: AbortSignal;
     } = {},
   ): Promise<ArchivedInboxPage> {
@@ -1201,6 +1215,7 @@ class ApiClient {
     // Only on a continuation: `cursor=` (empty) is not the same request as no
     // cursor, and the first page is defined by the latter.
     if (options.cursor) params.set("cursor", options.cursor);
+    if (options.groupId) params.set("group_id", options.groupId);
     const raw = await this.fetch<unknown>(
       `/api/inbox/archived/page?${params.toString()}`,
       { signal: options.signal },

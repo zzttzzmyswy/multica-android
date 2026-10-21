@@ -153,10 +153,23 @@ describe("buildRunTimeline", () => {
     expect(timeline.extent).toEqual([new Date("2026-09-24T10:00:00").getTime(), NOW]);
   });
 
-  it("ignores statuses the run timeline does not list", () => {
+  it("keeps a deferred retry off the timeline entirely", () => {
+    // `deferred` is a real status (migration 128), and it is in NEITHER the
+    // active set nor the terminal set — on purpose. A retry parked until
+    // `fire_at` has not been run, so it has no bar to draw and no money to
+    // attribute. Web's `toTimelineRun` returns null for it for the same
+    // reason. Before this round the type could not even name it, so the row
+    // arrived as `queued` and earned a live bar stretching to now.
+    const deferred = makeTask({ status: "deferred" });
+    expect(buildRunTimeline([deferred], NOW).runs).toHaveLength(0);
+    expect(toTimelineRun(deferred, NOW)).toBeNull();
+  });
+
+  it("ignores a status this build cannot place", () => {
     // The wire's active/terminal sets are closed; a status outside both is not
-    // a run anyone opened this sheet to see.
-    const unknown = makeTask({ status: "deferred" as AgentTask["status"] });
+    // a run anyone opened this sheet to see. Kept alongside the deferred case
+    // because the two exercise different reasons for the same `null`.
+    const unknown = makeTask({ status: "some_future_status" as AgentTask["status"] });
     expect(buildRunTimeline([unknown], NOW).runs).toHaveLength(0);
   });
 
