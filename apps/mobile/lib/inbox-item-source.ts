@@ -10,6 +10,7 @@
  * wires the result to `useQuery`.
  */
 import type { InboxBucket } from "@/data/queries/inbox";
+import { isIssueUuid } from "@multica/core/issues";
 
 export type { InboxBucket };
 
@@ -66,4 +67,55 @@ export function shouldFetchFallback(input: {
   hasPrimaryItem: boolean;
 }): boolean {
   return input.workspaceReady && input.primarySettled && !input.hasPrimaryItem;
+}
+
+/**
+ * Whether a still-missing archived notification is worth a DIRECT lookup
+ * against the paged archive.
+ *
+ * The two list reads above are not enough for this screen, and the gap is
+ * measurable rather than theoretical. Both are bounded:
+ *
+ *   - `/api/inbox/archived` applies a server-side LIMIT of 200 GROUPS
+ *     (`ListArchivedInboxItems`). Measured on this deployment: 314 rows / 200
+ *     groups returned against 1,287 archived groups.
+ *   - `/api/inbox/archived/page` is cursor-paged, and this screen only ever
+ *     reads page one (the bucket options carry no cursor).
+ *
+ * So an archived notification past the first page — or past the legacy cap
+ * when the two lists are the only reads — is absent from both, and the screen
+ * concludes 「这条通知已不可用。」 about a notification that exists. Confirmed
+ * against the live server with a real deep link target: an archived
+ * `autopilot_paused` row from 2026-09-29 was missing from the legacy list and
+ * present when resolved by `group_id`. `group_id` is the server's own escape
+ * hatch (`ListArchivedInboxPage` narrows to that group, index-backed, no
+ * cursor needed).
+ *
+ * Only for `inbox-item/<id>`-shaped targets: the lookup narrows on
+ * `COALESCE(issue_id, id)`, so it can only resolve a notification whose key IS
+ * its own id — an issue-backed row is reached by issue id, and the id in the
+ * URL is the notification's, not the issue's.
+ *
+ * `groupId` must be a canonical UUID: the server rejects anything else with a
+ * 400 (`parseUUIDOrBadRequest`), so a malformed id is a client bug and the
+ * honest response is not to spend a request proving it.
+ */
+export function shouldLookupArchivedItem(input: {
+  workspaceReady: boolean;
+  /** A row was found in one of the two lists — nothing to look up. */
+  hasItem: boolean;
+  /** Either list read failed: look nothing up until it settles. */
+  failed: boolean;
+  /** The lookup itself already failed — do not retry it in a render loop. */
+  lookupFailed: boolean;
+  /** The notification id from the deep link. */
+  notificationId: string;
+}): boolean {
+  return (
+    input.workspaceReady &&
+    !input.hasItem &&
+    !input.failed &&
+    !input.lookupFailed &&
+    isIssueUuid(input.notificationId)
+  );
 }

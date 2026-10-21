@@ -3,6 +3,7 @@ import {
   inboxItemBuckets,
   inboxItemPhase,
   shouldFetchFallback,
+  shouldLookupArchivedItem,
 } from "./inbox-item-source";
 
 /**
@@ -151,5 +152,59 @@ describe("inbox item source: fetching the fallback list", () => {
         hasPrimaryItem: true,
       }),
     ).toBe(false);
+  });
+});
+
+/**
+ * The third read: `group_id` against the paged archive.
+ *
+ * The two list reads are both bounded, so "absent from both" is not the same
+ * answer as "not there". Measured against mu.zztweb.top while writing this:
+ * `/api/inbox/archived` returned 314 rows / 200 groups against 1,287 archived
+ * groups, and an archived `autopilot_paused` notification from 2026-09-29 was
+ * absent from it while `?group_id=<id>` returned exactly that row. Without
+ * this gate the screen reports 「这条通知已不可用。」 about a notification the
+ * server can still produce.
+ */
+describe("shouldLookupArchivedItem", () => {
+  const ID = "01a0ec21-230f-751f-bf94-057353fb8d55";
+  const base = {
+    workspaceReady: true,
+    hasItem: false,
+    failed: false,
+    lookupFailed: false,
+    notificationId: ID,
+  };
+
+  it("fires once both lists missed and the id is a UUID", () => {
+    expect(shouldLookupArchivedItem(base)).toBe(true);
+  });
+
+  it("stays off when a row was already found", () => {
+    // Nothing to resolve, and a lookup here would be a request whose answer is
+    // discarded.
+    expect(shouldLookupArchivedItem({ ...base, hasItem: true })).toBe(false);
+  });
+
+  it("stays off while the workspace id is unresolved", () => {
+    expect(shouldLookupArchivedItem({ ...base, workspaceReady: false })).toBe(false);
+  });
+
+  it("stays off when a list read failed — a failure is not an absence", () => {
+    // Otherwise "the archive request 500'd" renders as "this notification is
+    // gone", which is the exact conflation `inboxItemPhase` exists to prevent.
+    expect(shouldLookupArchivedItem({ ...base, failed: true })).toBe(false);
+  });
+
+  it("stays off after the lookup itself failed, so it cannot loop", () => {
+    expect(shouldLookupArchivedItem({ ...base, lookupFailed: true })).toBe(false);
+  });
+
+  it("refuses a non-UUID id — the server answers 400 to one", () => {
+    // `ListArchivedInboxPage` calls parseUUIDOrBadRequest on group_id, so a
+    // slug or an empty id does not "try anyway": it guarantees a 400 that the
+    // screen would then render as an unavailable notification.
+    expect(shouldLookupArchivedItem({ ...base, notificationId: "MUL-123" })).toBe(false);
+    expect(shouldLookupArchivedItem({ ...base, notificationId: "" })).toBe(false);
   });
 });

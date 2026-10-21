@@ -811,6 +811,15 @@ export const AgentTaskSchema: z.ZodType<AgentTask> = z.object({
       "queued",
       "dispatched",
       "waiting_local_directory",
+      // A retry parked until `fire_at` (migration 128, `CreateRetryTask`). It
+      // is parsed rather than collapsed into `queued`: the two mean different
+      // things on screen ("waiting in line" vs "waiting out a backoff"), web's
+      // execution log gives the row a different tone, and web leaves only
+      // `deferred` out of its "has this been run" count. The `.catch` below
+      // still degrades any FUTURE status this build does not know to `queued`
+      // — that is the API-compatibility path, and it must not swallow a status
+      // the client can actually name.
+      "deferred",
       "running",
       "completed",
       "failed",
@@ -854,6 +863,13 @@ export const AgentTaskSchema: z.ZodType<AgentTask> = z.object({
   // Assigner's handoff note (MUL-3375) — also a trigger signal: a run carrying
   // one reads as a direct assignment rather than the generic initial run.
   handoff_note: z.string().optional(),
+  // The wakeup rule that started this run (MYS-2023). Optional, and read
+  // conditionally: absent on every task no rule started. It is the second
+  // half of the "is this issue still going to be worked on" test for a
+  // `deferred` task — `deferred` + a wakeup means the rule will fire, so the
+  // row counts as queued; `deferred` alone does not. See
+  // `packages/core/issues/surface/issue-activity.ts`.
+  wakeup_id: z.string().optional(),
   // Comment coverage. `coalesced_comment_ids` excludes the newest trigger, so
   // the planned coverage is its union with `trigger_comment_id`;
   // `delivered_comment_ids` is the authoritative receipt once claimed. Both

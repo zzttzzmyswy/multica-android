@@ -98,6 +98,32 @@ describe("listArchivedInboxPage", () => {
     expect(path).toContain("cursor=cur-2");
   });
 
+  it("sends group_id when resolving one group directly", async () => {
+    // The archive's deep-link escape hatch: the cursor chain only ever
+    // describes the newest N groups, so a link into the middle of a 1,287-row
+    // archive can only be resolved by asking for that group by id. The server
+    // supports it (`ListArchivedInboxPage` narrows to the group and indexes
+    // it), and omitting the parameter here would silently put the client back
+    // on "walk every page" — which is the bug.
+    const spy = fetchSpy().mockResolvedValue(pageBody([], null));
+    await api.listArchivedInboxPage(EMPTY, {
+      groupId: "01a1285f-bdc6-7a2f-8b9b-870ccdbeb1c3",
+    });
+
+    const [path] = spy.mock.calls[0] as unknown as [string];
+    expect(path).toContain("group_id=01a1285f-bdc6-7a2f-8b9b-870ccdbeb1c3");
+  });
+
+  it("omits group_id when none is asked for, so the list stays a list", async () => {
+    // An accidental empty `group_id=` is not "no filter" server-side: it is an
+    // empty string that fails parseUUIDOrBadRequest as a 400.
+    const spy = fetchSpy().mockResolvedValue(pageBody([], null));
+    await api.listArchivedInboxPage(EMPTY, { groupId: "" });
+
+    const [path] = spy.mock.calls[0] as unknown as [string];
+    expect(path).not.toContain("group_id");
+  });
+
   it("joins every dimension as a sorted, comma-separated list", async () => {
     const spy = fetchSpy().mockResolvedValue(pageBody([], null));
     await api.listArchivedInboxPage(

@@ -257,6 +257,32 @@ describe("mapArchivedInboxCache", () => {
     expect((out as InboxItem[]).map((i) => i.id)).toEqual(["b"]);
   });
 
+  it("patches a SINGLE page entry — the direct lookup's cache shape", () => {
+    // A resolved deep-link lookup caches one `ArchivedInboxPage` (not an
+    // `InfiniteData` wrapper) under the same `archived` prefix as the list, so
+    // the prefix-based patcher reaches it. Before iteration 265 the patcher
+    // assumed every object-shaped entry had `pages` and called
+    // `data.pages.map` — so the first archive/unarchive after opening a deep
+    // link threw `Cannot read properties of undefined (reading 'map')`, i.e. a
+    // crash in a cache patcher caused by opening a notification.
+    const data = page([row("a"), row("b")], "c2");
+    const out = mapArchivedInboxCache(data, (items) =>
+      items.filter((i) => i.id !== "a"),
+    ) as typeof data;
+
+    expect(out.items.map((i) => i.id)).toEqual(["b"]);
+    // The cursor must survive: it is this entry's own pagination state.
+    expect(out.nextCursor).toBe("c2");
+  });
+
+  it("leaves a single-page entry alone when the patch declines", () => {
+    // The patch helpers return undefined to mean "nothing to patch"; the
+    // mapper's `?? items` must honour that here too, not just for arrays.
+    const data = page([row("a")], null);
+    const out = mapArchivedInboxCache(data, () => undefined) as typeof data;
+    expect(out.items.map((i) => i.id)).toEqual(["a"]);
+  });
+
   it("patches every page of an infinite cache", () => {
     const data = {
       pages: [page([row("a")], "c2"), page([row("b")], null)],

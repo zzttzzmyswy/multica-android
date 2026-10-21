@@ -27,12 +27,24 @@ import type { AgentTask } from "../../types";
  * local_directory flow: dispatched, but parked behind another task holding
  * the same on-disk path lock. It is a non-terminal wait, so it reads as
  * queued rather than running.
+ *
+ * `deferred` is conditional and needs the task, not just its status: a retry
+ * parked until `fire_at` by a WAKEUP means the issue has work in line (the
+ * rule will fire), so it counts as queued; the same status on a task with no
+ * wakeup behind it is not on its way to running, so it does not. Web draws the
+ * same line (`packages/views/issues/surface/activity.ts`), and dropping the
+ * condition would make a deferred-but-orphaned task look like live work
+ * forever.
  */
-export function isQueuedTaskStatus(status: AgentTask["status"]): boolean {
+export function isQueuedTaskStatus(
+  status: AgentTask["status"],
+  wakeupId?: string,
+): boolean {
   return (
     status === "queued" ||
     status === "dispatched" ||
-    status === "waiting_local_directory"
+    status === "waiting_local_directory" ||
+    (status === "deferred" && !!wakeupId)
   );
 }
 
@@ -59,7 +71,7 @@ export function selectIssueTasks(
   for (const task of snapshot) {
     if (task.issue_id !== issueId) continue;
     if (task.status === "running") running.push(task);
-    else if (isQueuedTaskStatus(task.status)) queued.push(task);
+    else if (isQueuedTaskStatus(task.status, task.wakeup_id)) queued.push(task);
   }
   return { running, queued };
 }
@@ -144,7 +156,7 @@ export function deriveIssueSurfaceActivity(
 
   for (const task of tasks) {
     if (!task.issue_id) continue;
-    if (task.status !== "running" && !isQueuedTaskStatus(task.status)) {
+    if (task.status !== "running" && !isQueuedTaskStatus(task.status, task.wakeup_id)) {
       continue;
     }
 

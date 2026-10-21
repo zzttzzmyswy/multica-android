@@ -72,11 +72,23 @@ export function UsageBreakdownDialog({
   // Only runs that actually recorded usage earn a card: a run with no figure
   // contributes nothing to compare and would just add an all-em-dash line.
   // Their existence is still accounted for in the footnote below.
-  const priced = useMemo(
-    () => tasks.filter((task) => (task.usage?.length ?? 0) > 0),
+  //
+  // `deferred` is filtered out BEFORE that test, and the order matters: a
+  // deferred retry has not been claimed by a runtime, so it can carry usage
+  // inherited from the attempt it continues. Counting it would report a run
+  // the user did not get, and web's `runCount`
+  // (`execution-log-section.tsx`: `tasks.filter(t => t.status !== "deferred")`)
+  // excludes it for the same reason. Applying `deferred` first keeps
+  // `unpricedCount` honest too — it is a difference over the same base.
+  const counted = useMemo(
+    () => tasks.filter((task) => task.status !== "deferred"),
     [tasks],
   );
-  const unpricedCount = tasks.length - priced.length;
+  const priced = useMemo(
+    () => counted.filter((task) => (task.usage?.length ?? 0) > 0),
+    [counted],
+  );
+  const unpricedCount = counted.length - priced.length;
 
   const total = useMemo(
     () => summarizeTaskUsageAcross(priced.map((task) => task.usage)),
