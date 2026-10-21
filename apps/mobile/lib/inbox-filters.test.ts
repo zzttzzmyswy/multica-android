@@ -16,6 +16,7 @@ import {
   EMPTY_INBOX_FILTERS,
   filterInboxItems,
   inboxActorKey,
+  inboxFiltersForArchive,
   inboxActorKeyParts,
   inboxFilterCount,
   inboxFiltersForPrioritySupport,
@@ -341,5 +342,144 @@ describe("useInboxFilterStore", () => {
     const before = useInboxFilterStore.getState().filtersByWorkspace;
     useInboxFilterStore.getState().clearFilters("ws-never-touched");
     expect(useInboxFilterStore.getState().filtersByWorkspace).toBe(before);
+  });
+});
+
+/**
+ * Iteration 264 (MYS-2291): the "no agents working" dimension, and the archive
+ * boundary it must not cross.
+ *
+ * Web's `idleOnly` (`packages/core/inbox/filter-store.ts`) exists only in the
+ * active inbox: the archive is filtered server-side, and the backend answers
+ * no idle parameter. Three separate things go wrong if that is not honoured,
+ * and none of them are visible on a happy-path screenshot:
+ *
+ *   - the selection leaks into the archive's query KEY, spending a request on
+ *     a parameter the server ignores and caching the same rows twice;
+ *   - the badge and the Clear gate count a dimension the archive's list is not
+ *     applying, so a trigger claims to be narrowing a list it is not;
+ *   - an unresolved agent-task snapshot reads as "nobody is working", which
+ *     shows the entire inbox under a filter promising the opposite.
+ */
+describe("idleOnly — the 'no agents working' dimension", () => {
+  const busy = new Set(["issue-busy"]);
+
+  it("keeps rows whose issue nobody is running or queued on", () => {
+    const items = [
+      row({ id: "1", issue_id: "issue-idle" }),
+      row({ id: "2", issue_id: "issue-busy" }),
+    ];
+    expect(
+      filterInboxItems(items, filters({ idleOnly: true }), { activeIssueIds: busy }).map(
+        (i) => i.id,
+      ),
+    ).toEqual(["1"]);
+  });
+
+  it("drops a notification with no issue at all", () => {
+    // The predicate is `item.issue_id != null && !active.has(...)`. A plain
+    // notification — a failed run, an unconfirmed quick-create — is not "an
+    // issue nobody is working on"; letting it through would fill a list that
+    // promises "no agents working" with rows that are not about work at all.
+    const items = [
+      row({ id: "with-issue", issue_id: "issue-idle" }),
+      row({ id: "no-issue", issue_id: null, issue_status: null, issue_priority: null }),
+    ];
+    expect(
+      filterInboxItems(items, filters({ idleOnly: true }), { activeIssueIds: busy }).map(
+        (i) => i.id,
+      ),
+    ).toEqual(["with-issue"]);
+  });
+
+  it("fails CLOSED while the snapshot is unresolved", () => {
+    // The load-bearing one. `undefined` means "the task snapshot has not
+    // answered"; degrading it to an empty set would say "nobody is working"
+    // and pass every row, so the list would show the whole inbox and then
+    // throw most of it away a frame later. Nothing matches until the answer
+    // lands.
+    const items = [row({ id: "1", issue_id: "issue-idle" })];
+    expect(filterInboxItems(items, filters({ idleOnly: true }))).toEqual([]);
+    // And an explicitly empty set is a real answer: everybody IS idle.
+    expect(
+      filterInboxItems(items, filters({ idleOnly: true }), {
+        activeIssueIds: new Set(),
+      }).map((i) => i.id),
+    ).toEqual(["1"]);
+  });
+
+  it("ANDs with the other dimensions rather than replacing them", () => {
+    const items = [
+      row({ id: "1", issue_id: "issue-idle", issue_status: "done" }),
+      row({ id: "2", issue_id: "issue-idle", issue_status: "todo" }),
+      row({ id: "3", issue_id: "issue-busy", issue_status: "done" }),
+    ];
+    expect(
+      filterInboxItems(items, filters({ idleOnly: true, statuses: ["done"] }), {
+        activeIssueIds: busy,
+      }).map((i) => i.id),
+    ).toEqual(["1"]);
+  });
+
+  it("pins the open row across its own dimension only", () => {
+    // Opening a row and replying from the detail can start an agent on its
+    // issue, which would delete the row the user is working in. The idle pin
+    // holds it — but it must not rescue a row excluded by STATUS, because
+    // changing that selection is an explicit request to filter the row out.
+    const items = [row({ id: "1", issue_id: "issue-busy", issue_status: "todo" })];
+    expect(
+      filterInboxItems(items, filters({ idleOnly: true }), {
+        activeIssueIds: busy,
+        pinnedIdleKey: "issue-busy",
+      }).map((i) => i.id),
+    ).toEqual(["1"]);
+    expect(
+      filterInboxItems(items, filters({ idleOnly: true, statuses: ["done"] }), {
+        activeIssueIds: busy,
+        pinnedIdleKey: "issue-busy",
+      }),
+    ).toEqual([]);
+  });
+
+  it("counts as one selection on the badge", () => {
+    // Without this the Clear button in the sheet stays disabled with idle as
+    // the only selection, and the trigger shows no number — a filter that is
+    // visibly doing something with no way to undo it.
+    expect(inboxFilterCount(filters({ idleOnly: true }))).toBe(1);
+    expect(isEmptyInboxFilters(filters({ idleOnly: true }))).toBe(false);
+    expect(inboxFilterCount(filters({ idleOnly: true, unreadOnly: true }))).toBe(2);
+  });
+
+  it("is toggled by the store like every other boolean", () => {
+    const s = useInboxFilterStore.getState();
+    s.toggleIdleOnly("ws-idle");
+    expect(useInboxFilterStore.getState().filtersByWorkspace["ws-idle"].idleOnly).toBe(
+      true,
+    );
+    useInboxFilterStore.getState().toggleIdleOnly("ws-idle");
+    expect(useInboxFilterStore.getState().filtersByWorkspace["ws-idle"].idleOnly).toBe(
+      false,
+    );
+  });
+
+  it("never reaches the archive's normalized key", () => {
+    // The archive's backend has no idle dimension, so an idle selection must
+    // not make its way into the paged request or the cache key. Two selections
+    // that differ only in idle are the SAME archive query.
+    const withIdle = normalizeInboxFilters(filters({ idleOnly: true }));
+    const without = normalizeInboxFilters(filters({ idleOnly: false }));
+    expect(withIdle).toEqual(without);
+    expect("idleOnly" in withIdle).toBe(false);
+  });
+
+  it("is blanked by inboxFiltersForArchive, without touching the others", () => {
+    // The count the archive's Clear gate reads must not include a dimension
+    // that view cannot honour — and the store keeps the user's choice, so the
+    // main inbox gets it back on return.
+    const f = filters({ idleOnly: true, statuses: ["done"] });
+    const archived = inboxFiltersForArchive(f);
+    expect(archived.idleOnly).toBe(false);
+    expect(archived.statuses).toEqual(["done"]);
+    expect(f.idleOnly).toBe(true);
   });
 });

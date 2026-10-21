@@ -57,7 +57,7 @@ describe("main inbox filter wiring", () => {
     // renders a filter trigger without a `filterInboxItems` call over its own
     // data source would show a badge and change nothing.
     expect(screen).toMatch(
-      /const visibleData = useMemo\(\s*\(\) => filterInboxItems\(data, mainFilters\)/,
+      /const visibleData = useMemo\(\s*\(\) =>\s*filterInboxItems\(data, mainFilters, filterContext\),/,
     );
     expect(main).toMatch(/data=\{visibleData\}/);
   });
@@ -94,7 +94,7 @@ describe("main inbox filter wiring", () => {
     // nothing at all while a request it did not need went out.
     expect(main).toMatch(/facets=\{mainFacets\}/);
     expect(screen).toMatch(
-      /const mainFacets = useMemo\(\s*\(\) => inboxLocalFacets\(data, mainFilters\)/,
+      /const mainFacets = useMemo\(\s*\(\) =>\s*inboxLocalFacets\(data, mainFilters, \{ activeIssueIds \}\),/,
     );
   });
 

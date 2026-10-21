@@ -45,6 +45,7 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { formatDateTime } from "@/lib/autopilot-format";
 import { filterQuickActions, isStaleQuickAction } from "@/lib/quick-actions";
 import { useTranslation } from "@/lib/i18n/react";
+import { quickActionTargetState } from "@/lib/quick-action-target";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -86,29 +87,42 @@ function TargetLine({ action }: { action: QuickAction }) {
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
 
-  if (action.target_missing === true) {
-    return (
-      <Text className="text-caption text-destructive">
-        {t("quickActions.targetMissing")}
-      </Text>
-    );
+  // The order matters and lives in `quickActionTargetState`: an empty
+  // `assignee_type` means "mention nobody", which the server reports as a
+  // FOUND target with no name — so reading `target_missing` first would miss
+  // it entirely (the flag is false) and fall through to printing an empty
+  // name, which looks like a row that lost its binding.
+  switch (quickActionTargetState(action)) {
+    case "none":
+      return (
+        <Text className="text-caption text-muted-foreground/80">
+          {t("quickActions.noTarget")}
+        </Text>
+      );
+    case "missing":
+      return (
+        <Text className="text-caption text-destructive">
+          {t("quickActions.targetMissing")}
+        </Text>
+      );
+    case "mismatched":
+      return (
+        <Text className="text-caption text-warning" numberOfLines={1}>
+          <Ionicons name="alert-circle-outline" size={11} color={theme.warning} />
+          {action.target_name}
+          {` · ${t("quickActions.targetPrivate")}`}
+        </Text>
+      );
+    default:
+      return (
+        <Text className="text-caption text-muted-foreground/80" numberOfLines={1}>
+          {action.target_name}
+          {action.target_public !== true
+            ? ` · ${t("quickActions.targetPrivate")}`
+            : ""}
+        </Text>
+      );
   }
-  const mismatched = action.visibility === "public" && action.target_public !== true;
-  return (
-    <Text
-      className={cn(
-        "text-caption",
-        mismatched ? "text-warning" : "text-muted-foreground/80",
-      )}
-      numberOfLines={1}
-    >
-      {mismatched ? <Ionicons name="alert-circle-outline" size={11} color={theme.warning} /> : null}
-      {action.target_name}
-      {action.target_public !== true
-        ? ` · ${t("quickActions.targetPrivate")}`
-        : ""}
-    </Text>
-  );
 }
 
 export default function QuickActionsPage() {

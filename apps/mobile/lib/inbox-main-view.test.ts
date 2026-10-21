@@ -165,6 +165,78 @@ describe("inboxLocalFacets", () => {
   });
 });
 
+/**
+ * Iteration 264 (MYS-2291): the idle dimension's COUNT.
+ *
+ * Web counts it with the flag left ON rather than cleared-and-recounted
+ * (`inbox-filter-menu.tsx:170-173`) — the one dimension where that is the right
+ * shape, because "how many rows turning this on reveals" and "how many are left
+ * once it is on" are the same question for a boolean. What it needs from the
+ * client, though, is the agent-task snapshot, and that arrives asynchronously.
+ */
+describe("inboxLocalFacets — the idle count", () => {
+  const busy = new Set(["issue-busy"]);
+
+  it("counts the rows turning the dimension on would leave", () => {
+    const items = [
+      row({ id: "1", issue_id: "issue-1" }),
+      row({ id: "2", issue_id: "issue-2" }),
+      row({ id: "3", issue_id: "issue-busy" }),
+    ];
+    expect(
+      inboxLocalFacets(items, EMPTY_INBOX_FILTERS, { activeIssueIds: busy })
+        .idleCount,
+    ).toBe(2);
+  });
+
+  it("is undefined, not 0, while the snapshot is unresolved", () => {
+    // The difference is user-visible: `0` beside "no agents working" says the
+    // filter would reveal nothing, and every row is in fact unknown. The sheet
+    // prints no count for `undefined` (the same rule it applies to a 0), but
+    // the decision is made here so no caller has to guess.
+    const items = [row({ id: "1", issue_id: "issue-1" })];
+    expect(
+      inboxLocalFacets(items, EMPTY_INBOX_FILTERS, { activeIssueIds: undefined })
+        .idleCount,
+    ).toBeUndefined();
+    expect(
+      inboxLocalFacets(items, EMPTY_INBOX_FILTERS, { activeIssueIds: new Set() })
+        .idleCount,
+    ).toBe(1);
+  });
+
+  it("respects the OTHER dimensions, like every other count", () => {
+    const items = [
+      row({ id: "1", issue_id: "issue-1", issue_priority: "high" }),
+      row({ id: "2", issue_id: "issue-2", issue_priority: "low" }),
+      row({ id: "3", issue_id: "issue-busy", issue_priority: "high" }),
+    ];
+    expect(
+      inboxLocalFacets(items, filters({ priorities: ["high"] }), {
+        activeIssueIds: busy,
+      }).idleCount,
+    ).toBe(1);
+  });
+
+  it("leaves the other four counts narrowed by an ACTIVE idle selection", () => {
+    // The failure this pins: threading the snapshot into the idle count only.
+    // With the dimension switched on, every other count is computed through
+    // the same predicate — which fails closed without the set — and would
+    // print 0 beside every status and actor still on offer.
+    const items = [
+      row({ id: "1", issue_id: "issue-1", issue_status: "done", actor_id: "a1" }),
+      row({ id: "2", issue_id: "issue-busy", issue_status: "todo", actor_id: "a2" }),
+    ];
+    const facets = inboxLocalFacets(items, filters({ idleOnly: true }), {
+      activeIssueIds: busy,
+    });
+    expect(facets.statuses).toEqual({ done: 1 });
+    expect(facets.actors["agent:a1"]).toBe(1);
+    expect(facets.actors["agent:a2"]).toBe(0);
+    expect(facets.idleCount).toBe(1);
+  });
+});
+
 describe("mainInboxEmptyReason", () => {
   it("stays out of the way while rows are showing", () => {
     expect(mainInboxEmptyReason({ visibleCount: 3, activeFilterCount: 2 })).toBe(

@@ -33,6 +33,7 @@ import type { InboxItem } from "@multica/core/types";
 import {
   filterInboxItems,
   inboxActorKey,
+  type InboxFilterContext,
   type InboxFilters,
 } from "@/lib/inbox-filters";
 
@@ -42,6 +43,11 @@ export interface InboxFacetCounts {
   priorities: Record<string, number>;
   actors: Record<string, number>;
   unreadCount: number;
+  /**
+   * How many rows the "no agents working" dimension would reveal. Absent (not
+   * 0) while the task snapshot is unresolved — see `inboxLocalFacets`.
+   */
+  idleCount?: number;
 }
 
 /**
@@ -75,6 +81,17 @@ function countsOf<T extends string>(
  * it would reveal. Web does the same thing, in the same two steps
  * (`inbox-filter-menu.tsx:154-160`).
  *
+ * **`idleOnly` breaks that symmetry, in the one way that is not a choice.**
+ * Every other count can be computed from `items` alone; this one needs the
+ * agent task snapshot, which arrives through `activeIssueIds`. Web counts it
+ * with `idleOnly` left SET (`inbox-filter-menu.tsx:170-173`) — the predicate
+ * already reads that flag when there is no way to clear it and re-ask, because
+ * "how many rows does this reveal" and "how many are left once it is on" are
+ * the same number for a dimension every other count has already been narrowed
+ * by. An UNRESOLVED snapshot has no such number: the predicate matches nothing
+ * while `activeIssueIds` is undefined, so the facet is `undefined` rather than
+ * 0, and the sheet prints no count instead of a confident zero.
+ *
  * **The actor map is a universe, not a filtered count.** It carries a key for
  * every actor present in `items`, holding 0 where the other active dimensions
  * exclude that actor's rows. Status and priority need no such treatment — the
@@ -90,9 +107,20 @@ function countsOf<T extends string>(
 export function inboxLocalFacets(
   items: readonly InboxItem[],
   filters: InboxFilters,
+  { activeIssueIds }: InboxFilterContext = {},
 ): InboxFacetCounts {
-  const own = <K extends keyof InboxFilters>(dimension: K, cleared: InboxFilters[K]) =>
-    filterInboxItems([...items], { ...filters, [dimension]: cleared });
+  // The context travels into every count, not just the idle one: when the idle
+  // dimension is ON, the other four are narrowed by it too, and dropping the
+  // set here would make the predicate fail closed and print 0 beside every
+  // remaining row. Web threads `activeIssueIds` through all five for the same
+  // reason (`inbox-filter-menu.tsx:139-176`).
+  const own = <K extends keyof InboxFilters>(
+    dimension: K,
+    cleared: InboxFilters[K],
+  ) =>
+    filterInboxItems([...items], { ...filters, [dimension]: cleared }, {
+      activeIssueIds,
+    });
 
   const actors: Record<string, number> = {};
   for (const item of items) {
@@ -105,6 +133,17 @@ export function inboxLocalFacets(
     actors[key] = count;
   }
 
+  // The idle count forces the flag ON rather than clearing it, which for a
+  // boolean dimension is the same thing: the count answers "how many rows
+  // would turning this on leave", and turning it on is the only state it has.
+  // Web writes it the same way (`{...effectiveFilters, idleOnly: true}`).
+  const idleCount =
+    activeIssueIds === undefined
+      ? undefined
+      : filterInboxItems([...items], { ...filters, idleOnly: true }, {
+          activeIssueIds,
+        }).length;
+
   return {
     statuses: countsOf(own("statuses", []), (item) => item.issue_status ?? null),
     priorities: countsOf(
@@ -114,6 +153,7 @@ export function inboxLocalFacets(
     actors,
     unreadCount: own("unreadOnly", false).filter((item) => item.read !== true)
       .length,
+    idleCount,
   };
 }
 

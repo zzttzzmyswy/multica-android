@@ -25,7 +25,6 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import {
   findQuickActionTemplateToken,
   type QuickAction,
-  type QuickActionAssigneeType,
   type QuickActionVisibility,
 } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
@@ -41,6 +40,10 @@ import {
 } from "@/data/mutations/quick-actions";
 import { useActorLookup } from "@/data/use-actor-name";
 import { selectedActorLabel } from "@/lib/actor-name-state";
+import {
+  quickActionCanSave,
+  quickActionTargetPayload,
+} from "@/lib/quick-action-target";
 import {
   AgentSquadPickerModal,
   type QuickActionAssignee,
@@ -110,12 +113,7 @@ export function QuickActionForm({ action }: { action?: QuickAction | null }) {
     () => findQuickActionTemplateToken(prompt),
     [prompt],
   );
-  const canSave =
-    name.trim().length > 0 &&
-    prompt.trim().length > 0 &&
-    !!assignee &&
-    assignee.id.length > 0 &&
-    templateToken === null;
+  const canSave = quickActionCanSave({ name, prompt, templateToken });
 
   const archived = action?.status === "archived";
 
@@ -129,23 +127,21 @@ export function QuickActionForm({ action }: { action?: QuickAction | null }) {
   // exists only to keep the form open and re-enable Save.
   const handleSave = async () => {
     if (!canSave || saving) return;
-    if (!assignee) return;
     setSaving(true);
+    const target = quickActionTargetPayload(assignee);
     try {
       if (isEdit && action) {
         await update.mutateAsync({
           id: action.id,
           name: name.trim(),
-          assignee_type: assignee.type as QuickActionAssigneeType,
-          assignee_id: assignee.id,
+          ...target,
           prompt,
           visibility,
         });
       } else {
         await create.mutateAsync({
           name: name.trim(),
-          assignee_type: assignee.type as QuickActionAssigneeType,
-          assignee_id: assignee.id,
+          ...target,
           prompt,
           visibility,
         });
@@ -190,7 +186,11 @@ export function QuickActionForm({ action }: { action?: QuickAction | null }) {
   };
 
   const assigneeRowLabel = () => {
-    if (!assignee) return t("quickActions.selectTarget");
+    // "No target" is a choice, not an empty field: the author picked it in the
+    // picker, and it saves as `assignee_type: ""`. Printing the "select…"
+    // placeholder here would tell them the opposite — that nothing has been
+    // decided yet — and they would go looking for the setting they just made.
+    if (!assignee) return t("quickActions.noTarget");
     // ECHO: this row shows the form's OWN field — the value it was seeded
     // with, or the one the user just picked in the sheet it opens. A skeleton
     // here would read as "the target was lost", and the create/run action is
@@ -265,11 +265,6 @@ export function QuickActionForm({ action }: { action?: QuickAction | null }) {
               );
             })}
           </View>
-          {visibility === "public" ? (
-            <Text className="text-caption text-muted-foreground">
-              {t("quickActions.publicTargetHint")}
-            </Text>
-          ) : null}
         </View>
 
         <View className="gap-1.5">
@@ -291,6 +286,20 @@ export function QuickActionForm({ action }: { action?: QuickAction | null }) {
             </Text>
             <Ionicons name="chevron-down" size={14} color={theme.mutedForeground} />
           </Pressable>
+          {/* Web's three-way branch, no-target first
+              (`quick-actions-tab.tsx`): with no target bound, the sentence that
+              matters is what will actually happen — a comment with nobody
+              mentioned — not the public-target rule, which has no target to
+              constrain. */}
+          {!assignee ? (
+            <Text className="text-caption text-muted-foreground">
+              {t("quickActions.noTargetHint")}
+            </Text>
+          ) : visibility === "public" ? (
+            <Text className="text-caption text-muted-foreground">
+              {t("quickActions.publicTargetHint")}
+            </Text>
+          ) : null}
         </View>
 
         <View className="gap-1.5">

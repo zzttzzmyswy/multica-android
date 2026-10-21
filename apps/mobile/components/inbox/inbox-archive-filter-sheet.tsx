@@ -77,6 +77,8 @@ interface Props {
         priorities: Record<string, number>;
         actors: Record<string, number>;
         unreadCount: number;
+        /** Absent while the caller cannot say (main view, snapshot loading). */
+        idleCount?: number;
       }
     | undefined;
   facetsLoading: boolean;
@@ -90,12 +92,26 @@ interface Props {
   facetsError?: boolean;
   onRetryFacets?: () => void;
   prioritySupport: InboxPriorityFilterSupport;
+  /**
+   * Whether this sheet is filtering the ARCHIVED list.
+   *
+   * Required, not inferred. The idle dimension exists only in the active inbox
+   * — the archive is filtered server-side and the backend answers no such
+   * parameter — so this row must be absent there. The screen mounts this
+   * component twice, for two lists that differ in their COUNT SOURCE but not
+   * in any prop that could hint at the view, so a default or a signal
+   * borrowed from `facetsError` / `prioritySupport` would put a checkbox on
+   * the archive that filters nothing.
+   */
+  archived: boolean;
   /** Count of active selections — gates Clear (web's `inboxFilterCount`). */
   activeCount: number;
   onToggleStatus: (status: string) => void;
   onTogglePriority: (priority: IssuePriority) => void;
   onToggleActor: (actor: string) => void;
   onToggleUnreadOnly: () => void;
+  /** Absent for the archived view, whose sheet renders no idle row. */
+  onToggleIdleOnly?: () => void;
   onClear: () => void;
 }
 
@@ -110,11 +126,13 @@ export function InboxArchiveFilterSheet({
   facetsError,
   onRetryFacets,
   prioritySupport,
+  archived,
   activeCount,
   onToggleStatus,
   onTogglePriority,
   onToggleActor,
   onToggleUnreadOnly,
+  onToggleIdleOnly,
   onClear,
 }: Props) {
   const { t } = useTranslation();
@@ -284,6 +302,29 @@ export function InboxArchiveFilterSheet({
               />
             ),
           })}
+
+          {/* Web keeps this in the same section as "unread only" and hides it
+              in the archive (`inbox-filter-menu.tsx:255-266`, `{!archived && …}`).
+              The count is the caller's to supply: the main view computes it
+              over the list it holds, and leaves it undefined until the agent
+              task snapshot resolves — printing "0" then would claim the whole
+              inbox is idle while the answer is still on its way. */}
+          {!archived && onToggleIdleOnly ? (
+            row({
+              key: "idle",
+              label: t("inbox.archivedFiltersIdleOnly"),
+              count: facets?.idleCount ?? 0,
+              checked: filters.idleOnly,
+              onPress: onToggleIdleOnly,
+              leading: (
+                <Ionicons
+                  name="ban-outline"
+                  size={16}
+                  color={theme.mutedForeground}
+                />
+              ),
+            })
+          ) : null}
 
           {section(t("inbox.archivedFiltersStatus"))}
           {statusKeys.length === 0 ? (
