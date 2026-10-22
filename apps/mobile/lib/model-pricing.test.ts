@@ -31,6 +31,7 @@ import {
   cacheHitRatePercent,
   cacheHitRateRatio,
   canonicalCandidates,
+  cursorBaseModel,
   isModelPriced,
   pricingCandidates,
   pricingKey,
@@ -244,6 +245,18 @@ describe("lookup tolerances match web", () => {
     expect(pricingKey("auto")).toBe("auto");
   });
 
+  it("tries the provider-qualified form before the bare one", () => {
+    // Why this needs its own case: every qualified row except one is a Cursor
+    // row, and Cursor rows go down `cursorPricingCandidates` — which orders
+    // its own candidates and would stay correct if the GENERIC branch's
+    // ordering were flipped. `kimi/k3` is the one qualified row on the generic
+    // path, so it is the only row that can observe the flip at all.
+    expect(pricingCandidates("k3", "kimi")).toEqual(["kimi/k3", "k3"]);
+    expect(resolvePricing("k3", "kimi")!.input).toBe(3);
+    // Without a provider the generic id keeps no rate: `k3` is not a row.
+    expect(isModelPriced("k3")).toBe(false);
+  });
+
   it("tolerates provider case drift in the row's own value", () => {
     expect(resolvePricing("claude-sonnet-5", "Claude")).toEqual(
       resolvePricing("claude-sonnet-5", "claude"),
@@ -330,5 +343,134 @@ describe("cache hit rate counts every input-side bucket", () => {
     // reported 99% — the "99.5% rounds to 100%" trap on a run that actually
     // wrote 57K tokens into the cache.
     expect(cacheHitRatePercent(22, 341_623, 57_206)).toBe(86);
+  });
+});
+
+describe("Cursor ids carry their variant in the id, not in a separate field", () => {
+  // Iteration 269 (MYS-2317). Iteration 268 synced the rate TABLE and built a
+  // gate that compares it row by row — and that gate stayed green while this
+  // was broken, because the table was never the problem. Upstream's resolver
+  // has a Cursor-only branch (`cursorPricingCandidates`) that splits a catalog
+  // id into `<base> + <variant parts>`; mobile's did not. Every variant id
+  // therefore missed every row and priced at $0, silently.
+  //
+  // Measured against upstream's resolver on a 395k-case corpus built from every
+  // upstream row × 17 providers × 23 variant suffixes: 11,505 agreements
+  // missing before this fix, 0 after, all of them Cursor.
+
+  it("prices an effort-suffixed Cursor id at its base row", () => {
+    // The exact ids upstream's own test pins. Effort and thinking do not move
+    // per-token rates, so these are the base SKU's money.
+    const opus55 = { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 };
+    for (const id of ["claude-opus-5-5-high", "claude-opus-5-5-max"]) {
+      expect(resolvePricing(id, "cursor"), id).toEqual(opus55);
+    }
+    expect(resolvePricing("claude-fable-5-1-thinking-high", "cursor")).toEqual({
+      input: 10, output: 50, cacheRead: 0.25, cacheWrite: 12.5,
+    });
+    // Thinking AFTER the effort level, and the older 4.6 naming.
+    expect(
+      resolvePricing("claude-4.6-sonnet-medium-thinking", "cursor"),
+    ).toEqual({ input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 });
+    // A `cursor-` prefix on the model itself is part of Cursor's spelling.
+    expect(resolvePricing("cursor-grok-4.6-high", "cursor")).toEqual({
+      input: 2, output: 6, cacheRead: 0.5, cacheWrite: 0,
+    });
+    // No base row exists; the bare vendor row is the fallback upstream picks.
+    expect(resolvePricing("gpt-5.5-extra-high", "cursor")).toEqual({
+      input: 5, output: 30, cacheRead: 0.5, cacheWrite: 0,
+    });
+  });
+
+  it("keeps a Fast variant on its own rate and never folds it into the base", () => {
+    // A Fast SKU bills ABOVE its standard row, so resolving it to the base
+    // row understates a premium run — the opposite error from the $0 one, and
+    // invisible to a test that only asks "did it price".
+    expect(resolvePricing("gpt-5.6-sol-medium-fast", "cursor")).toEqual({
+      input: 8, output: 40, cacheRead: 0.8, cacheWrite: 10,
+    });
+    expect(resolvePricing("cursor-grok-4.5-high-fast", "cursor")).toEqual({
+      input: 4, output: 18, cacheRead: 1, cacheWrite: 0,
+    });
+    expect(resolvePricing("claude-opus-4-7-thinking-high-fast", "cursor")).toEqual({
+      input: 30, output: 150, cacheRead: 3, cacheWrite: 37.5,
+    });
+  });
+
+  it("reads `[fast=true]` as a Fast variant, not as a strippable context tag", () => {
+    // The trap in the generic tolerance list: `stripContextTag` removes any
+    // trailing `[...]`, so a parameterized Fast id lost its `fast=true` and
+    // borrowed the CHEAPER standard row. Upstream parses the parameter list
+    // first and treats the id as Fast.
+    expect(resolvePricing("claude-opus-4-8[effort=high,fast=true]", "cursor")).toEqual({
+      input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5,
+    });
+    expect(resolvePricing("claude-opus-4-7[fast=true]", "cursor")).toEqual({
+      input: 30, output: 150, cacheRead: 3, cacheWrite: 37.5,
+    });
+    // `fast=false` is the standard row, and `context=1m` alongside it does not
+    // make it a Fast one.
+    expect(resolvePricing("claude-opus-4-8[context=1m,effort=high,fast=false]", "cursor")).toEqual({
+      input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25,
+    });
+  });
+
+  it("refuses a Fast variant Cursor publishes no Fast rate for", () => {
+    // Upstream's rule: a Fast variant resolves through its exact id or its own
+    // `cursor/<base>-fast` row, never through the base price. There is no
+    // `cursor/claude-opus-5-5-fast`, so these must stay UNPRICED and surface
+    // in the unmapped diagnostic rather than quietly halving a premium SKU.
+    for (const id of [
+      "claude-opus-5-5-high-fast",
+      "gpt-5.5-medium-fast",
+      "claude-opus-5-5[fast=true]",
+    ]) {
+      expect(isModelPriced(id, "cursor"), id).toBe(false);
+    }
+  });
+
+  it("scopes the variant stripping to Cursor rows", () => {
+    // `claude-opus-5-5-high` is not a Claude-provider SKU. Stripping effort
+    // outside Cursor would invent a price for an id no vendor publishes.
+    expect(isModelPriced("claude-opus-5-5-high")).toBe(false);
+    expect(isModelPriced("claude-opus-5-5-high", "claude")).toBe(false);
+    expect(isModelPriced("claude-opus-5-5-high", "cursor")).toBe(true);
+  });
+
+  it("splits a Cursor id into base + fast the way upstream does", () => {
+    expect(cursorBaseModel("claude-opus-4-7-thinking-high-fast")).toEqual({
+      base: "claude-opus-4-7",
+      fast: true,
+    });
+    expect(cursorBaseModel("claude-4.6-sonnet-medium-thinking")).toEqual({
+      base: "claude-4.6-sonnet",
+      fast: false,
+    });
+    expect(cursorBaseModel("cursor-grok-4.6-high")).toEqual({
+      base: "grok-4.6",
+      fast: false,
+    });
+    expect(
+      cursorBaseModel("claude-opus-4-8[context=1m,effort=high,fast=true]"),
+    ).toEqual({ base: "claude-opus-4-8", fast: true });
+    // Case and surrounding whitespace drift on the wire.
+    expect(cursorBaseModel("  Claude-Opus-5-5-High  ")).toEqual({
+      base: "claude-opus-5-5",
+      fast: false,
+    });
+  });
+
+  it("puts the Cursor branch on the Cursor path only", () => {
+    // The branch must be reachable through the public entry point, keyed on
+    // the NORMALIZED provider — a row reporting `Cursor` is a Cursor row.
+    expect(pricingCandidates("claude-opus-5-5-high", "Cursor")).toEqual(
+      pricingCandidates("claude-opus-5-5-high", "cursor"),
+    );
+    expect(pricingCandidates("claude-opus-5-5-high", "cursor")).toContain(
+      "cursor/claude-opus-5-5",
+    );
+    expect(pricingCandidates("claude-opus-5-5-high", "claude")).not.toContain(
+      "claude/claude-opus-5-5",
+    );
   });
 });

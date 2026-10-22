@@ -438,14 +438,80 @@ export function isModelPriced(
   return resolvePricing(model, provider, overrides) !== undefined;
 }
 
-/** Every lookup key tried for one (model, provider) pair, in order. */
+/**
+ * Every lookup key tried for one (model, provider) pair, in order.
+ *
+ * Cursor is the one provider whose ids carry the variant in the id itself
+ * (`claude-opus-4-7-thinking-high-fast`, `claude-opus-4-8[effort=high,fast=true]`),
+ * so a Cursor row takes the `cursorPricingCandidates` path — see its docblock.
+ */
 export function pricingCandidates(model: string, provider?: string): string[] {
   const base = canonicalCandidates(model);
   const p = normalizeProvider(provider);
   // Provider-qualified first, then bare: a `cursor/auto` row wins for a Cursor
   // row, while an unqualified `auto` stays unmapped rather than borrowing it.
   if (!p) return base;
+  if (p === "cursor") return cursorPricingCandidates(model, base);
   return [...base.map((c) => qualify(p, c)), ...base];
+}
+
+/** Cursor's variant parts, stripped from the right (web's
+ *  `CURSOR_VARIANT_SUFFIX`). */
+const CURSOR_VARIANT_SUFFIX =
+  /-(?:fast|thinking|none|minimal|low|medium|high|xhigh|extra-high|max)$/;
+
+/**
+ * Split a Cursor id into its base model and whether it is a Fast variant.
+ *
+ * Cursor's catalog ids are a base model plus variant parts, in no fixed order:
+ * `claude-opus-4-7-thinking-high-fast`, `claude-4.6-sonnet-medium-thinking`,
+ * `cursor-grok-4.6-high`, or the parameterized
+ * `claude-opus-4-8[context=1m,effort=high,fast=true]`.
+ *
+ * Effort and thinking levels do not change per-token rates, so they are
+ * stripped to reach the base row — but `-fast` DOES (a Fast SKU bills above its
+ * standard row), so it is tracked separately and never folded into the base.
+ * Verbatim port of web's `cursorBaseModel` (`packages/views/runtimes/utils.ts`).
+ */
+export function cursorBaseModel(model: string): {
+  base: string;
+  fast: boolean;
+} {
+  let id = model.trim().toLowerCase();
+  let fast = false;
+  const params = id.match(/\[([^\]]*)\]$/);
+  if (params) {
+    fast = /(?:^|,)\s*fast\s*=\s*true\s*(?:,|$)/.test(params[1] ?? "");
+    id = id.slice(0, params.index);
+  }
+  for (
+    let m = id.match(CURSOR_VARIANT_SUFFIX);
+    m;
+    m = id.match(CURSOR_VARIANT_SUFFIX)
+  ) {
+    if (m[0] === "-fast") fast = true;
+    id = id.slice(0, m.index);
+  }
+  return { base: id.replace(/^cursor-/, ""), fast };
+}
+
+/**
+ * Fast mode bills above the standard rate, so a Fast variant resolves only
+ * through its exact id or its own `cursor/<base>-fast` row — never through a
+ * canonical form (where `[fast=true]` was stripped as a context tag, letting a
+ * `[fast=true]` id borrow the standard row) or the base model's price.
+ * Standard variants try the exact ids, then the Cursor base row, then the bare
+ * vendor row for the same SKU.
+ */
+export function cursorPricingCandidates(
+  model: string,
+  canonical: string[],
+): string[] {
+  const { base, fast } = cursorBaseModel(model);
+  if (fast) return [qualify("cursor", model), `cursor/${base}-fast`];
+  const qualified = canonical.map((c) => qualify("cursor", c));
+  if (!base) return [...qualified, ...canonical];
+  return [...new Set([...qualified, `cursor/${base}`, base, ...canonical])];
 }
 
 /**
