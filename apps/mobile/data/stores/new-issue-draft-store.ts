@@ -52,6 +52,7 @@ import type {
   Project,
 } from "@multica/core/types";
 import type { AssigneeValue } from "@/components/issue/pickers/assignee-picker-body";
+import { normalizedBatchStatus, batchFormChanged } from "@/lib/new-issue-batch-continuation";
 
 /**
  * Actor picked in the agent-mode quick-create panel (`new-issue.tsx` →
@@ -113,6 +114,17 @@ interface NewIssueDraftState extends NewIssueDraftValues {
    * the empty state through would erase the file it is about to read.
    */
   hydrated: boolean;
+  /**
+   * Snapshot of the draft a successful "create another" reset into the next
+   * issue of the batch (MUL-7648). Compared by value over the manual form's
+   * fields, so an untouched continuation — which merely inherits the
+   * submitted status and assignee — is not mistaken for work the user did,
+   * while any field they actually changed is.
+   *
+   * `null` when no continuation is live. Never persisted: an untouched
+   * continuation must reload as the create default (see `writeThrough`).
+   */
+  batchContinuationBaseline: NewIssueDraftValues | null;
   setTitle: (next: string) => void;
   setDescription: (next: string) => void;
   setPrompt: (next: string) => void;
@@ -145,17 +157,34 @@ interface NewIssueDraftState extends NewIssueDraftValues {
   reset: () => void;
   /**
    * Reset for the NEXT issue in a "create another" batch — web's
-   * `resetForNextIssue` (`packages/views/modals/create-issue.tsx:391-424`).
+   * `resetForNextIssue` (`packages/views/modals/create-issue.tsx`).
    *
-   * Differs from `reset` in exactly one field: the ASSIGNEE survives. Web
-   * keeps it deliberately (`:404-414`, "keep the just-used assignee for the
-   * next issue in the batch") because filing several tasks for the same
-   * person is the reason the feature exists. Everything that describes THIS
-   * issue — title, bodies, status, priority, dates, labels, project, property
-   * values, agent actor — goes back to its create default. The parent is not
-   * a draft field on mobile (it rides the route), so the screen clears it.
+   * Keeps the two values a batch inherits: the ASSIGNEE and the STATUS just
+   * submitted. Web keeps both deliberately (`resetForNextIssue`, "Keep status
+   * and assignee in this batch" — MUL-7648); filing five tasks for the same
+   * person at the same status is the reason the feature exists. The parent and
+   * the stage also survive on the screen side — they are not draft fields —
+   * because a batch of sub-issues under one parent is the other half of the
+   * same intent.
+   *
+   * Everything that describes THIS issue — title, bodies, priority, dates,
+   * labels, project, property values, agent actor — goes back to its create
+   * default.
+   *
+   * Records the resulting draft as a batch-continuation baseline, so an
+   * untouched continuation can be told apart from one the user edited (see
+   * `lib/new-issue-batch-continuation.ts`).
    */
   resetForNextIssue: () => void;
+  /**
+   * Normalize an untouched batch continuation on form close: its inherited
+   * status goes back to the create default, so the next fresh dialog starts
+   * from `todo`. A continuation the user actually edited keeps its fields.
+   *
+   * No-op when no continuation is active (the common case — the form was
+   * never in a batch, or the draft was replaced by a workspace switch).
+   */
+  endBatchContinuation: () => void;
 }
 
 export const EMPTY_NEW_ISSUE_DRAFT: NewIssueDraftValues = {
@@ -179,6 +208,15 @@ export const EMPTY_NEW_ISSUE_DRAFT: NewIssueDraftValues = {
  *  setters (called from picker routes with no workspace in scope) need it. */
 let boundWorkspaceId: string | null = null;
 
+/**
+ * Mirror of the live batch-continuation baseline, kept at module scope so
+ * `writeThrough` can read it without reaching back into the store object that
+ * is still being constructed (a `getState()` call there would depend on the
+ * `const` below already being initialised — true in practice, fragile by
+ * construction). The store's own field and this one are written together.
+ */
+let continuationBaseline: NewIssueDraftValues | null = null;
+
 /** Serialize file writes so a burst of keystrokes can't interleave. */
 let persistChain: Promise<void> = Promise.resolve();
 
@@ -196,8 +234,37 @@ function persist(wsId: string, values: NewIssueDraftValues): void {
     });
 }
 
-function writeThrough(values: NewIssueDraftValues): void {
-  if (boundWorkspaceId) persist(boundWorkspaceId, values);
+/**
+ * Persist `values` for the bound workspace.
+ *
+ * An untouched batch continuation must never reach disk carrying the status it
+ * merely INHERITED from the submit: on reload that would look like a choice
+ * the user made. Web normalizes in its persist `partialize` for the same
+ * reason. The in-memory value stays intact — the live form is still inside the
+ * batch and its chip has to show what the next issue inherits.
+ *
+ * `baseline` is an explicit parameter because `resetForNextIssue` writes the
+ * continuation BEFORE installing its own baseline: reading the previous (or
+ * absent) one would classify the freshly reset draft as edited and persist the
+ * inherited status. It defaults to the module mirror above.
+ */
+function writeThrough(
+  values: NewIssueDraftValues,
+  baseline: NewIssueDraftValues | null = continuationBaseline,
+): void {
+  if (!boundWorkspaceId) return;
+  const persisted: NewIssueDraftValues =
+    baseline === null
+      ? values
+      : {
+          ...values,
+          status: normalizedBatchStatus(
+            values,
+            baseline,
+            EMPTY_NEW_ISSUE_DRAFT.status,
+          ),
+        };
+  persist(boundWorkspaceId, persisted);
 }
 
 const asString = (raw: unknown): string =>
@@ -299,6 +366,37 @@ export function draftHasContent(values: NewIssueDraftValues): boolean {
   );
 }
 
+/**
+ * Whether the entry point should show the "unfinished draft" dot, accounting
+ * for a live batch continuation.
+ *
+ * A continuation inherits the submitted STATUS and ASSIGNEE, so plain
+ * `draftHasContent` would report content for a draft the user has not touched
+ * at all — every "create another" batch would leave a phantom dot behind. Web
+ * has the same problem and solves it with `hasRecoverableIntent`: content the
+ * user actually put there, OR a change away from the continuation baseline.
+ *
+ * The two inherited fields are therefore normalized to their defaults before
+ * the content check — if the user picks a DIFFERENT status or assignee, that
+ * is a change and `batchFormChanged` reports it.
+ */
+export function draftHasRecoverableIntent(
+  state: NewIssueDraftValues & {
+    batchContinuationBaseline: NewIssueDraftValues | null;
+  },
+): boolean {
+  const baseline = state.batchContinuationBaseline;
+  if (!baseline) return draftHasContent(state);
+  const withoutInherited: NewIssueDraftValues = {
+    ...state,
+    status: EMPTY_NEW_ISSUE_DRAFT.status,
+    assignee: EMPTY_NEW_ISSUE_DRAFT.assignee,
+  };
+  return (
+    draftHasContent(withoutInherited) || batchFormChanged(state, baseline)
+  );
+}
+
 export const useNewIssueDraftStore = create<NewIssueDraftState>((set, get) => {
   /** Merge a patch, write the result through, and return the new state. */
   const commit = (patch: Partial<NewIssueDraftValues>) => {
@@ -310,6 +408,7 @@ export const useNewIssueDraftStore = create<NewIssueDraftState>((set, get) => {
   return {
     ...EMPTY_NEW_ISSUE_DRAFT,
     hydrated: false,
+    batchContinuationBaseline: null,
     setTitle: (next) => commit({ title: next }),
     setDescription: (next) => commit({ description: next }),
     setPrompt: (next) => commit({ prompt: next }),
@@ -350,17 +449,57 @@ export const useNewIssueDraftStore = create<NewIssueDraftState>((set, get) => {
       // Persist the empty draft rather than deleting the file: the write is
       // ordered on the same chain as every other write, so a delete could
       // race a queued persist and resurrect the draft.
+      continuationBaseline = null;
       writeThrough(EMPTY_NEW_ISSUE_DRAFT);
-      set({ ...EMPTY_NEW_ISSUE_DRAFT });
+      // A plain reset also ends any live batch: the draft is being consumed as
+      // a whole, so there is no continuation left to normalize later.
+      set({ ...EMPTY_NEW_ISSUE_DRAFT, batchContinuationBaseline: null });
     },
     resetForNextIssue: () => {
-      // Same write-through discipline as `reset`. The assignee is read from
-      // the live state rather than the constant so a pick made during the
-      // submit request is not thrown away.
-      const { assignee } = get();
-      const next: NewIssueDraftValues = { ...EMPTY_NEW_ISSUE_DRAFT, assignee };
-      writeThrough(next);
-      set(next);
+      // Same write-through discipline as `reset`. Assignee AND status are read
+      // from the live state rather than the constant: a pick made during the
+      // submit request is not thrown away, and the status is the one this
+      // batch inherits (MUL-7648 — web keeps it for the same reason it keeps
+      // the assignee: a batch is usually one person doing one kind of work).
+      const { assignee, status } = get();
+      const next: NewIssueDraftValues = {
+        ...EMPTY_NEW_ISSUE_DRAFT,
+        assignee,
+        status,
+      };
+      // The reset above is a batch continuation, not user input. Recording the
+      // baseline is what lets `hasRecoverableIntent` tell an untouched
+      // continuation (discard on close) from one the user edited (keep). It is
+      // passed to the write as well: this draft IS the new baseline, so an
+      // untouched one persists at the create default.
+      writeThrough(next, next);
+      continuationBaseline = next;
+      set({ ...next, batchContinuationBaseline: next });
+    },
+    endBatchContinuation: () => {
+      const { batchContinuationBaseline: baseline } = get();
+      if (!baseline) return;
+      // `normalizedBatchStatus` decides: untouched → the create default,
+      // edited → whatever the user has. The baseline is dropped either way —
+      // the batch is over, and holding a stale snapshot would make the NEXT
+      // continuation compare against the wrong draft.
+      const current = snapshot(get());
+      const status = normalizedBatchStatus(
+        current,
+        baseline,
+        EMPTY_NEW_ISSUE_DRAFT.status,
+      );
+      const next: NewIssueDraftValues = { ...current, status };
+      // Drop the mirror BEFORE writing: the write is what makes the
+      // normalized status durable, so it must not be re-normalized against the
+      // baseline it just came from.
+      continuationBaseline = null;
+      if (status !== current.status) {
+        writeThrough(next);
+        set({ ...next, batchContinuationBaseline: null });
+        return;
+      }
+      set({ batchContinuationBaseline: null });
     },
   };
 });
@@ -404,7 +543,14 @@ export function useNewIssueDraftWorkspace(wsId: string | null) {
     // writes nothing: the workspace we just left keeps its saved draft, and
     // the one we are entering has not been touched yet.
     boundWorkspaceId = wsId;
-    useNewIssueDraftStore.setState({ ...EMPTY_NEW_ISSUE_DRAFT, hydrated: false });
+    // A workspace switch replaces the draft wholesale, so any continuation
+    // snapshot describes a draft that no longer exists (web clears it in its
+    // persist `merge` for the same reason).
+    useNewIssueDraftStore.setState({
+      ...EMPTY_NEW_ISSUE_DRAFT,
+      hydrated: false,
+      batchContinuationBaseline: null,
+    });
     prevRef.current = wsId;
     let cancelled = false;
     void (async () => {

@@ -347,8 +347,20 @@ export default function NewIssueModal() {
 
   /**
    * Reset the form for the NEXT issue in a "create another" batch — web's
-   * `resetForNextIssue` (`packages/views/modals/create-issue.tsx:391-424`).
+   * `resetForNextIssue` (`packages/views/modals/create-issue.tsx`).
    * The form stays mounted; the caller decides that, not this function.
+   *
+   * **What survives the batch (MUL-7648).** Web keeps three things: the
+   * assignee, the just-submitted status, and — after the upstream change — the
+   * parent and its stage. The store owns the first two (`resetForNextIssue`);
+   * this function must therefore no longer clear the parent or the stage,
+   * which is the opposite of what it did before. A batch of sub-issues under
+   * one parent at one stage is the common case the feature exists for, and the
+   * previous behaviour forced a parent pick plus a stage pick per issue.
+   *
+   * Nothing leaks past the form itself: the stage pick store is scoped to this
+   * component's lifetime by `useNewIssueStagePick()` and tagged by parent, and
+   * the parent only ever comes from the route this form was opened with.
    *
    * Ordering matters: the draft reset runs on a chained promise that writes
    * through to the persisted file, so doing it after the bodies are blanked
@@ -361,16 +373,31 @@ export default function NewIssueModal() {
     // the next issue would open carrying the previous body.
     description.setText("");
     promptInput.setText("");
-    // The parent rides the route; a batch has no shared parent (web `:401`).
-    setParentCleared(true);
-    // Stage is relative to the parent that was just dropped, and the pick
-    // store is module-level — leaving a stale pick here is the exact bug
-    // MYS-2255 fixed, reintroduced through the keep-open path.
-    useNewIssueStagePickStore.getState().reset();
     // Uploaded attachments belonged to the issue just created; their ids are
     // already spent on that issue's payload.
     setUploadedAttachmentIds([]);
   }, [description, promptInput, resetForNextIssue]);
+
+  /**
+   * Close out a batch continuation when the form dies.
+   *
+   * An untouched continuation is indistinguishable from a draft the user is
+   * working on, so web normalizes it on unmount (`endBatchContinuation`): the
+   * inherited status goes back to the create default, which is what the next
+   * FRESH dialog must start from. A continuation the user actually edited
+   * keeps everything.
+   *
+   * Unmount, not "on submit", because the form closes four ways (submit,
+   * cancel, swipe-down, router dismiss) and the store action no-ops when no
+   * continuation is live — the same lifetime argument the stage pick store
+   * makes.
+   */
+  useEffect(
+    () => () => {
+      useNewIssueDraftStore.getState().endBatchContinuation();
+    },
+    [],
+  );
 
   /**
    * Leave the form after a successful create — web's

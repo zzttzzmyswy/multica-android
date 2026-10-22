@@ -38,6 +38,7 @@ import * as fs from "expo-file-system";
 import {
   useNewIssueDraftStore,
   draftHasContent,
+  draftHasRecoverableIntent,
   normalizeNewIssueDraft,
   EMPTY_NEW_ISSUE_DRAFT,
   __bindNewIssueDraftWorkspace,
@@ -78,7 +79,10 @@ describe("new-issue-draft-store", () => {
     fsStore.clear();
     __resetNewIssueDraftBinding();
     __bindNewIssueDraftWorkspace("ws-1");
-    useNewIssueDraftStore.setState({ ...EMPTY_NEW_ISSUE_DRAFT });
+    useNewIssueDraftStore.setState({
+      ...EMPTY_NEW_ISSUE_DRAFT,
+      batchContinuationBaseline: null,
+    });
   });
 
   it("seeds empty draft defaults including labels and startDate", () => {
@@ -204,6 +208,151 @@ describe("new-issue-draft-store", () => {
     expect(fsStore.size).toBe(0);
     // The value still lands in memory, so nothing the user typed is lost.
     expect(useNewIssueDraftStore.getState().title).toBe("orphan");
+  });
+
+  // ── "Create another" batch continuation (MUL-7648) ──────────────────────
+  //
+  // Web keeps the submitted status and the parent/stage across the next issue
+  // of a batch. Keeping the status creates a second problem: an untouched
+  // continuation looks exactly like a draft the user is working on, so it needs
+  // a baseline to be told apart.
+
+  describe("batch continuation", () => {
+    it("keeps BOTH the assignee and the submitted status", () => {
+      useNewIssueDraftStore.getState().setAssignee({ type: "member", id: "m-1" });
+      useNewIssueDraftStore.getState().setStatus("in_progress");
+      useNewIssueDraftStore.getState().setTitle("first");
+      useNewIssueDraftStore.getState().resetForNextIssue();
+
+      const s = useNewIssueDraftStore.getState();
+      expect(s.assignee).toEqual({ type: "member", id: "m-1" });
+      // MUL-7648: the status is no longer reset to todo.
+      expect(s.status).toBe("in_progress");
+    });
+
+    it("clears the content of the issue just filed", () => {
+      useNewIssueDraftStore.getState().setTitle("first");
+      useNewIssueDraftStore.getState().setDescription("body");
+      useNewIssueDraftStore.getState().setPriority("urgent");
+      useNewIssueDraftStore.getState().setDueDate("2026-11-01");
+      useNewIssueDraftStore.getState().setStartDate("2026-11-01");
+      useNewIssueDraftStore.getState().attachLabel(LABEL_A);
+      useNewIssueDraftStore.getState().resetForNextIssue();
+
+      const s = useNewIssueDraftStore.getState();
+      expect(s.title).toBe("");
+      expect(s.description).toBe("");
+      expect(s.priority).toBe("none");
+      expect(s.dueDate).toBeNull();
+      expect(s.startDate).toBeNull();
+      expect(s.labels).toEqual([]);
+    });
+
+    it("records the reset draft as the continuation baseline", () => {
+      useNewIssueDraftStore.getState().setStatus("in_progress");
+      useNewIssueDraftStore.getState().resetForNextIssue();
+
+      const s = useNewIssueDraftStore.getState();
+      expect(s.batchContinuationBaseline).not.toBeNull();
+      // The baseline describes the draft the reset produced, not the submitted
+      // issue — otherwise every continuation would read as "already edited".
+      expect(s.batchContinuationBaseline?.title).toBe("");
+      expect(s.batchContinuationBaseline?.status).toBe("in_progress");
+    });
+
+    it("an untouched continuation does NOT light the draft dot", () => {
+      useNewIssueDraftStore.getState().setStatus("in_progress");
+      useNewIssueDraftStore.getState().resetForNextIssue();
+
+      // Inherited status + assignee only: nothing here is the user's work.
+      expect(draftHasRecoverableIntent(useNewIssueDraftStore.getState())).toBe(false);
+      // The plain content rule WOULD have lit it — which is the bug the
+      // baseline exists to prevent.
+      expect(draftHasContent(useNewIssueDraftStore.getState())).toBe(true);
+    });
+
+    it("an edited continuation DOES light the draft dot", () => {
+      useNewIssueDraftStore.getState().resetForNextIssue();
+      useNewIssueDraftStore.getState().setPriority("high");
+      expect(draftHasRecoverableIntent(useNewIssueDraftStore.getState())).toBe(true);
+    });
+
+    it("persists an untouched continuation at the create default status", async () => {
+      useNewIssueDraftStore.getState().setStatus("in_progress");
+      useNewIssueDraftStore.getState().setTitle("first");
+      useNewIssueDraftStore.getState().resetForNextIssue();
+      await __flushNewIssueDraftWrites();
+
+      // On disk: todo, so a reload cannot present the inherited status as a
+      // choice. In memory: still in_progress, because the live form is still
+      // inside the batch and its chip must show what the next issue inherits.
+      expect(savedDraft("ws-1")?.status).toBe("todo");
+      expect(useNewIssueDraftStore.getState().status).toBe("in_progress");
+    });
+
+    it("persists an EDITED continuation's status as-is", async () => {
+      useNewIssueDraftStore.getState().setStatus("in_progress");
+      useNewIssueDraftStore.getState().resetForNextIssue();
+      useNewIssueDraftStore.getState().setTitle("second issue");
+      await __flushNewIssueDraftWrites();
+
+      expect(savedDraft("ws-1")?.status).toBe("in_progress");
+    });
+
+    it("endBatchContinuation drops an untouched continuation's status", () => {
+      useNewIssueDraftStore.getState().setStatus("in_progress");
+      useNewIssueDraftStore.getState().resetForNextIssue();
+      useNewIssueDraftStore.getState().endBatchContinuation();
+
+      const s = useNewIssueDraftStore.getState();
+      expect(s.status).toBe("todo");
+      // The baseline is spent — holding it would make the NEXT batch compare
+      // against the wrong draft.
+      expect(s.batchContinuationBaseline).toBeNull();
+    });
+
+    it("endBatchContinuation keeps an edited continuation intact", () => {
+      useNewIssueDraftStore.getState().setStatus("in_progress");
+      useNewIssueDraftStore.getState().resetForNextIssue();
+      useNewIssueDraftStore.getState().setTitle("half-typed second issue");
+      useNewIssueDraftStore.getState().endBatchContinuation();
+
+      const s = useNewIssueDraftStore.getState();
+      expect(s.title).toBe("half-typed second issue");
+      expect(s.status).toBe("in_progress");
+      expect(s.batchContinuationBaseline).toBeNull();
+    });
+
+    it("endBatchContinuation is a no-op when no continuation is live", () => {
+      useNewIssueDraftStore.getState().setTitle("ordinary draft");
+      useNewIssueDraftStore.getState().setStatus("done");
+      useNewIssueDraftStore.getState().endBatchContinuation();
+
+      // An ordinary draft must not have its status rewritten out from under
+      // it: the normalization only ever applies to a batch.
+      expect(useNewIssueDraftStore.getState().status).toBe("done");
+      expect(useNewIssueDraftStore.getState().title).toBe("ordinary draft");
+    });
+
+    it("reset() ends the batch as well", () => {
+      useNewIssueDraftStore.getState().resetForNextIssue();
+      expect(useNewIssueDraftStore.getState().batchContinuationBaseline).not.toBeNull();
+      useNewIssueDraftStore.getState().reset();
+      expect(useNewIssueDraftStore.getState().batchContinuationBaseline).toBeNull();
+      expect(useNewIssueDraftStore.getState().status).toBe("todo");
+    });
+
+    it("a fresh continuation re-baselines against the new draft", () => {
+      // Two submits in one batch: the second must compare against what the
+      // SECOND reset produced, not the first — otherwise the first batch's
+      // edits would make every later continuation look edited.
+      useNewIssueDraftStore.getState().setStatus("in_progress");
+      useNewIssueDraftStore.getState().resetForNextIssue();
+      useNewIssueDraftStore.getState().setTitle("second");
+      useNewIssueDraftStore.getState().resetForNextIssue();
+
+      expect(draftHasRecoverableIntent(useNewIssueDraftStore.getState())).toBe(false);
+    });
   });
 
   // ── draftHasContent: the entry-point dot's rule ────────────────────────

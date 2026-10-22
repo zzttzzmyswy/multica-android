@@ -23,9 +23,17 @@ const BARS: Record<IssuePriority, number> = {
 };
 
 // Mirrors PRIORITY_CONFIG.color in packages/core/issues/config/priority.ts.
+//
+// `high` is NOT `warning`. Upstream split it out (MUL-8155, `--priority-high`,
+// oklch(0.68 0.18 50) → #f97316) because High and Medium previously drew the
+// same three-vs-two yellow bars: on a list where the only difference is one
+// filled bar, "urgent-ish" and "normal" read alike. Orange sits between
+// `--destructive` (urgent, red) and `--warning` (medium, yellow) on the hue
+// scale, so severity is legible from colour alone. `medium` keeps the warning
+// yellow — the split is only High's.
 const COLOR: Record<IssuePriority, string> = {
   urgent: "#dc2626", // destructive
-  high: "#eab308", // warning
+  high: "#f97316", // priority-high
   medium: "#eab308", // warning
   low: "#3b82f6", // info
   none: "#71717a", // muted-foreground

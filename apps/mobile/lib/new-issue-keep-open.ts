@@ -5,23 +5,24 @@
  * is the reference. Reading it line by line gives one rule that is easy to
  * miss and expensive to get wrong:
  *
- *   **The assignee survives; the parent does not.**
+ *   **The assignee, the status, the parent and the stage survive; the project
+ *   does not.**
  *
- * Web keeps `assigneeType` / `assigneeId` (`:406-414` — the comment says
- * "Keep the just-used assignee for the next issue in the batch") but clears
- * the parent (`:401`) and the project (`:400`). That asymmetry is the whole
- * point of batching: five tasks for the same person is the common case, and
- * re-picking them five times is what the feature exists to avoid. A sub-task
- * queue, by contrast, is not a batch — carrying the parent forward would file
- * unrelated tasks under somebody else's sub-task tree. Project is cleared for
- * the same reason web's quick-create store refuses to remember it at all
- * (`quick-create-store.test.ts`, MUL-5862): a project belongs to the issue
- * being filed, not to the person filing it.
+ * Web keeps `assigneeType` / `assigneeId` and the just-submitted `status`
+ * (`resetForNextIssue`, "Keep status and assignee in this batch" — MUL-7648),
+ * and after that same commit it no longer clears the parent or the stage
+ * (`updateParent` resets stage only when the parent itself changes). That is
+ * the whole point of batching: five tasks for the same person, at the same
+ * status, under the same parent is the common case, and re-picking them five
+ * times is what the feature exists to avoid.
+ *
+ * Project is cleared: web's quick-create store refuses to remember it at all
+ * (`quick-create-store.test.ts`, MUL-5862) because a project belongs to the
+ * issue being filed, not to the person filing it.
  *
  * Everything else is "the *content* of this issue" and must go: title,
- * description, prompt, status (back to todo), priority (back to none), dates,
- * labels, custom-property values, attachments, and the stage pick (which is
- * relative to the parent that was just cleared).
+ * description, prompt, priority (back to none), dates, labels,
+ * custom-property values, and attachments.
  *
  * Kept pure and separate from the screen so the interesting part — the
  * keep/clear split — is testable and mutable without a renderer.
@@ -33,12 +34,17 @@ import type { IssuePropertyValues } from "@multica/core/types";
  * The subset of the draft a "create another" has to rewrite. Mirrors the
  * mobile draft store's settable fields; deliberately structural so the screen
  * can pass its own store's snapshot.
+ *
+ * `assignee`, `status`, `parentIssueId` and `stage` are absent on purpose:
+ * the first two are inherited from the live store by
+ * `useNewIssueDraftStore.resetForNextIssue`, and the last two are screen state
+ * a batch now carries forward. A caller therefore cannot clear them through
+ * this shape.
  */
 export interface NextIssueDraftReset {
   title: string;
   description: string;
   prompt: string;
-  status: string;
   priority: string;
   dueDate: string | null;
   startDate: string | null;
@@ -46,8 +52,6 @@ export interface NextIssueDraftReset {
   propertyValues: IssuePropertyValues;
   /** `undefined` clears it — a batch has no shared project. */
   project: undefined;
-  /** `undefined` clears it — a batch is not a sub-task queue. */
-  parentIssueId: undefined;
 }
 
 /**
@@ -76,14 +80,12 @@ export function nextIssueDraftReset(
     title: "",
     description: "",
     prompt: "",
-    status: "todo",
     priority: "none",
     dueDate: null,
     startDate: null,
     labels: [],
     propertyValues: {},
     project: undefined,
-    parentIssueId: undefined,
   };
 }
 
