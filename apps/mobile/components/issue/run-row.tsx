@@ -33,13 +33,21 @@ import { RunLog } from "./run-log";
 import { RerunButton } from "./rerun-button";
 import { useCancelTask } from "@/data/mutations/issues";
 import { useActorLookup } from "@/data/use-actor-name";
+import { useRunWakeup } from "@/data/queries/run-wakeup";
 import { useTimeAgo } from "@/lib/time-ago";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
-import { formatTokens } from "@/lib/usage-format";
 import { summarizeTaskUsage } from "@/lib/task-usage";
+import { useCustomPricingStore } from "@/lib/custom-pricing-store";
 import { canRerunRun } from "@/lib/run-retry";
+import {
+  runDurationLabel,
+  runReasonLabel,
+  runUsageParts,
+} from "@/lib/run-row-meta";
+import { runTriggerLabel, wakeupRunLabel } from "@/lib/run-trigger-label";
+import { useWakeupText } from "@/lib/use-wakeup-text";
 
 interface Props {
   task: AgentTask;
@@ -59,14 +67,44 @@ export function RunRow({ task, issueId }: Props) {
   const { resolveActorName } = useActorLookup();
   const agentName = actorNameText(resolveActorName("agent", task.agent_id));
   const { t } = useTranslation();
+  const text = useWakeupText();
   const timeAgo = useTimeAgo();
   const [transcriptOpen, setTranscriptOpen] = useState(false);
   const isActive = ACTIVE_STATUSES.includes(task.status);
-  const summary = task.trigger_summary?.trim() || fallbackSummary(task, t);
+  // A wakeup run's stored summary is the rule's INSTRUCTION, so quoting it
+  // would describe what the agent was told, not why it ran. The rule — when
+  // the issue still has it — names the condition instead; when it does not,
+  // the label stays the complete "Triggered by wakeup" (web's
+  // `wakeup-source-chip.tsx:58-66` does the same, and for the same reason: a
+  // template with an empty condition reads as a rendering fault).
+  const rule = useRunWakeup(issueId, task.wakeup_id);
+  const fallbackSummaryText = runTriggerLabel(task, t);
+  const summary = task.wakeup_id
+    ? wakeupRunLabel(text, rule, fallbackSummaryText)
+    : fallbackSummaryText;
   // Past tasks use completed_at when present (server fills it for terminal
   // statuses); active tasks fall back to created_at so the user sees how
   // long it's been waiting.
   const timestamp = task.completed_at || task.created_at;
+  // `pricings` is a dependency, not a read: `summarizeTaskUsage` prices through
+  // the custom-rate store imperatively, so without the subscription a rate
+  // saved on the runtime page never reaches this row (web
+  // `execution-log-section.tsx:247` subscribes for exactly this reason, and
+  // `lib/custom-pricing-wiring.test.ts` pins the shape).
+  const pricings = useCustomPricingStore((s) => s.pricings);
+  const usage = useMemo(
+    () => runUsageParts(summarizeTaskUsage(task.usage)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `pricings` re-prices; it is read imperatively by `estimateCost`
+    [task.usage, pricings],
+  );
+  const reason = runReasonLabel(task, t);
+  // Web's rule, and its reason: a run that stopped for a stated reason shows
+  // the reason, and only an unexplained one shows how long it took
+  // (`execution-log-section.tsx:685-692`). Mobile's StatusBadge already prints
+  // "Failed · <reason>", so the reason slot here stays empty and the duration
+  // is what the second line adds. Saying both would put the same sentence on
+  // the row twice.
+  const duration = reason ? null : runDurationLabel(task);
 
   const info = (
     <View className="flex-row items-start gap-3 py-2">
@@ -98,12 +136,20 @@ export function RunRow({ task, issueId }: Props) {
             <Text className="text-muted-foreground">{summary}</Text>
           )}
         </Text>
-        <View className="flex-row items-center gap-2">
+        {/* The facts line. Web puts these on one row beside the status mark
+            because a desktop has hover to carry the exact values; a phone has
+            no hover, so they are drawn as visible small text:
+            status · duration · tokens · model · cost · when. Each slot hides
+            itself when it has nothing to state rather than printing a zero. */}
+        <View className="flex-row flex-wrap items-center gap-x-2 gap-y-0.5">
           <StatusBadge task={task} />
-          <UsageTokens task={task} />
-          <Text className="text-caption text-muted-foreground">
-            {timestamp ? timeAgo(timestamp) : ""}
-          </Text>
+          {duration ? (
+            <MetaText>{duration}</MetaText>
+          ) : null}
+          <MetaText>{usage ? usage.tokens : "—"}</MetaText>
+          {usage?.model ? <MetaText>{usage.model}</MetaText> : null}
+          <MetaText>{usage ? usage.cost : "—"}</MetaText>
+          <MetaText>{timestamp ? timeAgo(timestamp) : ""}</MetaText>
         </View>
       </View>
       {transcriptOpen ? (
@@ -191,16 +237,16 @@ export function RunRow({ task, issueId }: Props) {
 }
 
 /**
- * Compact per-run token usage, next to the status badge. No figure → an em
- * dash, never 0: a run that predates usage reporting was not free, we just
- * don't know (web execution-log-section.tsx renders the same pair).
- * Display-only this round — the per-run breakdown dialog is a later item.
+ * One fact on the row's second line: caption-sized, muted, tabular. The
+ * `tabular-nums` matters because durations, token counts and costs stack
+ * vertically down the list — proportional digits make the column wobble as it
+ * scrolls.
  */
-function UsageTokens({ task }: { task: AgentTask }) {
-  const summary = useMemo(() => summarizeTaskUsage(task.usage), [task.usage]);
+function MetaText({ children }: { children: React.ReactNode }) {
+  if (!children) return null;
   return (
     <Text className="text-caption text-muted-foreground tabular-nums">
-      {summary ? formatTokens(summary.tokens) : "—"}
+      {children}
     </Text>
   );
 }
@@ -211,16 +257,13 @@ function StatusBadge({ task }: { task: AgentTask }) {
   const cls = STATUS_CLASS[task.status] ?? "text-muted-foreground";
   // For failed tasks, surface the failure_reason inline so users don't have
   // to drill in. Missing / empty / unrecognised stays as just "Failed".
-  if (task.status === "failed" && task.failure_reason) {
-    const key = `failureReason.${task.failure_reason}`;
-    const reasonLabel = t(key);
-    if (reasonLabel !== key) {
-      return (
-        <Text className={`text-caption ${cls}`}>
-          {label} · {reasonLabel}
-        </Text>
-      );
-    }
+  const reason = runReasonLabel(task, t);
+  if (reason) {
+    return (
+      <Text className={`text-caption ${cls}`}>
+        {label} · {reason}
+      </Text>
+    );
   }
   return <Text className={`text-caption ${cls}`}>{label}</Text>;
 }
@@ -288,22 +331,6 @@ function CancelButton({
       <Text className="text-caption font-medium text-foreground">{t("runs.cancel")}</Text>
     </Pressable>
   );
-}
-
-function fallbackSummary(task: AgentTask, t: (id: string) => string): string {
-  switch (task.kind) {
-    case "comment":
-      return t("runs.kind.comment");
-    case "autopilot":
-      return t("runs.kind.autopilot");
-    case "chat":
-      return t("runs.kind.chat");
-    case "quick_create":
-      return t("runs.kind.quickCreate");
-    case "direct":
-    default:
-      return t("runs.kind.task");
-  }
 }
 
 const STATUS_CLASS: Record<AgentTask["status"], string> = {

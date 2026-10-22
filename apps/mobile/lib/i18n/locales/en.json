@@ -2818,6 +2818,8 @@
   "runs.transcript.triggerQuickCreate": "Quick create",
   "runs.transcript.triggerRetry": "Retry",
   "runs.transcript.usageChip": "Tokens and estimated cost for this run",
+  "runs.triggerWakeup": "Wakeup · {{condition}}",
+  "runs.triggeredByWakeup": "Triggered by wakeup",
   "runs.usageDetail.byAgent": "By agent",
   "runs.usageDetail.colCacheRead": "Cache R",
   "runs.usageDetail.colCacheWrite": "Cache W",

@@ -2818,6 +2818,8 @@
   "runs.transcript.triggerQuickCreate": "快速创建",
   "runs.transcript.triggerRetry": "重试",
   "runs.transcript.usageChip": "这次运行消耗的 token 与估算费用",
+  "runs.triggerWakeup": "由唤醒触发 · {{condition}}",
+  "runs.triggeredByWakeup": "由唤醒触发",
   "runs.usageDetail.byAgent": "按智能体分摊",
   "runs.usageDetail.colCacheRead": "缓存读",
   "runs.usageDetail.colCacheWrite": "缓存写",

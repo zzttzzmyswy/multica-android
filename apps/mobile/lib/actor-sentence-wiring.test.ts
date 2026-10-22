@@ -35,19 +35,38 @@ const CREATE_SHEET = "components/issue/wakeup-create-sheet.tsx";
 const RUN_HINT = "components/issue/create-run-hint.tsx";
 const NEW_ISSUE = "app/(app)/[workspace]/new-issue.tsx";
 const ARCHIVE_SHEET = "components/inbox/inbox-archive-filter-sheet.tsx";
+/** The one bundle the issue section and the run rows now share (MYS-2300). */
+const SHARED_WAKEUP_TEXT = "lib/use-wakeup-text.ts";
 
 describe("the three ASSERTION sentences", () => {
-  /** Every bundle that reads a wakeup rule back from the server. */
-  const ASSERT_SITES = [
-    WAKEUPS_SECTION,
-    HEADER_BADGE,
-    WORKSPACE_CONTROLLER,
-  ] as const;
+  /**
+   * Every bundle that reads a wakeup rule back from the server.
+   *
+   * `mode` says WHERE the `actorName` dep is assembled, not whether it is the
+   * three-state one: iteration 266 moved the issue section's bundle into
+   * `lib/use-wakeup-text.ts` so a run row naming a rule's condition gets the
+   * same sentence. The section therefore CONSUMES the shared hook, and the
+   * hook is asserted to hold the resolver — checking both ends keeps the
+   * ratchet on the dep itself rather than on a particular file owning it.
+   */
+  const ASSERT_SITES: { rel: string; mode: "inline" | "shared" }[] = [
+    { rel: WAKEUPS_SECTION, mode: "shared" },
+    { rel: HEADER_BADGE, mode: "inline" },
+    { rel: WORKSPACE_CONTROLLER, mode: "inline" },
+  ];
 
-  for (const rel of ASSERT_SITES) {
+  for (const { rel, mode } of ASSERT_SITES) {
     it(`${rel} feeds the read-state resolver, not the raw lookup`, () => {
       const src = code(rel);
-      expect(src).toContain("resolveActorName");
+      if (mode === "shared") {
+        // The bundle lives in the hook; this site must read THAT bundle.
+        expect(src).toContain("useWakeupText");
+        expect(code(SHARED_WAKEUP_TEXT)).toContain(
+          "resolveActorName(type, id)",
+        );
+      } else {
+        expect(src).toContain("resolveActorName");
+      }
       // The old wrapper: `getName` narrowed to agents and coerced back to a
       // string, which is exactly the type that cannot represent "not read yet".
       expect(src).not.toMatch(/actorName:\s*\(type[^)]*\)\s*=>\s*getName\(/);
@@ -58,8 +77,9 @@ describe("the three ASSERTION sentences", () => {
   it("does not mark any assertion bundle as an echo", () => {
     // The context flag is what selects "retreat" over "noun". An assertion
     // surface that opted into echo would name a type where it has no evidence
-    // even of the type.
-    for (const rel of ASSERT_SITES) {
+    // even of the type. The shared bundle counts as a site of its own: it is
+    // what the issue section and the run rows now draw from.
+    for (const rel of [...ASSERT_SITES.map((site) => site.rel), SHARED_WAKEUP_TEXT]) {
       expect(code(rel), rel).not.toContain('actorNameContext: "echo"');
     }
   });

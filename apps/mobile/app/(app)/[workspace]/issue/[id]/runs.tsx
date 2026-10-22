@@ -201,7 +201,7 @@ export default function IssueRunsRoute() {
                   </Text>
                 </Pressable>
               </View>
-              <RunTimelinePanel timeline={timeline} unmapped={unmapped} />
+              <RunTimelinePanel timeline={timeline} unmapped={unmapped} issueId={id} />
             </>
           ) : null}
           {timeline.runs.length > 0 && !timelineOpen && timeline.pricedCount === 0 ? (
