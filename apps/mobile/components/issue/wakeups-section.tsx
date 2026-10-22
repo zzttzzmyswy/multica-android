@@ -48,8 +48,7 @@ import {
 import { WakeupCreateSheet } from "@/components/issue/wakeup-create-sheet";
 import { useTranslation } from "@/lib/i18n/react";
 import { useWorkspaceStore } from "@/data/workspace-store";
-import { useActorLookup } from "@/data/use-actor-name";
-import { useStatusLabel } from "@/lib/status-options";
+import { useWakeupText } from "@/lib/use-wakeup-text";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { issueTasksOptions } from "@/data/queries/issues";
@@ -94,20 +93,9 @@ interface Props {
 }
 
 /** The `t` + catalog bundle every text helper in `wakeup-presentation` needs.
- *  Built once per render here and threaded down, so a row does not rebuild it. */
-function useWakeupText(): WakeupTextDeps {
-  const { t } = useTranslation();
-  const statusLabel = useStatusLabel();
-  const { resolveActorName } = useActorLookup();
-  return {
-    t,
-    statusLabel,
-    // ASSERT: every line this bundle draws is a rule read back from the
-    // server. An unread directory must retreat to a sentence that names
-    // nobody rather than print a fallback name inside the template (MYS-2228).
-    actorName: (type: string, id: string) => resolveActorName(type, id),
-  };
-}
+ *  Built once per render by the shared `lib/use-wakeup-text` hook, so the
+ *  section and the run rows that now name a rule's condition cannot assemble
+ *  two different bundles for the same sentence (MYS-2300). */
 
 export function WakeupsSection({ issueId, closed = false, defaultAgentId }: Props) {
   const { t } = useTranslation();

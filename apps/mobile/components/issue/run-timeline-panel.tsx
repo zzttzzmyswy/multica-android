@@ -37,6 +37,9 @@ import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { actorNameText } from "@/components/ui/actor-name";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useTranslation, useIntlLocale } from "@/lib/i18n/react";
+import { useRunWakeup } from "@/data/queries/run-wakeup";
+import { wakeupRunLabel } from "@/lib/run-trigger-label";
+import { useWakeupText } from "@/lib/use-wakeup-text";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { formatDuration } from "@/lib/usage-time";
@@ -106,11 +109,16 @@ function tickBudget(plotWidth: number): number {
 export function RunTimelinePanel({
   timeline,
   unmapped,
+  issueId,
 }: {
   timeline: RunTimeline;
   /** Pricing keys with no rate on file — their tokens count, their cost does
    *  not. Empty when everything resolved. */
   unmapped: readonly string[];
+  /** The issue whose wakeup rules a row names. Web threads this the same way
+   *  (`issue-runs-dialog.tsx:612`): the timeline is a second place a run is
+   *  listed, so a wakeup-triggered run must read as one here too. */
+  issueId: string;
 }) {
   const { t } = useTranslation();
 
@@ -120,7 +128,7 @@ export function RunTimelinePanel({
     <View className="gap-3">
       <RunStats timeline={timeline} />
       <RunTimelineChart timeline={timeline} />
-      <RunDayList timeline={timeline} />
+      <RunDayList timeline={timeline} issueId={issueId} />
       {unmapped.length > 0 || timeline.pricedCount > 0 ? (
         <View className="gap-1 pt-1">
           {unmapped.length > 0 ? (
@@ -844,7 +852,13 @@ function IdleReadout({
 
 // ─── Day list ──────────────────────────────────────────────────────────────
 
-function RunDayList({ timeline }: { timeline: RunTimeline }) {
+function RunDayList({
+  timeline,
+  issueId,
+}: {
+  timeline: RunTimeline;
+  issueId: string;
+}) {
   const { t } = useTranslation();
   const locale = useIntlLocale();
   const groups = useMemo(() => groupRunsByDay(timeline.runs), [timeline.runs]);
@@ -885,7 +899,7 @@ function RunDayList({ timeline }: { timeline: RunTimeline }) {
             </Text>
           </View>
           {group.runs.map((run) => (
-            <RunListRow key={run.task.id} run={run} />
+            <RunListRow key={run.task.id} run={run} issueId={issueId} />
           ))}
         </View>
       ))}
@@ -893,11 +907,20 @@ function RunDayList({ timeline }: { timeline: RunTimeline }) {
   );
 }
 
-function RunListRow({ run }: { run: TimelineRun }) {
+function RunListRow({ run, issueId }: { run: TimelineRun; issueId: string }) {
   const { t } = useTranslation();
   const locale = useIntlLocale();
   const { resolveActorName } = useActorLookup();
   const task = run.task;
+  const text = useWakeupText(!!task.wakeup_id);
+  // The second place a run is listed. Web's day list names a wakeup run's
+  // condition exactly as the execution log does (`issue-runs-cumulative-chart.tsx:404`,
+  // `:432`), so the two lists cannot disagree about why a run exists.
+  const rule = useRunWakeup(issueId, task.wakeup_id);
+  const fallbackSummary = runSummary(run, t);
+  const summary = task.wakeup_id
+    ? wakeupRunLabel(text, rule, fallbackSummary)
+    : fallbackSummary;
   const time = new Intl.DateTimeFormat(locale, {
     hour: "2-digit",
     minute: "2-digit",
@@ -919,7 +942,7 @@ function RunListRow({ run }: { run: TimelineRun }) {
           }
           numberOfLines={1}
         >
-          {runSummary(run, t)}
+          {summary}
         </Text>
         <View className="flex-row items-center gap-1.5">
           <ActorAvatar type="agent" id={task.agent_id} size={12} />

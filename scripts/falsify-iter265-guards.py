@@ -115,17 +115,14 @@ MUTATIONS: list[tuple[str, Path, str, str]] = [
         "arrives as 'queued' and renders as active work — the fact bug this "
         "round exists to fix",
         SCHEMAS,
-        '      "waiting_local_directory",\n'
-        "      // A retry parked until `fire_at` (migration 128, `retry_deferred`). It\n"
-        "      // is parsed rather than collapsed into `queued`: the two mean different\n"
-        '      // things on screen ("waiting in line" vs "waiting out a backoff"), and\n'
-        "      // the web execution log gives them different tones while excluding both\n"
-        '      // from its "has this been run" count. The `.catch` below still degrades\n'
-        "      // any FUTURE status this build does not know to `queued` — that is the\n"
-        "      // API-compatibility path, and it must not swallow a status the client\n"
-        "      // can actually name.\n"
-        '      "deferred",\n',
-        '      "waiting_local_directory",\n',
+        # The needle is anchored on the enum member itself. Iteration 265
+        # rewrote the comment above `"deferred"` while landing the change, so
+        # the original needle (which quoted the pre-landing comment) stopped
+        # matching — the mutation reported MISS instead of testing anything.
+        # Matching `"deferred",` directly keeps the mutation aimed at the live
+        # code and stays correct if the comment is edited again.
+        '      "deferred",\n      "running",\n',
+        '      "running",\n',
     ),
     (
         "2. core's AgentTask.status union loses deferred, so every downstream "
