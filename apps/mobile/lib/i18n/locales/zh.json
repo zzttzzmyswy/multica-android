@@ -4285,5 +4285,8 @@
   "squads.picker.roleLabel": "角色（可选）",
   "squads.picker.back": "返回",
   "squads.picker.confirmAdd": "添加",
-  "filter.display.cardProject": "项目"
+  "filter.display.cardProject": "项目",
+  "runsTimeline.statTokens": "Token",
+  "runsTimeline.statOutput": "输出",
+  "runsTimeline.tokensCached": "{{percent}} 来自缓存"
 }

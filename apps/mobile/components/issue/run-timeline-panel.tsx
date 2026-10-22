@@ -44,6 +44,8 @@ import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { formatDuration } from "@/lib/usage-time";
 import { formatUsd } from "@/lib/task-usage";
+import { cacheHitRateRatio } from "@/lib/model-pricing";
+import { formatTokens } from "@/lib/usage-format";
 import {
   groupRunsByDay,
   niceTicks,
@@ -305,6 +307,9 @@ function Stat({ label, children }: { label: string; children: React.ReactNode })
 
 function RunStats({ timeline }: { timeline: RunTimeline }) {
   const { t } = useTranslation();
+  // Ratio form so the percentage this row prints derives from the same
+  // denominator as the runtime page's KPI (cache writes included).
+  const cachedShare = cacheHitRateRatio(timeline.tokens);
   const breakdown = [
     timeline.failedCount > 0
       ? t("runsTimeline.countFailed", { count: timeline.failedCount })
@@ -324,6 +329,29 @@ function RunStats({ timeline }: { timeline: RunTimeline }) {
             usage reporting was not free, we just don't know. */}
         <Text className="text-title-lg font-semibold text-foreground">
           {timeline.pricedCount > 0 ? formatUsd(timeline.totalCost) : "—"}
+        </Text>
+      </Stat>
+      <Stat label={t("runsTimeline.statTokens")}>
+        {/* Cache reads are most of an agent's tokens; without the share the
+            total reads as far more fresh work than it was. Web states the
+            share inline beside the count (`issue-runs-dialog.tsx:235`), and
+            its absence here made a cache-heavy issue look like a token-hungry
+            one. `null` (no input-side traffic) is "no figure" — the share is
+            then simply not stated, never "0% from cache". */}
+        <Text className="text-title-sm font-medium text-foreground">
+          {timeline.pricedCount > 0 ? formatTokens(timeline.tokens.total) : "—"}
+        </Text>
+        {timeline.pricedCount > 0 && cachedShare != null ? (
+          <Text className="text-caption text-muted-foreground">
+            · {t("runsTimeline.tokensCached", {
+              percent: `${Math.round(cachedShare * 100)}%`,
+            })}
+          </Text>
+        ) : null}
+      </Stat>
+      <Stat label={t("runsTimeline.statOutput")}>
+        <Text className="text-title-sm font-medium text-foreground">
+          {timeline.pricedCount > 0 ? formatTokens(timeline.tokens.output) : "—"}
         </Text>
       </Stat>
       <Stat label={t("runsTimeline.statAgentTime")}>

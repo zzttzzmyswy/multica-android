@@ -12,6 +12,7 @@ import {
   timelineUsageRows,
   toTimelineRun,
 } from "./issue-run-timeline";
+import { cacheHitRatePercent, cacheHitRateRatio } from "./model-pricing";
 
 /**
  * Port of web `packages/views/issues/components/issue-run-timeline.test.ts`
@@ -685,7 +686,11 @@ describe("stepCurvePath", () => {
     const unpricedModel = (outputTokens: number): TaskUsage[] => [
       {
         provider: "codex",
-        model: "gpt-6.1-sol", // not in the rate table, and no cost_usd_ticks
+        // Deliberately absent from the rate table, and no cost_usd_ticks: the
+        // fixture has to be a model the table will NEVER learn, or the premise
+        // ("all runs cost 0") silently expires when a later price sync adds it.
+        // `gpt-6.1-sol` was this fixture until iteration 268 priced it.
+        model: "gpt-9.9-unknown",
         input_tokens: 0,
         output_tokens: outputTokens,
         cache_read_tokens: 0,
@@ -843,5 +848,116 @@ describe("timelineUsageRows", () => {
     );
     expect(timelineUsageRows(runs)).toHaveLength(1);
     expect(timelineUsageRows(runs)[0]!.model).toBe("claude-opus-5");
+  });
+});
+
+/**
+ * The header's token figures (iteration 268).
+ *
+ * Web's run header states spend, tokens, output, agent time and runs
+ * (`issue-runs-dialog.tsx:209-262`). Mobile stated spend, agent time, elapsed
+ * and runs — no token count and no cache share at all, so a cache-heavy issue
+ * (the normal shape for an agent) looked like raw fresh work. These cases pin
+ * the totals the header divides; the wiring ratchet pins that the header
+ * actually reads them.
+ */
+describe("token totals and the cache share", () => {
+  const mixed = (): TaskUsage[] => [
+    {
+      provider: "claude",
+      model: "claude-sonnet-5-5",
+      input_tokens: 22,
+      output_tokens: 1_000,
+      cache_read_tokens: 341_623,
+      cache_write_tokens: 57_206,
+    },
+  ];
+
+  it("sums each bucket across runs, not just the total", () => {
+    const timeline = buildRunTimeline(
+      [
+        makeTask({ id: "a", usage: mixed() }),
+        makeTask({
+          id: "b",
+          started_at: "2026-09-24T11:00:00",
+          completed_at: "2026-09-24T11:20:00",
+          usage: mixed(),
+        }),
+      ],
+      NOW,
+    );
+    expect(timeline.tokens).toEqual({
+      input: 44,
+      output: 2_000,
+      cacheRead: 683_246,
+      cacheWrite: 114_412,
+      total: 44 + 2_000 + 683_246 + 114_412,
+    });
+  });
+
+  it("carries the cache savings beside the cost they belong to", () => {
+    const timeline = buildRunTimeline([makeTask({ usage: mixed() })], NOW);
+    expect(timeline.cacheSavings).toBeGreaterThan(0);
+    // The savings are a share of what the cache reads would have cost, so a
+    // cache-heavy run's savings exceed its actual spend.
+    expect(timeline.cacheSavings).toBeGreaterThan(timeline.totalCost);
+  });
+
+  it("counts a run's tokens even when its model prices to $0", () => {
+    // The two figures answer different questions: "how much did it work" and
+    // "what did it cost". A run on an unpriced model still moved tokens, and
+    // hiding them would understate the work while the cost note explains the
+    // missing money.
+    const timeline = buildRunTimeline(
+      [
+        makeTask({
+          usage: [
+            {
+              provider: "codex",
+              model: "gpt-9.9-unknown",
+              input_tokens: 0,
+              output_tokens: 500,
+              cache_read_tokens: 0,
+              cache_write_tokens: 0,
+            },
+          ],
+        }),
+      ],
+      NOW,
+    );
+    expect(timeline.totalCost).toBe(0);
+    expect(timeline.tokens.total).toBe(500);
+  });
+
+  it("leaves the buckets at zero when no run reported usage", () => {
+    const timeline = buildRunTimeline([makeTask({ usage: undefined })], NOW);
+    expect(timeline.pricedCount).toBe(0);
+    expect(timeline.tokens).toEqual({
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      total: 0,
+    });
+    // …which is why the header renders an em dash rather than "0".
+    expect(cacheHitRateRatio(timeline.tokens)).toBeNull();
+  });
+
+  it("the share of these tokens is 86%, not the 99% the old denominator gave", () => {
+    // MYS-2311's real buckets. `input / (input + cacheRead)` = 99.99% floored
+    // to 99 — but 57K tokens were WRITTEN into the cache, i.e. input-side
+    // traffic that did not come from it.
+    const timeline = buildRunTimeline([makeTask({ usage: mixed() })], NOW);
+    expect(cacheHitRateRatio(timeline.tokens)).toBeCloseTo(
+      341_623 / (22 + 341_623 + 57_206),
+      10,
+    );
+    expect(
+      cacheHitRatePercent(
+        timeline.tokens.input,
+        timeline.tokens.cacheRead,
+        timeline.tokens.cacheWrite,
+      ),
+    ).toBe(86);
   });
 });

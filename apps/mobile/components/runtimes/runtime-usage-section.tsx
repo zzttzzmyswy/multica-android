@@ -53,6 +53,7 @@ import {
   sliceWindow,
   type HeatmapData,
 } from "@/lib/runtime-usage";
+import { cacheHitRatePercent } from "@/lib/model-pricing";
 import {
   removeCustomPricing,
   setCustomPricing,
@@ -205,9 +206,15 @@ function SectionBody({
 
   const tokensTotal =
     totals.input + totals.output + totals.cacheRead + totals.cacheWrite;
-  const cacheable = totals.input + totals.cacheRead;
-  const cacheHitRate =
-    cacheable > 0 ? Math.round((totals.cacheRead / cacheable) * 100) : 0;
+  // Shared helper, so this page and the per-issue usage sheet quote the same
+  // rate for the same tokens. Cache WRITES are input-side traffic that was NOT
+  // served from cache, so they belong in the denominator; and no input-side
+  // traffic at all is "no figure" (`null` → em dash), not a confident 0%.
+  const cacheHitRate = cacheHitRatePercent(
+    totals.input,
+    totals.cacheRead,
+    totals.cacheWrite,
+  );
 
   return (
     <View className="mt-4 gap-4">
@@ -253,10 +260,14 @@ function SectionBody({
           icon="server-outline"
           label={t("runtimes.usage.kpi_cache_label", { days })}
           value={formatUsd(totals.cacheSavings)}
-          hint={t("runtimes.usage.kpiCacheHint", {
-            pct: cacheHitRate,
-            reads: formatTokens(totals.cacheRead),
-          })}
+          hint={
+            cacheHitRate == null
+              ? "—"
+              : t("runtimes.usage.kpiCacheHint", {
+                  pct: cacheHitRate,
+                  reads: formatTokens(totals.cacheRead),
+                })
+          }
           accent={totals.cacheSavings > 0}
         />
         <KpiCard

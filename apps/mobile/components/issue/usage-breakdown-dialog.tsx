@@ -42,6 +42,7 @@ import {
   type TaskUsageSummary,
 } from "@/lib/task-usage";
 import { useCustomPricingStore } from "@/lib/custom-pricing-store";
+import { cacheHitRatePercent } from "@/lib/model-pricing";
 
 const tKey = "runs.usageDetail";
 
@@ -109,13 +110,16 @@ export function UsageBreakdownDialog({
     [priced],
   );
 
-  // Floor, not round: on a cache-heavy issue 99.55% rounds to "100% hit
-  // rate", which claims every token came from cache. Flooring only ever says
-  // 100% when it is actually 100% (web parity).
-  const cacheHitRate =
-    total && total.input + total.cacheRead > 0
-      ? Math.floor((total.cacheRead / (total.input + total.cacheRead)) * 100)
-      : 0;
+  // The cache share, from the shared helper so this sheet and the runtime page
+  // cannot quote two different rates for the same tokens. Two corrections over
+  // the old inline math: cache WRITES belong in the denominator (they are
+  // input-side tokens that were not served from cache — leaving them out
+  // overstates the hit rate, one live issue here reads 99% instead of 86%),
+  // and "no input-side traffic" is `null` (rendered as an em dash) rather than
+  // a confident 0%.
+  const cacheHitRate = total
+    ? cacheHitRatePercent(total.input, total.cacheRead, total.cacheWrite)
+    : null;
 
   const runCount = priced.length;
   const subtitle = t(
@@ -188,10 +192,16 @@ export function UsageBreakdownDialog({
                   label={t(`${tKey}.kpiCache`)}
                   value={formatUsd(total.cacheSavings)}
                   accent={total.cacheSavings > 0}
-                  hint={t(`${tKey}.kpiCacheHint`, {
-                    pct: cacheHitRate,
-                    reads: formatTokens(total.cacheRead),
-                  })}
+                  hint={
+                    // No input-side traffic is "no figure", not "0% hit" —
+                    // web renders the same em dash (`usage-section.tsx:274`).
+                    cacheHitRate == null
+                      ? "—"
+                      : t(`${tKey}.kpiCacheHint`, {
+                          pct: cacheHitRate,
+                          reads: formatTokens(total.cacheRead),
+                        })
+                  }
                 />
                 <KpiCard
                   label={t(`${tKey}.kpiTokens`)}
