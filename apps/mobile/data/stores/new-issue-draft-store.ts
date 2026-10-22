@@ -545,7 +545,9 @@ export function useNewIssueDraftWorkspace(wsId: string | null) {
     boundWorkspaceId = wsId;
     // A workspace switch replaces the draft wholesale, so any continuation
     // snapshot describes a draft that no longer exists (web clears it in its
-    // persist `merge` for the same reason).
+    // persist `merge` for the same reason). The module mirror is cleared with
+    // it — a stale baseline would normalize the NEXT workspace's drafts.
+    continuationBaseline = null;
     useNewIssueDraftStore.setState({
       ...EMPTY_NEW_ISSUE_DRAFT,
       hydrated: false,
@@ -596,5 +598,6 @@ export function __flushNewIssueDraftWrites(): Promise<void> {
 /** Test-only: forget the bound workspace and any queued writes. */
 export function __resetNewIssueDraftBinding() {
   boundWorkspaceId = null;
+  continuationBaseline = null;
   persistChain = Promise.resolve();
 }

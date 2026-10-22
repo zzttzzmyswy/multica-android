@@ -99,6 +99,14 @@ describe("MUL-7648 — a batch keeps the parent and its stage", () => {
       /hydrated: false,\s*batchContinuationBaseline: null,/,
     );
   });
+
+  it("a workspace switch also clears the module mirror", () => {
+    // `writeThrough` reads the mirror, not the store field — a baseline left
+    // there would normalize the NEXT workspace's drafts against the previous
+    // one's continuation.
+    const switchBody = STORE.slice(STORE.indexOf("boundWorkspaceId = wsId;"));
+    expect(switchBody.slice(0, 600)).toMatch(/continuationBaseline = null;/);
+  });
 });
 
 describe("MUL-7648 — the entry point's dot is batch-aware", () => {
