@@ -27,7 +27,10 @@ import { router } from "expo-router";
 import { IconButton } from "@/components/ui/icon-button";
 import { HeaderSearchButton } from "@/components/ui/header-search-button";
 import { useWorkspaceStore } from "@/data/workspace-store";
-import { useNewIssueDraftStore, draftHasContent } from "@/data/stores/new-issue-draft-store";
+import {
+  useNewIssueDraftStore,
+  draftHasRecoverableIntent,
+} from "@/data/stores/new-issue-draft-store";
 import { useTranslation } from "@/lib/i18n/react";
 
 export function HeaderActions() {
@@ -36,7 +39,11 @@ export function HeaderActions() {
   // Derived in the selector, so it re-renders on any draft change and only
   // when the ANSWER flips — a method selector (`hasDraft()`) would never
   // re-render, because the method itself is stable.
-  const hasDraft = useNewIssueDraftStore((s) => draftHasContent(s));
+  // Batch-aware: an untouched "create another" continuation inherits the
+  // submitted status and assignee, which plain `draftHasContent` would read as
+  // work the user did. `draftHasRecoverableIntent` normalizes those two away
+  // (MUL-7648).
+  const hasDraft = useNewIssueDraftStore((s) => draftHasRecoverableIntent(s));
 
   const onCreate = () => {
     if (slug) router.push(`/${slug}/new-issue`);

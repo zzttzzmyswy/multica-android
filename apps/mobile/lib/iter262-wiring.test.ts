@@ -134,20 +134,34 @@ describe("iteration 262 wiring", () => {
       );
     });
 
-    it("the batch reset keeps the assignee", () => {
+    it("the batch reset keeps the assignee AND the status", () => {
       // The whole point of the feature: five tasks for one person must not
-      // need five assignee picks. "Clear everything" looks correct and is not.
+      // need five assignee picks, and (MUL-7648) five status picks either.
+      // "Clear everything" looks correct and is not.
+      expect(draftStore).toMatch(/const \{ assignee, status \} = get\(\);/);
       expect(draftStore).toMatch(
-        /const \{ assignee \} = get\(\);[\s\S]{0,120}\{ \.\.\.EMPTY_NEW_ISSUE_DRAFT, assignee \}/,
+        /\.\.\.EMPTY_NEW_ISSUE_DRAFT,\s*assignee,\s*status,/,
       );
     });
 
-    it("the batch reset clears the module-level stage pick", () => {
-      // MYS-2255's fix, re-opened through the new path: the pick store is
-      // module-level, so a form that stays mounted keeps the last pick.
-      expect(screen).toMatch(
-        /useNewIssueStagePickStore\.getState\(\)\.reset\(\)/,
+    it("the batch reset records a continuation baseline", () => {
+      // Without it an untouched continuation is indistinguishable from a
+      // draft the user is working on, and every batch leaves a phantom dot.
+      expect(draftStore).toMatch(/batchContinuationBaseline: next/);
+    });
+
+    it("the batch reset does NOT clear the module-level stage pick", () => {
+      // MUL-7648 reversed MYS-2255's keep-open behaviour: the parent and its
+      // stage now survive the batch, so clearing them here would undo the
+      // feature. Lifetime is still bounded — `useNewIssueStagePick()` resets
+      // on unmount, and the pick is tagged by parent.
+      const body = screen.match(
+        /const resetForNextIssueLocally = useCallback\(\(\) => \{([\s\S]*?)\}, \[/,
       );
+      expect(body).not.toBeNull();
+      expect(body![1]).not.toMatch(/useNewIssueStagePickStore/);
+      // ...but the form still scopes the pick to its own lifetime.
+      expect(screen).toMatch(/useNewIssueStagePick\(\);/);
     });
 
     it("the batch reset clears both mention-input bodies", () => {
@@ -157,15 +171,15 @@ describe("iteration 262 wiring", () => {
       expect(screen).toMatch(/promptInput\.setText\(""\)/);
     });
 
-    it("the batch reset drops the parent", () => {
-      // Anchored INSIDE `resetForNextIssueLocally`, not to a bare token: the
-      // chip's own dismiss handler also calls `setParentCleared(true)`, so a
-      // token match would survive this line being deleted entirely.
+    it("the batch reset keeps the parent", () => {
+      // MUL-7648. Anchored INSIDE `resetForNextIssueLocally` because the
+      // chip's own dismiss handler legitimately calls `setParentCleared(true)`
+      // — a whole-file token match would pass even if the batch cleared it.
       const body = screen.match(
         /const resetForNextIssueLocally = useCallback\(\(\) => \{([\s\S]*?)\}, \[/,
       );
       expect(body).not.toBeNull();
-      expect(body![1]).toMatch(/setParentCleared\(true\)/);
+      expect(body![1]).not.toMatch(/setParentCleared\(true\)/);
     });
 
     it("the batch reset's pieces all live in one function", () => {
@@ -178,7 +192,6 @@ describe("iteration 262 wiring", () => {
       expect(body).toMatch(/resetForNextIssue\(\)/);
       expect(body).toMatch(/description\.setText\(""\)/);
       expect(body).toMatch(/promptInput\.setText\(""\)/);
-      expect(body).toMatch(/useNewIssueStagePickStore\.getState\(\)\.reset\(\)/);
       expect(body).toMatch(/setUploadedAttachmentIds\(\[\]\)/);
     });
   });

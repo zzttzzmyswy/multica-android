@@ -10,9 +10,12 @@ import Svg, { Line, Rect } from "react-native-svg";
 import type { ProjectPriority } from "@multica/core/types";
 import { projectPriorityBars } from "@/lib/project-status";
 
+// Identical to the issue `PriorityIcon` map, including High's dedicated
+// orange — `PROJECT_PRIORITY_CONFIG` upstream got the same `--priority-high`
+// change as its issue counterpart, so the two surfaces must not drift.
 const COLOR: Record<ProjectPriority, string> = {
   urgent: "#dc2626",
-  high: "#eab308",
+  high: "#f97316",
   medium: "#eab308",
   low: "#3b82f6",
   none: "#71717a",

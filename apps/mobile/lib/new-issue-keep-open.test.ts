@@ -18,12 +18,19 @@ describe("nextIssueDraftReset", () => {
     expect(reset.startDate).toBeNull();
   });
 
-  it("returns status and priority to their create defaults", () => {
-    // Web `:393-394` — "todo" / "none", not "keep whatever was just used".
-    // A batch of five tasks where the first was urgent does not make the
-    // other four urgent.
-    expect(reset.status).toBe("todo");
+  it("returns priority to its create default", () => {
+    // "none", not "keep whatever was just used": a batch of five tasks where
+    // the first was urgent does not make the other four urgent.
     expect(reset.priority).toBe("none");
+  });
+
+  it("does NOT touch the status", () => {
+    // MUL-7648. Web now keeps the just-submitted status on the next issue of
+    // the batch. The reset shape simply has no status field, so a caller
+    // cannot reset it here — the store's `resetForNextIssue` inherits the live
+    // value instead.
+    expect(reset).not.toHaveProperty("status");
+    expect(Object.keys(reset)).not.toContain("status");
   });
 
   it("drops the project", () => {
@@ -31,10 +38,12 @@ describe("nextIssueDraftReset", () => {
     expect(reset.project).toBeUndefined();
   });
 
-  it("drops the parent", () => {
-    // Web `:401`. A batch is not a sub-task queue: carrying the parent
-    // forward files unrelated tasks under the previous issue's tree.
-    expect(reset.parentIssueId).toBeUndefined();
+  it("does NOT drop the parent", () => {
+    // MUL-7648 reversed this. Filing several sub-issues under one parent is
+    // the case batching exists for, so the parent (and its stage) now survive
+    // the next issue of a batch. It stays out of this shape because it lives
+    // on the screen's route state, not in the draft store.
+    expect(reset).not.toHaveProperty("parentIssueId");
   });
 
   it("does NOT touch the assignee", () => {
@@ -46,9 +55,10 @@ describe("nextIssueDraftReset", () => {
   });
 
   it("does NOT touch the stage pick", () => {
-    // Stage is relative to the parent, which this reset just cleared. The
-    // screen clears it through its own parent-scoped store — see the module
-    // doc; keeping it out of this shape stops the two from disagreeing.
+    // Stage is only meaningful relative to the parent, and the parent now
+    // survives the batch (MUL-7648) — so neither is cleared. The screen's
+    // parent-scoped pick store keeps the value; keeping it out of this shape
+    // stops the two from disagreeing.
     expect(reset).not.toHaveProperty("stage");
   });
 });
