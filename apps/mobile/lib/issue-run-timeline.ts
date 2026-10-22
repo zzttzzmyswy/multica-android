@@ -75,11 +75,26 @@ export interface TimelineLane {
   runs: TimelineRun[];
 }
 
+/** Token buckets summed across runs — web's `TokenTotals`
+ *  (`packages/views/issues/components/issue-run-timeline.ts`). */
+export interface TokenTotals {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  total: number;
+}
+
 export interface RunTimeline {
   /** Oldest first. */
   runs: TimelineRun[];
   totalCost: number;
   pricedCount: number;
+  /** Token buckets across every run that reported usage. Web's run header
+   *  states these beside the spend, so a phone must have them too. */
+  tokens: TokenTotals;
+  /** What cache reads saved against paying the input rate for them. */
+  cacheSavings: number;
   /** Sum of finished runs' wall time. */
   agentMs: number;
   /** First start to last end (or now, while a run is active). */
@@ -167,6 +182,8 @@ export function buildRunTimeline(tasks: readonly AgentTask[], nowMs: number): Ru
 
   let totalCost = 0;
   let pricedCount = 0;
+  let cacheSavings = 0;
+  const tokens: TokenTotals = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 };
   let agentMs = 0;
   let failedCount = 0;
   let cancelledCount = 0;
@@ -177,8 +194,16 @@ export function buildRunTimeline(tasks: readonly AgentTask[], nowMs: number): Ru
   for (const run of runs) {
     if (run.usage) {
       totalCost += run.usage.cost;
+      cacheSavings += run.usage.cacheSavings;
       pricedCount += 1;
       maxRunCost = Math.max(maxRunCost, run.usage.cost);
+      // Summed per bucket, never as an average of per-run rates: the header's
+      // cache share has to be the share of THESE tokens (web does the same).
+      tokens.input += run.usage.input;
+      tokens.output += run.usage.output;
+      tokens.cacheRead += run.usage.cacheRead;
+      tokens.cacheWrite += run.usage.cacheWrite;
+      tokens.total += run.usage.tokens;
     }
     if (run.durationMs != null) agentMs += run.durationMs;
     if (run.task.status === "failed") failedCount += 1;
@@ -219,6 +244,8 @@ export function buildRunTimeline(tasks: readonly AgentTask[], nowMs: number): Ru
     runs,
     totalCost,
     pricedCount,
+    tokens,
+    cacheSavings,
     agentMs,
     elapsedMs,
     failedCount,

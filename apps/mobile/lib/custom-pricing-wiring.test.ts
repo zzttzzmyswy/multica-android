@@ -68,11 +68,28 @@ describe("issue cost surfaces subscribe to the custom-pricing store", () => {
   });
 
   it("the shared pricing module falls back to the store after the table", () => {
-    const lib = code("lib/task-usage.ts");
-    // Table candidates win first (web's order); the store is the second loop.
+    // Iteration 268 moved the rate table into `lib/model-pricing.ts` (one
+    // table, one resolver). The ordering it enforces is unchanged and still
+    // the point: the table's candidates win, and the user's overrides are
+    // consulted only for keys the table missed (web's `resolvePricing`).
+    const lib = code("lib/model-pricing.ts");
     const tableLoop = lib.indexOf("const hit = MODEL_PRICING[candidate];");
-    const storeLoop = lib.indexOf("const hit = getCustomPricing(candidate);");
+    const storeLoop = lib.indexOf("const hit = overrides[candidate];");
     expect(tableLoop).toBeGreaterThan(-1);
     expect(storeLoop).toBeGreaterThan(tableLoop);
+  });
+
+  it("both cost venues resolve through that one table", () => {
+    // A second copy of the table is how the two venues drifted 88 rows apart
+    // in the first place (iteration 268). Neither consumer may grow one back.
+    for (const rel of ["lib/task-usage.ts", "lib/runtime-usage.ts"]) {
+      const src = code(rel);
+      expect(src, `${rel} must not define a rate table`).not.toMatch(
+        /const MODEL_PRICING\b\s*:/,
+      );
+      expect(src, `${rel} must resolve through lib/model-pricing`).toMatch(
+        /from "\.\/model-pricing"/,
+      );
+    }
   });
 });

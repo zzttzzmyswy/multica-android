@@ -19,7 +19,15 @@
  * Hermes note in `lib/usage-format.ts`.
  */
 import type { TaskUsage } from "@multica/core/types";
-import { getCustomPricing } from "./custom-pricing-store";
+import { useCustomPricingStore, type CustomModelPricing } from "./custom-pricing-store";
+import {
+  pricingKey as sharedPricingKey,
+  resolvePricing as resolvePricingFrom,
+  type ModelPrice,
+  type PricingOverrides,
+} from "./model-pricing";
+
+export type { ModelPrice };
 
 /** Collapsed usage for one agent run, or for a set of runs. */
 export interface TaskUsageSummary {
@@ -109,13 +117,9 @@ export function estimateCost(slice: TaskUsage): number {
   );
 }
 
-// Cents below $100, whole dollars above — two decimals on a four-figure
-// spend is noise, dropping them below $100 would round most single runs to
-// $0. Web parity: packages/views/runtimes/utils.ts formatUsd.
-export function formatUsd(n: number): string {
-  if (n >= 100) return `$${n.toFixed(0)}`;
-  return `$${n.toFixed(2)}`;
-}
+// Money rendering is the same function on every surface; it lives with the
+// rate table so the issue side and the runtime side cannot format differently.
+export { formatUsd } from "./model-pricing";
 
 /**
  * What this slice's cache *reads* would have cost at full input pricing minus
@@ -142,8 +146,7 @@ export function estimateCacheSavings(slice: TaskUsage): number {
  * `auto` from another in the "unmapped" note (web parity).
  */
 export function pricingKey(model: string, provider?: string): string {
-  const p = normalizeProvider(provider);
-  return p ? qualify(p, model) : model;
+  return sharedPricingKey(model, provider);
 }
 
 /** Whether a model string resolves to a rate-table entry. */
@@ -178,181 +181,27 @@ export function collectUnmappedModels(rows: readonly TaskUsage[]): string[] {
 }
 
 // ---------------------------------------------------------------------------
-// Pricing table — VERBATIM mirror of web's MODEL_PRICING
-// (packages/views/runtimes/utils.ts). Keep in sync when providers release
-// new models or adjust prices; mirror new entries there before adding them
-// to this file.
-// ---------------------------------------------------------------------------
-
-interface ModelPrice {
-  input: number;
-  output: number;
-  cacheRead: number;
-  cacheWrite: number;
-}
-
-const MODEL_PRICING: Record<string, ModelPrice> = {
-  // -- Anthropic: current generation --
-  "claude-sonnet-5":     { input: 2,    output: 10,   cacheRead: 0.20, cacheWrite: 2.50 },
-  "claude-fable-5":     { input: 10,   output: 50,   cacheRead: 1.00, cacheWrite: 12.50 },
-  "claude-opus-5":      { input: 5,    output: 25,   cacheRead: 0.50, cacheWrite: 6.25 },
-  "claude-haiku-4-5":   { input: 1,    output: 5,    cacheRead: 0.10, cacheWrite: 1.25 },
-  "claude-sonnet-4-5":  { input: 3,    output: 15,   cacheRead: 0.30, cacheWrite: 3.75 },
-  "claude-sonnet-4-6":  { input: 3,    output: 15,   cacheRead: 0.30, cacheWrite: 3.75 },
-  "claude-opus-4-5":    { input: 5,    output: 25,   cacheRead: 0.50, cacheWrite: 6.25 },
-  "claude-opus-4-6":    { input: 5,    output: 25,   cacheRead: 0.50, cacheWrite: 6.25 },
-  "claude-opus-4-7":    { input: 5,    output: 25,   cacheRead: 0.50, cacheWrite: 6.25 },
-  "claude-opus-4-8":    { input: 5,    output: 25,   cacheRead: 0.50, cacheWrite: 6.25 },
-
-  // -- Anthropic: pre-4.5 Opus (legacy tier) --
-  "claude-opus-4-1":    { input: 15,   output: 75,   cacheRead: 1.50, cacheWrite: 18.75 },
-  "claude-opus-4":      { input: 15,   output: 75,   cacheRead: 1.50, cacheWrite: 18.75 },
-
-  // -- Anthropic: Sonnet 4.0 (deprecated) --
-  "claude-sonnet-4":    { input: 3,    output: 15,   cacheRead: 0.30, cacheWrite: 3.75 },
-
-  // -- Anthropic: older Haiku tier --
-  "claude-haiku-3-5":   { input: 0.80, output: 4,    cacheRead: 0.08, cacheWrite: 1.00 },
-
-  // -- OpenAI: Codex catalog SKUs (5.6+ bills cache writes separately) --
-  "gpt-5.6-sol":        { input: 5,    output: 30,   cacheRead: 0.50,  cacheWrite: 6.25 },
-  "gpt-5.6-terra":      { input: 2.50, output: 15,   cacheRead: 0.25,  cacheWrite: 3.125 },
-  "gpt-5.6-luna":       { input: 1,    output: 6,    cacheRead: 0.10,  cacheWrite: 1.25 },
-  "gpt-5.5":            { input: 5,    output: 30,   cacheRead: 0.50,  cacheWrite: 5 },
-  "gpt-5.4-mini":       { input: 0.75, output: 4.50, cacheRead: 0.075, cacheWrite: 0.75 },
-  "gpt-5.4":            { input: 2.50, output: 15,   cacheRead: 0.25,  cacheWrite: 2.50 },
-  "gpt-5.3-codex":      { input: 1.75, output: 14,   cacheRead: 0.175, cacheWrite: 1.75 },
-
-  // -- OpenAI: GPT-5 family --
-  "gpt-5-codex":        { input: 1.25, output: 10,   cacheRead: 0.125, cacheWrite: 1.25 },
-  "gpt-5-mini":         { input: 0.25, output: 2,    cacheRead: 0.025, cacheWrite: 0.25 },
-  "gpt-5-nano":         { input: 0.05, output: 0.40, cacheRead: 0.005, cacheWrite: 0.05 },
-  "gpt-5":              { input: 1.25, output: 10,   cacheRead: 0.125, cacheWrite: 1.25 },
-
-  // -- OpenAI: o-series reasoning models --
-  "o3-mini":            { input: 1.10, output: 4.40, cacheRead: 0.55,  cacheWrite: 1.10 },
-  "o3":                 { input: 2,    output: 8,    cacheRead: 0.50,  cacheWrite: 2 },
-  "o4-mini":            { input: 1.10, output: 4.40, cacheRead: 0.275, cacheWrite: 1.10 },
-
-  // -- OpenAI: GPT-4o family (legacy) --
-  "gpt-4o-mini":        { input: 0.15, output: 0.60, cacheRead: 0.075, cacheWrite: 0.15 },
-  "gpt-4o":             { input: 2.50, output: 10,   cacheRead: 1.25,  cacheWrite: 2.50 },
-
-  // -- DeepSeek --
-  "deepseek-v4-flash":  { input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0.14 },
-  "deepseek-v4-pro":    { input: 1.74, output: 3.48, cacheRead: 0.0145, cacheWrite: 1.74 },
-  "deepseek-chat":      { input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0.14 },
-  "deepseek-reasoner":  { input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0.14 },
-
-  // -- Moonshot Kimi --
-  "kimi-k2.6":          { input: 0.95, output: 4.00, cacheRead: 0.16,   cacheWrite: 0.95 },
-
-  // -- Zhipu z.ai (flash tiers priced 0 so they resolve instead of unmapping) --
-  "glm-5.1":            { input: 1.4,  output: 4.4,  cacheRead: 0.26,   cacheWrite: 1.4 },
-  "glm-5":              { input: 1.0,  output: 3.2,  cacheRead: 0.2,    cacheWrite: 1.0 },
-  "glm-5-turbo":        { input: 1.2,  output: 4.0,  cacheRead: 0.24,   cacheWrite: 1.2 },
-  "glm-4.7":            { input: 0.6,  output: 2.2,  cacheRead: 0.11,   cacheWrite: 0.6 },
-  "glm-4.7-flashx":     { input: 0.07, output: 0.4,  cacheRead: 0.01,   cacheWrite: 0.07 },
-  "glm-4.7-flash":      { input: 0,    output: 0,    cacheRead: 0,      cacheWrite: 0 },
-  "glm-4.6":            { input: 0.6,  output: 2.2,  cacheRead: 0.11,   cacheWrite: 0.6 },
-  "glm-4.5":            { input: 0.6,  output: 2.2,  cacheRead: 0.11,   cacheWrite: 0.6 },
-  "glm-4.5-x":          { input: 2.2,  output: 8.9,  cacheRead: 0.45,   cacheWrite: 2.2 },
-  "glm-4.5-air":        { input: 0.2,  output: 1.1,  cacheRead: 0.03,   cacheWrite: 0.2 },
-  "glm-4.5-airx":       { input: 1.1,  output: 4.5,  cacheRead: 0.22,   cacheWrite: 1.1 },
-  "glm-4.5-flash":      { input: 0,    output: 0,    cacheRead: 0,      cacheWrite: 0 },
-
-  // -- xAI Grok (fallback tier; xAI reports its own per-turn price that
-  //    estimateCost prefers, since these rates cannot express the 200K-token
-  //    2x tier) --
-  "grok-4.5":                     { input: 2,    output: 6,    cacheRead: 0.30, cacheWrite: 2 },
-  "grok-4.3":                     { input: 1.25, output: 2.50, cacheRead: 0.20, cacheWrite: 1.25 },
-  "grok-build-0.1":               { input: 1,    output: 2,    cacheRead: 0.20, cacheWrite: 1 },
-  "grok-4.20-multi-agent-0309":   { input: 1.25, output: 2.50, cacheRead: 0.20, cacheWrite: 1.25 },
-  "grok-4.20-0309-reasoning":     { input: 1.25, output: 2.50, cacheRead: 0.20, cacheWrite: 1.25 },
-  "grok-4.20-0309-non-reasoning": { input: 1.25, output: 2.50, cacheRead: 0.20, cacheWrite: 1.25 },
-
-  // -- Cursor Composer / Auto. Generic unprefixed ids are provider-qualified
-  //    (`cursor/auto`) to avoid cross-provider collisions; the legacy
-  //    fallback key `cursor` equals its provider name and stays bare. --
-  "cursor/auto":              { input: 1.25, output: 6,    cacheRead: 0.25,   cacheWrite: 0 },
-  "cursor/composer-2.5-fast": { input: 3,    output: 15,   cacheRead: 0.5,    cacheWrite: 0 },
-  "cursor/composer-2.5":      { input: 0.5,  output: 2.5,  cacheRead: 0.2,    cacheWrite: 0 },
-  "cursor/composer-2-fast":   { input: 1.5,  output: 7.5,  cacheRead: 0.35,   cacheWrite: 0 },
-  "cursor/composer-2":        { input: 0.5,  output: 2.5,  cacheRead: 0.2,    cacheWrite: 0 },
-  "cursor/composer-1.5":      { input: 3.5,  output: 17.5, cacheRead: 0.35,   cacheWrite: 0 },
-  "cursor/composer-1":        { input: 1.25, output: 10,   cacheRead: 0.125,  cacheWrite: 0 },
-  "cursor":                   { input: 3,    output: 15,   cacheRead: 0.5,    cacheWrite: 0 },
-};
-
-// ---------------------------------------------------------------------------
-// Pricing resolution — faithful subset of web's resolvePricing: the lookup
-// candidates in web order (raw → provider-stripped → claude dot↔dash →
-// context-tag stripped → each date-stripped), provider-qualified keys tried
-// first, then the same candidate list against the user's custom-pricing
-// overrides (lib/custom-pricing-store.ts) — the rate table stays authoritative,
-// exactly as web's resolvePricing orders them.
+// Pricing resolution — the rate table itself lives in ONE place now
+// (`lib/model-pricing.ts`), mirrored verbatim from web's
+// `packages/views/runtimes/utils.ts`. This module owns only what is specific
+// to the issue side: collapsing a run's slices into one summary.
+//
+// Before iteration 268 this file carried its own 61-row copy of the table and
+// its own candidate derivation, and so did `lib/runtime-usage.ts`. Both copies
+// had drifted the same 88 rows behind upstream, which priced most live runs at
+// $0 while web priced them. One table, one resolver — the two venues cannot
+// disagree about what a run cost.
 // ---------------------------------------------------------------------------
 
 function resolvePricing(model: string, provider?: string): ModelPrice | undefined {
-  if (!model) return undefined;
-  const candidates = pricingCandidates(model, provider);
-  for (const candidate of candidates) {
-    const hit = MODEL_PRICING[candidate];
-    if (hit) return hit;
-  }
-  for (const candidate of candidates) {
-    const hit = getCustomPricing(candidate);
-    if (hit) return hit;
-  }
-  return undefined;
+  // The custom-pricing overrides are read imperatively here (not passed in) so
+  // this stays the same call shape the rest of the module and its tests use;
+  // surfaces that must REPAINT on a saved override subscribe to the store
+  // themselves (see lib/custom-pricing-wiring.test.ts).
+  return resolvePricingFrom(model, provider, getCustomPricingState());
 }
 
-function normalizeProvider(provider?: string): string {
-  return provider?.trim().toLowerCase() ?? "";
-}
-
-function qualify(provider: string, key: string): string {
-  return key.startsWith(`${provider}/`) ? key : `${provider}/${key}`;
-}
-
-function pricingCandidates(model: string, provider?: string): string[] {
-  const base = canonicalCandidates(model);
-  const p = normalizeProvider(provider);
-  if (!p) return base;
-  return [...base.map((c) => qualify(p, c)), ...base];
-}
-
-function canonicalCandidates(model: string): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  const push = (s: string) => {
-    if (!s || seen.has(s)) return;
-    seen.add(s);
-    out.push(s);
-  };
-  const stripDate = (s: string) =>
-    s.replace(/-(20\d{2}-\d{2}-\d{2}|20\d{6}|latest)$/, "");
-  const stripProvider = (s: string) => {
-    const i = s.indexOf("/");
-    return i > 0 && /^[a-z][a-z0-9_-]*$/i.test(s.slice(0, i)) ? s.slice(i + 1) : s;
-  };
-  // Only Anthropic IDs are dot↔dash equivalent; OpenAI separators are semantic.
-  const canonAnthropic = (s: string) =>
-    s.startsWith("claude-") ? s.replace(/\./g, "-") : s;
-  const stripContextTag = (s: string) => s.replace(/\[[^\]]+\]$/, "");
-
-  const raw = model;
-  const noProvider = stripProvider(raw);
-  const dashed = canonAnthropic(noProvider);
-  const noTag = stripContextTag(dashed);
-
-  push(raw);
-  push(noProvider);
-  push(dashed);
-  push(noTag);
-  push(stripDate(raw));
-  push(stripDate(noProvider));
-  push(stripDate(dashed));
-  push(stripDate(noTag));
-  return out;
+/** The store's snapshot, in the shape the shared resolver expects. */
+function getCustomPricingState(): PricingOverrides {
+  return useCustomPricingStore.getState().pricings;
 }

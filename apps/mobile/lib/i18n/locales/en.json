@@ -4285,5 +4285,8 @@
   "squads.picker.roleLabel": "Role (optional)",
   "squads.picker.back": "Back",
   "squads.picker.confirmAdd": "Add",
-  "filter.display.cardProject": "Project"
+  "filter.display.cardProject": "Project",
+  "runsTimeline.statTokens": "Tokens",
+  "runsTimeline.statOutput": "Output",
+  "runsTimeline.tokensCached": "{{percent}} from cache"
 }
