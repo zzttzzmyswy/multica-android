@@ -187,6 +187,24 @@ describe("a wakeup run names its source", () => {
     );
   });
 
+  it("arms the catalog reads only on a wakeup run's row", () => {
+    // Both run surfaces mount per ROW, and `useWakeupText` holds two catalog
+    // queries (labels + properties). Called unconditionally on an issue with
+    // 1,800 runs that is 3,600 query observers for data only the wakeup rows
+    // can draw, so the flag must be driven by the run itself — not left at the
+    // default `true`.
+    for (const rel of [RUN_ROW, "components/issue/run-timeline-panel.tsx"]) {
+      const src = code(rel);
+      expect(src, rel).toContain("useWakeupText(!!task.wakeup_id)");
+      expect(src, rel).not.toMatch(/useWakeupText\(\s*\)/);
+    }
+    // The default stays `true` so a surface that always draws a condition (the
+    // issue's wakeup section) does not have to opt in.
+    expect(code("lib/use-wakeup-text.ts")).toContain(
+      "export function useWakeupText(catalogs = true)",
+    );
+  });
+
   it("still labels a run whose rule was deleted, or is not read yet", () => {
     // `wakeupRunLabel(deps, undefined, fallback)` returns the fallback
     // unchanged — asserted numerically in `lib/run-trigger-label.test.ts`.

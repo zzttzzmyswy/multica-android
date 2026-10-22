@@ -911,8 +911,8 @@ function RunListRow({ run, issueId }: { run: TimelineRun; issueId: string }) {
   const { t } = useTranslation();
   const locale = useIntlLocale();
   const { resolveActorName } = useActorLookup();
-  const text = useWakeupText();
   const task = run.task;
+  const text = useWakeupText(!!task.wakeup_id);
   // The second place a run is listed. Web's day list names a wakeup run's
   // condition exactly as the execution log does (`issue-runs-cumulative-chart.tsx:404`,
   // `:432`), so the two lists cannot disagree about why a run exists.

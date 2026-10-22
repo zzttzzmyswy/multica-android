@@ -29,12 +29,17 @@ import type { WakeupTextDeps } from "@/lib/wakeup-presentation";
 /**
  * Build the bundle.
  *
- * `catalogs` is `false` on surfaces that only ever render a condition's EVENT
- * or SCHEDULE text (`wakeupEventName`, an interval, a cron expression) — those
- * branches cannot reach `labelName`/`property`, so arming the two catalog reads
- * for them would be two requests per screen for data nothing draws. The run row
- * passes `true`: its label is `wakeupTrigger`, which resolves a
- * `issue_field/label` or `issue_field/property` condition through exactly these.
+ * `catalogs` gates the two workspace catalog reads (labels, properties). Pass
+ * `false` on any surface that cannot reach a condition mentioning one of them:
+ * the wakeup section only draws rules it already has, and a run row only builds
+ * a condition sentence when the run is wakeup-triggered. Since `useRunWakeup`
+ * mounts per ROW, an ungated pair here would put two query observers behind
+ * every run — 3,600 of them on an issue with 1,800 runs — for data most rows
+ * never read.
+ *
+ * The hook itself is always called (Rules of Hooks); the flag only flips
+ * `enabled` on the queries inside it, so a row that becomes a wakeup run on the
+ * next poll starts reading the catalogs then.
  */
 export function useWakeupText(catalogs = true): WakeupTextDeps {
   const { t } = useTranslation();

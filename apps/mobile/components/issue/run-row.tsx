@@ -67,7 +67,14 @@ export function RunRow({ task, issueId }: Props) {
   const { resolveActorName } = useActorLookup();
   const agentName = actorNameText(resolveActorName("agent", task.agent_id));
   const { t } = useTranslation();
-  const text = useWakeupText();
+  // `catalogs` is gated on this being a wakeup run: only those build the
+  // "Wakeup · <condition>" sentence, and a condition can name a label or a
+  // property. An ordinary run never reaches that branch, so arming the two
+  // workspace-catalog reads for it would be two query observers per row for
+  // data the row cannot draw — on an issue with 1,800 runs that is the
+  // difference between one observer and 3,600. The `select` on the rule read
+  // below is gated the same way (`enabled` inside `useRunWakeup`).
+  const text = useWakeupText(!!task.wakeup_id);
   const timeAgo = useTimeAgo();
   const [transcriptOpen, setTranscriptOpen] = useState(false);
   const isActive = ACTIVE_STATUSES.includes(task.status);

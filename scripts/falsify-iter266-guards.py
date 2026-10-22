@@ -224,6 +224,14 @@ MUTATIONS: list[tuple[str, Path, str, str]] = [
         "  const reason = runReasonLabel(task, t);\n  // Web's rule, and its reason",
         "  const reason = task.failure_reason ?? null;\n  // Web's rule, and its reason",
     ),
+    (
+        "18. the catalog gate is left at its default on every row, so two "
+        "workspace-catalog query observers mount behind every run — 3,600 of "
+        "them on an issue with 1,800 runs — for data an ordinary row cannot draw",
+        RUN_ROW,
+        "  const text = useWakeupText(!!task.wakeup_id);\n",
+        "  const text = useWakeupText();\n",
+    ),
 ]
 
 
