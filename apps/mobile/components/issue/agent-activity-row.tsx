@@ -3,9 +3,18 @@
  * `issue/[id]/runs` formSheet route — the Stack-header
  * `<AgentHeaderBadge>` pushes the same route.
  *
- *   ≥1 active task        → [agent avatars] (pulse) Working           ›
+ *   ≥1 RUNNING task       → [agent avatars] (pulse) Working           ›
+ *   0 running, ≥1 queued  → [dim avatars]    Queued · N agents        ›
  *   0 active, ≥1 past     → 🕓 Runs · N                                ›
  *   never run             → null (zero space)
+ *
+ * The running/queued split is not cosmetic. `GET /api/issues/:id/active-task`
+ * returns `queued`, `dispatched` and `waiting_local_directory` alongside
+ * `running` (server/pkg/db/queries/agent.sql:1647), so reading a non-empty
+ * list as "an agent is working" told the reader work was in flight while the
+ * task had not started. Web keeps the two apart in
+ * `issue-agent-header-chip.tsx` (`is_working` / `is_queued`); the decision now
+ * lives in `lib/issue-work-state.ts` so all three detail surfaces share it.
  *
  * This row is the "discovery" surface (visible only when timeline isn't
  * scrolled). The badge is the "ambient" surface (always visible during
@@ -24,6 +33,8 @@ import {
   issueTasksOptions,
 } from "@/data/queries/issues";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { countLabelKey } from "@/lib/actor-profile";
+import { summarizeIssueWork } from "@/lib/issue-work-state";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
@@ -44,7 +55,10 @@ export function AgentActivityRow({ issueId }: Props) {
   );
   const { data: allTasks = [] } = useQuery(issueTasksOptions(wsId, issueId));
 
-  const activeCount = activeTasks.length;
+  // Running vs. waiting-to-start, the same split web's header chip makes. A
+  // queued task is real work in line, but saying it is "working" is a claim
+  // about the present that is not true yet.
+  const work = useMemo(() => summarizeIssueWork(activeTasks), [activeTasks]);
   // "Past" = tasks not currently active. The /task-runs endpoint returns the
   // full list, so we filter rather than fetching a separate past-only query.
   const pastCount = useMemo(
@@ -58,7 +72,7 @@ export function AgentActivityRow({ issueId }: Props) {
     [allTasks],
   );
 
-  if (activeCount === 0 && pastCount === 0) {
+  if (work.state === "idle" && pastCount === 0) {
     return null;
   }
 
@@ -73,16 +87,18 @@ export function AgentActivityRow({ issueId }: Props) {
       }}
       className="flex-row items-center gap-2 -mx-2 px-2 py-2 rounded-lg active:bg-secondary"
     >
-      {activeCount > 0 ? (
+      {work.state === "idle" ? (
+        <IdleContent count={pastCount} mutedFg={mutedFg} t={t} />
+      ) : (
         <ActiveContent
-          actors={activeTasks.map<StackActor>((t) => ({
+          actors={work.agentIds.map<StackActor>((id) => ({
             type: "agent",
-            id: t.agent_id,
+            id,
           }))}
+          running={work.state === "running"}
+          mutedFg={mutedFg}
           t={t}
         />
-      ) : (
-        <IdleContent count={pastCount} mutedFg={mutedFg} t={t} />
       )}
       <Ionicons name="chevron-forward" size={16} color={mutedFg} />
     </Pressable>
@@ -91,16 +107,37 @@ export function AgentActivityRow({ issueId }: Props) {
 
 function ActiveContent({
   actors,
+  running,
+  mutedFg,
   t,
 }: {
   actors: StackActor[];
-  t: (id: string) => string;
+  running: boolean;
+  mutedFg: string;
+  t: (id: string, params?: Record<string, string | number>) => string;
 }) {
+  // Motion is reserved for work genuinely in flight (web's chip does the same:
+  // the border beam only runs while something is `running`). A half-opacity
+  // stack and a muted word say "waiting" without claiming otherwise.
   return (
     <View className="flex-1 flex-row items-center gap-2">
-      <AvatarStack actors={actors} max={3} size={24} />
-      <PulseDot />
-      <Text className="text-body font-medium text-foreground">{t("issue.working")}</Text>
+      <View style={running ? undefined : { opacity: 0.5 }}>
+        <AvatarStack actors={actors} max={3} size={24} />
+      </View>
+      {running ? <PulseDot /> : null}
+      <Text
+        className={
+          running
+            ? "text-body font-medium text-foreground"
+            : "text-body font-medium text-muted-foreground"
+        }
+      >
+        {running
+          ? t("issue.working")
+          : t(countLabelKey("issue.queuedAgents", actors.length), {
+              count: actors.length,
+            })}
+      </Text>
     </View>
   );
 }

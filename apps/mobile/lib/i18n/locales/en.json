@@ -1,5 +1,7 @@
 {
   "a11y.agentActions": "Agent actions",
+  "a11y.agentQueued_one": "{{count}} agent queued — open runs",
+  "a11y.agentQueued_other": "{{count}} agents queued — open runs",
   "a11y.agentWorking": "Agent working — open runs",
   "a11y.attachFile": "Attach file",
   "a11y.attachImage": "Attach image",
@@ -1882,6 +1884,8 @@
   "issue.workdirPathCopied": "Workdir path copied",
   "issue.workdirPathCopyFailed": "Failed to copy workdir path",
   "issue.workdirPathUnavailable": "No local workdir yet — issue has not been run by a local agent",
+  "issue.queuedAgents_one": "{{count}} agent queued",
+  "issue.queuedAgents_other": "{{count}} agents queued",
   "issue.working": "Working",
   "issueRelation.addChildDescription": "Search for an issue to add as a sub-issue",
   "issueRelation.addChildFailed": "Failed to add sub-issue",
