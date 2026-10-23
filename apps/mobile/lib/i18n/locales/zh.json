@@ -1,5 +1,7 @@
 {
   "a11y.agentActions": "智能体操作",
+  "a11y.agentQueued_one": "{{count}} 个智能体排队中 — 打开运行记录",
+  "a11y.agentQueued_other": "{{count}} 个智能体排队中 — 打开运行记录",
   "a11y.agentWorking": "智能体正在执行 — 打开运行记录",
   "a11y.attachFile": "附加文件",
   "a11y.attachImage": "附加图片",
@@ -1882,6 +1884,8 @@
   "issue.workdirPathCopied": "已复制本地 workdir 路径",
   "issue.workdirPathCopyFailed": "复制本地 workdir 路径失败",
   "issue.workdirPathUnavailable": "暂无本地 workdir — 这个任务还没被本地智能体运行过",
+  "issue.queuedAgents_one": "{{count}} 个智能体排队中",
+  "issue.queuedAgents_other": "{{count}} 个智能体排队中",
   "issue.working": "正在处理",
   "issueRelation.addChildDescription": "搜索一个任务添加为子任务",
   "issueRelation.addChildFailed": "添加子任务失败",
