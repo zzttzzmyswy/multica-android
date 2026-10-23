@@ -47,7 +47,11 @@ import {
   runUsageParts,
 } from "@/lib/run-row-meta";
 import { runTriggerLabel, wakeupRunLabel } from "@/lib/run-trigger-label";
-import { isCancelledOutcome, runOutcomeLabel } from "@/lib/task-outcome";
+import {
+  failureNeedsAction,
+  isCancelledOutcome,
+  runOutcomeLabel,
+} from "@/lib/task-outcome";
 import { useWakeupText } from "@/lib/use-wakeup-text";
 
 interface Props {
@@ -159,6 +163,19 @@ export function RunRow({ task, issueId }: Props) {
           <MetaText>{usage ? usage.cost : "—"}</MetaText>
           <MetaText>{timestamp ? timeAgo(timestamp) : ""}</MetaText>
         </View>
+        {/* A failure nobody can retry away — auth, quota, missing config, a
+            missing CLI, a private runtime — needs the operator's actual error
+            text to act on, and the reason label above only names the class.
+            Web shows the raw error here for exactly this set
+            (`inline-comment-run.tsx:228-231`: `needsAction && rawError`),
+            while every other failure keeps it behind a hover the phone does
+            not have. Without this the most actionable failures would be the
+            least explained. */}
+        {failureNeedsAction(task) && task.error?.trim() ? (
+          <Text className="text-caption text-muted-foreground" numberOfLines={4}>
+            {task.error.trim()}
+          </Text>
+        ) : null}
       </View>
       {transcriptOpen ? (
         <RunTranscriptDialog

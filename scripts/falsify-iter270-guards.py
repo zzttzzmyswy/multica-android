@@ -51,12 +51,14 @@ ROOT = Path(__file__).resolve().parent.parent
 APP = ROOT / "apps" / "mobile"
 SCHEMA = APP / "data" / "schemas.ts"
 OUTCOME = APP / "lib" / "task-outcome.ts"
+ROW = APP / "components" / "issue" / "run-row.tsx"
 EN = APP / "lib" / "i18n" / "locales" / "en.json"
 ZH = APP / "lib" / "i18n" / "locales" / "zh.json"
 
 SUITE = [
     "data/schemas-agent-task-failure-reason.test.ts",
     "lib/task-outcome.test.ts",
+    "lib/run-row-outcome-wiring.test.ts",
     "lib/run-row-meta.test.ts",
     "lib/failure-class.test.ts",
 ]
@@ -207,6 +209,21 @@ MUTATIONS: list[tuple[str, Path, str, str]] = [
         EN,
         '  "failureReason.agent_error.provider_quota_limit": "Provider quota exhausted",\n',
         "",
+    ),
+    # ── the row actually calls the classifiers ────────────────────────────
+    (
+        "14. the row stops asking whether the run was stopped, so a "
+        "cancellation renders as 'Failed · Cancelled by the system' again",
+        ROW,
+        "  if (isCancelledOutcome(task)) {\n",
+        "  if (false) {\n",
+    ),
+    (
+        "15. the action-required error is printed on every failed row instead "
+        "of only the ones a retry cannot fix",
+        ROW,
+        "{failureNeedsAction(task) && task.error?.trim() ? (",
+        "{task.error?.trim() ? (",
     ),
 ]
 
