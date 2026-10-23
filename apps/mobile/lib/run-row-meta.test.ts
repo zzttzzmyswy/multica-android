@@ -4,7 +4,6 @@ import {
   UNDER_A_SECOND,
   runDurationLabel,
   runDurationSeconds,
-  runReasonLabel,
   runUsageParts,
   shortModelName,
 } from "./run-row-meta";
@@ -124,39 +123,6 @@ describe("runDurationLabel", () => {
 
   it("is null when the run has no length", () => {
     expect(runDurationLabel(task({ started_at: null }))).toBeNull();
-  });
-});
-
-describe("runReasonLabel", () => {
-  it("translates a failed run's reason", () => {
-    expect(
-      runReasonLabel(
-        task({ status: "failed", failure_reason: "agent_error.agent_timeout" }),
-        t,
-      ),
-    ).toBe("Agent timed out");
-  });
-
-  it("is null for a run that did not fail", () => {
-    // A completed run carrying a stale reason field must not grow a reason
-    // line; the status is the gate, not the field's presence.
-    expect(
-      runReasonLabel(
-        task({ status: "completed", failure_reason: "provider_network" }),
-        t,
-      ),
-    ).toBeNull();
-  });
-
-  it("is null for a reason the catalog does not know", () => {
-    // The failure vocabulary is operator-facing English; printing half of it
-    // (the raw enum) would be worse than printing none.
-    expect(
-      runReasonLabel(
-        task({ status: "failed", failure_reason: "some_future_reason" }),
-        t,
-      ),
-    ).toBeNull();
   });
 });
 

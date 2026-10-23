@@ -63,26 +63,6 @@ export function runDurationLabel(
   return formatDuration(seconds, UNDER_A_SECOND);
 }
 
-/**
- * The reason a failed run stopped, in the viewer's language, or `null`.
- *
- * This is the ONE place that decides whether a reason is on screen: the row's
- * status badge renders it, and the row's duration slot is suppressed while it
- * is present. A raw `failure_reason` with no catalog entry returns `null`
- * rather than the bare English enum — the failure vocabulary is
- * operator-facing (`packages/core/types/agent.ts` MUL-7411 notes the same for
- * `task.error`) and showing half of it would be worse than showing none.
- */
-export function runReasonLabel(
-  task: Pick<AgentTask, "status" | "failure_reason">,
-  t: (id: string) => string,
-): string | null {
-  if (task.status !== "failed" || !task.failure_reason) return null;
-  const key = `failureReason.${task.failure_reason}`;
-  const label = t(key);
-  return label === key ? null : label;
-}
-
 // ─── Model names ───────────────────────────────────────────────────────────
 
 function capitalize(word: string): string {

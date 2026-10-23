@@ -28,6 +28,20 @@ describe("run row wiring", () => {
     expect(ROW).toContain("runOutcomeLabel(task, t)");
   });
 
+  it("does not fall back to the raw field for the badge text", () => {
+    // The defect this pins: a naive `task.failure_reason` lookup renders
+    // nothing for a reason the bundle does not name, so an operator sees a
+    // bare "Failed" for a failure the server explained. `runOutcomeLabel` is
+    // the only helper that degrades to the wire value, so its presence — and
+    // the absence of a raw-field shortcut inside the badge — is the contract.
+    const badge = ROW.slice(ROW.indexOf("function StatusBadge"));
+    expect(badge).toContain("runOutcomeLabel(task, t)");
+    expect(badge).not.toMatch(/task\.failure_reason\s*\?\?/);
+    // Only the call site matters — the comment above it names the retired
+    // helper on purpose, explaining why it is not used.
+    expect(badge).not.toMatch(/=\s*runReasonLabel\(/);
+  });
+
   it("surfaces the raw error for failures a retry cannot fix", () => {
     // Web shows `task.error` for the action-required set instead of hiding it
     // behind hover, which a phone does not have.

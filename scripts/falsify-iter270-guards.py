@@ -225,6 +225,13 @@ MUTATIONS: list[tuple[str, Path, str, str]] = [
         "{failureNeedsAction(task) && task.error?.trim() ? (",
         "{task.error?.trim() ? (",
     ),
+    (
+        "16. the badge goes back to a lookup that returns null for an unknown "
+        "reason, so a reason this build predates renders as a bare 'Failed'",
+        ROW,
+        "  const reason = runOutcomeLabel(task, t);\n  if (reason) {",
+        "  const reason = task.failure_reason ?? null;\n  if (reason) {",
+    ),
 ]
 
 
