@@ -836,11 +836,37 @@ export const AgentTaskSchema: z.ZodType<AgentTask> = z.object({
   // `omitempty` on a custom string-typed enum). Normalize that to `undefined`
   // so downstream truthy checks (`if (task.failure_reason)`) don't have to
   // special-case both null/undefined AND "".
+  //
+  // Open string, NOT a closed enum (iteration 270). The server's taxonomy
+  // (`server/pkg/taskfailure`) has 22 canonical values plus the pre-MUL-1949
+  // coarse ones still on historical rows, and it keeps growing;
+  // `packages/core/types/agent.ts` declares the field as
+  // `TaskFailureReason | (string & {}) | ""` for exactly that reason. A
+  // six-member enum ending in `.catch("")` rewrote every other value to the
+  // empty sentinel, so on this deployment 130 of 134 failed runs (97.0%)
+  // reached the UI with no reason at all — the `failureReason.*` labels were
+  // already in the bundle, with nothing left to look up. Anything string-like
+  // survives; only a non-string degrades, and it degrades to "no reason"
+  // rather than costing the row.
   failure_reason: z
-    .enum(["agent_error", "timeout", "runtime_offline", "runtime_recovery", "manual", ""])
+    .unknown()
+    .transform((v) => (typeof v === "string" && v !== "" ? v : undefined)),
+  // Who stopped a cancelled run (MYS iteration 270). The wire value is open
+  // (`packages/core/types/agent.ts` `TaskCancellationActor`) and the field is
+  // absent on older rows and on cancellations recorded without an actor, so
+  // the whole object stays optional and each member stays optional. A
+  // partially-populated actor is kept rather than dropped: `type` alone still
+  // says "the system did this", which is the distinction the UI needs, and
+  // the label layer refuses to print a name it does not have.
+  cancelled_by: z
+    .object({
+      type: z.string().optional(),
+      id: z.string().optional(),
+      name: z.string().optional(),
+    })
     .optional()
-    .catch("")
-    .transform((v) => (v === "" ? undefined : v)),
+    .catch(undefined)
+    .transform((v) => (v && typeof v.type === "string" ? { ...v, type: v.type } : undefined)),
   created_at: z.string().default(""),
   chat_session_id: z.string().optional(),
   autopilot_run_id: z.string().optional(),

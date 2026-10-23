@@ -47,6 +47,7 @@ import {
   runUsageParts,
 } from "@/lib/run-row-meta";
 import { runTriggerLabel, wakeupRunLabel } from "@/lib/run-trigger-label";
+import { isCancelledOutcome, runOutcomeLabel } from "@/lib/task-outcome";
 import { useWakeupText } from "@/lib/use-wakeup-text";
 
 interface Props {
@@ -260,6 +261,23 @@ function MetaText({ children }: { children: React.ReactNode }) {
 
 function StatusBadge({ task }: { task: AgentTask }) {
   const { t } = useTranslation();
+  // A failed row whose recorded reason is a cancellation ("cancelled" /
+  // "user_cancelled" / "manual") was *stopped*, not broken. Printing
+  // "Failed · Cancelled by the system" states both halves of a contradiction,
+  // so those rows take the cancellation label and its calmer tone instead —
+  // web's `isCancelledOutcome` rule (`task-failure.ts`, applied in
+  // `inline-comment-run.tsx:85-88`). `cancelled` showed up 13 times in one
+  // live sample of this deployment's task-runs, every one of them on a
+  // status-`failed` row.
+  if (isCancelledOutcome(task)) {
+    // One label says how the run ended; null means nothing was recorded, so
+    // the plain "Cancelled" status stands in.
+    return (
+      <Text className="text-caption text-muted-foreground">
+        {runOutcomeLabel(task, t) ?? t("enum.taskStatus.cancelled")}
+      </Text>
+    );
+  }
   const label = t(`enum.taskStatus.${task.status}`);
   const cls = STATUS_CLASS[task.status] ?? "text-muted-foreground";
   // For failed tasks, surface the failure_reason inline so users don't have
