@@ -41,12 +41,13 @@ import { THEME } from "@/lib/theme";
 import { summarizeTaskUsage } from "@/lib/task-usage";
 import { useCustomPricingStore } from "@/lib/custom-pricing-store";
 import { canRerunRun } from "@/lib/run-retry";
-import {
-  runDurationLabel,
-  runReasonLabel,
-  runUsageParts,
-} from "@/lib/run-row-meta";
+import { runDurationLabel, runUsageParts } from "@/lib/run-row-meta";
 import { runTriggerLabel, wakeupRunLabel } from "@/lib/run-trigger-label";
+import {
+  failureNeedsAction,
+  isCancelledOutcome,
+  runOutcomeLabel,
+} from "@/lib/task-outcome";
 import { useWakeupText } from "@/lib/use-wakeup-text";
 
 interface Props {
@@ -104,7 +105,11 @@ export function RunRow({ task, issueId }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `pricings` re-prices; it is read imperatively by `estimateCost`
     [task.usage, pricings],
   );
-  const reason = runReasonLabel(task, t);
+  // Same helper the badge uses, so the two agree on whether a reason is on
+  // screen: an unknown reason now prints on the badge (degraded to its wire
+  // value), and the duration slot must yield to it exactly as it does for a
+  // known one.
+  const reason = runOutcomeLabel(task, t);
   // Web's rule, and its reason: a run that stopped for a stated reason shows
   // the reason, and only an unexplained one shows how long it took
   // (`execution-log-section.tsx:685-692`). Mobile's StatusBadge already prints
@@ -158,6 +163,19 @@ export function RunRow({ task, issueId }: Props) {
           <MetaText>{usage ? usage.cost : "—"}</MetaText>
           <MetaText>{timestamp ? timeAgo(timestamp) : ""}</MetaText>
         </View>
+        {/* A failure nobody can retry away — auth, quota, missing config, a
+            missing CLI, a private runtime — needs the operator's actual error
+            text to act on, and the reason label above only names the class.
+            Web shows the raw error here for exactly this set
+            (`inline-comment-run.tsx:228-231`: `needsAction && rawError`),
+            while every other failure keeps it behind a hover the phone does
+            not have. Without this the most actionable failures would be the
+            least explained. */}
+        {failureNeedsAction(task) && task.error?.trim() ? (
+          <Text className="text-caption text-muted-foreground" numberOfLines={4}>
+            {task.error.trim()}
+          </Text>
+        ) : null}
       </View>
       {transcriptOpen ? (
         <RunTranscriptDialog
@@ -260,11 +278,35 @@ function MetaText({ children }: { children: React.ReactNode }) {
 
 function StatusBadge({ task }: { task: AgentTask }) {
   const { t } = useTranslation();
+  // A failed row whose recorded reason is a cancellation ("cancelled" /
+  // "user_cancelled" / "manual") was *stopped*, not broken. Printing
+  // "Failed · Cancelled by the system" states both halves of a contradiction,
+  // so those rows take the cancellation label and its calmer tone instead —
+  // web's `isCancelledOutcome` rule (`task-failure.ts`, applied in
+  // `inline-comment-run.tsx:85-88`). `cancelled` showed up 13 times in one
+  // live sample of this deployment's task-runs, every one of them on a
+  // status-`failed` row.
+  if (isCancelledOutcome(task)) {
+    // One label says how the run ended; null means nothing was recorded, so
+    // the plain "Cancelled" status stands in.
+    return (
+      <Text className="text-caption text-muted-foreground">
+        {runOutcomeLabel(task, t) ?? t("enum.taskStatus.cancelled")}
+      </Text>
+    );
+  }
   const label = t(`enum.taskStatus.${task.status}`);
   const cls = STATUS_CLASS[task.status] ?? "text-muted-foreground";
-  // For failed tasks, surface the failure_reason inline so users don't have
-  // to drill in. Missing / empty / unrecognised stays as just "Failed".
-  const reason = runReasonLabel(task, t);
+  // Surface the failure_reason inline so users don't have to drill in.
+  //
+  // This goes through `runOutcomeLabel`, not `runReasonLabel`: the latter
+  // returns `null` for a reason the bundle does not name, which is right for
+  // a sentence surface but wrong here — it leaves a bare "Failed" while the
+  // wire value it was handed (`agent_error.some_new_classification`) would
+  // still tell an operator which classifier fired. Web degrades to the raw
+  // value for exactly this case; a row that shows nothing is the one outcome
+  // this iteration exists to remove.
+  const reason = runOutcomeLabel(task, t);
   if (reason) {
     return (
       <Text className={`text-caption ${cls}`}>

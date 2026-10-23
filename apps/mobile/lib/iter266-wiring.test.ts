@@ -67,7 +67,11 @@ describe("a run row states duration, model and cost", () => {
   it("states the reason through the shared helper, not a second lookup", () => {
     // One decision about "is a reason on screen" — the badge and the duration
     // gate must not each re-derive it from `failure_reason`.
-    expect(row).toContain("const reason = runReasonLabel(task, t)");
+    // Iteration 270 moved this to `runOutcomeLabel`: it also speaks for
+    // cancelled rows and degrades an unknown reason to its wire value instead
+    // of leaving a bare "Failed". The invariant this test protects is
+    // unchanged — ONE lookup feeds both the badge and the duration gate.
+    expect(row).toContain("const reason = runOutcomeLabel(task, t)");
     expect(row).not.toMatch(/task\.failure_reason/);
   });
 

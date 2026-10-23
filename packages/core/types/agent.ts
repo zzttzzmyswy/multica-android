@@ -270,6 +270,13 @@ export interface TaskAttribution {
   rerun_of_task_id?: string;
 }
 
+export interface TaskCancellationActor {
+  /** Open wire value; current servers emit member, agent, or system. */
+  type: string;
+  id?: string;
+  name?: string;
+}
+
 export interface AgentTask {
   id: string;
   agent_id: string;
@@ -316,6 +323,14 @@ export interface AgentTask {
   // coarse values; `string & {}` admits the rest without collapsing the
   // hints.
   failure_reason?: TaskFailureReason | (string & {}) | "";
+  /**
+   * Present on cancellations recorded by a backend with actor provenance
+   * (`member` / `agent` / `system`). Observed live on this deployment:
+   * `GET /api/issues/:id/task-runs` sends it for every cancelled row. Absent
+   * on historical rows and on user cancellations recorded without an actor,
+   * so every consumer must treat it as optional.
+   */
+  cancelled_by?: TaskCancellationActor;
   created_at: string;
   /** Non-empty when the task was spawned from a chat session. */
   chat_session_id?: string;
