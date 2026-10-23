@@ -610,8 +610,14 @@ export default function IssueDetail() {
               children section lives inside the timeline's scroll content and
               an absolutely-positioned bar would scroll away with it. The bar
               intersects its `issues` with the live selection, so it stays
-              hidden while a selection made on a list screen is carried in. */}
-          <BatchActionBar issues={children.data ?? []} />
+              hidden while a selection made on a list screen is carried in.
+
+              `oneShot` mirrors web's `clearSelectionOnApply` on this exact
+              call site (issue-detail.tsx:3681-3685): a batch edit on sub-issues
+              is a one-shot dispatch, and leaving the bar up over the parent's
+              timeline reads as unfinished. The full-screen lists deliberately
+              omit it so several edits can be chained. */}
+          <BatchActionBar issues={children.data ?? []} oneShot />
           <InlineCommentComposer issueId={id} />
         </View>
       )}

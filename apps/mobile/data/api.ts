@@ -439,10 +439,10 @@ import {
   SubscribeStatusSchema,
   type SubscribeStatusResponse,
   BatchUpdateResultSchema,
-  EMPTY_BATCH_UPDATE_RESULT,
+  UNREAD_BATCH_UPDATE_RESULT,
   type BatchUpdateResult,
   BatchDeleteResultSchema,
-  EMPTY_BATCH_DELETE_RESULT,
+  UNREAD_BATCH_DELETE_RESULT,
   type BatchDeleteResult,
   VCSConnectionSchema,
   ListVCSConnectionsResponseSchema,
@@ -4017,8 +4017,10 @@ class ApiClient {
 
   // Batch writes — mirror packages/core/api/client.ts (POST
   // /api/issues/batch-update|batch-delete). Responses are counts
-  // (`{ updated: N }` / `{ deleted: N }`); lenient parse so drift
-  // downgrades to a 0 count rather than throwing.
+  // (`{ updated: N }` / `{ deleted: N }`), and that count is the only signal
+  // distinguishing a full write from a partial one (both handlers skip
+  // per-issue failures and report what they committed). A response the client
+  // cannot read yields `null`, not `0` — see the schema note.
   async batchUpdateIssues(
     issueIds: string[],
     updates: UpdateIssueRequest,
@@ -4026,7 +4028,7 @@ class ApiClient {
     return this.fetchValidatedWith(
       "/api/issues/batch-update",
       BatchUpdateResultSchema,
-      EMPTY_BATCH_UPDATE_RESULT,
+      UNREAD_BATCH_UPDATE_RESULT,
       {
         method: "POST",
         body: JSON.stringify({ issue_ids: issueIds, updates }),
@@ -4041,7 +4043,7 @@ class ApiClient {
     return this.fetchValidatedWith(
       "/api/issues/batch-delete",
       BatchDeleteResultSchema,
-      EMPTY_BATCH_DELETE_RESULT,
+      UNREAD_BATCH_DELETE_RESULT,
       {
         method: "POST",
         body: JSON.stringify({ issue_ids: issueIds }),

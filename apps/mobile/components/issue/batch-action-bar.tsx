@@ -18,11 +18,28 @@
  *     a run). Member / unassigned applies directly.
  *   - Delete confirms via Alert first (mobile's native confirm pattern).
  *
+ * ## The success claim is the SERVER's, not the selection's (iteration 272)
+ *
+ * Both batch endpoints skip rows they cannot act on and answer a committed
+ * count (`{"updated": N}` / `{"deleted": N}` — `server/internal/handler/
+ * issue.go`). This bar used to throw that count away and announce
+ * `batch.updateSuccess` with `selection.length`, so a two-of-five write said
+ * "已更新 5 个任务" and cleared the selection over the three rows that never
+ * applied. Every settle now runs through `lib/batch-write-outcome.ts`:
+ *
+ *   - full commit  → success copy, selection follows `oneShot`;
+ *   - short commit → `batch.updatePartial` / `batch.deletePartial` (a warning,
+ *     not an error — rows DID change) and the selection is KEPT, because the
+ *     skipped rows are the only handle left on the retry;
+ *   - unreadable count → no count-shaped claim at all (that is `null`, not 0).
+ *
+ * `oneShot` mirrors web's `clearSelectionOnApply`: on for the sub-issue list
+ * (a batch edit there is a one-shot dispatch, and a lingering inline bar reads
+ * as unfinished), off for the full-screen lists, where the selection stays so
+ * several edits can be chained.
+ *
  * Success / failure feedback is a lightweight in-bar toast (mobile has no
  * toast infra; follows the "keep it local" precedent of the rest of the app).
- * On success the selection is cleared (`clear()`, stays in selection mode per
- * the store contract) so the user can immediately batch a next group; delete
- * exits selection mode entirely.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -52,6 +69,12 @@ import { squadListOptions } from "@/data/queries/squads";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { commonIssueFields, needRunConfirm } from "@/lib/batch-issues";
 import {
+  batchSelectionAfter,
+  batchToastKind,
+  batchWriteOutcome,
+  type BatchToastKind,
+} from "@/lib/batch-write-outcome";
+import {
   assignConfirmPayload,
   handoffNoteDisabled,
   handoffVerdict,
@@ -66,6 +89,14 @@ interface Props {
   /** The visible issue list this surface renders (rows the selection can
    *  intersect with — same "selectedIds ∩ visible" rule as web). */
   issues: Issue[];
+  /**
+   * Drop the selection once a write fully applies — web's
+   * `clearSelectionOnApply`. Off for full-screen lists (the selection stays so
+   * several edits can be chained); on for the sub-issue list, where a batch
+   * edit is a one-shot dispatch. A partial / unreadable write keeps the
+   * selection either way (`lib/batch-write-outcome.ts`).
+   */
+  oneShot?: boolean;
 }
 
 /** Assignee target awaiting run-confirm (agent/squad only — the sole batch
@@ -75,14 +106,14 @@ type AssignConfirmTarget = {
   id: string;
 };
 
-/** In-bar feedback toast — kind colors success differently from error. */
+/** In-bar feedback toast — kind colors success / warning / error apart. */
 type ToastState = {
   key: number;
-  kind: "success" | "error";
+  kind: BatchToastKind;
   message: string;
 } | null;
 
-export function BatchActionBar({ issues }: Props) {
+export function BatchActionBar({ issues, oneShot = false }: Props) {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const { resolveActorName } = useActorLookup();
@@ -133,7 +164,7 @@ export function BatchActionBar({ issues }: Props) {
   // the selection is mixed — web commonIssueFields.
   const common = useMemo(() => commonIssueFields(selectedIssues), [selectedIssues]);
 
-  const showToast = useCallback((kind: "success" | "error", message: string) => {
+  const showToast = useCallback((kind: BatchToastKind, message: string) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     setToast({ key: Date.now(), kind, message });
     toastTimer.current = setTimeout(() => {
@@ -155,14 +186,52 @@ export function BatchActionBar({ issues }: Props) {
     setAssignTarget(null);
   }, [count]);
 
+  /**
+   * Settle one batch write against the count the SERVER committed. `applied`
+   * is `null` when the response carried no readable count — never a stand-in
+   * for zero (see `lib/batch-write-outcome.ts`).
+   *
+   * The partial sentence names the committed number, so a short write can
+   * never render as the selection-sized sentence the old code printed.
+   */
+  const settleWrite = (
+    requestedCount: number,
+    applied: number | null,
+    oneShotSurface: boolean,
+    copy: {
+      successKey: string;
+      partialKey: string;
+      /** Interpolation name the partial sentence uses for the committed count
+       *  (`updated` for updates, `deleted` for deletes). */
+      appliedParam: string;
+    },
+  ) => {
+    const outcome = batchWriteOutcome(requestedCount, applied);
+    if (batchSelectionAfter(outcome, oneShotSurface) === "exit") {
+      useIssueBatchSelectionStore.getState().exitSelection();
+    }
+    showToast(
+      batchToastKind(outcome),
+      outcome === "partial"
+        ? t(copy.partialKey, {
+            [copy.appliedParam]: applied ?? 0,
+            count: requestedCount,
+          })
+        : t(copy.successKey, { count: requestedCount }),
+    );
+  };
+
   const handleUpdate = (updates: UpdateIssueRequest) => {
     if (ids.length === 0) return;
     batchUpdate.mutate(
       { ids, updates },
       {
-        onSuccess: () => {
-          clear();
-          showToast("success", t("batch.updateSuccess", { count }));
+        onSuccess: (result) => {
+          settleWrite(ids.length, result.updated, oneShot, {
+            successKey: "batch.updateSuccess",
+            partialKey: "batch.updatePartial",
+            appliedParam: "updated",
+          });
         },
         onError: (err) =>
           showToast(
@@ -186,9 +255,17 @@ export function BatchActionBar({ issues }: Props) {
           style: "destructive",
           onPress: () => {
             batchDelete.mutate(ids, {
-              onSuccess: () => {
-                useIssueBatchSelectionStore.getState().exitSelection();
-                showToast("success", t("batch.deleteSuccess", { count }));
+              // Same server-count rule as the update path. A full delete takes
+              // the rows with it, so selection mode exits; a short one leaves
+              // the survivors selected — they are still in the visible list,
+              // so the selection is exactly the retry handle. Partial is a
+              // warning, not an error: some rows really were deleted.
+              onSuccess: (result) => {
+                settleWrite(ids.length, result.deleted, true, {
+                  successKey: "batch.deleteSuccess",
+                  partialKey: "batch.deletePartial",
+                  appliedParam: "deleted",
+                });
               },
               onError: (err) =>
                 showToast(
@@ -264,16 +341,22 @@ export function BatchActionBar({ issues }: Props) {
         >
           <View
             className={`mx-auto rounded-lg px-4 py-2 shadow-lg ${
-              toast.kind === "error" ? "bg-destructive" : "bg-foreground"
+              toast.kind === "error"
+                ? "bg-destructive"
+                : toast.kind === "warning"
+                  ? "bg-warning"
+                  : "bg-foreground"
             }`}
           >
             <Text
               className={`text-body font-medium ${
                 toast.kind === "error"
                   ? "text-destructive-foreground"
-                  : "text-background"
+                  : toast.kind === "warning"
+                    ? "text-foreground"
+                    : "text-background"
               }`}
-              numberOfLines={2}
+              numberOfLines={3}
             >
               {toast.message}
             </Text>
