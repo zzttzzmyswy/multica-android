@@ -1049,28 +1049,39 @@ export interface SubscribeStatusResponse {
 }
 
 // Batch issue write endpoints answer a count (`{"updated": N}` /
-// `{"deleted": N}`). Lenient parse so a shape drift downgrades to a 0 count
-// instead of throwing, mirroring the core client's `{ updated: number }`
-// return type (packages/core/api/client.ts batchUpdateIssues).
+// `{"deleted": N}`). Both handlers skip per-issue failures with `continue` and
+// report the count they actually committed, so this number is the ONLY thing
+// that tells a full write from a partial one — and the UI now branches on it
+// (`lib/batch-write-outcome.ts`).
+//
+// The count is therefore nullable, and the sentinel is `null`, not `0`. With a
+// `0` sentinel a response the client cannot read (schema drift, a renamed
+// field, a proxy's error envelope) would parse to "committed 0 of N" — the
+// client inventing a partial-failure claim the server never made. `null` says
+// the honest thing: no count was read, so make no count-shaped claim. For the
+// same reason the field is REQUIRED rather than `.default(0)`: a missing
+// `updated` is an unreadable count, not a zero one.
 export const BatchUpdateResultSchema = z
-  .object({ updated: z.number().default(0) })
+  .object({ updated: z.number() })
   .loose();
 
 export interface BatchUpdateResult {
-  updated: number;
+  /** Committed row count, or `null` when the response carried no readable one. */
+  updated: number | null;
 }
 
-export const EMPTY_BATCH_UPDATE_RESULT: BatchUpdateResult = { updated: 0 };
+export const UNREAD_BATCH_UPDATE_RESULT: BatchUpdateResult = { updated: null };
 
 export const BatchDeleteResultSchema = z
-  .object({ deleted: z.number().default(0) })
+  .object({ deleted: z.number() })
   .loose();
 
 export interface BatchDeleteResult {
-  deleted: number;
+  /** Deleted row count, or `null` when the response carried no readable one. */
+  deleted: number | null;
 }
 
-export const EMPTY_BATCH_DELETE_RESULT: BatchDeleteResult = { deleted: 0 };
+export const UNREAD_BATCH_DELETE_RESULT: BatchDeleteResult = { deleted: null };
 
 // =====================================================
 // User / Workspace / Inbox / Member / Agent

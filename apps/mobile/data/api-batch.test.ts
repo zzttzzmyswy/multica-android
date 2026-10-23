@@ -23,6 +23,8 @@ vi.mock("expo-secure-store", () => ({
 import {
   BatchDeleteResultSchema,
   BatchUpdateResultSchema,
+  UNREAD_BATCH_DELETE_RESULT,
+  UNREAD_BATCH_UPDATE_RESULT,
 } from "./schemas";
 
 type ApiClient = typeof import("./api").api;
@@ -45,9 +47,11 @@ describe("batch result schemas", () => {
     expect(res.updated).toBe(3);
   });
 
-  it("BatchUpdateResultSchema defaults updated to 0 when missing", () => {
-    const res = BatchUpdateResultSchema.parse({});
-    expect(res.updated).toBe(0);
+  it("BatchUpdateResultSchema REJECTS a response without a count", () => {
+    // Iteration 272: a missing `updated` is an unreadable count, not a zero
+    // one. It must fall through to the `null` sentinel so no caller can read
+    // "committed 0 of N" out of a response the server never shaped that way.
+    expect(BatchUpdateResultSchema.safeParse({}).success).toBe(false);
   });
 
   it("BatchDeleteResultSchema parses {deleted: N}", () => {
@@ -55,9 +59,13 @@ describe("batch result schemas", () => {
     expect(res.deleted).toBe(2);
   });
 
-  it("BatchDeleteResultSchema defaults deleted to 0 when missing", () => {
-    const res = BatchDeleteResultSchema.parse({});
-    expect(res.deleted).toBe(0);
+  it("BatchDeleteResultSchema REJECTS a response without a count", () => {
+    expect(BatchDeleteResultSchema.safeParse({}).success).toBe(false);
+  });
+
+  it("the unread sentinels are null, not 0", () => {
+    expect(UNREAD_BATCH_UPDATE_RESULT.updated).toBeNull();
+    expect(UNREAD_BATCH_DELETE_RESULT.deleted).toBeNull();
   });
 });
 
@@ -78,8 +86,17 @@ describe("batch issue api methods", () => {
     expect(res.updated).toBe(2);
   });
 
-  it("batchUpdateIssues falls back to {updated: 0} on a malformed response", async () => {
+  it("batchUpdateIssues reports an unreadable count as null, never 0", async () => {
+    // A malformed body used to hand back `{updated: 0}`, which the bar then
+    // printed as a real "0 of 1 applied" verdict. `null` means "no count was
+    // read", and the outcome layer makes no claim from it.
     fetchSpy().mockResolvedValue({ unexpected: true });
+    const res = await api.batchUpdateIssues(["a"], { priority: "high" });
+    expect(res.updated).toBeNull();
+  });
+
+  it("batchUpdateIssues keeps a committed 0 distinct from an unreadable count", async () => {
+    fetchSpy().mockResolvedValue({ updated: 0 });
     const res = await api.batchUpdateIssues(["a"], { priority: "high" });
     expect(res.updated).toBe(0);
   });
@@ -97,9 +114,9 @@ describe("batch issue api methods", () => {
     expect(res.deleted).toBe(2);
   });
 
-  it("batchDeleteIssues falls back to {deleted: 0} on a malformed response", async () => {
+  it("batchDeleteIssues reports an unreadable count as null, never 0", async () => {
     fetchSpy().mockResolvedValue({ unexpected: true });
     const res = await api.batchDeleteIssues(["a"]);
-    expect(res.deleted).toBe(0);
+    expect(res.deleted).toBeNull();
   });
 });

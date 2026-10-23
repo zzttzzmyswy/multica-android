@@ -49,6 +49,10 @@ describe("batch action i18n", () => {
     "batch.clearSelection": "清空",
     "batch.assignFailedTitle": "指派失败",
     "batch.assignFailedBody": "无法指派选中的任务，请重试。",
+    // Iteration-272 additions: the server's committed count can be short of
+    // the selection, and that case needs its own sentence in both locales.
+    "batch.updatePartial": "已更新 {{updated}}/{{count}} 个任务，其余任务未能修改，保持不变。",
+    "batch.deletePartial": "已删除 {{deleted}}/{{count}} 个任务，其余任务未能删除，仍保留选中。",
   };
 
   it("resolves every batch key in both locales with a real zh translation", () => {
