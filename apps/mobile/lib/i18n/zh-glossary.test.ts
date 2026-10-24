@@ -147,6 +147,13 @@ const RUN_SENSE_KEYS = [
   "runs.kind.task",
   "runs.retryFailed",
   "runtimes.connect.successDescription",
+  // MUL-8185 restriction confirmation: the runs the server cancels when access
+  // is narrowed. The English source says "runs", but they are agent task runs
+  // in the glossary's sense — the count is exactly what
+  // `runtimes.row.taskCount` shows — so the bundle uses the run term.
+  "runtimes.access.revoke.description",
+  "runtimes.access.revoke.warning",
+  "runtimes.access.revoke.checkbox",
   "runtimes.row.taskCount",
   "squads.detail.activeTask",
   "squads.instructions.description",

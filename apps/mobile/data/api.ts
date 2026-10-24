@@ -1884,6 +1884,13 @@ class ApiClient {
     runtimeId: string,
     patch: {
       visibility?: "private" | "public";
+      /**
+       * Members granted access while the runtime stays private (MUL-8185).
+       * Sent explicitly — including as `[]` — because the server reads an
+       * explicit visibility with no grant list as "clear the grants". Sending
+       * a non-empty list with `visibility: "public"` is a 400.
+       */
+      shared_with?: string[];
       /** Empty string clears the custom name (server reverts to default). */
       custom_name?: string;
       /** Apply custom_name to every runtime on the same machine. */
@@ -1893,6 +1900,29 @@ class ApiClient {
     return this.fetch<RuntimeDevice>(`/api/runtimes/${runtimeId}`, {
       method: "PATCH",
       body: JSON.stringify(patch),
+    });
+  }
+
+  /**
+   * Confirmed counterpart to a restricting PATCH (MUL-8185). The PATCH returns
+   * a structured 409 when teammates still have agents bound or runs in flight;
+   * the caller shows that plan, then submits its exact agent/task id sets here.
+   * The server rechecks both sets in one transaction, so a stale plan is
+   * refused again rather than applied partly.
+   */
+  async revokeRuntimeWorkspaceAccess(
+    runtimeId: string,
+    expectedNonownerAgentIds: string[],
+    expectedTaskIds: string[],
+    sharedWith?: string[],
+  ): Promise<void> {
+    await this.fetch<void>(`/api/runtimes/${runtimeId}/revoke-workspace-access`, {
+      method: "POST",
+      body: JSON.stringify({
+        expected_nonowner_agent_ids: expectedNonownerAgentIds,
+        expected_task_ids: expectedTaskIds,
+        ...(sharedWith !== undefined ? { shared_with: sharedWith } : {}),
+      }),
     });
   }
 

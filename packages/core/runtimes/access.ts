@@ -3,12 +3,14 @@ import type { RuntimeDevice } from "../types";
 /**
  * Whether this member may run an agent on `runtime`.
  *
- * A private runtime is usable only by its owner; a public one by anyone in the
+ * A private runtime is usable by its owner and the members explicitly granted
+ * access through `shared_with` (MUL-8185); a public one by anyone in the
  * workspace; an ownerless one by nobody. Workspace role does not enter into
  * it: a private runtime is someone's own machine, so not even an admin may
- * bind an agent to it, and only the owner may flip it to public. The server
- * enforces exactly this predicate (`canUseRuntimeForAgent`), so the picker and
- * the API/CLI never disagree (MUL-6126).
+ * bind an agent without a grant, and only the owner may change sharing. The
+ * server enforces exactly this predicate (`RuntimeAllowsUser` in
+ * server/internal/service/runtime_access.go), so the picker and the API/CLI
+ * never disagree (MUL-6126).
  *
  * An unknown viewer (no session yet) is treated as allowed so a still-loading
  * auth state never hides a runtime the user does own — every write path
@@ -28,5 +30,11 @@ export function isRuntimeUsableForUser(
   if (!runtime.owner_id) return false;
   if (!currentUserId) return true;
   if (runtime.owner_id === currentUserId) return true;
-  return runtime.visibility === "public";
+  return (
+    runtime.visibility === "public" ||
+    // A missing list is "no grants", never "everybody": a backend that
+    // predates MUL-8185 must keep the strict MUL-6126 behavior.
+    (runtime.visibility === "private" &&
+      (runtime.shared_with ?? []).includes(currentUserId))
+  );
 }

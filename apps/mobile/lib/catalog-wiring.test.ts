@@ -53,6 +53,10 @@ const PICKER_SURFACES = [
   "components/project/pickers/project-lead-picker-body.tsx",
   "components/issue/mention-suggestion-bar.tsx",
   "components/issue/subscriber-picker-sheet.tsx",
+  // MUL-8185: the runtime grant sheet reads the member directory to render its
+  // checkboxes, and its 「工作区里还没有其他成员。」 branch is an assertion about
+  // the workspace — it may only be made from a settled read.
+  "components/runtimes/runtime-access-editor.tsx",
 ];
 
 /** The surfaces that read a workspace directory *inside a detail page's

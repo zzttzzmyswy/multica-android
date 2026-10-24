@@ -45,6 +45,7 @@ import {
   pendingRuntimeCommandName,
 } from "@/lib/pending-runtime";
 import { daemonRuntimesDocsHref } from "@/lib/runtime-docs";
+import { runtimeAccessBadge } from "@/lib/runtime-access";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useAuthStore } from "@/data/auth-store";
 import { useChatSessionPickerStore } from "@/data/stores/chat-session-picker-store";
@@ -477,10 +478,17 @@ function MachineHeader({
                 </Text>
               </View>
               {machine.runtimes.length === 1 &&
-              machine.runtimes[0]!.visibility === "public" ? (
+              runtimeAccessBadge(machine.runtimes[0]!) === "public" ? (
                 <View className="px-1.5 py-px rounded-full bg-info/10">
                   <Text className="text-micro text-info font-medium">
                     {t("runtimes.visibility.public")}
+                  </Text>
+                </View>
+              ) : machine.runtimes.length === 1 &&
+                runtimeAccessBadge(machine.runtimes[0]!) === "members" ? (
+                <View className="px-1.5 py-px rounded-full bg-info/10">
+                  <Text className="text-micro text-info font-medium">
+                    {t("runtimes.access.label.members")}
                   </Text>
                 </View>
               ) : null}
@@ -535,6 +543,7 @@ function RuntimeRow({
   // "recently lost" then "offline" — which reads as a runtime that will come
   // back on its own, while the reason it never will stays hidden.
   const registrationFailure = customRuntimeRegistrationFailure(runtime);
+  const accessBadge = runtimeAccessBadge(runtime);
 
   // Pair the dot colour with a filled badge tone, same split as web's
   // HealthCell (colored dot + caption label underneath).
@@ -581,11 +590,22 @@ function RuntimeRow({
                 </Text>
               </View>
             )}
-            {/* Only public earns a badge — private is the default. */}
-            {runtime.visibility === "public" ? (
+            {/* Public and shared-with-members earn a chip; private-and-
+                unshared is the default, so badging it would put a lock on
+                nearly every row (web's VisibilityBadge returns null there). */}
+            {accessBadge === "public" ? (
               <View className="px-1.5 py-px rounded-full bg-info/10">
                 <Text className="text-micro text-info font-medium">
                   {t("runtimes.visibility.public")}
+                </Text>
+              </View>
+            ) : accessBadge === "members" ? (
+              /* Private-but-shared reads as its own scope on web too: without
+                 this chip the row says nothing, and the granted member cannot
+                 tell this machine apart from one they may not touch. */
+              <View className="px-1.5 py-px rounded-full bg-info/10">
+                <Text className="text-micro text-info font-medium">
+                  {t("runtimes.access.label.members")}
                 </Text>
               </View>
             ) : null}

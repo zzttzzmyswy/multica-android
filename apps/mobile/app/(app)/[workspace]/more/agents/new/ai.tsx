@@ -35,6 +35,7 @@ import {
   builderDraftTitle,
 } from "@/lib/agent-builder";
 import { usableRuntimes } from "@/lib/agent-create";
+import { runtimeAccessScope } from "@/lib/runtime-access";
 import { useTranslation } from "@/lib/i18n/react";
 import { useTimeAgo } from "@/lib/time-ago";
 import { useColorScheme } from "@/lib/use-color-scheme";
@@ -254,7 +255,11 @@ export default function AiBuilderSetupPage() {
                 </Text>
                 {selectedRuntime.visibility !== "public" ? (
                   <Text className="text-micro text-info">
-                    {t("runtimes.visibility.private")}
+                    {t(
+                      runtimeAccessScope(selectedRuntime) === "members"
+                        ? "runtimes.access.label.members"
+                        : "runtimes.visibility.private",
+                    )}
                   </Text>
                 ) : null}
               </>

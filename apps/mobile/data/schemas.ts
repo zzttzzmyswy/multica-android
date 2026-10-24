@@ -1530,6 +1530,11 @@ export const RuntimeSchema: z.ZodType<RuntimeDevice> = z.object({
   visibility: z.string().catch("private") as unknown as z.ZodType<
     RuntimeDevice["visibility"]
   >,
+  // Members granted access while the runtime stays private (MUL-8185).
+  // Defaults to the empty list — the same strict degrade `visibility` gets —
+  // so a backend that predates member sharing parses as "nobody was granted
+  // access" instead of inventing grants.
+  shared_with: z.array(z.string()).default([]),
   timezone: z.string().default(""),
   created_at: z.string().default(""),
   updated_at: z.string().default(""),
