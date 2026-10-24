@@ -95,6 +95,95 @@ export type WakeupField = "status" | "assignee" | "label" | "property";
 export type WakeupAtPreset = "10m" | "1h" | "tomorrow" | "custom";
 export type WakeupRecurrence = "hourly" | "daily" | "weekdays";
 
+/** The `pull_request` condition's events, in the order the picker lists them.
+ *
+ *  `conflicts` is upstream MUL-8135. The set is not guessed: the server's own
+ *  validator is `if c.Event != "checks_finished" && c.Event != "merged" &&
+ *  c.Event != "conflicts"` → "event must be checks_finished, merged or
+ *  conflicts" (`server/internal/service/issue_wakeup_condition.go`, also the
+ *  enum in `packages/core/api/schemas.ts`). One exported tuple so the form's
+ *  options, the draft's union and the read path cannot offer a different set
+ *  from the one the server accepts. */
+export const WAKEUP_PR_EVENTS = [
+  "checks_finished",
+  "merged",
+  "conflicts",
+] as const;
+export type WakeupPrEvent = (typeof WAKEUP_PR_EVENTS)[number];
+
+/** The create-form label for each PR event (`wakeups.create.pr_*`). A map
+ *  rather than a ternary chain: the previous binary
+ *  `event === "merged" ? … : …` labelled ANY third value as "CI finishes",
+ *  which is exactly what happened once the server grew `conflicts`. */
+export const WAKEUP_PR_EVENT_LABEL_KEY: Record<WakeupPrEvent, string> = {
+  checks_finished: "wakeups.create.pr_checks",
+  merged: "wakeups.create.pr_merged",
+  conflicts: "wakeups.create.pr_conflicts",
+};
+
+/** The rule-sentence suffix (`wakeups.{cond,wait}.pr*`) for each PR event.
+ *  Same reason: a two-way ternary cannot express three. */
+export const WAKEUP_PR_EVENT_SENTENCE_KEY: Record<WakeupPrEvent, string> = {
+  checks_finished: "prChecks",
+  merged: "prMerged",
+  conflicts: "prConflicts",
+};
+
+/** Whether `event` is one the platform accepts. Used by the READ path, whose
+ *  input is whatever the server stored: a rule carrying an event this client
+ *  does not know must not be described as one it does. */
+export function isWakeupPrEvent(event: unknown): event is WakeupPrEvent {
+  return (
+    typeof event === "string" &&
+    (WAKEUP_PR_EVENTS as readonly string[]).includes(event)
+  );
+}
+
+/** What the create form can say, ahead of time, about a `conflicts` rule on
+ *  THIS issue. See `prConflictsReadiness`. */
+export type PrConflictsReadiness = "blocked" | "ready" | "unknown";
+
+/**
+ * Whether a `conflicts` rule can ever fire on an issue, judged from its linked
+ * pull requests (`GET /api/issues/:id/pull-requests`).
+ *
+ * Why the form needs this: `conflicts` is the one PR event with a server-side
+ * precondition. `issue_wakeup_condition.go` only evaluates it against GitHub
+ * snapshot rows (`if c.Event == "conflicts" && linked == 0 { errPRConflictsUnsupported }`),
+ * so a rule created on an issue whose only PRs are self-hosted
+ * (Forgejo/Gitea/GitLab) is accepted, stored, and then never fires — the user
+ * gets silence, not an error. Web lets you create it too; this client says so
+ * first.
+ *
+ * The three answers, and why the uncertain ones stay SILENT rather than
+ * guessing:
+ *
+ *   - `blocked` — there ARE linked PRs and none is a GitHub one. Deterministic
+ *     from the list alone: `conflicts` is unsatisfiable until a GitHub PR is
+ *     linked. This is the exact case `errPRConflictsUnsupported` names.
+ *   - `unknown` — no list, or an EMPTY one. An empty list cannot be told apart
+ *     from a read that fell back (`listIssuePullRequests` degrades to
+ *     `{ pull_requests: [] }`), and, more importantly, "no PR linked yet" is
+ *     NOT a reason to warn: linking a PR later makes the rule live. Claiming
+ *     "this rule will never fire" there would be the same class of false
+ *     statement this round exists to remove.
+ *   - `ready` — at least one GitHub PR is linked.
+ *
+ * Deliberately NOT judged here: whether this server has the GitHub snapshot
+ * client configured. `snapshot_available === false` means "enabled but no
+ * current-head snapshot" AND "not enabled" alike, so the client cannot tell
+ * them apart and must not pretend to.
+ */
+export function prConflictsReadiness(
+  prs: readonly { provider?: string | null }[] | undefined | null,
+): PrConflictsReadiness {
+  if (!prs || prs.length === 0) return "unknown";
+  // `provider` is absent on older GitHub-only backends, where every row IS a
+  // GitHub PR — the same default the response schema applies.
+  const hasGitHub = prs.some((pr) => (pr.provider ?? "github") === "github");
+  return hasGitHub ? "ready" : "blocked";
+}
+
 /** The wait and fire-count ladders, in the rungs web offers. Every value a
  *  multiple of a day/run so the label reads naturally, and every rung inside the
  *  server's own windows: `expires_in_seconds` must be 60…31,536,000
@@ -225,7 +314,10 @@ export interface WakeupDraft {
   assignee: { type: "member" | "agent" | "squad"; id: string } | null;
   /** Null waits for every sub-issue. */
   stage: number | null;
-  prEvent: "checks_finished" | "merged";
+  /** The three PR events the platform evaluates (MUL-8135 added `conflicts`).
+   *  Kept as its own type rather than inlined so the picker's option list and
+   *  this field cannot drift apart — see `WAKEUP_PR_EVENTS`. */
+  prEvent: WakeupPrEvent;
   otherIssue: { id: string; identifier: string } | null;
   otherState: "done" | "ended" | "in_review";
   maxFires: number;
