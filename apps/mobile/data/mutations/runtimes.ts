@@ -27,6 +27,7 @@ export function useUpdateRuntime() {
       runtimeId: string;
       patch: {
         visibility?: "private" | "public";
+        shared_with?: string[];
         custom_name?: string;
         apply_to_machine?: boolean;
       };
@@ -35,6 +36,48 @@ export function useUpdateRuntime() {
       if (!wsId) return;
       void qc.invalidateQueries({
         queryKey: runtimeListOptions(wsId).queryKey,
+      });
+    },
+  });
+}
+
+/**
+ * Confirmed access restriction (MUL-8185). Mirrors web
+ * `useRevokeRuntimeWorkspaceAccess`: the transaction touches runtime rows,
+ * agent bindings and task presence, so every affected projection is
+ * invalidated after it settles — the same set the delete cascade refreshes.
+ */
+export function useRevokeRuntimeAccess() {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+
+  return useMutation({
+    mutationFn: ({
+      runtimeId,
+      expectedNonownerAgentIds,
+      expectedTaskIds,
+      sharedWith,
+    }: {
+      runtimeId: string;
+      expectedNonownerAgentIds: string[];
+      expectedTaskIds: string[];
+      sharedWith?: string[];
+    }) =>
+      api.revokeRuntimeWorkspaceAccess(
+        runtimeId,
+        expectedNonownerAgentIds,
+        expectedTaskIds,
+        sharedWith,
+      ),
+    onSettled: () => {
+      if (!wsId) return;
+      void qc.invalidateQueries({
+        queryKey: runtimeListOptions(wsId).queryKey,
+      });
+      void qc.invalidateQueries({ queryKey: agentKeys.list(wsId) });
+      void qc.invalidateQueries({ queryKey: agentKeys.listAll(wsId) });
+      void qc.invalidateQueries({
+        queryKey: agentTaskSnapshotOptions(wsId).queryKey,
       });
     },
   });

@@ -27,6 +27,7 @@ import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { runtimeRowLabel } from "@/lib/runtime-machines";
+import { runtimeAccessScope } from "@/lib/runtime-access";
 import {
   RUNTIME_SEARCH_THRESHOLD,
   computeFilteredRuntimes,
@@ -213,11 +214,19 @@ export function RuntimePickerSheet({
                 {t(`runtimes.health.${runtime.status}`)}
                 {runtime.provider ? ` · ${runtime.provider}` : ""}
               </Text>
+              {/* Three-way, not two: a private runtime shared with this
+                  viewer is neither "private" (it is usable) nor public (it is
+                  not open to the workspace), and calling it 私有 next to an
+                  unlocked row contradicts what the row just let them do. */}
               {!isPublic ? (
                 <Text className="text-micro text-muted-foreground">
                   ·{" "}
                   <Text className="text-info">
-                    {t("runtimes.visibility.private")}
+                    {t(
+                      runtimeAccessScope(runtime) === "members"
+                        ? "runtimes.access.label.members"
+                        : "runtimes.visibility.private",
+                    )}
                   </Text>
                 </Text>
               ) : null}

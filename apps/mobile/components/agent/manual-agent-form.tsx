@@ -84,6 +84,7 @@ import { RuntimePickerSheet } from "@/components/agent/runtime-picker-sheet";
 import { ModelPickerSheet } from "@/components/agent/model-picker-sheet";
 import { MultiSelectSheet } from "@/components/agent/multi-select-sheet";
 import { agentCreateGate, classifyAgentCreateError, resolveDuplicateSeed, usableRuntimes } from "@/lib/agent-create";
+import { runtimeAccessScope } from "@/lib/runtime-access";
 import { catalogRead } from "@/lib/catalog-read";
 import { agentEditGate } from "@/lib/agent-edit";
 import {
@@ -705,7 +706,11 @@ export function ManualAgentForm({
               </Text>
               {selectedRuntime.visibility !== "public" ? (
                 <Text className="text-micro text-info">
-                  {t("runtimes.visibility.private")}
+                  {t(
+                    runtimeAccessScope(selectedRuntime) === "members"
+                      ? "runtimes.access.label.members"
+                      : "runtimes.visibility.private",
+                  )}
                 </Text>
               ) : null}
             </>

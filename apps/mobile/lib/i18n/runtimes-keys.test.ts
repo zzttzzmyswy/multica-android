@@ -162,6 +162,21 @@ describe("runtimes i18n", () => {
     "runtimes.mikaSetup.pickRuntime": "选择运行时",
     "runtimes.mikaSetup.noRuntimes": "当前还没有你可用的在线运行时。请先连接一台机器。",
     "runtimes.mikaSetup.cancel": "取消",
+    // iteration 273 (MUL-8185) — three-way runtime access
+    "runtimes.access.choice.private": "私有",
+    "runtimes.access.choice.public": "公开",
+    "runtimes.access.choice.members": "指定成员",
+    "runtimes.access.label.members": "指定成员",
+    "runtimes.access.membersTitle": "共享给成员",
+    "runtimes.access.membersSearch": "搜索成员",
+    "runtimes.access.membersNone": "工作区里还没有其他成员。",
+    "runtimes.access.membersCount": "{{count}} 位成员",
+    "runtimes.access.membersEdit": "编辑",
+    "runtimes.access.revoke.title": "限制运行时访问权限？",
+    "runtimes.access.revoke.confirm": "限制访问",
+    "runtimes.access.revoke.planChanged": "弹窗打开期间，访问方案发生了变化。请重新确认。",
+    "runtimes.detail.visibilityHint.members": "只有你选中的成员可以将智能体绑定到此运行时。",
+    "runtimes.detail.visibilityReadonly.members": "属运行时所有者所有，只有所有者可修改共享给谁。",
   };
 
   it("resolves every key in both locales with a real zh translation", () => {

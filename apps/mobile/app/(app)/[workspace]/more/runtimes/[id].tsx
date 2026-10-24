@@ -39,6 +39,10 @@ import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { PresenceDot } from "@/components/ui/presence-dot";
 import { RuntimeProfilesDialog } from "@/components/runtimes/runtime-profiles-dialog";
 import {
+  RuntimeAccessEditor,
+  RuntimeAccessReadout,
+} from "@/components/runtimes/runtime-access-editor";
+import {
   DeleteRuntimeProfileDialog,
   type ProfileDeleteSubject,
 } from "@/components/runtimes/delete-runtime-profile-dialog";
@@ -437,26 +441,10 @@ export default function RuntimeDetailPage() {
     runtime,
   });
   const displayName = runtimeDisplayLabel(runtime);
-  const isPublic = runtime.visibility === "public";
 
   const openRename = () => {
     setNameInput(runtime.custom_name ?? runtime.name);
     setRenameOpen(true);
-  };
-
-  const flipVisibility = (next: "private" | "public") => {
-    if (next === runtime.visibility) return;
-    updateRuntime.mutate(
-      { runtimeId: runtime.id, patch: { visibility: next } },
-      {
-        onSuccess: () => Alert.alert(t("runtimes.detail.visibilityUpdated")),
-        onError: (err) =>
-          Alert.alert(
-            t("runtimes.detail.visibilityFailed"),
-            err instanceof Error ? err.message : t("runtimes.detail.unknown"),
-          ),
-      },
-    );
   };
 
   const handleRenameSave = () => {
@@ -708,71 +696,19 @@ export default function RuntimeDetailPage() {
               </View>
             ) : null}
 
-            {/* Visibility */}
+            {/* Visibility — three scopes (private / public / specific
+                members), MUL-8185. The owner gets the editor; everyone else
+                gets a readout of the same three-way state, because "private"
+                was previously the only thing a granted member could see and it
+                was wrong: the server lets them bind agents here. */}
             <View className="gap-1.5">
               <Text className="text-micro uppercase tracking-wide text-muted-foreground">
                 {t("runtimes.detail.visibility")}
               </Text>
               {access.canEditVisibility ? (
-                <View className="gap-1.5">
-                  <View className="flex-row gap-1.5">
-                    <Button
-                      size="sm"
-                      variant={!isPublic ? "secondary" : "outline"}
-                      onPress={() => flipVisibility("private")}
-                      disabled={updateRuntime.isPending}
-                    >
-                      <Ionicons
-                        name="lock-closed-outline"
-                        size={14}
-                        color={theme.mutedForeground}
-                      />
-                      <Text>{t("runtimes.visibility.private")}</Text>
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant={isPublic ? "secondary" : "outline"}
-                      onPress={() => flipVisibility("public")}
-                      disabled={updateRuntime.isPending}
-                    >
-                      <Ionicons
-                        name="globe-outline"
-                        size={14}
-                        color={theme.mutedForeground}
-                      />
-                      <Text>{t("runtimes.visibility.public")}</Text>
-                    </Button>
-                  </View>
-                  <Text className="text-caption text-muted-foreground">
-                    {t(
-                      isPublic
-                        ? "runtimes.detail.visibilityHint.public"
-                        : "runtimes.detail.visibilityHint.private",
-                    )}
-                  </Text>
-                </View>
+                <RuntimeAccessEditor runtime={runtime} />
               ) : (
-                <View className="gap-1.5">
-                  <View className="flex-row items-center gap-1.5">
-                    <Ionicons
-                      name={isPublic ? "globe-outline" : "lock-closed-outline"}
-                      size={14}
-                      color={theme.mutedForeground}
-                    />
-                    <Text className="text-caption font-medium text-foreground">
-                      {isPublic
-                        ? t("runtimes.visibility.public")
-                        : t("runtimes.visibility.private")}
-                    </Text>
-                  </View>
-                  <Text className="text-caption text-muted-foreground">
-                    {t(
-                      isPublic
-                        ? "runtimes.detail.visibilityReadonly.public"
-                        : "runtimes.detail.visibilityReadonly.private",
-                    )}
-                  </Text>
-                </View>
+                <RuntimeAccessReadout runtime={runtime} />
               )}
             </View>
 

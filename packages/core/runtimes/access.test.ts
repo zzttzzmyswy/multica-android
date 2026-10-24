@@ -40,6 +40,27 @@ describe("isRuntimeUsableForUser", () => {
     expect(isRuntimeUsableForUser(makeRuntime(), OTHER)).toBe(false);
   });
 
+  it("allows only selected members on a shared private runtime", () => {
+    // MUL-8185: the owner can grant named members while the machine stays
+    // private. The grant list is the only thing that widens "owner only" —
+    // a member who is not on it is still refused, and an ownerless runtime
+    // stays unusable no matter who was granted.
+    const runtime = makeRuntime({ shared_with: [OTHER] });
+    expect(isRuntimeUsableForUser(runtime, OTHER)).toBe(true);
+    expect(isRuntimeUsableForUser(runtime, OWNER)).toBe(true);
+    expect(isRuntimeUsableForUser(runtime, "not-selected")).toBe(false);
+    expect(isRuntimeUsableForUser({ ...runtime, owner_id: null }, OTHER)).toBe(
+      false,
+    );
+  });
+
+  it("treats a backend with no shared_with field as granting nobody", () => {
+    // A server that predates MUL-8185 omits the field entirely. Defaulting it
+    // to "everyone" (or falling through to true) would turn "private" into
+    // "public" on exactly the servers least able to enforce the real rule.
+    expect(isRuntimeUsableForUser(makeRuntime(), OTHER)).toBe(false);
+  });
+
   it("lets anyone use a public runtime", () => {
     expect(
       isRuntimeUsableForUser(makeRuntime({ visibility: "public" }), OTHER),
