@@ -124,6 +124,7 @@
   "activity.wakeupChipCreatedBy": "{{name}} 创建",
   "activity.wakeupChipSystem": "系统规则",
   "activity.wakeupCreated": "添加了唤醒：{{condition}}唤醒 {{agent}}",
+  "activity.wakeupCreatedScheduled": "为 {{agent}} 添加了唤醒：{{condition}}",
   "activity.wakeupTimedOutEnd": "唤醒已到期结束：{{condition}}",
   "activity.wakeupTimedOutWake": "等待超时（{{condition}}），唤醒了 {{agent}} 处理超时",
   "activity.wakeupTriggered": "{{condition}}，唤醒了 {{agent}}",

@@ -103,6 +103,107 @@ describe("formatActivity — wakeup actions", () => {
     expect(text).toContain("Agent One");
   });
 
+  // Iteration 275 (MYS-2415), from upstream MUL-8220. A time rule's label
+  // already ends in "wake" (`Wake every hour`, `每小时唤醒`), so the generic
+  // sentence's `· wake {{agent}}` tail appended a second one — Chinese read
+  // 「添加了唤醒：每小时唤醒唤醒 Agent One」. These pin the whole sentence, not a
+  // substring: `toContain("Agent One")` passed while the defect was live, which
+  // is why it survived five rounds of tests over this formatter.
+  describe("a created time rule does not repeat 'wake'", () => {
+    /** A time rule carries its schedule instead of a condition. */
+    const timeRule = (kind: "at" | "every") =>
+      entry({
+        action: "wakeup_created",
+        details: {
+          wakeup: {
+            ...STORED,
+            kind,
+            condition: undefined,
+            interval_seconds: 3600,
+            next_fire_at: "2026-10-21T09:00:00Z",
+          },
+        },
+      });
+
+    it("names the agent first in English", () => {
+      expect(mod.formatActivity(timeRule("every"), resolve, statusLabel)).toBe(
+        "added a wakeup for Agent One: Wake every hour",
+      );
+      // No standalone "wake" verb after the schedule — the repetition itself.
+      expect(
+        mod.formatActivity(timeRule("every"), resolve, statusLabel),
+      ).not.toMatch(/Wake every hour · wake/);
+    });
+
+    it("names the agent first in Chinese, with no 「唤醒唤醒」", () => {
+      i18n.setLocale("zh");
+      expect(mod.formatActivity(timeRule("every"), resolve, statusLabel)).toBe(
+        "为 Agent One 添加了唤醒：每小时唤醒",
+      );
+      expect(
+        mod.formatActivity(timeRule("every"), resolve, statusLabel),
+      ).not.toContain("唤醒唤醒");
+    });
+
+    it("still appends the wake tail for a conditional rule", () => {
+      // The negative half of the guard. An `event` rule's condition sentence
+      // does NOT end in "wake" ("When this issue moves to In Review"), so
+      // rewriting it would drop the action the sentence exists to state. A
+      // change that routes every kind down the new branch has to fail here.
+      expect(mod.formatActivity(entry({ action: "wakeup_created", details: { wakeup: STORED } }), resolve, statusLabel)).toBe(
+        "added a wakeup: When this issue moves to In Review · wake Agent One",
+      );
+    });
+
+    it("keeps the wake tail for a raw-event rule, which carries no condition", () => {
+      // The case that makes the `kind !== "event"` clause load-bearing rather
+      // than belt-and-braces. A rule built from raw events stores `kind:
+      // "event"` with NO condition (`buildWakeupInput`'s default branch sets
+      // `event_types` and leaves `condition` unset), so `!preview.condition`
+      // alone would route it down the time-rule sentence and print
+      // "added a wakeup for Agent One: When this issue receives a new comment"
+      // — a sentence that loses the wake. Only the kind test separates them.
+      const rawEvent = entry({
+        action: "wakeup_created",
+        details: {
+          wakeup: {
+            ...STORED,
+            condition: undefined,
+            event_types: ["comment.created"],
+          },
+        },
+      });
+      const text = mod.formatActivity(rawEvent, resolve, statusLabel);
+      expect(text).toBe(
+        "added a wakeup: When this issue receives a new comment · wake Agent One",
+      );
+      expect(text).not.toContain("for Agent One");
+    });
+
+    it("keeps the wake tail when a rule carries both a condition and a time kind", () => {
+      // The case that makes the `!preview.condition` clause load-bearing. A
+      // rule CAN hold a condition beside a time kind — the server only forbids
+      // a condition alongside raw events or filters. The condition is what
+      // `wakeupTrigger` renders (it wins over the schedule), so the sentence
+      // must lead with it; testing only the kind would print
+      // "for Agent One: When this issue moves to In Review", which reads as a
+      // schedule that this rule is not.
+      const hybrid = entry({
+        action: "wakeup_created",
+        details: {
+          wakeup: {
+            ...STORED,
+            kind: "at",
+            next_fire_at: "2026-10-21T09:00:00Z",
+          },
+        },
+      });
+      expect(mod.formatActivity(hybrid, resolve, statusLabel)).toBe(
+        "added a wakeup: When this issue moves to In Review · wake Agent One",
+      );
+    });
+  });
+
   it("names the manual trigger by who pressed it", () => {
     const text = mod.formatActivity(
       entry({

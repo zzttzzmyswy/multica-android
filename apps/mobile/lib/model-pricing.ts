@@ -197,18 +197,30 @@ const MODEL_PRICING: Record<string, ModelPrice> = {
   "gpt-4o-mini":        { input: 0.15, output: 0.60, cacheRead: 0.075, cacheWrite: 0.15 },
   "gpt-4o":             { input: 2.50, output: 10,   cacheRead: 1.25,  cacheWrite: 2.50 },
 
-  // -- DeepSeek (api-docs.deepseek.com/quick_start/pricing).
-  //    The official catalog lists exactly two current SKUs; `deepseek-chat`
-  //    and `deepseek-reasoner` are aliases that route to `deepseek-v4-flash`
-  //    (non-thinking and thinking mode respectively) per the same page.
+  // -- DeepSeek Flash: api-docs.deepseek.com/quick_start/pricing (2026-10-27).
+  //    The sheet names `deepseek-flash`, served by DeepSeek-V4.1-Flash-1017;
+  //    the legacy names `deepseek-v4-flash` / `deepseek-v4-flash-vision-exp`
+  //    were retired and are billed at the Flash price, and `deepseek-chat` /
+  //    `deepseek-reasoner` route there too. Priced at the PEAK rate, not the
+  //    off-peak one ($0.15/$0.60): rollups carry no per-request pricing window,
+  //    and under-reporting a bill is worse than the ~2x over-estimate an
+  //    off-peak-only workload would see. Cache writes bill as ordinary input.
+  //    Only known spellings resolve — there is no family fallback, so
+  //    `deepseek-v4.1-flash-preview` or a later snapshot stays unmapped rather
+  //    than inheriting this row.
+  "deepseek-flash":               { input: 0.30, output: 1.20, cacheRead: 0.006, cacheWrite: 0.30 },
+  "deepseek-v4-flash":            { input: 0.30, output: 1.20, cacheRead: 0.006, cacheWrite: 0.30 },
+  "deepseek-v4-flash-vision-exp": { input: 0.30, output: 1.20, cacheRead: 0.006, cacheWrite: 0.30 },
+  "deepseek-v4.1-flash":          { input: 0.30, output: 1.20, cacheRead: 0.006, cacheWrite: 0.30 },
+  "deepseek-v4.1-flash-1017":     { input: 0.30, output: 1.20, cacheRead: 0.006, cacheWrite: 0.30 },
+  "deepseek-chat":                { input: 0.30, output: 1.20, cacheRead: 0.006, cacheWrite: 0.30 },
+  "deepseek-reasoner":            { input: 0.30, output: 1.20, cacheRead: 0.006, cacheWrite: 0.30 },
+
   //    `deepseek-v4-pro` is currently under a 75%-off promo that ends
   //    2026-05-31 15:59 UTC; we price at the post-promo standard rate
   //    ($1.74/$3.48) so the dashboard does not jump 4× on June 1 — accept
-  //    a brief over-estimate during the promo over a sudden cliff after it. --
-  "deepseek-v4-flash":  { input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0.14 },
+  //    a brief over-estimate during the promo over a sudden cliff after it.
   "deepseek-v4-pro":    { input: 1.74, output: 3.48, cacheRead: 0.0145, cacheWrite: 1.74 },
-  "deepseek-chat":      { input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0.14 },
-  "deepseek-reasoner":  { input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0.14 },
 
   // -- Moonshot Kimi (kimi.com/resources/kimi-k2-6-pricing).
   //    Only K2.6 is on the official price sheet today; earlier K2 variants
@@ -557,6 +569,19 @@ export function canonicalCandidates(model: string): string[] {
   // (`gpt-5.4` ≠ `gpt-5-4`).
   const canonAnthropic = (s: string) =>
     s.startsWith("claude-") ? s.replace(/\./g, "-") : s;
+  // Amazon Bedrock prefixes Anthropic ids with a region family (`us.`, `eu.`,
+  // `apac.`, `global.`) and the vendor (`anthropic.`), and appends the
+  // inference-profile version to snapshot ids (`...-20250929-v1:0`). A Bedrock
+  // turn reports `us.anthropic.claude-sonnet-5`, which matched no table key at
+  // all, so every such turn rendered as $0 plus an "unmapped" warning while its
+  // tokens were still counted in `task_usage`. Only the vendor-prefixed form is
+  // rewritten: `us.amazon.nova-*` and other non-Anthropic Bedrock ids stay
+  // unmapped rather than borrowing a Claude rate.
+  const stripBedrock = (s: string) => {
+    const prefix = /^(?:(?:us|eu|apac|global)\.)?anthropic\.(claude-)/;
+    if (!prefix.test(s)) return s;
+    return s.replace(prefix, "$1").replace(/-v\d+:\d+(\[[^\]]+\])?$/, "$1");
+  };
   // A trailing context-window tag (`claude-opus-4-7[1m]`) is the same SKU at
   // standard rates for prompts under the tier boundary; aggregated rows carry
   // no per-request prompt size, so the bracketed variant prices at the
@@ -577,15 +602,22 @@ export function canonicalCandidates(model: string): string[] {
   const noProvider = stripProvider(raw);
   const dashed = canonAnthropic(noProvider);
   const noTag = stripContextTag(dashed);
+  // Bedrock ids arrive dotted (`us.anthropic.claude-…`) with a `-v1:0` profile
+  // version, so the strip has to run BEFORE `canonAnthropic`, whose dot→dash
+  // rewrite is gated on the string already starting with `claude-`. Both are
+  // applied here because a Bedrock id can carry a `[1m]` tag too.
+  const bedrock = canonAnthropic(stripContextTag(stripBedrock(noProvider)));
 
   push(raw);
   push(noProvider);
   push(dashed);
   push(noTag);
+  push(bedrock);
   push(stripDate(raw));
   push(stripDate(noProvider));
   push(stripDate(dashed));
   push(stripDate(noTag));
+  push(stripDate(bedrock));
   push(canonGemini(noTag));
   push(canonGemini(stripDate(noTag)));
   return out;

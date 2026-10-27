@@ -215,8 +215,122 @@ describe("lookup tolerances match web", () => {
     );
   });
 
-  it("normalizes Antigravity's Gemini display labels and effort suffixes", () => {
-    expect(resolvePricing("gemini 3.8 flash")).toEqual(
+  // Iteration 275 (MYS-2415), from upstream MUL-8269. Bedrock reports Anthropic
+  // models as `<region>.anthropic.<id>` with an inference-profile version on
+  // snapshots. None of that shape matched a table key, so every Bedrock-served
+  // turn priced at $0.00 while its tokens were still counted in `task_usage`.
+  describe("Bedrock-served Anthropic ids", () => {
+    it("prices like the bare catalog SKU, ignoring region and vendor prefixes", () => {
+      const bare = resolvePricing("claude-sonnet-5");
+      expect(bare).toBeDefined();
+      for (const id of [
+        "us.anthropic.claude-sonnet-5",
+        "eu.anthropic.claude-sonnet-5",
+        "apac.anthropic.claude-sonnet-5",
+        "global.anthropic.claude-sonnet-5",
+        "anthropic.claude-sonnet-5",
+      ]) {
+        expect(resolvePricing(id), id).toEqual(bare);
+      }
+    });
+
+    it("drops the `-v<digit>:<digit>` inference-profile version", () => {
+      // Bedrock appends a profile version to snapshot ids. Resolving to the
+      // family tier is right here: the version names an inference profile, not
+      // a different SKU.
+      expect(resolvePricing("eu.anthropic.claude-sonnet-4-5-20250929-v1:0")).toEqual(
+        resolvePricing("claude-sonnet-4-5"),
+      );
+      expect(resolvePricing("us.anthropic.claude-sonnet-5-v1:0")).toEqual(
+        resolvePricing("claude-sonnet-5"),
+      );
+    });
+
+    it("survives a context tag and a provider prefix on top of the Bedrock form", () => {
+      expect(resolvePricing("us.anthropic.claude-sonnet-5-v1:0[1m]")).toEqual(
+        resolvePricing("claude-sonnet-5"),
+      );
+      expect(resolvePricing("custom:bedrock/us.anthropic.claude-sonnet-5")).toEqual(
+        resolvePricing("claude-sonnet-5"),
+      );
+    });
+
+    it("leaves non-Anthropic Bedrock ids unmapped", () => {
+      // The negative gate that makes the strip safe. Peeling `us.amazon.` the
+      // way `us.anthropic.` is peeled would let a Nova turn borrow a Claude
+      // rate — a silent over-charge on every request.
+      for (const id of [
+        "us.amazon.nova-pro-v1:0",
+        "us.amazon.nova-lite-v1:0",
+        "us.meta.llama4-scout-17b-instruct-v1:0",
+      ]) {
+        expect(isModelPriced(id), id).toBe(false);
+      }
+    });
+
+    it("only strips versions from recognized Anthropic ids", () => {
+      // A version suffix on anything else must not be rewritten into a priced
+      // key, and an unknown Anthropic SKU stays unpriced rather than falling
+      // back to a near-named relative.
+      for (const id of [
+        "us.anthropic.claude-sonnet-6",
+        "us.anthropic.claude-sonnet-5-preview",
+        "us.anthropic.gpt-6.1-sol-v1:0",
+        "gpt-6.1-sol-v1:0",
+        "us.anthropic.claude-sonnet-5-v1:0junk",
+      ]) {
+        expect(isModelPriced(id), id).toBe(false);
+      }
+    });
+  });
+
+  describe("DeepSeek Flash", () => {
+    it("prices V4.1-Flash and the retired aliases it now serves at the peak rate", () => {
+      // The sheet names `deepseek-flash` (served by DeepSeek-V4.1-Flash-1017);
+      // `deepseek-v4-flash` and `deepseek-v4-flash-vision-exp` were retired and
+      // are billed at the same price, as are the chat/reasoner routes.
+      const want = { input: 0.3, output: 1.2, cacheRead: 0.006, cacheWrite: 0.3 };
+      for (const id of [
+        "deepseek-flash",
+        "deepseek-v4-flash",
+        "deepseek-v4-flash-vision-exp",
+        "deepseek-v4.1-flash",
+        "deepseek-v4.1-flash-1017",
+        "deepseek-chat",
+        "deepseek-reasoner",
+      ]) {
+        expect(resolvePricing(id), id).toEqual(want);
+      }
+    });
+
+    it("uses the peak rate, not the off-peak one", () => {
+      // Rollups carry no per-request pricing window, so only peak can be
+      // assumed. Off-peak ($0.15/$0.60) would under-report a bill by half for
+      // any workload that ran during peak hours.
+      expect(resolvePricing("deepseek-v4.1-flash")).not.toEqual({
+        input: 0.15,
+        output: 0.6,
+        cacheRead: 0.003,
+        cacheWrite: 0.15,
+      });
+    });
+
+    it("leaves unknown Flash variants unpriced", () => {
+      // No family fallback: a later snapshot or a qualifier must surface in the
+      // unmapped diagnostic, not inherit this row.
+      for (const id of [
+        "deepseek-v4.1-flash-preview",
+        "deepseek-v4.1-flash-1020",
+        "deepseek-v4-1-flash",
+        "deepseek-flash-preview",
+        "deepseek-v4.1-pro",
+      ]) {
+        expect(isModelPriced(id), id).toBe(false);
+      }
+    });
+  });
+
+  it("normalizes Antigravity's Gemini display labels and effort suffixes", () => {    expect(resolvePricing("gemini 3.8 flash")).toEqual(
       resolvePricing("gemini-3.8-flash"),
     );
     expect(resolvePricing("gemini-3.8-flash-high")).toEqual(

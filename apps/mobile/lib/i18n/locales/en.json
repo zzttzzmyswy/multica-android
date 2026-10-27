@@ -124,6 +124,7 @@
   "activity.wakeupChipCreatedBy": "{{name}}'s wakeup",
   "activity.wakeupChipSystem": "System rule",
   "activity.wakeupCreated": "added a wakeup: {{condition}} · wake {{agent}}",
+  "activity.wakeupCreatedScheduled": "added a wakeup for {{agent}}: {{condition}}",
   "activity.wakeupTimedOutEnd": "Wakeup ended at its deadline: {{condition}}",
   "activity.wakeupTimedOutWake": "{{condition}} did not happen in time · woke {{agent}} to handle it",
   "activity.wakeupTriggered": "{{condition}} · woke {{agent}}",
