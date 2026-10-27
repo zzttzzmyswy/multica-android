@@ -34,6 +34,10 @@ import type {
 } from "@multica/core/types";
 import { issueStatusCategoryOfIssue } from "./issue-status-catalog";
 import {
+  WAKEUP_PR_EVENT_SENTENCE_KEY,
+  isWakeupPrEvent,
+} from "./wakeup-draft";
+import {
   selectedActorLabel,
   type ActorNameContext,
   type ActorNameState,
@@ -414,7 +418,17 @@ function conditionSentence(
         ? t(`${K}.childrenStage`, { stage: c.stage })
         : t(`${K}.childrenAll`);
     case "pull_request":
-      return t(c.event === "merged" ? `${K}.prMerged` : `${K}.prChecks`);
+      // Three events, three sentences (MUL-8135). The binary
+      // `event === "merged" ? prMerged : prChecks` this replaces described a
+      // `conflicts` rule as "waiting for CI" — a different trigger on a
+      // different signal, so the reader was told something false about what
+      // would wake them. Unknown events (a newer server) get the neutral
+      // sentence rather than being mapped onto one of the three.
+      return t(
+        isWakeupPrEvent(c.event)
+          ? `${K}.${WAKEUP_PR_EVENT_SENTENCE_KEY[c.event]}`
+          : `${K}.prUnknown`,
+      );
     case "other_issue":
       return t(
         c.state === "ended"

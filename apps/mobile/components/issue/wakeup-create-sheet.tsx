@@ -65,6 +65,7 @@ import { AssigneePickerBody } from "@/components/issue/pickers/assignee-picker-b
 import { IssuePickerBody } from "@/components/issue/pickers/issue-picker-body";
 import { useCreateIssueWakeup } from "@/data/mutations/issue-wakeups";
 import { issueChildrenOptions, issueDetailOptions } from "@/data/queries/issues";
+import { issuePullRequestsOptions } from "@/data/queries/github";
 import { agentListOptions } from "@/data/queries/agents";
 import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { labelListOptions } from "@/data/queries/labels";
@@ -82,12 +83,15 @@ import {
   WAKEUP_CONDITION_GROUPS,
   WAKEUP_EVENT_TYPES,
   WAKEUP_MAX_FIRES,
+  WAKEUP_PR_EVENTS,
+  WAKEUP_PR_EVENT_LABEL_KEY,
   WAKEUP_WAIT_DAYS,
   buildWakeupInput,
   emptyWakeupDraft,
   isEventCondition,
   localDateTimeInput,
   parseLocalDateTime,
+  prConflictsReadiness,
   wakeupConditionHintKey,
   wakeupConditionLabelKey,
   wakeupDraftErrorKey,
@@ -164,6 +168,24 @@ export function WakeupCreateSheet({
   // Read once here and passed down: the property catalog is a workspace read,
   // and both the field chip's label and the value list need the same row.
   const properties = useActivePropertyCatalog(wsId).definitions;
+
+  // The issue's linked PRs, only while a `conflicts` rule is being drafted.
+  // `conflicts` is the one PR event with a server-side precondition
+  // (`errPRConflictsUnsupported`), so the form has to be able to say ahead of
+  // time that a rule would never fire instead of letting the user build one.
+  // Gated on the choice rather than always-on: the issue page already reads
+  // this list, so an unrelated draft should not re-trigger it. `?? undefined`
+  // keeps a still-loading read distinct from a genuinely empty one — the
+  // decision layer's `unknown` is what suppresses the warning.
+  const watchingConflicts =
+    draft.condition === "pull_request" && draft.prEvent === "conflicts";
+  const linkedPrs = useQuery({
+    ...issuePullRequestsOptions(issueId),
+    enabled: watchingConflicts,
+  }).data?.pull_requests;
+  const conflictsReadiness = watchingConflicts
+    ? prConflictsReadiness(linkedPrs)
+    : "unknown";
 
   const update = (patch: Partial<WakeupDraft>) => {
     setDraft((prev) => ({ ...prev, ...patch }));
@@ -255,6 +277,22 @@ export function WakeupCreateSheet({
               {t("wakeups.create.assignee_comment_hint", {
                 name: agentName ?? "",
               })}
+            </Text>
+          ) : null}
+
+          {conflictsReadiness === "blocked" ? (
+            // The one PR event whose precondition this client CAN judge: the
+            // issue links pull requests, and none of them is a GitHub one. The
+            // server accepts this rule and then never evaluates it
+            // (`errPRConflictsUnsupported`), so creating it would be building
+            // a rule that can only stay silent. Stated before submission, not
+            // after — the server's own message for it is a diagnostic on a
+            // rule that already exists.
+            <Text
+              role="alert"
+              className="mt-2 rounded-md bg-secondary/60 px-2.5 py-2 text-caption leading-5 text-muted-foreground"
+            >
+              {t("wakeups.create.pr_conflicts_unsupported")}
             </Text>
           ) : null}
 
@@ -570,11 +608,7 @@ function ConditionParams({
     case "pull_request":
       return (
         <Pill
-          label={t(
-            draft.prEvent === "merged"
-              ? "wakeups.create.pr_merged"
-              : "wakeups.create.pr_checks",
-          )}
+          label={t(WAKEUP_PR_EVENT_LABEL_KEY[draft.prEvent])}
           onPress={() => openPicker("pr-event")}
         />
       );
@@ -1016,10 +1050,10 @@ function SubPickerSheet({
       <ListSheet
         title={t("wakeups.create.cond_pr")}
         value={draft.prEvent}
-        options={[
-          { value: "checks_finished", label: t("wakeups.create.pr_checks") },
-          { value: "merged", label: t("wakeups.create.pr_merged") },
-        ]}
+        options={WAKEUP_PR_EVENTS.map((event) => ({
+          value: event,
+          label: t(WAKEUP_PR_EVENT_LABEL_KEY[event]),
+        }))}
         onPick={(prEvent) => {
           update({ prEvent: prEvent as WakeupDraft["prEvent"] });
           close();
