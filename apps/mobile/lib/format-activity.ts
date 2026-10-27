@@ -211,7 +211,14 @@ function formatWakeupActivity(
   const agent = preview?.agent_name ?? "";
   switch (entry.action) {
     case "wakeup_created":
-      return translate("activity.wakeupCreated", { condition, agent });
+      // A time rule's label already ends in "wake" (`每小时唤醒`, `09:00 唤醒`),
+      // so appending the generic "wake {{agent}}" tail renders 「唤醒唤醒」. Only
+      // the two time kinds take the agent-first sentence; `event` rules keep the
+      // original one, whose condition does NOT end in "wake" and would lose the
+      // wake action if rewritten. Pinned by `format-activity-wakeup.test.ts`.
+      return preview && !preview.condition && preview.kind !== "event"
+        ? translate("activity.wakeupCreatedScheduled", { condition, agent })
+        : translate("activity.wakeupCreated", { condition, agent });
     case "wakeup_triggered": {
       if (details.rule === "child_done") {
         const count = details.total ?? 1;
