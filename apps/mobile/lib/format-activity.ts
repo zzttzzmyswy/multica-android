@@ -44,14 +44,40 @@ function shortDate(date: string | undefined): string {
   return formatIssueDate(date);
 }
 
+/**
+ * How a timeline sentence is rendered — the two dependencies the wakeup
+ * branches cannot derive themselves.
+ *
+ * A single object rather than two more positional arguments: `statusLabel` was
+ * already optional, and a required parameter cannot follow an optional one, so
+ * appending `locale` positionally would have meant either reordering the
+ * existing callers or giving `locale` a default — and the default is the bug
+ * (MYS-2429). It also gives the next dependency a place to go without a
+ * fourteenth positional slot.
+ */
+export interface ActivityTextOptions {
+  /** Status key → localized label. Omitted, a built-in key still resolves
+   *  through i18n via `issueStatusLabel`. */
+  statusLabel?: (statusKey: string) => string;
+  /**
+   * BCP-47 tag for the ACTIVE app locale. REQUIRED, no default: the fallback
+   * `Intl` takes for `undefined` is the DEVICE locale, which is a different
+   * setting from the app language — a Chinese UI on an English phone then
+   * rendered 「Oct 20, 04:00 AM 唤醒」. Callers reach this through
+   * `useIntlLocale()` (`ActivityTextDeps.locale` / `WakeupTextDeps.locale`).
+   */
+  locale: string;
+}
+
 export function formatActivity(
   entry: TimelineEntry,
   resolveActorName: (
     type: string | null | undefined,
     id: string | null | undefined,
   ) => string,
-  statusLabel?: (statusKey: string) => string,
+  options: ActivityTextOptions,
 ): string {
+  const { statusLabel, locale } = options;
   const details = (entry.details ?? {}) as Record<string, string>;
   // Wakeup actions read as their own sentences — the generic fallback would
   // print the enum (`wakeup_checkin`). Handled before the switch so the five
@@ -62,6 +88,7 @@ export function formatActivity(
       (entry.details ?? {}) as WakeupActivityDetails,
       resolveActorName,
       statusLabel,
+      locale,
     );
   }
   switch (entry.action) {
@@ -183,7 +210,8 @@ function formatWakeupActivity(
     type: string | null | undefined,
     id: string | null | undefined,
   ) => string,
-  statusLabel?: (statusKey: string) => string,
+  statusLabel: ((statusKey: string) => string) | undefined,
+  locale: string,
 ): string {
   const getName = (type: string, id: string) =>
     resolveActorName(type, id) || id;
@@ -201,6 +229,7 @@ function formatWakeupActivity(
   };
   const deps: WakeupTextDeps = {
     t: translate,
+    locale,
     statusLabel,
     actorName: actorState,
   };

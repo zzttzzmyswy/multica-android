@@ -275,6 +275,23 @@ export function previewOf(
  */
 export interface WakeupTextDeps {
   t: (id: string, params?: Record<string, string | number>) => string;
+  /**
+   * BCP-47 tag for the ACTIVE app locale (`getIntlLocale()`), for the absolute
+   * instants these sentences embed — a rule's next fire time, its expiry.
+   *
+   * Required, and required for the reason `lib/format-date.ts` states: passing
+   * `undefined` to `Intl` falls back to the DEVICE locale, which is a separate
+   * setting from the app language. A Chinese UI on an English phone then read
+   * 「Oct 20, 04:00 AM 唤醒」 — an English date inside a Chinese sentence, on a
+   * screen whose every other word came from the zh dictionary (MYS-2429).
+   *
+   * Optional would have repeated the original defect: `formatWakeupTime`'s
+   * `locale` parameter was optional and five of five call sites omitted it.
+   * Making it required moves that from a thing to remember to a compile error
+   * at every bundle-assembly site, which is the only form of this rule that
+   * survives the next surface added.
+   */
+  locale: string;
   /** Built-in statuses read in the viewer's language; custom ones by name. */
   statusLabel?: (statusKey: string) => string;
   /** Resolve a label id to its name, or undefined when it no longer exists. */
@@ -509,7 +526,9 @@ export function wakeupTrigger(
     return `${w.cron_expression ?? ""} · ${w.timezone}`.trim();
   if (w.kind === "at")
     return w.next_fire_at
-      ? t("wakeups.atTime", { time: formatWakeupTime(w.next_fire_at) })
+      ? t("wakeups.atTime", {
+          time: formatWakeupTime(w.next_fire_at, deps.locale),
+        })
       : t("wakeups.scheduledTime");
   const event = w.event_types[0] ?? "";
   const label = wakeupEventName(
@@ -534,13 +553,21 @@ export function wakeupTrigger(
  * which formats in the viewer's chosen timezone, mobile has no timezone
  * preference for this surface — it reads the device's, which is what a phone
  * user expects. `formatWakeupTime` therefore takes no timezone argument.
+ *
+ * `locale` is REQUIRED, and has no default on purpose (MYS-2429). It reads as
+ * a BCP-47 tag, not as the app's "zh"/"en" — `getIntlLocale()` owns that
+ * mapping, and every caller reaches it through `WakeupTextDeps.locale`. A
+ * default would put the store read back inside this pure module (the reason
+ * this file takes `t` as an argument instead of importing it), and the
+ * parameter's history is the argument against optional: it was
+ * `locale?: string` and five of five call sites omitted it, so `Intl` silently
+ * formatted in the DEVICE locale and a Chinese screen read 「Oct 20, 04:00 AM
+ * 唤醒」. Required makes that a compile error at the next surface that builds a
+ * bundle, which is the only version of this rule that survives being forgotten.
  */
-export function formatWakeupTime(value: string, locale?: string): string {
+export function formatWakeupTime(value: string, locale: string): string {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return value;
-  // `undefined` is deliberate: mobile's date helpers subscribe to the app
-  // locale and pass it in; a caller with no locale gets the device's, which is
-  // the same fallback `lib/format-date.ts` documents.
   return new Intl.DateTimeFormat(locale, {
     month: "short",
     day: "numeric",
@@ -557,7 +584,9 @@ export function wakeupStateText(
 ): string {
   const key = wakeupState(w, closed);
   if (key === "scheduled" && w.next_fire_at)
-    return deps.t("wakeups.nextAt", { time: formatWakeupTime(w.next_fire_at) });
+    return deps.t("wakeups.nextAt", {
+      time: formatWakeupTime(w.next_fire_at, deps.locale),
+    });
   return deps.t(`wakeups.ruleStates.${key}`);
 }
 
@@ -610,7 +639,7 @@ export function wakeupWaitingText(
   if (w.kind !== "event") {
     return w.next_fire_at
       ? t("wakeups.wait.time", {
-          time: formatWakeupTime(w.next_fire_at),
+          time: formatWakeupTime(w.next_fire_at, deps.locale),
           agent: w.agent_name,
         })
       : wakeupTrigger(deps, w);

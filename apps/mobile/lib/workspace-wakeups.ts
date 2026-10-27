@@ -525,7 +525,7 @@ export function workspaceWakeupTriggerDetail(
     return `${row.cron_expression} · ${row.timezone}`;
   }
   if (row.kind === "at" && row.next_fire_at) {
-    return formatWakeupTime(row.next_fire_at);
+    return formatWakeupTime(row.next_fire_at, deps.locale);
   }
   return row.mode === "continuous" ? t("wakeups.continuous") : t("wakeups.once");
 }
@@ -554,7 +554,7 @@ export function workspaceWakeupEndsText(
   if (row.expires_at) {
     return row.kind === "event" || row.expiry_seconds
       ? remainingText(deps, row.expires_at)
-      : t("wakeups.untilDate", { date: shortDate(row.expires_at) });
+      : t("wakeups.untilDate", { date: shortDate(row.expires_at, deps.locale) });
   }
   return row.mode === "once"
     ? t("autopilots.wakeups.fires_once")
@@ -584,10 +584,13 @@ function remainingText(deps: WakeupTextDeps, value: string): string {
   });
 }
 
-function shortDate(value: string): string {
+/** The expiry as a bare calendar day, in the app locale — never the device's.
+ *  Same rule as `formatWakeupTime`; this is the one that appears beside
+ *  「至 …」 (「until …」) rather than inside a wake sentence (MYS-2429). */
+function shortDate(value: string, locale: string): string {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return value;
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(locale, {
     month: "short",
     day: "numeric",
   }).format(date);

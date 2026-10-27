@@ -72,14 +72,21 @@ describe("the activity timeline", () => {
     // could disagree about which directory they are waiting on.
     const screen = code("app/(app)/[workspace]/issue/[id].tsx");
     expect(screen).toContain("const { resolveActorName } = useActorLookup();");
-    expect(screen).toContain(
-      "activityBlockIndex(timeline.data, { resolveActorName, statusLabel })",
-    );
+    // The bundle now also carries the app locale, because a wakeup sentence
+    // embeds an absolute instant and the haystack must hold the words the row
+    // draws (MYS-2429). Asserted as the presence of all three fields rather
+    // than one exact line, so reordering or reformatting stays allowed while
+    // DROPPING the locale fails.
+    expect(screen).toMatch(/activityBlockIndex\(timeline\.data,\s*\{/);
+    expect(screen).toMatch(/activityBlockIndex\(timeline\.data,[\s\S]{0,200}resolveActorName/);
+    expect(screen).toMatch(/activityBlockIndex\(timeline\.data,[\s\S]{0,200}statusLabel/);
+    expect(screen).toMatch(/activityBlockIndex\(timeline\.data,[\s\S]{0,200}locale: intlLocale/);
     // The memo has to follow the settle flags, which live inside the resolver;
     // depending on `getName`'s old wrapper would have frozen the index at
-    // whatever readiness the first render saw.
+    // whatever readiness the first render saw. `intlLocale` joined for the same
+    // reason: a language switch changes the sentence a wakeup row draws.
     expect(screen).toMatch(
-      /\[timeline\.data, resolveActorName, statusLabel\]/,
+      /\[timeline\.data, resolveActorName, statusLabel, intlLocale\]/,
     );
   });
 });

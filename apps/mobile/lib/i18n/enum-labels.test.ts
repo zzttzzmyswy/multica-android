@@ -101,23 +101,29 @@ describe("formatActivity i18n", () => {
         details: { from: "todo", to: "done" },
       } as never,
       () => "nobody",
+      { locale: i18n.getIntlLocale() },
     );
     expect(out).toBe("changed status: Todo → Done");
     i18n.setLocale("zh");
     const zh = fmt.formatActivity(
       { action: "status_changed", details: { from: "todo", to: "done" } } as never,
       () => "nobody",
+      { locale: i18n.getIntlLocale() },
     );
     expect(zh).toBe("更改状态：待处理 → 已完成");
   });
 
   it("localizes a created-issue verb", () => {
     expect(
-      fmt.formatActivity({ action: "created" } as never, () => "nobody"),
+      fmt.formatActivity({ action: "created" } as never, () => "nobody", {
+        locale: i18n.getIntlLocale(),
+      }),
     ).toBe("created the issue");
     i18n.setLocale("zh");
     expect(
-      fmt.formatActivity({ action: "created" } as never, () => "nobody"),
+      fmt.formatActivity({ action: "created" } as never, () => "nobody", {
+        locale: i18n.getIntlLocale(),
+      }),
     ).toBe("创建了任务");
   });
 });

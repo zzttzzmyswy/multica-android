@@ -74,6 +74,21 @@ describe("formatActivity — wakeup actions", () => {
    *  the raw key, which is the failure this test would otherwise bake in. */
   const statusLabel = (key: string) => STATUS_LABELS[key] ?? key;
 
+  /** `formatActivity` with the options filled the way a rendered row fills
+   *  them: the app locale's BCP-47 tag alongside the status resolver. `locale`
+   *  is REQUIRED (MYS-2429) so no caller can let `Intl` fall back to the device
+   *  locale, and reading it from the i18n store rather than hardcoding "en-US"
+   *  is what makes the Chinese cases below exercise the real mapping. */
+  const format = (
+    e: TimelineEntry,
+    resolveName: typeof resolve = resolve,
+    status: typeof statusLabel | undefined = statusLabel,
+  ) =>
+    mod.formatActivity(e, resolveName, {
+      statusLabel: status,
+      locale: i18n.getIntlLocale(),
+    });
+
   it("never renders a bare wakeup enum string", () => {
     const actions = [
       "wakeup_created",
@@ -83,17 +98,14 @@ describe("formatActivity — wakeup actions", () => {
       "wakeup_checkin",
     ];
     for (const action of actions) {
-      const text = mod.formatActivity(
-        entry({ action, details: { wakeup: STORED } }),
-        resolve,
-      );
+      const text = format(entry({ action, details: { wakeup: STORED } }));
       expect(text).not.toBe(action);
       expect(text).not.toContain("wakeup_");
     }
   });
 
   it("says what a created rule watches and which agent it wakes", () => {
-    const text = mod.formatActivity(
+    const text = format(
       entry({ action: "wakeup_created", details: { wakeup: STORED } }),
       resolve,
       statusLabel,
@@ -126,22 +138,22 @@ describe("formatActivity — wakeup actions", () => {
       });
 
     it("names the agent first in English", () => {
-      expect(mod.formatActivity(timeRule("every"), resolve, statusLabel)).toBe(
+      expect(format(timeRule("every"), resolve, statusLabel)).toBe(
         "added a wakeup for Agent One: Wake every hour",
       );
       // No standalone "wake" verb after the schedule — the repetition itself.
       expect(
-        mod.formatActivity(timeRule("every"), resolve, statusLabel),
+        format(timeRule("every"), resolve, statusLabel),
       ).not.toMatch(/Wake every hour · wake/);
     });
 
     it("names the agent first in Chinese, with no 「唤醒唤醒」", () => {
       i18n.setLocale("zh");
-      expect(mod.formatActivity(timeRule("every"), resolve, statusLabel)).toBe(
+      expect(format(timeRule("every"), resolve, statusLabel)).toBe(
         "为 Agent One 添加了唤醒：每小时唤醒",
       );
       expect(
-        mod.formatActivity(timeRule("every"), resolve, statusLabel),
+        format(timeRule("every"), resolve, statusLabel),
       ).not.toContain("唤醒唤醒");
     });
 
@@ -150,7 +162,7 @@ describe("formatActivity — wakeup actions", () => {
       // does NOT end in "wake" ("When this issue moves to In Review"), so
       // rewriting it would drop the action the sentence exists to state. A
       // change that routes every kind down the new branch has to fail here.
-      expect(mod.formatActivity(entry({ action: "wakeup_created", details: { wakeup: STORED } }), resolve, statusLabel)).toBe(
+      expect(format(entry({ action: "wakeup_created", details: { wakeup: STORED } }), resolve, statusLabel)).toBe(
         "added a wakeup: When this issue moves to In Review · wake Agent One",
       );
     });
@@ -173,7 +185,7 @@ describe("formatActivity — wakeup actions", () => {
           },
         },
       });
-      const text = mod.formatActivity(rawEvent, resolve, statusLabel);
+      const text = format(rawEvent, resolve, statusLabel);
       expect(text).toBe(
         "added a wakeup: When this issue receives a new comment · wake Agent One",
       );
@@ -198,14 +210,14 @@ describe("formatActivity — wakeup actions", () => {
           },
         },
       });
-      expect(mod.formatActivity(hybrid, resolve, statusLabel)).toBe(
+      expect(format(hybrid, resolve, statusLabel)).toBe(
         "added a wakeup: When this issue moves to In Review · wake Agent One",
       );
     });
   });
 
   it("names the manual trigger by who pressed it", () => {
-    const text = mod.formatActivity(
+    const text = format(
       entry({
         action: "wakeup_triggered",
         details: {
@@ -214,87 +226,78 @@ describe("formatActivity — wakeup actions", () => {
           actor_id: "u1",
         },
       }),
-      resolve,
     );
     expect(text).toContain("u1");
     expect(text).toContain("Agent One");
   });
 
   it("distinguishes a merged run from a plain trigger", () => {
-    const plain = mod.formatActivity(
+    const plain = format(
       entry({ action: "wakeup_triggered", details: { wakeup: STORED } }),
-      resolve,
-    );
-    const merged = mod.formatActivity(
+      );
+    const merged = format(
       entry({
         action: "wakeup_triggered",
         details: { wakeup: STORED, outcome: "merged" },
       }),
-      resolve,
-    );
+      );
     expect(merged).not.toBe(plain);
   });
 
   it("distinguishes timing out into a run from timing out into nothing", () => {
-    const woke = mod.formatActivity(
+    const woke = format(
       entry({
         action: "wakeup_timed_out",
         details: { wakeup: STORED, woke: true },
       }),
-      resolve,
-    );
-    const ended = mod.formatActivity(
+      );
+    const ended = format(
       entry({
         action: "wakeup_timed_out",
         details: { wakeup: STORED, woke: false },
       }),
-      resolve,
-    );
+      );
     expect(woke).not.toBe(ended);
     expect(woke).toContain("Agent One");
   });
 
   it("explains a platform pause with its reason", () => {
-    const text = mod.formatActivity(
+    const text = format(
       entry({ action: "wakeup_paused", details: { reason: "rate" } }),
-      resolve,
-    );
+      );
     expect(text).toContain("12");
   });
 
   it("carries the check-in note, and the count when coalesced", () => {
-    const one = mod.formatActivity(
+    const one = format(
       entry({
         action: "wakeup_checkin",
         details: { note: "nothing to do" },
       }),
-      resolve,
-    );
+      );
     expect(one).toContain("nothing to do");
 
-    const many = mod.formatActivity(
+    const many = format(
       entry({
         action: "wakeup_checkin",
         coalesced_count: 4,
         details: { note: "nothing to do" },
       }),
-      resolve,
-    );
+      );
     expect(many).toContain("4");
     expect(many).toContain("nothing to do");
     expect(many).not.toBe(one);
   });
 
   it("describes the child-done rule's stage and count", () => {
-    const all = mod.formatActivity(
+    const all = format(
       entry({
         action: "wakeup_triggered",
         details: { rule: "child_done", total: 3, target_type: "agent", target_id: "a1" },
       }),
-      resolve,
-    );
+      );
     expect(all).toContain("3");
-    const staged = mod.formatActivity(
+    const staged = format(
       entry({
         action: "wakeup_triggered",
         details: {
@@ -305,8 +308,7 @@ describe("formatActivity — wakeup actions", () => {
           target_id: "a1",
         },
       }),
-      resolve,
-    );
+      );
     expect(staged).toContain("2");
     expect(staged).not.toBe(all);
   });
@@ -314,19 +316,17 @@ describe("formatActivity — wakeup actions", () => {
   it("keeps the unknown-action fallback for a future wakeup action", () => {
     // The rule this whole file must not break: an action this build predates
     // still renders as itself rather than crashing or vanishing.
-    const future = mod.formatActivity(
+    const future = format(
       entry({ action: "wakeup_something_new", details: {} }),
-      resolve,
-    );
+      );
     expect(future).toBe("wakeup_something_new");
   });
 
   it("resolves the wakeup sentences in Chinese too", () => {
     i18n.setLocale("zh");
-    const text = mod.formatActivity(
+    const text = format(
       entry({ action: "wakeup_checkin", details: { note: "无变化" } }),
-      resolve,
-    );
+      );
     expect(text).toContain("无变化");
     expect(text).not.toContain("silent check");
   });

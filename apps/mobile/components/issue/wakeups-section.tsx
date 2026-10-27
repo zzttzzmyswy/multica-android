@@ -46,7 +46,7 @@ import {
   wakeupBlockedTextKey,
 } from "@/components/issue/wakeup-row-actions";
 import { WakeupCreateSheet } from "@/components/issue/wakeup-create-sheet";
-import { useTranslation } from "@/lib/i18n/react";
+import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useWakeupText } from "@/lib/use-wakeup-text";
 import { useColorScheme } from "@/lib/use-color-scheme";
@@ -272,6 +272,7 @@ function WakeupRow({
   onToggle: () => void;
 }) {
   const { t } = useTranslation();
+  const intlLocale = useIntlLocale();
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -395,7 +396,7 @@ function WakeupRow({
             <Text className="mt-1 text-micro text-muted-foreground">
               {t("wakeups.expiryTitle")}:{" "}
               {t("wakeups.expiryAt", {
-                time: formatWakeupTime(wakeup.expires_at),
+                time: formatWakeupTime(wakeup.expires_at, intlLocale),
               })}
             </Text>
           ) : null}

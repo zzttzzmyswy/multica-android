@@ -91,7 +91,7 @@ describe("a condition sentence whose name the client may not state", () => {
   it("retreats the WHOLE sentence in the assertion voice", async () => {
     const mod = await load();
     const text = mod.wakeupTrigger(
-      { t, actorName: () => unsettled },
+      { t, locale: "en-US", actorName: () => unsettled },
       preview(),
     );
     expect(text).toBe("When this issue is assigned to someone");
@@ -100,7 +100,7 @@ describe("a condition sentence whose name the client may not state", () => {
   it("does the same for the header chip's waiting voice", async () => {
     const mod = await load();
     const text = mod.wakeupWaitingText(
-      { t, actorName: () => unsettled },
+      { t, locale: "en-US", actorName: () => unsettled },
       preview(),
     );
     expect(text).toBe("Waiting for this issue to be assigned");
@@ -110,9 +110,9 @@ describe("a condition sentence whose name the client may not state", () => {
     // The failure mode withholding a NAME would produce. Asserted directly
     // because it is the whole reason the fallback is at sentence level.
     const mod = await load();
-    const cond = mod.wakeupTrigger({ t, actorName: () => unsettled }, preview());
+    const cond = mod.wakeupTrigger({ t, locale: "en-US", actorName: () => unsettled }, preview());
     const wait = mod.wakeupWaitingText(
-      { t, actorName: () => unsettled },
+      { t, locale: "en-US", actorName: () => unsettled },
       preview(),
     );
     expect(cond).not.toMatch(/assigned to\s*$/);
@@ -124,14 +124,14 @@ describe("a condition sentence whose name the client may not state", () => {
     // fires only when the field becomes ONE named actor. Trading an unbacked
     // name for an over-broad rule is a second, worse claim.
     const mod = await load();
-    const text = mod.wakeupTrigger({ t, actorName: () => unsettled }, preview());
+    const text = mod.wakeupTrigger({ t, locale: "en-US", actorName: () => unsettled }, preview());
     expect(text).not.toBe(EN["wakeups.conditions.assigneeChanged"]);
   });
 
   it("names the actor again the moment the directory answers", async () => {
     const mod = await load();
     const text = mod.wakeupTrigger(
-      { t, actorName: () => settled },
+      { t, locale: "en-US", actorName: () => settled },
       preview(),
     );
     expect(text).toBe("When this issue is assigned to Ada Lovelace");
@@ -143,7 +143,7 @@ describe("a condition sentence whose name the client may not state", () => {
     // the same call `actorNameState`'s `gone` branch makes for a whole cell.
     const mod = await load();
     const text = mod.wakeupTrigger(
-      { t, actorName: () => ({ kind: "gone", name: "agent-1" }) },
+      { t, locale: "en-US", actorName: () => ({ kind: "gone", name: "agent-1" }) },
       preview(),
     );
     expect(text).toBe("When this issue is assigned to agent-1");
@@ -154,7 +154,7 @@ describe("a condition sentence whose name the client may not state", () => {
     // The pre-257 behaviour, kept for callers that have no lookup (a stored
     // preview rendered outside the workspace scope).
     const mod = await load();
-    expect(mod.wakeupTrigger({ t }, preview())).toBe(
+    expect(mod.wakeupTrigger({ t, locale: "en-US" }, preview())).toBe(
       "When this issue is assigned to agent-1",
     );
   });
@@ -164,7 +164,7 @@ describe("a condition sentence echoing a value the user just chose", () => {
   it("keeps the sentence whole and degrades to the type's noun", async () => {
     const mod = await load();
     const text = mod.wakeupTrigger(
-      { t, actorName: () => unsettled, actorNameContext: "echo" },
+      { t, locale: "en-US", actorName: () => unsettled, actorNameContext: "echo" },
       preview(),
     );
     // Not a skeleton, not nothing, and not a sentinel: a subject that is true
@@ -179,7 +179,7 @@ describe("a condition sentence echoing a value the user just chose", () => {
       ["squad", "Squad"],
     ] as const) {
       const text = mod.wakeupTrigger(
-        { t, actorName: () => unsettled, actorNameContext: "echo" },
+        { t, locale: "en-US", actorName: () => unsettled, actorNameContext: "echo" },
         preview({
           type: "issue_field",
           field: "assignee",
@@ -194,7 +194,7 @@ describe("a condition sentence echoing a value the user just chose", () => {
   it("never echoes an empty string", async () => {
     const mod = await load();
     const text = mod.wakeupTrigger(
-      { t, actorName: () => unsettled, actorNameContext: "echo" },
+      { t, locale: "en-US", actorName: () => unsettled, actorNameContext: "echo" },
       preview(),
     );
     const slot = text.replace(/^When this issue is assigned to /, "");
@@ -206,7 +206,7 @@ describe("a condition sentence echoing a value the user just chose", () => {
     const mod = await load();
     expect(
       mod.wakeupTrigger(
-        { t, actorName: () => settled, actorNameContext: "echo" },
+        { t, locale: "en-US", actorName: () => settled, actorNameContext: "echo" },
         preview(),
       ),
     ).toBe("When this issue is assigned to Ada Lovelace");
@@ -223,6 +223,7 @@ describe("the readiness the sentence waits on is the ASSIGNEE's own type", () =>
     mod.wakeupTrigger(
       {
         t,
+        locale: "en-US",
         actorName: (type: string, id: string) => {
           seen.push([type, id]);
           return settled;
@@ -264,7 +265,7 @@ describe("readiness is per TYPE, not one combined flag", () => {
       readiness,
     });
     expect(
-      mod.wakeupTrigger({ t, actorName: () => state }, preview()),
+      mod.wakeupTrigger({ t, locale: "en-US", actorName: () => state }, preview()),
     ).toBe("When this issue is assigned to Ada Lovelace");
   });
 
@@ -279,7 +280,7 @@ describe("readiness is per TYPE, not one combined flag", () => {
     });
     expect(state.kind).toBe("unsettled");
     expect(
-      mod.wakeupTrigger({ t, actorName: () => state }, preview()),
+      mod.wakeupTrigger({ t, locale: "en-US", actorName: () => state }, preview()),
     ).toBe("When this issue is assigned to someone");
   });
 });

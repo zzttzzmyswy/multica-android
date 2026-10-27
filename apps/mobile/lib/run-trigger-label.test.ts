@@ -139,7 +139,11 @@ describe("wakeupRunLabel", () => {
     presentation = await import("./wakeup-presentation");
   });
 
-  const deps = () => ({ t: (id: string, params?: Record<string, string | number>) => i18n.translate(id, params) });
+  const deps = () => ({
+    t: (id: string, params?: Record<string, string | number>) =>
+      i18n.translate(id, params),
+    locale: i18n.getIntlLocale(),
+  });
   const FALLBACK = "Triggered by wakeup";
 
   it("upgrades the label with the rule's condition when the rule is readable", () => {

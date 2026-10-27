@@ -681,6 +681,7 @@ function SubPickerSheet({
   properties: IssueProperty[];
 }) {
   const { t } = useTranslation();
+  const intlLocale = useIntlLocale();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const statusLabel = useStatusLabel(wsId);
   const { resolveActorName } = useActorLookup();
@@ -704,6 +705,7 @@ function SubPickerSheet({
   const text: WakeupTextDeps = useMemo(
     () => ({
       t,
+      locale: intlLocale,
       statusLabel,
       // ECHO: this bundle only draws `wakeupEventName` — the per-event rows of
       // the picker — and its `{{agent}}` comes from the RULE's own
@@ -714,7 +716,7 @@ function SubPickerSheet({
       actorNameContext: "echo",
       actorName: (type, id) => resolveActorName(type, id),
     }),
-    [t, statusLabel, resolveActorName],
+    [t, intlLocale, statusLabel, resolveActorName],
   );
 
   if (picker === "condition") {
