@@ -23,7 +23,7 @@ import { useActorLookup } from "@/data/use-actor-name";
 import { labelListOptions } from "@/data/queries/labels";
 import { propertyCatalogOptions } from "@/data/queries/properties";
 import { useStatusLabel } from "@/lib/status-options";
-import { useTranslation } from "@/lib/i18n/react";
+import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
 import type { WakeupTextDeps } from "@/lib/wakeup-presentation";
 
 /**
@@ -43,6 +43,7 @@ import type { WakeupTextDeps } from "@/lib/wakeup-presentation";
  */
 export function useWakeupText(catalogs = true): WakeupTextDeps {
   const { t } = useTranslation();
+  const locale = useIntlLocale();
   const statusLabel = useStatusLabel();
   const { resolveActorName } = useActorLookup();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
@@ -58,6 +59,7 @@ export function useWakeupText(catalogs = true): WakeupTextDeps {
   return useMemo<WakeupTextDeps>(
     () => ({
       t,
+      locale,
       statusLabel,
       // ASSERT: every line this bundle draws is a rule read back from the
       // server. An unread directory must retreat to a sentence that names
@@ -67,6 +69,6 @@ export function useWakeupText(catalogs = true): WakeupTextDeps {
       property: (id) =>
         properties.data?.find((definition) => definition.id === id),
     }),
-    [t, statusLabel, resolveActorName, labels.data, properties.data],
+    [t, locale, statusLabel, resolveActorName, labels.data, properties.data],
   );
 }

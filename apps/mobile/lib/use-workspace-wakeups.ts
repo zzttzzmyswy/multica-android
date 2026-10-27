@@ -34,7 +34,7 @@ import {
 } from "@/data/queries/workspace-wakeups";
 import { useDisableWorkspaceWakeups } from "@/data/mutations/workspace-wakeups";
 import { useWorkspaceStore } from "@/data/workspace-store";
-import { useTranslation } from "@/lib/i18n/react";
+import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
 import { useActorLookup } from "@/data/use-actor-name";
 import {
   EMPTY_WORKSPACE_WAKEUP_FILTERS,
@@ -126,6 +126,7 @@ export interface WorkspaceWakeupsController {
 export function useWorkspaceWakeupsController(): WorkspaceWakeupsController {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { t } = useTranslation();
+  const locale = useIntlLocale();
   const statusLabel = useStatusLabel(wsId);
   const { resolveActorName } = useActorLookup();
 
@@ -156,12 +157,13 @@ export function useWorkspaceWakeupsController(): WorkspaceWakeupsController {
   const deps: WakeupTextDeps = useMemo(
     () => ({
       t,
+      locale,
       statusLabel,
       // ASSERT: this table reads rules back from the server, so an unread
       // directory may not put a name (or a noun) into the sentence.
       actorName: (type: string, id: string) => resolveActorName(type, id),
     }),
-    [t, statusLabel, resolveActorName],
+    [t, locale, statusLabel, resolveActorName],
   );
 
   const rows = query.data?.items ?? [];

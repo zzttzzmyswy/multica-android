@@ -20,7 +20,7 @@
  *     viewing moment, so indexing them would put text in the haystack that
  *     changes under a stable query.
  */
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { TimelineEntry } from "@multica/core/types";
 
 vi.mock("expo-secure-store", () => ({
@@ -82,6 +82,12 @@ const deps = {
       in_progress: "In Progress",
       in_review: "In Review",
     })[key] ?? key,
+  // The BCP-47 tag the app locale maps to. Required rather than optional so a
+  // bundle cannot silently fall back to the device locale — see
+  // `ActivityTextDeps.locale`. Tests that switch the app language override it
+  // alongside `statusLabel`, because on the real screen both come from the one
+  // `useTranslation()`.
+  locale: "en-US",
 };
 
 describe("activityRowText", () => {
@@ -344,5 +350,87 @@ describe("an unsettled actor contributes no name to the haystack", () => {
       activityBlockIndex([entry], { ...deps, resolveActorName: resolver({ u1: "Ada" }, false) })
         .get("a1"),
     ).not.toContain("Ada");
+  });
+});
+
+/**
+ * The find haystack must hold the words the row DRAWS (MYS-2429).
+ *
+ * A wakeup row's sentence embeds an absolute instant, and the module's whole
+ * contract is that rendering and searching cannot drift. So the locale has to
+ * reach `formatActivity` through this bundle too — otherwise a Chinese reader
+ * searches 「10月20日」 while the haystack holds 「Oct 20, 07:00 PM」.
+ */
+describe("wakeup rows index the instant in the app locale", () => {
+  let savedTz: string | undefined;
+  beforeAll(() => {
+    savedTz = process.env.TZ;
+    process.env.TZ = "Asia/Shanghai";
+  });
+  afterAll(() => {
+    if (savedTz === undefined) delete process.env.TZ;
+    else process.env.TZ = savedTz;
+  });
+
+  /** A timeline row for a created time rule — the wakeup action whose sentence
+   *  carries `next_fire_at` through `formatWakeupTime`. */
+  function wakeupCreated(): TimelineEntry {
+    return {
+      type: "activity",
+      id: "row-w",
+      actor_type: "agent",
+      actor_id: "a1",
+      created_at: "2026-10-19T00:00:00Z",
+      action: "wakeup_created",
+      details: {
+        wakeup: {
+          id: "w1",
+          kind: "at",
+          mode: "once",
+          agent_id: "a1",
+          agent_name: "Atlas",
+          timezone: "UTC",
+          next_fire_at: "2026-10-20T19:00:00+08:00",
+          event_types: [],
+        },
+      },
+    } as TimelineEntry;
+  }
+
+  it("verb carries the localized instant", async () => {
+    const { activityRowText } = await load();
+    const i18n = await loadI18n();
+    i18n.resetI18nForTests();
+    i18n.setLocale("zh");
+
+    const { verb } = activityRowText(wakeupCreated(), {
+      ...deps,
+      locale: i18n.getIntlLocale(),
+    });
+    expect(verb).toContain("10月20日 19:00");
+    // The negative half: the English form must be absent, or "contains the
+    // Chinese date" would also pass on a string that carried both.
+    expect(verb).not.toContain("Oct 20");
+  });
+
+  it("the indexed block matches the drawn text under each locale", async () => {
+    const { activityBlockIndex } = await load();
+    const i18n = await loadI18n();
+    i18n.resetI18nForTests();
+    i18n.setLocale("en");
+
+    const en = activityBlockIndex([wakeupCreated()], {
+      ...deps,
+      locale: i18n.getIntlLocale(),
+    });
+    expect(en.get("row-w")?.join(" ")).toContain("Oct 20, 07:00 PM");
+
+    i18n.setLocale("zh");
+    const zh = activityBlockIndex([wakeupCreated()], {
+      ...deps,
+      locale: i18n.getIntlLocale(),
+    });
+    expect(zh.get("row-w")?.join(" ")).toContain("10月20日 19:00");
+    expect(zh.get("row-w")?.join(" ")).not.toContain("Oct 20");
   });
 });

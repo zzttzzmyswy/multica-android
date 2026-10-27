@@ -96,6 +96,17 @@ export interface ActivityTextDeps {
   /** Status key → localized label. Omitted, a built-in key still resolves
    *  through i18n via `issueStatusLabel`. */
   statusLabel?: (statusKey: string) => string;
+  /**
+   * BCP-47 tag for the app locale (`getIntlLocale()`), for the wakeup sentences
+   * that embed an absolute instant.
+   *
+   * Required for the same reason `WakeupTextDeps.locale` is: this haystack has
+   * to hold the words the row DRAWS. Defaulting to the device locale here would
+   * make find report 「Oct 20, 04:00 AM」 on a Chinese screen — a hit the reader
+   * cannot see, which is the exact drift this module exists to prevent
+   * (MYS-2429).
+   */
+  locale: string;
 }
 
 /** The string form `formatActivity` interpolates. An unsettled actor is the
@@ -147,7 +158,7 @@ export function activityRowText(
     verb: formatActivity(
       entry,
       (type, id) => nameForSentence(deps.resolveActorName, type, id),
-      deps.statusLabel,
+      { statusLabel: deps.statusLabel, locale: deps.locale },
     ),
   };
 }

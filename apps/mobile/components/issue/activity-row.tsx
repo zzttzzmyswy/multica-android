@@ -32,6 +32,7 @@ import { PriorityIcon } from "@/components/ui/priority-icon";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { activityRowText } from "@/lib/activity-search";
+import { useIntlLocale } from "@/lib/i18n/react";
 import { useStatusLabel } from "@/lib/status-options";
 import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { useTimeAgo } from "@/lib/time-ago";
@@ -150,9 +151,13 @@ export function ActivityRow({
   // print 「Unknown」 as if it were the actor's name (MYS-2215's rule, wired to
   // this surface in MYS-2219). `actor` therefore arrives empty in exactly the
   // case the skeleton is drawn, and find's index for this row is empty with it.
+  const intlLocale = useIntlLocale();
   const { actor: actorName, verb } = activityRowText(entry, {
     resolveActorName,
     statusLabel,
+    // The row and find's haystack must format the same instant the same way;
+    // both read the ACTIVE app locale, never the device's (MYS-2429).
+    locale: intlLocale,
   });
   const showCoalesceBadge =
     (entry.coalesced_count ?? 1) > 1 &&

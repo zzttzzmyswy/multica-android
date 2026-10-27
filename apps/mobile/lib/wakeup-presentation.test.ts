@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentTask, IssueWakeup, SystemWakeup } from "@multica/core/types";
 
 vi.mock("expo-secure-store", () => ({
@@ -268,15 +268,18 @@ describe("primaryWakeup (header chip selection)", () => {
 });
 
 describe("wakeupRunStateText", () => {
-  const deps = { t: (id: string, params?: Record<string, string | number>) => {
-    const en: Record<string, string> = {
-      "wakeups.noRun": "Not run yet",
-      "wakeups.runStates.completed": "Run succeeded",
-      "wakeups.runStates.failed": "Run failed",
-      "wakeups.runStates.queued": "Queued",
-    };
-    return en[id] ?? id;
-  } };
+  const deps = {
+    t: (id: string, params?: Record<string, string | number>) => {
+      const en: Record<string, string> = {
+        "wakeups.noRun": "Not run yet",
+        "wakeups.runStates.completed": "Run succeeded",
+        "wakeups.runStates.failed": "Run failed",
+        "wakeups.runStates.queued": "Queued",
+      };
+      return en[id] ?? id;
+    },
+    locale: "en-US",
+  };
 
   it("names a terminal run, not an empty string", async () => {
     // The device smoke showed the trigger-history block rendering an empty
@@ -301,23 +304,182 @@ describe("wakeupRunStateText", () => {
 });
 
 describe("formatWakeupTime", () => {
+  // The wire value below is the one the live server returned; 19:00 +08:00 is
+  // 11:00Z. The formatter deliberately renders in the DEVICE zone (a phone has
+  // no timezone preference for this surface), so pinning the zone is what makes
+  // the expected strings exact instead of host-dependent — and exact strings
+  // are the whole point of this suite.
+  const INSTANT = "2026-10-20T19:00:00+08:00";
+  let savedTz: string | undefined;
+  beforeAll(() => {
+    savedTz = process.env.TZ;
+    process.env.TZ = "Asia/Shanghai";
+  });
+  afterAll(() => {
+    if (savedTz === undefined) delete process.env.TZ;
+    else process.env.TZ = savedTz;
+  });
+
+  it("formats in the locale it is GIVEN, not the device's", async () => {
+    // The defect (MYS-2429): `locale` was an optional parameter that all five
+    // call sites omitted, so `Intl` fell back to the device and a Chinese UI
+    // read 「Oct 20, 04:00 AM 唤醒」 — English date, Chinese sentence.
+    //
+    // Both halves are asserted as an EXACT string. The old assertion here was
+    // `toMatch(/\d{1,2}:\d{2}/)`, which the defective output satisfied, so the
+    // suite stayed green for the whole life of the bug.
+    const mod = await load();
+    expect(mod.formatWakeupTime(INSTANT, "zh-CN")).toBe("10月20日 19:00");
+    expect(mod.formatWakeupTime(INSTANT, "en-US")).toBe("Oct 20, 07:00 PM");
+  });
+
+  it("gives a DIFFERENT string per locale, so one hardcoded tag cannot pass", async () => {
+    // Negative gate. Rewriting the body to hardcode `"zh-CN"` would keep every
+    // exact-equality assertion above honest-looking while reintroducing a
+    // single-language formatter — the same shape of failure as the original
+    // optional parameter, one level down.
+    const mod = await load();
+    expect(mod.formatWakeupTime(INSTANT, "zh-CN")).not.toBe(
+      mod.formatWakeupTime(INSTANT, "en-US"),
+    );
+  });
+
   it("renders a wire instant as a readable time, not the raw string", async () => {
-    // The defect the device smoke caught: the section printed
+    // The earlier defect the device smoke caught: the section printed
     // `2026-10-12T04:04:16.978744+08:00` verbatim.
     const mod = await load();
-    const out = mod.formatWakeupTime("2026-10-12T04:04:16.978744+08:00");
+    const out = mod.formatWakeupTime("2026-10-12T04:04:16.978744+08:00", "en-US");
     expect(out).not.toContain("T04:");
     expect(out).not.toContain("978744");
-    // The formatter is deliberately year-less (a rule expires within days),
-    // so what must NOT survive is the machine form, not the year.
-    expect(out).toMatch(/\d{1,2}:\d{2}/);
   });
 
   it("passes a value it cannot parse straight through", async () => {
     // Never crash and never invent a date: an unparseable value is shown as
     // it arrived, which is the module's documented fallback.
     const mod = await load();
-    expect(mod.formatWakeupTime("not a date")).toBe("not a date");
+    expect(mod.formatWakeupTime("not a date", "en-US")).toBe("not a date");
+  });
+});
+
+/**
+ * The sentences that EMBED a time — the surface the user actually reads.
+ *
+ * Asserting only `formatWakeupTime` would leave the defect reachable: the
+ * reported symptom was a whole line (「… 唤醒」) in the wrong language, and the
+ * formatter was correct in isolation the entire time. What was broken was that
+ * nothing passed `deps.locale` to it, so these tests go through the public text
+ * helpers with a bundle whose `t` is the real dictionary.
+ */
+describe("wakeup sentences embed the time in the app locale", () => {
+  const INSTANT = "2026-10-20T19:00:00+08:00";
+  let savedTz: string | undefined;
+  beforeAll(() => {
+    savedTz = process.env.TZ;
+    process.env.TZ = "Asia/Shanghai";
+  });
+  afterAll(() => {
+    if (savedTz === undefined) delete process.env.TZ;
+    else process.env.TZ = savedTz;
+  });
+
+  /** A bundle over the REAL dictionaries, so the assertion covers the whole
+   *  rendered line rather than a templating stand-in. `t` is the live
+   *  `translate`, and the locale is put in the store exactly as
+   *  `useTranslation()`/`useIntlLocale()` would read it — so the two halves of
+   *  the bundle cannot be given inconsistent settings by the test. */
+  async function bundle(locale: "zh-CN" | "en-US") {
+    const i18n = await import("./i18n");
+    i18n.resetI18nForTests();
+    i18n.setLocale(locale === "zh-CN" ? "zh" : "en");
+    return {
+      t: (id: string, params?: Record<string, string | number>) =>
+        i18n.translate(id, params),
+      locale: i18n.getIntlLocale(),
+    };
+  }
+
+  /** Assert what the bundle actually resolved to, so a typo in the fixture
+   *  cannot make a passing test prove nothing. */
+  async function zhBundle() {
+    const b = await bundle("zh-CN");
+    expect(b.locale).toBe("zh-CN");
+    return b;
+  }
+  async function enBundle() {
+    const b = await bundle("en-US");
+    expect(b.locale).toBe("en-US");
+    return b;
+  }
+
+  it("renders `wakeups.atTime` as one language, not two", async () => {
+    const mod = await load();
+    const rule = {
+      id: "w1",
+      kind: "at" as const,
+      mode: "once" as const,
+      agent_id: "a1",
+      agent_name: "Agent One",
+      timezone: "UTC",
+      next_fire_at: INSTANT,
+      event_types: [],
+    } as never;
+
+    expect(mod.wakeupTrigger(await zhBundle(), rule)).toBe("10月20日 19:00 唤醒");
+    expect(mod.wakeupTrigger(await enBundle(), rule)).toBe(
+      "Wake at Oct 20, 07:00 PM",
+    );
+  });
+
+  it("renders `wakeups.wait.time` and `wakeups.nextAt` in the app locale too", async () => {
+    // The two other call sites inside this module. A fix applied to only
+    // `wakeupTrigger` would leave these two still reading the device locale —
+    // which is exactly how the original defect spread across five sites.
+    const mod = await load();
+    const rule = {
+      id: "w1",
+      kind: "at" as const,
+      mode: "once" as const,
+      agent_id: "a1",
+      agent_name: "Agent One",
+      timezone: "UTC",
+      next_fire_at: INSTANT,
+      event_types: [],
+      enabled: true,
+      disabled_at: null,
+      paused_reason: null,
+      timed_out_at: null,
+      last_task_id: null,
+    } as never;
+
+    expect(mod.wakeupWaitingText(await zhBundle(), rule)).toBe(
+      "10月20日 19:00 · 唤醒 Agent One",
+    );
+    expect(mod.wakeupStateText(await zhBundle(), rule)).toBe("下次 10月20日 19:00");
+    // The en half as well: asserting only one locale here let a mutant that
+    // hardcodes `zh-CN` inside the formatter survive this particular test.
+    expect(mod.wakeupWaitingText(await enBundle(), rule)).toBe(
+      "Oct 20, 07:00 PM · wakes Agent One",
+    );
+    expect(mod.wakeupStateText(await enBundle(), rule)).toBe("Next: Oct 20, 07:00 PM");
+  });
+
+  it("and the same line differs under the other locale", async () => {
+    // Negative gate: a body that hardcoded one tag would satisfy every
+    // expectation above and still be a single-language formatter.
+    const mod = await load();
+    const rule = {
+      id: "w1",
+      kind: "at" as const,
+      mode: "once" as const,
+      agent_id: "a1",
+      agent_name: "Agent One",
+      timezone: "UTC",
+      next_fire_at: INSTANT,
+      event_types: [],
+    } as never;
+    expect(mod.wakeupTrigger(await zhBundle(), rule)).not.toBe(
+      mod.wakeupTrigger(await enBundle(), rule),
+    );
   });
 });
 

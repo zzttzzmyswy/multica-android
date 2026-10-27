@@ -136,7 +136,7 @@ describe("the pull_request condition knows three events", () => {
     const seen = new Map<string, string>();
     for (const event of ["checks_finished", "merged", "conflicts"]) {
       const { t, asked } = recordingT();
-      const sentence = wakeupTrigger({ t }, prRule(event));
+      const sentence = wakeupTrigger({ t, locale: "en-US" }, prRule(event));
       expect(sentence).not.toBe(event);
       const key = asked.find((id) => id.startsWith("wakeups.cond.pr"));
       expect(key, `no pr sentence key for ${event}`).toBeTruthy();
@@ -152,8 +152,8 @@ describe("the pull_request condition knows three events", () => {
       "./wakeup-presentation"
     );
     const { t } = recordingT();
-    const rule = wakeupTrigger({ t }, prRule("conflicts"));
-    const waiting = wakeupWaitingText({ t }, prRule("conflicts"));
+    const rule = wakeupTrigger({ t, locale: "en-US" }, prRule("conflicts"));
+    const waiting = wakeupWaitingText({ t, locale: "en-US" }, prRule("conflicts"));
     // The exact regression: both used to fall into the `prChecks` branch.
     expect(rule).toBe(EN["wakeups.cond.prConflicts"]);
     expect(rule).not.toBe(EN["wakeups.cond.prChecks"]);
@@ -166,7 +166,7 @@ describe("the pull_request condition knows three events", () => {
     // A newer server could add a fourth event. Saying "waiting for CI" about
     // it would be the same class of false statement, so the neutral sentence
     // is the only honest answer.
-    const sentence = wakeupTrigger({ t }, prRule("reopened"));
+    const sentence = wakeupTrigger({ t, locale: "en-US" }, prRule("reopened"));
     expect(sentence).not.toBe(EN["wakeups.cond.prChecks"]);
     expect(sentence).not.toBe(EN["wakeups.cond.prMerged"]);
     expect(sentence).not.toBe(EN["wakeups.cond.prConflicts"]);

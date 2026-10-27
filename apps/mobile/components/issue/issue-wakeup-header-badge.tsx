@@ -23,7 +23,7 @@ import { router } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useQuery } from "@tanstack/react-query";
 import { Text } from "@/components/ui/text";
-import { useTranslation } from "@/lib/i18n/react";
+import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useStatusLabel } from "@/lib/status-options";
@@ -45,6 +45,7 @@ interface Props {
 
 export function IssueWakeupHeaderBadge({ issueId }: Props) {
   const { t } = useTranslation();
+  const intlLocale = useIntlLocale();
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
@@ -61,6 +62,7 @@ export function IssueWakeupHeaderBadge({ issueId }: Props) {
 
   const text: WakeupTextDeps = {
     t,
+    locale: intlLocale,
     statusLabel,
     // ASSERT: this chip's `label` is also its accessibility label, so an
     // unread directory must not put a name (or a type noun standing in for

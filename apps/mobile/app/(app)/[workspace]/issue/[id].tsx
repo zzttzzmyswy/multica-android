@@ -68,7 +68,7 @@ import { useActorLookup } from "@/data/use-actor-name";
 import { useStatusLabel } from "@/lib/status-options";
 import { resolveCatalogState } from "@/lib/catalog-state";
 import { showMarkDuplicateAction } from "@/lib/issue-duplicates";
-import { useTranslation } from "@/lib/i18n/react";
+import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
 
 export default function IssueDetail() {
   // `highlight` + `h` come from inbox deep-link (apps/mobile/app/(app)/
@@ -91,6 +91,7 @@ export default function IssueDetail() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const qc = useQueryClient();
   const { t } = useTranslation();
+  const intlLocale = useIntlLocale();
 
   // Thread navigator. The target id rides with a nonce because picking the
   // same thread twice must re-fire the scroll — same reason the inbox
@@ -168,8 +169,16 @@ export default function IssueDetail() {
   const { resolveActorName } = useActorLookup();
   const statusLabel = useStatusLabel(wsId);
   const activityBlocks = useMemo(
-    () => activityBlockIndex(timeline.data, { resolveActorName, statusLabel }),
-    [timeline.data, resolveActorName, statusLabel],
+    () =>
+      activityBlockIndex(timeline.data, {
+        resolveActorName,
+        statusLabel,
+        locale: intlLocale,
+      }),
+    // `intlLocale` belongs in the dependency list: a language switch changes
+    // the words a wakeup sentence draws, so an index built under the old
+    // locale would hold text that is no longer on screen (MYS-2429).
+    [timeline.data, resolveActorName, statusLabel, intlLocale],
   );
 
   const searchables = useMemo(

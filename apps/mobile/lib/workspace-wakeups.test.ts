@@ -11,11 +11,25 @@
  * `GET /api/issue-wakeups`), not invented — including `can_manage`, `source`
  * and `runs_7d`, which are the three fields every branch here reads.
  */
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type {
   WorkspaceWakeup,
   WorkspaceWakeupFilters,
 } from "@multica/core/types";
+
+// `lib/i18n` pulls both of these through `expo-*`, whose real modules reach
+// React Native's Flow-typed entry points and cannot be parsed under the Node
+// test lane. Same two mocks every other suite that touches i18n declares.
+vi.mock("expo-secure-store", () => ({
+  getItemAsync: vi.fn(),
+  setItemAsync: vi.fn(),
+  deleteItemAsync: vi.fn(),
+}));
+vi.mock("expo-localization", () => ({
+  getLocales: vi.fn(),
+}));
+
+import * as i18n from "./i18n";
 import {
   WORKSPACE_WAKEUP_PAGE_SIZE,
   WORKSPACE_WAKEUP_SEARCH_MAX_BYTES,
@@ -27,12 +41,14 @@ import {
   previousWorkspaceWakeupOffset,
   selectableWorkspaceWakeups,
   workspaceWakeupBatchOutcome,
+  workspaceWakeupEndsText,
   workspaceWakeupInvalidationKeys,
   workspaceWakeupPage,
   workspaceWakeupPager,
   workspaceWakeupSearchBytes,
   workspaceWakeupSearchFits,
   workspaceWakeupSelectionState,
+  workspaceWakeupTriggerDetail,
   workspaceWakeupsAreFiltered,
 } from "./workspace-wakeups";
 
@@ -307,5 +323,76 @@ describe("invalidation set", () => {
     expect(keys.table).toBe(true);
     expect(keys.issueWakeups).toBe(true);
     expect(keys.taskIssueIds).toEqual([]);
+  });
+});
+
+/**
+ * The table's two date cells (MYS-2429).
+ *
+ * Both are the same defect as `formatWakeupTime`: a `new Intl.DateTimeFormat
+ * (undefined, …)`, i.e. the DEVICE locale, inside a sentence whose surrounding
+ * words come from the app's dictionary. The 有效期 cell read 「至 Oct 20」 on a
+ * Chinese screen, and the schedule cell under the trigger had the same problem
+ * with the full instant.
+ */
+describe("date cells follow the app locale", () => {
+  let savedTz: string | undefined;
+  beforeAll(() => {
+    savedTz = process.env.TZ;
+    process.env.TZ = "Asia/Shanghai";
+  });
+  afterAll(() => {
+    if (savedTz === undefined) delete process.env.TZ;
+    else process.env.TZ = savedTz;
+  });
+
+  /** The real dictionaries, with the locale put in the store the way
+   *  `useWorkspaceWakeupsController` reads it. */
+  function deps(locale: "zh" | "en") {
+    i18n.resetI18nForTests();
+    i18n.setLocale(locale);
+    return {
+      t: (id: string, params?: Record<string, string | number>) =>
+        i18n.translate(id, params),
+      locale: i18n.getIntlLocale(),
+    };
+  }
+
+  it("renders the schedule line's instant in the app locale", async () => {
+    const at = row({ kind: "at", next_fire_at: "2026-10-20T19:00:00+08:00" });
+    expect(workspaceWakeupTriggerDetail(deps("zh"), at)).toBe(
+      "10月20日 19:00",
+    );
+    expect(workspaceWakeupTriggerDetail(deps("en"), at)).toBe(
+      "Oct 20, 07:00 PM",
+    );
+  });
+
+  it("renders the 有效期 day in the app locale, not the device's", async () => {
+    // A time rule with no `expiry_seconds` takes the calendar-day branch —
+    // the one that used `new Intl.DateTimeFormat(undefined, …)`.
+    const expiring = row({
+      kind: "at",
+      next_fire_at: "2026-10-20T19:00:00+08:00",
+      expires_at: "2026-11-05T19:00:00+08:00",
+    });
+    expect(workspaceWakeupEndsText(deps("zh"), expiring)).toBe("至 11月5日");
+    expect(workspaceWakeupEndsText(deps("en"), expiring)).toBe(
+      "until Nov 5",
+    );
+  });
+
+  it("gives a different string per locale, so a hardcoded tag fails", async () => {
+    // Negative gate, same reasoning as `formatWakeupTime`'s: a body that pinned
+    // one tag would satisfy both exact assertions above only if that tag were
+    // the hardcoded one, so this pins that the two halves genuinely differ.
+    const expiring = row({
+      kind: "at",
+      next_fire_at: "2026-10-20T19:00:00+08:00",
+      expires_at: "2026-11-05T19:00:00+08:00",
+    });
+    expect(workspaceWakeupEndsText(deps("zh"), expiring)).not.toBe(
+      workspaceWakeupEndsText(deps("en"), expiring),
+    );
   });
 });
