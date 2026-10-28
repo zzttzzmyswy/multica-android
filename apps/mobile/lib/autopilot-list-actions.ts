@@ -27,7 +27,8 @@
  * row tap already opens the autopilot — so it is omitted for the same reason
  * `lib/agent-row-actions.ts` omits it from the agents list.
  */
-import type { Autopilot } from "@multica/core/types";
+import type { Autopilot, AutopilotRunSource } from "@multica/core/types";
+import { runStatusKey } from "./i18n/dynamic-families";
 
 export type AutopilotRowAction = "pause" | "resume" | "delete";
 
@@ -83,27 +84,34 @@ export function knownRunStatus(
  * The i18n id for a known run status, or `null` for enum drift — in which case
  * the caller renders the raw server string, as web does (`:365`).
  *
- * The ids are this app's existing `autopilots.runStatus.*` family, which
- * already carries these five states for the detail page's run history and
- * matches web's `run_status.*` wording in both locales. A second
- * `run_status.*` family with byte-identical values would be one more pair of
- * bundles to keep in sync for no behavioural gain.
+ * The ids come from `lib/i18n/dynamic-families`' `RUN_STATUS_KEYS` rather than
+ * being written here: that table is the one place the wire vocabulary is
+ * translated to dictionary leaves, and `issue_created` → `issueCreated` is a
+ * translation a caller cannot be trusted to repeat (MYS-2433 — the detail page
+ * interpolated the raw value and printed the id).
  */
-const RUN_STATUS_KEYS: Record<KnownRunStatus, string> = {
-  issue_created: "autopilots.runStatus.issueCreated",
-  running: "autopilots.runStatus.running",
-  completed: "autopilots.runStatus.completed",
-  failed: "autopilots.runStatus.failed",
-  skipped: "autopilots.runStatus.skipped",
-};
-
 /** Localized run-status text, falling back to the raw server value. */
 export function runStatusLabel(
   status: string | null | undefined,
   t: (id: string) => string,
 ): string {
   if (!status) return "";
-  return knownRunStatus(status) ? t(RUN_STATUS_KEYS[status]) : status;
+  return knownRunStatus(status) ? t(runStatusKey(status)) : status;
+}
+
+/** The four run sources the backend emits (`AutopilotRunSource`). */
+const KNOWN_RUN_SOURCES: readonly AutopilotRunSource[] = [
+  "schedule",
+  "manual",
+  "webhook",
+  "api",
+];
+
+/** Whether this is one of the four sources the app has copy for. */
+export function knownRunSource(
+  source: string | null | undefined,
+): source is AutopilotRunSource {
+  return !!source && (KNOWN_RUN_SOURCES as readonly string[]).includes(source);
 }
 
 /**

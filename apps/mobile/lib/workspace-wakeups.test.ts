@@ -395,4 +395,27 @@ describe("date cells follow the app locale", () => {
       workspaceWakeupEndsText(deps("en"), expiring),
     );
   });
+
+  // Iteration 277 (MYS-2433). The 有效期 cell is the SECOND place that turns a
+  // lifecycle state into copy, and it built its id by interpolation too. The
+  // issue-level section rendering correctly while this table still printed
+  // `wakeups.ruleStates.issue_closed` is the exact failure this pins.
+  it("names a closed rule's state instead of printing its i18n id", async () => {
+    const closed = row({ enabled: false, issue_closed: true });
+    expect(workspaceWakeupEndsText(deps("zh"), closed)).toBe(
+      "任务已结束，唤醒已停用",
+    );
+    expect(workspaceWakeupEndsText(deps("en"), closed)).toBe(
+      "Issue ended; wakeups stopped",
+    );
+  });
+
+  it("names a timed-out rule's state instead of printing its i18n id", async () => {
+    const timedOut = row({
+      enabled: false,
+      timed_out_at: "2026-01-01T00:00:00Z",
+    });
+    expect(workspaceWakeupEndsText(deps("zh"), timedOut)).toBe("已超时");
+    expect(workspaceWakeupEndsText(deps("en"), timedOut)).toBe("Timed out");
+  });
 });

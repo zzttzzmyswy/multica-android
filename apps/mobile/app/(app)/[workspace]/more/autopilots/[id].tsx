@@ -82,6 +82,8 @@ import {
   splitAutopilotRuns,
 } from "@/lib/autopilot-runs";
 import { runNowToastKind, runNowBlockedKey } from "@/lib/autopilot-run-toast";
+import { knownRunSource, knownRunStatus } from "@/lib/autopilot-list-actions";
+import { runStatusKey } from "@/lib/i18n/dynamic-families";
 import {
   canJumpToRuntimeBinding,
   isRuntimeRequiredPause,
@@ -1027,21 +1029,17 @@ function RunRow({
   const [transcriptOpen, setTranscriptOpen] = useState(false);
 
   const visual = runVisual(run.status);
-  const statusLabel =
-    run.status === "issue_created" ||
-    run.status === "running" ||
-    run.status === "completed" ||
-    run.status === "failed" ||
-    run.status === "skipped"
-      ? t(`autopilots.runStatus.${run.status}`)
-      : run.status;
-  const sourceLabel =
-    run.source === "schedule" ||
-    run.source === "manual" ||
-    run.source === "webhook" ||
-    run.source === "api"
-      ? t(`autopilots.runSource.${run.source}`)
-      : run.source;
+  // Through the shared table, not by interpolation: `issue_created` is stored
+  // under `issueCreated`, so building the id from the wire value printed
+  // `autopilots.runStatus.issue_created` on screen (MYS-2433). `knownRunStatus`
+  // is the membership test, and an unknown status still degrades to the raw
+  // server string as web does.
+  const statusLabel = knownRunStatus(run.status)
+    ? t(runStatusKey(run.status))
+    : run.status;
+  const sourceLabel = knownRunSource(run.source)
+    ? t(`autopilots.runSource.${run.source}`)
+    : run.source;
   const startedAt = run.triggered_at || run.created_at;
   const hasIssue = Boolean(run.issue_id);
 
