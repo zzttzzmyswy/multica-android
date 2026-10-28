@@ -20,6 +20,8 @@ import type { WakeupTextDeps } from "./wakeup-presentation";
 import {
   formatWakeupTime,
   wakeupPausedText,
+  wakeupState,
+  wakeupStateKey,
   wakeupTrigger,
   wakeupRunStateText,
 } from "./wakeup-presentation";
@@ -546,10 +548,16 @@ export function workspaceWakeupEndsText(
 ): string {
   const { t } = deps;
   if (row.source === "system") return t("autopilots.wakeups.until_issue_ends");
-  if (!row.enabled) {
+  // Web's split (`workspace-wakeups.tsx` `ends`): while the rule is live the
+  // cell answers "when does this stop"; once it is not, it answers "what is it
+  // now". The second half used to hand-roll the state as
+  // `issue_closed | waiting | scheduled`, so a rule stopped by a timeout, by
+  // the platform, or by already firing all read as "Waiting for trigger" —
+  // the opposite of what the row was trying to say (MYS-2433).
+  if (!row.enabled || row.issue_closed) {
     const paused = wakeupPausedText(deps, row);
     if (paused) return paused;
-    return t(`wakeups.ruleStates.${row.issue_closed ? "issue_closed" : stateKeyOf(row)}`);
+    return t(wakeupStateKey(wakeupState(row, row.issue_closed)));
   }
   if (row.expires_at) {
     return row.kind === "event" || row.expiry_seconds
@@ -558,12 +566,7 @@ export function workspaceWakeupEndsText(
   }
   return row.mode === "once"
     ? t("autopilots.wakeups.fires_once")
-    : t("wakeups.ruleStates.waiting");
-}
-
-/** The lifecycle key for an enabled rule, which reads as "waiting"/"scheduled". */
-function stateKeyOf(row: WorkspaceWakeup): string {
-  return row.kind === "event" ? "waiting" : "scheduled";
+    : t(wakeupStateKey(wakeupState(row, row.issue_closed)));
 }
 
 /** "In 3 days" / "in 4 hours", or the date once it has passed. */

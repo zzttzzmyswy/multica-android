@@ -42,19 +42,26 @@ import {
   type ActorNameContext,
   type ActorNameState,
 } from "./actor-name-state";
+import {
+  wakeupStateKey,
+  type WakeupState,
+} from "./i18n/dynamic-families";
 
-/** One rule's lifecycle state, as the section and the chip read it. The keys
- *  are the `wakeups.ruleStates.*` i18n ids. */
-export type WakeupState =
-  | "issue_closed"
-  | "waiting"
-  | "scheduled"
-  | "paused"
-  | "timed_out"
-  | "disabled"
-  | "triggered"
-  | "expired"
-  | "inactive";
+/**
+ * One rule's lifecycle state, as the section and the chip read it.
+ *
+ * The type and its dictionary-leaf mapping live in `lib/i18n/dynamic-families`,
+ * together with every other runtime-built i18n family: the mapping is a
+ * vocabulary difference (snake_case state names vs camelCase leaves), and
+ * keeping it next to the family inventory is what lets the guard test walk all
+ * nine states at once (MYS-2433). Re-exported here because this module is
+ * where callers already look for it.
+ */
+export type { WakeupState } from "./i18n/dynamic-families";
+export {
+  WAKEUP_STATE_KEYS,
+  wakeupStateKey,
+} from "./i18n/dynamic-families";
 
 /**
  * Which lifecycle state a rule is in. Mirrors web's `wakeupState`
@@ -587,7 +594,7 @@ export function wakeupStateText(
     return deps.t("wakeups.nextAt", {
       time: formatWakeupTime(w.next_fire_at, deps.locale),
     });
-  return deps.t(`wakeups.ruleStates.${key}`);
+  return deps.t(wakeupStateKey(key));
 }
 
 /** Why the platform, not a person, stopped a rule. */
