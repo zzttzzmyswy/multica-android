@@ -649,15 +649,24 @@ export interface HeatmapData {
  * 26) ending at the week containing today in `tz`. Day intensity is a
  * percentile of non-zero daily costs (web getHeatmapColor levels). Month
  * labels are emitted at Monday cells where the month changes, localized via
- * `locale` (default "en").
+ * `locale`.
+ *
+ * `locale` is REQUIRED, not optional-with-a-default. It used to default to
+ * `"en"`, and the only call site omitted it — so on a Chinese screen the top
+ * month labels read "Aug Sep Oct" directly above the Chinese weekday row
+ * labels drawn by the same widget. A default cannot be observed at the call
+ * site (the function compiles and runs); requiring the argument makes the
+ * omission a `tsc` error instead. Compose it with `getIntlLocale()` rather
+ * than hand-writing "zh-CN" / "en" — that mapping lives in one place
+ * (`lib/i18n/index.ts`), same rule as `lib/format-date.ts`.
  */
 export function computeHeatmapCells(
   usage: readonly RuntimeUsage[],
   tz: string,
-  opts: { weeks?: number; locale?: string } = {},
+  opts: { weeks?: number; locale: string },
 ): HeatmapData {
   const weekCount = Math.max(1, Math.floor(opts.weeks ?? 26));
-  const locale = opts.locale ?? "en";
+  const locale = opts.locale;
   const dateCost = new Map<string, number>();
   for (const u of usage) {
     dateCost.set(u.date, (dateCost.get(u.date) ?? 0) + estimateCost(u));

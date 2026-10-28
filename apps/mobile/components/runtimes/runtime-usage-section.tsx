@@ -34,7 +34,7 @@ import { catalogRead } from "@/lib/catalog-read";
 import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { agentListOptions } from "@/data/queries/agents";
 import { useWorkspaceStore } from "@/data/workspace-store";
-import { useTranslation } from "@/lib/i18n/react";
+import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -624,6 +624,12 @@ function WhenChartCard({
   tz: string;
 }) {
   const { t } = useTranslation();
+  // Month labels are drawn by the same widget as the weekday row labels, so
+  // they must resolve through the same Intl tag. Reading it from the hook (not
+  // a hand-written ternary) keeps the app-language → BCP-47 mapping in the one
+  // place that owns it, and puts `locale` in the memo deps so switching the
+  // language re-renders the labels.
+  const intlLocale = useIntlLocale();
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [metric, setMetric] = useState<Metric>("cost");
   const pricings = useCustomPricingStore((s) => s.pricings);
@@ -637,8 +643,11 @@ function WhenChartCard({
     () => aggregateByWeek(usage, tz, weekCount),
     [usage, tz, weekCount, pricings], // eslint-disable-line react-hooks/exhaustive-deps
   );
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const heatmap = useMemo(() => computeHeatmapCells(usage, tz), [usage, tz, pricings]);
+  const heatmap = useMemo(
+    () => computeHeatmapCells(usage, tz, { locale: intlLocale }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pricings re-prices via estimateCost
+    [usage, tz, pricings, intlLocale],
+  );
 
   const legendIncludeCacheRead = !showHeatmap && metric === "tokens";
 
@@ -921,18 +930,22 @@ function colorWithAlpha(hsl: string, alpha: string): string {
 }
 
 function HeatmapView({ heatmap }: { heatmap: HeatmapData }) {
-  const { t, locale } = useTranslation();
+  const { t } = useTranslation();
+  // Same Intl tag the month labels above are built with — a hand-written
+  // `locale === "zh" ? "zh-CN" : "en"` here was a second copy of that mapping,
+  // and the two label sets drifted apart exactly once already.
+  const intlLocale = useIntlLocale();
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
 
   const weekdayLabels = useMemo(() => {
     const anchor = Date.UTC(2026, 0, 5); // Monday
-    const fmt = new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en", {
+    const fmt = new Intl.DateTimeFormat(intlLocale, {
       weekday: "short",
       timeZone: "UTC",
     });
     return Array.from({ length: 7 }, (_, i) => fmt.format(new Date(anchor + i * 86_400_000)));
-  }, [locale]);
+  }, [intlLocale]);
 
   const weeks = useMemo(() => {
     const cols: { cells: (HeatmapData["cells"][number] | null)[] }[] = [];

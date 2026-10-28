@@ -367,6 +367,7 @@ describe("computeHeatmapCells", () => {
         row({ date: "2026-08-09", model: "gpt-5-mini", input_tokens: 1_000_000 }),
       ],
       "UTC",
+      { locale: "en-US" },
     );
     expect(hud.cells.length).toBeGreaterThan(6 * 7); // at least full weeks
     expect(hud.cells[0]!.dayOfWeek).toBe(0); // Mon-first
@@ -379,5 +380,52 @@ describe("computeHeatmapCells", () => {
     // Insights: busiest day = today (highest? tie → first found), total>0.
     expect(hud.insights.totalCost).toBeCloseTo(0.25 * 3, 5);
     expect(hud.insights.windowDays).toBe(hud.cells.length);
+  });
+
+  // The heatmap draws two label sets in the SAME widget: the left row labels
+  // (built in runtime-usage-section.tsx from the app locale) and the top month
+  // labels (built here). When only one of them followed the app language, a
+  // Chinese screen read "周一 … 周日" with "Aug Sep Oct" sitting directly above
+  // — the exact failure mode lib/format-date.ts warns about, where an
+  // undefined locale silently falls back to the DEVICE locale.
+  //
+  // These assert whole strings rather than a shape: the old suite never
+  // asserted monthLabels at all, which is why the defect shipped.
+  describe("month labels follow the caller's locale", () => {
+    it("renders Chinese month abbreviations for zh-CN", () => {
+      const hud = computeHeatmapCells([], "UTC", { locale: "zh-CN" });
+      expect(hud.monthLabels.length).toBeGreaterThan(0);
+      for (const m of hud.monthLabels) {
+        expect(m.label).toMatch(/^\d{1,2}月$/);
+      }
+    });
+
+    it("renders English month abbreviations for en-US", () => {
+      const hud = computeHeatmapCells([], "UTC", { locale: "en-US" });
+      expect(hud.monthLabels.length).toBeGreaterThan(0);
+      for (const m of hud.monthLabels) {
+        expect(m.label).toMatch(/^[A-Z][a-z]{2}$/);
+      }
+    });
+
+    // Negative gate: if someone "fixes" this by hardcoding a single locale,
+    // both assertions above can still pass — but this one cannot.
+    it("produces different month labels for zh-CN and en-US", () => {
+      const zh = computeHeatmapCells([], "UTC", { locale: "zh-CN" });
+      const en = computeHeatmapCells([], "UTC", { locale: "en-US" });
+      expect(zh.monthLabels.map((m) => m.label)).not.toEqual(
+        en.monthLabels.map((m) => m.label),
+      );
+    });
+
+    // Same month sequence on both sides, only the wording differs — proves the
+    // locale is not also shifting which cells get a label.
+    it("labels the same weeks regardless of locale", () => {
+      const zh = computeHeatmapCells([], "UTC", { locale: "zh-CN" });
+      const en = computeHeatmapCells([], "UTC", { locale: "en-US" });
+      expect(zh.monthLabels.map((m) => m.week)).toEqual(
+        en.monthLabels.map((m) => m.week),
+      );
+    });
   });
 });
