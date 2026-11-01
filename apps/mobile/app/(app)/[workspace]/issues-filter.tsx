@@ -220,11 +220,12 @@ export default function IssuesFilterRoute() {
   const activeDimensions = activeFilterDimensions(s, baseline);
   const hasActive = activeDimensions.length > 0;
   const resetFilters = () =>
-    applyFilterReset(s, baseline, {
+    // The agent-running condition rides in the snapshot (and in
+    // `clearFilters`), so there is no trailing toggle to pass here any more.
+    applyFilterReset(baseline, {
       resetFiltersTo: act().resetFiltersTo,
       clearFilters: act().clearFilters,
       setDateFilter: act().setDateFilter,
-      toggleWorkingOnly: act().toggleWorkingOnly,
     });
   const statusOptions = useStatusOptions(wsId);
   // Four-state read (MYS-1892). The `= []` default this replaced folded
@@ -381,6 +382,12 @@ export default function IssuesFilterRoute() {
           label={t("filter.workingOnly")}
           checked={workingOnly}
           onToggle={() => act().toggleWorkingOnly()}
+          // A view that fixes the condition ON pins the row, exactly like
+          // `noAssigneeFixed` above (`disabled={viewBaseline.agentRunning === true}`,
+          // web issues-header.tsx). Only the ON direction locks: a view that
+          // fixed it OFF does not stop the user turning it on, which is a real
+          // addition the view is then "modified" by.
+          fixed={baseline?.agentRunningFilter === true}
           t={t}
         />
 

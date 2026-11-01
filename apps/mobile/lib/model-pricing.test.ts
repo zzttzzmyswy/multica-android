@@ -120,20 +120,21 @@ describe("the rate table is upstream's table", () => {
 
     // A Cursor row that has NO bare counterpart. The ids above all also exist
     // unqualified, so they would still resolve if every `cursor/*` row were
-    // deleted — they cannot tell the two apart. These can: `gpt-5.6-sol` costs
-    // 5/30 bare and 4/20 through Cursor, and `glm-5.2` / `kimi-k3` are
-    // Cursor-only at this radius.
-    expect(resolvePricing("gpt-5.6-sol")).toEqual({
-      input: 5,
-      output: 30,
-      cacheRead: 0.5,
-      cacheWrite: 6.25,
+    // deleted — they cannot tell the two apart. These can: `gemini-3.5-flash`
+    // costs 0.75/3.75 bare and 1.5/9.00 through Cursor (upstream `e8ae72c9d`
+    // re-rated the Cursor row and left the bare one alone), and `glm-5.2` /
+    // `kimi-k3` are Cursor-only at this radius.
+    expect(resolvePricing("gemini-3.5-flash")).toEqual({
+      input: 0.75,
+      output: 3.75,
+      cacheRead: 0.075,
+      cacheWrite: 0.75,
     });
-    expect(resolvePricing("gpt-5.6-sol", "cursor")).toEqual({
-      input: 4,
-      output: 20,
-      cacheRead: 0.4,
-      cacheWrite: 5,
+    expect(resolvePricing("gemini-3.5-flash", "cursor")).toEqual({
+      input: 1.5,
+      output: 9,
+      cacheRead: 0.15,
+      cacheWrite: 0,
     });
     expect(isModelPriced("glm-5.2", "cursor")).toBe(true);
     expect(isModelPriced("glm-5.2")).toBe(false);
@@ -500,8 +501,15 @@ describe("Cursor ids carry their variant in the id, not in a separate field", ()
     // A Fast SKU bills ABOVE its standard row, so resolving it to the base
     // row understates a premium run — the opposite error from the $0 one, and
     // invisible to a test that only asks "did it price".
+    //
+    // `gpt-5.6-sol-fast` re-rated to $10/$60 in upstream `e8ae72c9d`
+    // (MUL-8418); this row used to pin $8/$40, which is now the *standard*
+    // Sol rate's Fast multiple of an older table. The number is asserted
+    // against the current upstream row, not against what mobile shipped
+    // before — `scripts/check-pricing-resolver-parity.py` is what keeps the
+    // two tables equal, and it is green.
     expect(resolvePricing("gpt-5.6-sol-medium-fast", "cursor")).toEqual({
-      input: 8, output: 40, cacheRead: 0.8, cacheWrite: 10,
+      input: 10, output: 60, cacheRead: 1, cacheWrite: 12.5,
     });
     expect(resolvePricing("cursor-grok-4.5-high-fast", "cursor")).toEqual({
       input: 4, output: 18, cacheRead: 1, cacheWrite: 0,
@@ -529,15 +537,34 @@ describe("Cursor ids carry their variant in the id, not in a separate field", ()
     });
   });
 
-  it("refuses a Fast variant Cursor publishes no Fast rate for", () => {
+  it("prices a Fast variant that has its own published Fast row", () => {
     // Upstream's rule: a Fast variant resolves through its exact id or its own
-    // `cursor/<base>-fast` row, never through the base price. There is no
-    // `cursor/claude-opus-5-5-fast`, so these must stay UNPRICED and surface
-    // in the unmapped diagnostic rather than quietly halving a premium SKU.
+    // `cursor/<base>-fast` row, never through the base price.
+    //
+    // Upstream `e8ae72c9d` (MUL-8418) has since PUBLISHED the two rows this
+    // case used to hold up as "no Fast rate exists": `cursor/claude-opus-5-5-fast`
+    // ($8/$40) and the GPT-5.5 fast row. So these are now priced — at the Fast
+    // rate, which is the whole point of the rule. What must still hold is that
+    // they are NOT folded onto the cheaper base row:
+    expect(resolvePricing("claude-opus-5-5-high-fast", "cursor")).toEqual({
+      input: 8, output: 40, cacheRead: 0.4, cacheWrite: 10,
+    });
+    expect(isModelPriced("claude-opus-5-5-high-fast", "cursor")).toBe(true);
+    // …and still strictly dearer than the standard row for the same SKU.
+    const standard = resolvePricing("claude-opus-5-5-high", "cursor");
+    expect(resolvePricing("claude-opus-5-5-high-fast", "cursor")!.input)
+      .toBeGreaterThan(standard!.input);
+  });
+
+  it("leaves a genuinely unpublished Fast variant unpriced", () => {
+    // The original rule still needs a live example, or deleting it would look
+    // safe. Upstream publishes no `-fast` row for `composer-1` or
+    // `claude-sonnet-5-5`, so a Fast spelling of either must stay unpriced
+    // and surface in the unmapped diagnostic rather than quietly borrowing
+    // the standard row's money.
     for (const id of [
-      "claude-opus-5-5-high-fast",
-      "gpt-5.5-medium-fast",
-      "claude-opus-5-5[fast=true]",
+      "composer-1-high-fast",
+      "claude-sonnet-5-5-high-fast",
     ]) {
       expect(isModelPriced(id, "cursor"), id).toBe(false);
     }

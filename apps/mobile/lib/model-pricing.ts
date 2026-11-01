@@ -123,21 +123,22 @@ const MODEL_PRICING: Record<string, ModelPrice> = {
   // -- OpenAI: dotted-minor Codex catalog SKUs. Each generation is priced
   //    independently — no fallback to `gpt-5`. Entries track
   //    `server/pkg/agent/models.go` (Codex provider list).
-  //    gpt-6-astra and gpt-5.6 (sol/terra/luna) use OpenAI's official rates.
-  //    5.6+ is the first OpenAI generation to bill cache writes separately:
-  //    cacheRead generally = 0.1x input, cacheWrite = 1.25x
-  //    input (see the header note above). Codex usage doesn't yet report
-  //    cache-write tokens, so cacheWrite isn't exercised today, but the rate
-  //    is kept correct for when it is.
+  //    GPT-6 and GPT-5.6 rows use OpenAI's standard short-context rates
+  //    (developers.openai.com/api/docs/pricing, 2026-10-31). GPT-5.6 Sol
+  //    keeps its $5 / $30 list rate; the page's temporary promotional rate is
+  //    deliberately not used. 5.6+ is the first OpenAI generation to bill
+  //    cache writes separately: cacheRead generally = 0.1x input, cacheWrite
+  //    = 1.25x input (see the header note above). Mirror
+  //    server/internal/metrics/pricing.go.
   "gpt-6-astra":        { input: 10,   output: 50,   cacheRead: 1.00,  cacheWrite: 12.50 },
-  // Standard short-context rates: developers.openai.com/api/docs/models/.
-  // GPT-6.1 Sol's cached input is 0.05x input; GPT-6 Sol's is 0.1x.
+  // GPT-6.1 Sol and Terra's cached input is 0.05x input; GPT-6 Sol's is 0.1x.
   "gpt-6.1-sol":        { input: 2,    output: 10,   cacheRead: 0.10,  cacheWrite: 2.50 },
+  "gpt-6.1-terra":      { input: 1,    output: 5,    cacheRead: 0.05,  cacheWrite: 1.25 },
   "gpt-6-sol":          { input: 2,    output: 10,   cacheRead: 0.20,  cacheWrite: 2.50 },
   "gpt-6-luna":         { input: 0.10, output: 0.50, cacheRead: 0.01,  cacheWrite: 0.125 },
   "gpt-5.6-sol":        { input: 5,    output: 30,   cacheRead: 0.50,  cacheWrite: 6.25 },
-  "gpt-5.6-terra":      { input: 2.50, output: 15,   cacheRead: 0.25,  cacheWrite: 3.125 },
-  "gpt-5.6-luna":       { input: 1,    output: 6,    cacheRead: 0.10,  cacheWrite: 1.25 },
+  "gpt-5.6-terra":      { input: 2,    output: 12,   cacheRead: 0.20,  cacheWrite: 2.50 },
+  "gpt-5.6-luna":       { input: 0.20, output: 1.20, cacheRead: 0.02,  cacheWrite: 0.25 },
   "gpt-5.5":            { input: 5,    output: 30,   cacheRead: 0.50,  cacheWrite: 5 },
   "gpt-5.4-mini":       { input: 0.75, output: 4.50, cacheRead: 0.075, cacheWrite: 0.75 },
   "gpt-5.4":            { input: 2.50, output: 15,   cacheRead: 0.25,  cacheWrite: 2.50 },
@@ -197,29 +198,20 @@ const MODEL_PRICING: Record<string, ModelPrice> = {
   "gpt-4o-mini":        { input: 0.15, output: 0.60, cacheRead: 0.075, cacheWrite: 0.15 },
   "gpt-4o":             { input: 2.50, output: 10,   cacheRead: 1.25,  cacheWrite: 2.50 },
 
-  // -- DeepSeek Flash: api-docs.deepseek.com/quick_start/pricing (2026-10-27).
-  //    The sheet names `deepseek-flash`, served by DeepSeek-V4.1-Flash-1017;
-  //    the legacy names `deepseek-v4-flash` / `deepseek-v4-flash-vision-exp`
-  //    were retired and are billed at the Flash price, and `deepseek-chat` /
-  //    `deepseek-reasoner` route there too. Priced at the PEAK rate, not the
-  //    off-peak one ($0.15/$0.60): rollups carry no per-request pricing window,
-  //    and under-reporting a bill is worse than the ~2x over-estimate an
-  //    off-peak-only workload would see. Cache writes bill as ordinary input.
-  //    Only known spellings resolve — there is no family fallback, so
-  //    `deepseek-v4.1-flash-preview` or a later snapshot stays unmapped rather
-  //    than inheriting this row.
-  "deepseek-flash":               { input: 0.30, output: 1.20, cacheRead: 0.006, cacheWrite: 0.30 },
-  "deepseek-v4-flash":            { input: 0.30, output: 1.20, cacheRead: 0.006, cacheWrite: 0.30 },
+  // -- DeepSeek Flash: api-docs.deepseek.com/quick_start/pricing/ (2026-10-27).
+  // The English sheet supplies USD; the Chinese sheet lists CNY. The official
+  // Flash name and retired v4 aliases serve V4.1-Flash-1017. Preserve the
+  // existing Flash routing for chat/reasoner. Only known spellings and the
+  // 1017 snapshot resolve. Use peak USD rates because rollups lack each
+  // request's pricing window; off-peak costs half as much and reseller prices
+  // can differ. Cache writes bill as ordinary input. Mirror pricing.go.
+  "deepseek-flash":              { input: 0.30, output: 1.20, cacheRead: 0.006, cacheWrite: 0.30 },
+  "deepseek-v4-flash":           { input: 0.30, output: 1.20, cacheRead: 0.006, cacheWrite: 0.30 },
   "deepseek-v4-flash-vision-exp": { input: 0.30, output: 1.20, cacheRead: 0.006, cacheWrite: 0.30 },
   "deepseek-v4.1-flash":          { input: 0.30, output: 1.20, cacheRead: 0.006, cacheWrite: 0.30 },
   "deepseek-v4.1-flash-1017":     { input: 0.30, output: 1.20, cacheRead: 0.006, cacheWrite: 0.30 },
-  "deepseek-chat":                { input: 0.30, output: 1.20, cacheRead: 0.006, cacheWrite: 0.30 },
-  "deepseek-reasoner":            { input: 0.30, output: 1.20, cacheRead: 0.006, cacheWrite: 0.30 },
-
-  //    `deepseek-v4-pro` is currently under a 75%-off promo that ends
-  //    2026-05-31 15:59 UTC; we price at the post-promo standard rate
-  //    ($1.74/$3.48) so the dashboard does not jump 4× on June 1 — accept
-  //    a brief over-estimate during the promo over a sudden cliff after it.
+  "deepseek-chat":               { input: 0.30, output: 1.20, cacheRead: 0.006, cacheWrite: 0.30 },
+  "deepseek-reasoner":           { input: 0.30, output: 1.20, cacheRead: 0.006, cacheWrite: 0.30 },
   "deepseek-v4-pro":    { input: 1.74, output: 3.48, cacheRead: 0.0145, cacheWrite: 1.74 },
 
   // -- Moonshot Kimi (kimi.com/resources/kimi-k2-6-pricing).
@@ -317,6 +309,8 @@ const MODEL_PRICING: Record<string, ModelPrice> = {
   //    runtime model or the legacy key `cursor`. Cursor does not publish a
   //    cache-write rate for these rows; keep it at 0 so reported
   //    cache_write_tokens don't invent spend from input pricing.
+  //    Every `cursor/` row, and `cursorBaseModel` below, is mirrored in
+  //    server/internal/metrics/cursor_pricing.go; keep the two in sync.
   "cursor/auto":              { input: 1.25, output: 6,    cacheRead: 0.25,   cacheWrite: 0 },
   "cursor/composer-2.5-fast": { input: 3,    output: 15,   cacheRead: 0.5,    cacheWrite: 0 },
   "cursor/composer-2.5":      { input: 0.5,  output: 2.5,  cacheRead: 0.2,    cacheWrite: 0 },
@@ -334,17 +328,25 @@ const MODEL_PRICING: Record<string, ModelPrice> = {
   // -- Third-party models through Cursor (cursor.com/docs/models-and-pricing,
   //    "Model pricing"). Cursor bills these at API list price, but its sheet
   //    is the bill, so Cursor rows use it even where it differs from the
-  //    vendor rows above (GPT-5.6 Sol is on a Cursor promo through
-  //    2026-11-21; update the row when it ends). Keys are the Cursor base id
+  //    vendor rows above — except temporary promotional rates, which are not
+  //    used: GPT-5.6 Sol keeps its $5 / $30 list rate (Fast at 2x) rather
+  //    than the sheet's promo price. Keys are the Cursor base id
   //    left by `cursorBaseModel`, which drops the effort / thinking / fast
   //    variant parts — effort and thinking don't change per-token rates.
-  //    A `-fast` row exists only where Cursor publishes the Fast rate; other
-  //    Fast variants stay unmapped rather than borrowing the standard rate.
-  //    Where the sheet lists no cache-write rate, cacheWrite is 0 (same as the
-  //    Composer rows). Long-context surcharges (GPT >272K input) can't be
-  //    seen in aggregated rows, so those requests are underestimated. --
+  //    A `-fast` row exists only where a Fast rate is published: on Cursor's
+  //    sheet, or (where Cursor offers a Fast variant its sheet doesn't price)
+  //    on the vendor's own sheet, since Cursor bills third-party models at
+  //    API list price. Other Fast variants stay unmapped rather than borrowing the
+  //    standard rate. Where the sheet lists no cache-write rate, cacheWrite is
+  //    0 (same as the Composer rows). Long-context surcharges (GPT >272K
+  //    input) can't be seen in aggregated rows, so those requests are
+  //    underestimated. --
   "cursor/claude-opus-5-5":      { input: 4,    output: 20,   cacheRead: 0.2,   cacheWrite: 5 },
+  // Opus 5.5 / Opus 5 Fast: Anthropic's fast-mode rates, with its cache
+  // multipliers applied on top (Opus 5.5 reads at 0.05x input).
+  "cursor/claude-opus-5-5-fast": { input: 8,    output: 40,   cacheRead: 0.4,   cacheWrite: 10 },
   "cursor/claude-opus-5":        { input: 5,    output: 25,   cacheRead: 0.5,   cacheWrite: 6.25 },
+  "cursor/claude-opus-5-fast":   { input: 10,   output: 50,   cacheRead: 1,     cacheWrite: 12.5 },
   "cursor/claude-opus-4-8":      { input: 5,    output: 25,   cacheRead: 0.5,   cacheWrite: 6.25 },
   // Published as "3x lower per-token pricing than Opus 4.7 fast mode".
   "cursor/claude-opus-4-8-fast": { input: 10,   output: 50,   cacheRead: 1,     cacheWrite: 12.5 },
@@ -361,30 +363,43 @@ const MODEL_PRICING: Record<string, ModelPrice> = {
   "cursor/claude-4-sonnet":      { input: 3,    output: 15,   cacheRead: 0.3,   cacheWrite: 3.75 },
   // <=100K prompt tier; see the claude-haiku-5-5 row above.
   "cursor/claude-haiku-5-5":     { input: 0.1,  output: 0.5,  cacheRead: 0.01,  cacheWrite: 0.125 },
-  "cursor/gpt-5.6-sol":          { input: 4,    output: 20,   cacheRead: 0.4,   cacheWrite: 5 },
-  "cursor/gpt-5.6-sol-fast":     { input: 8,    output: 40,   cacheRead: 0.8,   cacheWrite: 10 },
+  "cursor/gpt-5.6-sol":          { input: 5,    output: 30,   cacheRead: 0.5,   cacheWrite: 6.25 },
+  "cursor/gpt-5.6-sol-fast":     { input: 10,   output: 60,   cacheRead: 1,     cacheWrite: 12.5 },
   "cursor/gpt-5.6-terra":        { input: 2,    output: 12,   cacheRead: 0.2,   cacheWrite: 2.5 },
   "cursor/gpt-5.6-terra-fast":   { input: 4,    output: 24,   cacheRead: 0.4,   cacheWrite: 5 },
   "cursor/gpt-5.6-luna":         { input: 0.2,  output: 1.2,  cacheRead: 0.02,  cacheWrite: 0.25 },
   "cursor/gpt-5.6-luna-fast":    { input: 0.4,  output: 2.4,  cacheRead: 0.04,  cacheWrite: 0.5 },
   "cursor/gpt-5.5":              { input: 5,    output: 30,   cacheRead: 0.5,   cacheWrite: 0 },
+  // GPT-5.5 / 5.3 Codex / 5.2 Fast: OpenAI's Fast-tier rates, since Cursor's
+  // sheet doesn't price these Fast variants.
+  "cursor/gpt-5.5-fast":         { input: 12.5, output: 75,   cacheRead: 1.25,  cacheWrite: 0 },
   "cursor/gpt-5.4":              { input: 2.5,  output: 15,   cacheRead: 0.25,  cacheWrite: 0 },
   "cursor/gpt-5.4-fast":         { input: 5,    output: 30,   cacheRead: 0.5,   cacheWrite: 0 },
   "cursor/gpt-5.4-mini":         { input: 0.75, output: 4.5,  cacheRead: 0.075, cacheWrite: 0 },
   "cursor/gpt-5.4-nano":         { input: 0.2,  output: 1.25, cacheRead: 0.02,  cacheWrite: 0 },
   "cursor/gpt-5.3-codex":        { input: 1.75, output: 14,   cacheRead: 0.175, cacheWrite: 0 },
+  "cursor/gpt-5.3-codex-fast":   { input: 3.5,  output: 28,   cacheRead: 0.35,  cacheWrite: 0 },
   "cursor/gpt-5.2":              { input: 1.75, output: 14,   cacheRead: 0.175, cacheWrite: 0 },
+  "cursor/gpt-5.2-fast":         { input: 3.5,  output: 28,   cacheRead: 0.35,  cacheWrite: 0 },
+  // GPT-5.1 is in Cursor's catalog but missing from its sheet: OpenAI list price.
+  "cursor/gpt-5.1":              { input: 1.25, output: 10,   cacheRead: 0.125, cacheWrite: 0 },
+  "cursor/gpt-5":                { input: 1.25, output: 10,   cacheRead: 0.125, cacheWrite: 0 },
+  "cursor/gpt-5-fast":           { input: 2.5,  output: 20,   cacheRead: 0.25,  cacheWrite: 0 },
   "cursor/gpt-5-mini":           { input: 0.25, output: 2,    cacheRead: 0.025, cacheWrite: 0 },
   "cursor/gemini-4-argon":       { input: 2,    output: 10,   cacheRead: 0.1,   cacheWrite: 0 },
   "cursor/gemini-3.8-flash":     { input: 0.75, output: 3.75, cacheRead: 0.075, cacheWrite: 0 },
   "cursor/gemini-3.7-flash":     { input: 0.75, output: 3.75, cacheRead: 0.075, cacheWrite: 0 },
-  "cursor/gemini-3.6-flash":     { input: 0.75, output: 3.75, cacheRead: 0.075, cacheWrite: 0 },
-  "cursor/gemini-3.5-flash":     { input: 0.75, output: 3.75, cacheRead: 0.075, cacheWrite: 0 },
+  // Cursor bills 3.6 / 3.5 Flash above Google's current (promotional /
+  // rerouted) rate used by the bare rows; Cursor's sheet is the bill here.
+  "cursor/gemini-3.6-flash":     { input: 1.5,  output: 7.5,  cacheRead: 0.15,  cacheWrite: 0 },
+  "cursor/gemini-3.5-flash":     { input: 1.5,  output: 9,    cacheRead: 0.15,  cacheWrite: 0 },
   "cursor/gemini-3.1-pro":       { input: 2,    output: 12,   cacheRead: 0.2,   cacheWrite: 0 },
   "cursor/gemini-3-flash":       { input: 0.5,  output: 3,    cacheRead: 0.05,  cacheWrite: 0 },
   "cursor/kimi-k3":              { input: 3,    output: 15,   cacheRead: 0.3,   cacheWrite: 0 },
   "cursor/kimi-k2.7-code":       { input: 0.95, output: 4,    cacheRead: 0.19,  cacheWrite: 0 },
   "cursor/glm-5.2":              { input: 1.4,  output: 4.4,  cacheRead: 0.26,  cacheWrite: 0 },
+  // Cursor spells DeepSeek V4.1 Flash 1017 without the dot.
+  "cursor/deepseek-v41-flash-1017": { input: 0.3, output: 1.2, cacheRead: 0.006, cacheWrite: 0 },
   "cursor/muse-wonder-1.0":      { input: 4,    output: 20,   cacheRead: 0.2,   cacheWrite: 0 },
   "cursor/muse-spark-1.3":       { input: 1.25, output: 4.25, cacheRead: 0.15,  cacheWrite: 0 },
 

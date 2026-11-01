@@ -95,7 +95,7 @@ const SLICE: IssueFilterSlice & {
 };
 
 describe("viewQueryFromSnapshot", () => {
-  it("serializes exactly the nine filter dims (no sort/grouping/date)", () => {
+  it("serializes exactly the ten filter dims (no sort/grouping/date)", () => {
     const query = viewQueryFromSnapshot(SLICE);
     expect(query).toEqual({
       statusFilters: ["todo", "in_progress"],
@@ -107,7 +107,11 @@ describe("viewQueryFromSnapshot", () => {
       includeNoProject: false,
       labelFilters: ["label-1"],
       propertyFilters: { "prop-1": ["opt-1", "opt-2"] },
+      // Web's key, not mobile's local `workingOnly` field name
+      // (iteration 281, MYS-2539).
+      agentRunningFilter: false,
     });
+    expect(query).not.toHaveProperty("workingOnly");
     expect(query).not.toHaveProperty("sortBy");
     expect(query).not.toHaveProperty("dateFilter");
   });
@@ -269,6 +273,7 @@ describe("sanitizeViewQuery", () => {
       includeNoProject: false,
       labelFilters: [],
       propertyFilters: {},
+      agentRunningFilter: false,
     });
   });
 });
@@ -440,6 +445,7 @@ describe("baselineFromViewQuery", () => {
       includeNoProject: false,
       labelFilters: [],
       propertyFilters: {},
+      agentRunningFilter: false,
     });
     expect(baseline.status.size).toBe(0);
   });

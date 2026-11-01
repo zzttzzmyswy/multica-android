@@ -131,10 +131,17 @@ function firstEnum<T extends string>(
     : fallback;
 }
 
-/** Serialize the nine query-defining filter fields to a view's `query` blob,
- *  mirroring web's save-view-dialog payload
- *  (packages/views/issues/components/save-view-dialog.tsx:585-596). Views are
- *  never created with a date window — date stays a user layer. */
+/** Serialize the ten query-defining filter fields to a view's `query` blob,
+ *  mirroring web's view definition payload
+ *  (`packages/core/issue-views/definition.ts: issueViewDefinitionFromState`).
+ *  Views are never created with a date window — date stays a user layer.
+ *
+ *  `workingOnly` is written under web's name `agentRunningFilter`
+ *  (iteration 281, MYS-2539). The two clients must agree on the KEY or a view
+ *  saved on one side loses the condition on the other; the local field name
+ *  is mobile's business, the blob is the contract. Always written, never
+ *  omitted-when-false: a re-save of a web view that had the condition has to
+ *  CLEAR it for every client rather than leave a stale `true` behind. */
 export function viewQueryFromSnapshot(
   snapshot: Pick<
     IssueFilterSlice,
@@ -147,6 +154,7 @@ export function viewQueryFromSnapshot(
     | "includeNoProject"
     | "labelFilters"
     | "propertyFilters"
+    | "workingOnly"
   >,
 ): Record<string, unknown> {
   return {
@@ -159,6 +167,7 @@ export function viewQueryFromSnapshot(
     includeNoProject: snapshot.includeNoProject,
     labelFilters: snapshot.labelFilters,
     propertyFilters: snapshot.propertyFilters,
+    agentRunningFilter: snapshot.workingOnly,
   };
 }
 
@@ -218,7 +227,12 @@ export function viewDisplayFromState(state: {
 }
 
 /** Enum-sanitized snapshot straight from a view blob — safe to hand to
- *  `resetFiltersTo`. Unknown members drop; missing fields default. */
+ *  `resetFiltersTo`. Unknown members drop; missing fields default.
+ *
+ *  `agentRunningFilter` accepts only a real `true` (web `baseline.ts`
+ *  `query.agentRunningFilter === true`). A view blob predating the field
+ *  carries no key and therefore means "no agent-running condition" — which is
+ *  what such a view actually promised when it was saved. */
 export function sanitizeViewQuery(query: Record<string, unknown>): IssueFilterSnapshot {
   return {
     statusFilters: stringArray(query.statusFilters).filter((s): s is IssueStatus =>
@@ -234,13 +248,18 @@ export function sanitizeViewQuery(query: Record<string, unknown>): IssueFilterSn
     includeNoProject: query.includeNoProject === true,
     labelFilters: stringArray(query.labelFilters),
     propertyFilters: stringRecord(query.propertyFilters),
+    agentRunningFilter: query.agentRunningFilter === true,
   };
 }
 
-/** The nine filter dims a saved view fixes, plus the user-layer date window
- *  — the shape the filter chips read. Structurally the surfaces'
+/** The filter dims a saved view fixes, plus the user-layer date window —
+ *  the shape the filter chips read. Structurally the surfaces'
  *  `IssueFilterState` (lib/filter-issues.ts), declared here because that
- *  module pulls the i18n runtime and this one must stay Node-testable. */
+ *  module pulls the i18n runtime and this one must stay Node-testable.
+ *
+ *  `workingOnly` is included (iteration 281) because it became a view
+ *  dimension: the chip bar, the active-dimension set and the reset plan all
+ *  have to see it. */
 export type IssueFilterDims = Pick<
   IssueFilterSlice,
   | "statusFilters"
@@ -253,6 +272,7 @@ export type IssueFilterDims = Pick<
   | "labelFilters"
   | "propertyFilters"
   | "dateFilter"
+  | "workingOnly"
 >;
 
 /** The open saved view's query, normalized for the two jobs web's
@@ -274,6 +294,9 @@ export interface IssueViewBaseline {
   label: Set<string>;
   /** Property definition id → fixed option ids. */
   property: Map<string, Set<string>>;
+  /** The view fixes "only issues an agent is running right now".
+   *  A blob predating the field means `false` — see `sanitizeViewQuery`. */
+  agentRunningFilter: boolean;
   /** Enum-sanitized snapshot, safe to hand straight to `resetFiltersTo`. */
   raw: IssueFilterSnapshot;
 }
@@ -303,6 +326,7 @@ export function baselineFromViewQuery(
     includeNoProject: raw.includeNoProject,
     label: new Set(raw.labelFilters),
     property,
+    agentRunningFilter: raw.agentRunningFilter,
     raw,
   };
 }
@@ -319,6 +343,9 @@ export interface IssueFilterDelta {
   includeNoProject: boolean;
   labels: string[];
   property: PropertyFilterValue;
+  /** Live agent-running condition minus what the open view fixes — the
+   *  "you added this on top of the view" half of the chip bar. */
+  agentRunning: boolean;
 }
 
 export function issueFilterDelta(
@@ -336,6 +363,7 @@ export function issueFilterDelta(
       includeNoProject: state.includeNoProject,
       labels: state.labelFilters,
       property: state.propertyFilters,
+      agentRunning: state.workingOnly,
     };
   }
   const property: PropertyFilterValue = {};
@@ -358,6 +386,12 @@ export function issueFilterDelta(
     includeNoProject: state.includeNoProject && !baseline.includeNoProject,
     labels: state.labelFilters.filter((id) => !baseline.label.has(id)),
     property,
+    // Web's chip condition verbatim (`filter-chips-bar.tsx`:
+    // `agentRunningFilter && !baseline?.agentRunning`). Asymmetric on
+    // purpose: a chip named "Agent is running" can describe "on", but there
+    // is no chip that describes "the view's running condition is gone" — that
+    // state is just the view being modified, which the dot reports.
+    agentRunning: state.workingOnly && !baseline.agentRunningFilter,
   };
 }
 
@@ -385,6 +419,7 @@ export function clearDimensionToBaseline(
     includeNoProject: state.includeNoProject,
     labelFilters: state.labelFilters,
     propertyFilters: state.propertyFilters,
+    agentRunningFilter: state.workingOnly,
   };
   switch (dimension) {
     case "status":
@@ -407,6 +442,12 @@ export function clearDimensionToBaseline(
       };
     case "label":
       return { ...current, labelFilters: raw.labelFilters };
+    case "agentRunning":
+      return { ...current, agentRunningFilter: raw.agentRunningFilter };
+    case "date":
+      // The date window is a user layer no view carries, so there is nothing
+      // to restore it to — the date chip clears itself at the call site.
+      return current;
     default: {
       const propertyId = propertyIdFromDimension(dimension);
       if (!propertyId) return current;
@@ -675,6 +716,7 @@ export type IssueViewSnapshotSource = Pick<
   | "includeNoProject"
   | "labelFilters"
   | "propertyFilters"
+  | "workingOnly"
   | "sortBy"
   | "sortDirection"
   | "grouping"
@@ -722,6 +764,11 @@ export function viewMatchesSlice(
   ) {
     return false;
   }
+  // `sanitizeViewQuery` defaults a missing key to `false` on BOTH sides, so a
+  // pre-key view compares against `false` — the same seed web uses
+  // (`mergeViewStatePersisted` keeps the store default), which is what makes
+  // "legacy view opened untouched" read as unmodified on both clients.
+  if (want.agentRunningFilter !== curr.agentRunningFilter) return false;
   const wantDisplay = sanitizeViewDisplay(view.display, slice.sortBy);
   return (
     wantDisplay.viewMode === viewMode &&
@@ -841,11 +888,12 @@ function exceedsBaseline(
  * them as such either offered itself when nothing was added, or (the defect
  * this replaces) wiped the view's definition when something was.
  *
- * `workingOnly` and `dateFilter` are user layers no view carries
- * (`issue-filter-slice.ts:282-286`), so they always count on their own.
+ * `workingOnly` counts only when the open view does not already fix it.
+ * `dateFilter` is a user layer no view carries, so it always counts on its
+ * own.
  */
 export function activeFilterDimensions(
-  state: IssueFilterDims & { workingOnly?: boolean },
+  state: IssueFilterDims,
   baseline: IssueViewBaseline | null,
 ): ActiveFilterDimension[] {
   const out: ActiveFilterDimension[] = [];
@@ -883,30 +931,39 @@ export function activeFilterDimensions(
     }
   }
   if (state.dateFilter) out.push("date");
-  if (state.workingOnly) out.push("workingOnly");
+  // Web's `getActiveFilterCount` clause verbatim (`issues-header.tsx`:
+  // `if (state.agentRunningFilter && !baseline?.agentRunning) count++`).
+  // Note this is NOT "differs from the baseline": a view that fixes `true`
+  // with the live filter switched off is a modification the DOT reports, but
+  // it is not a chip and must not light the trigger — clearing that state
+  // means re-opening the view, not removing a chip.
+  if (state.workingOnly && !(baseline?.agentRunningFilter ?? false)) {
+    out.push("agentRunning");
+  }
   return out;
 }
 
 /**
  * The snapshot a Reset must leave the store in.
  *
- * Web's rule (`issues-header.tsx:1513-1527`): inside a saved view, reset
+ * Web's rule (`issues-header.tsx` Reset handler): inside a saved view, reset
  * returns to the VIEW's conditions; outside one it clears everything. The
  * date window is handled separately by the caller because it is not part of
  * `IssueFilterSnapshot` — web calls `onDateFilterChange?.(null)` right after
- * the same branch. `workingOnly` is likewise outside the snapshot and is left
- * to the caller for the same reason.
+ * the same branch. `agentRunningFilter` is now INSIDE the snapshot
+ * (iteration 281), so the view branch restores it along with everything else
+ * and needs no special case.
  *
  * Returned as a discriminated result rather than "a snapshot or null" so a
  * caller cannot accidentally treat a null view as "nothing to do".
  */
 /**
  * A dimension the user can have changed beyond an open view. Extends the
- * store's `FilterDimension` (which the chip bar clears) with `workingOnly` —
- * a quick filter that has no chip and therefore no store-level dimension,
- * but which a Reset must still turn off.
+ * store's `FilterDimension` (which the chip bar clears) with `agentRunning` —
+ * a quick filter that has no per-value chip of its own but which a Reset
+ * must still be able to turn off.
  */
-export type ActiveFilterDimension = FilterDimension | "workingOnly";
+export type ActiveFilterDimension = FilterDimension;
 
 export type FilterResetPlan =
   | { kind: "to-view"; snapshot: IssueFilterSnapshot }
@@ -921,37 +978,42 @@ export function planFilterReset(
 }
 
 /** The store actions one Reset touches. Structural, so the callers' three
- *  concrete zustand stores all satisfy it without a cast. */
+ *  concrete zustand stores all satisfy it without a cast.
+ *
+ *  No `toggleWorkingOnly`: the agent-running condition rides in the snapshot
+ *  and in `clearFilters`, so there is nothing left for a trailing toggle to
+ *  do (and on the view branch one would be wrong — see `applyFilterReset`). */
 export interface FilterResetActions {
   resetFiltersTo: (snapshot: IssueFilterSnapshot) => void;
   clearFilters: () => void;
   setDateFilter: (value: IssueDateFilterValue | null) => void;
-  toggleWorkingOnly: () => void;
 }
 
 /**
  * Perform a Reset in full — the ONE place the semantics live.
  *
- * Web's handler (`issues-header.tsx:1513-1527`) is a branch plus a trailing
- * `onDateFilterChange?.(null)`; the date is outside the snapshot because
- * views never carry one, and mobile's `workingOnly` quick filter is outside
- * it for a third reason (`issue-filter-slice.ts:143-152`: it is deliberately
- * neither persisted nor saved, and `clearFilters` is the only thing that
- * turns it off). Both have to be undone on EVERY path, which is why they are
- * written here once rather than repeated at the call site where one branch
- * could quietly lose them.
+ * Web's handler is a branch plus a trailing `onDateFilterChange?.(null)`.
+ * The date is outside the snapshot because views never carry one, so it has
+ * to be undone on BOTH paths — that is why it is written here once rather
+ * than repeated at the call site where one branch could quietly lose it.
  *
- * `state` is read only for `workingOnly` — the store exposes a toggle, not a
- * setter, so "turn it off" has to be conditional to stay idempotent.
+ * `agentRunningFilter` needs no such treatment any more (iteration 281): it
+ * is INSIDE the snapshot, so the view branch restores it from the view and
+ * the clear branch gets it from `clearFilters`.
  */
 export function applyFilterReset(
-  state: { workingOnly: boolean },
   baseline: IssueViewBaseline | null,
   actions: FilterResetActions,
 ): void {
   const plan = planFilterReset(baseline);
-  if (plan.kind === "to-view") actions.resetFiltersTo(plan.snapshot);
-  else actions.clearFilters();
+  if (plan.kind === "to-view") {
+    // `plan.snapshot` carries `agentRunningFilter`, so this restores the
+    // view's condition directly.
+    actions.resetFiltersTo(plan.snapshot);
+  } else {
+    // `clearFilters` zeroes `workingOnly` as one of its fields, so the
+    // outside-a-view path is covered without a trailing toggle.
+    actions.clearFilters();
+  }
   actions.setDateFilter(null);
-  if (state.workingOnly) actions.toggleWorkingOnly();
 }
