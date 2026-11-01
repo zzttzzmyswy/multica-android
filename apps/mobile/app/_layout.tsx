@@ -1,7 +1,7 @@
 import "../global.css";
 
 import { useEffect, useRef } from "react";
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 import Constants from "expo-constants";
 import { Stack, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -19,6 +19,8 @@ import { loadApiBaseUrl } from "@/data/server-config";
 import { LightboxProvider, prewarmHighlighter } from "@/lib/markdown";
 import { ActionSheetProvider } from "@/lib/action-sheet";
 import { resolveAppVersion } from "@/lib/app-identity";
+import { SessionActivityBoundary } from "@/components/auth/session-activity-boundary";
+import { maybeRenewSession, renewSessionNow } from "@/lib/session-renewal";
 import { NAV_THEME } from "@/lib/theme";
 import { useColorScheme } from "@/lib/use-color-scheme";
 
@@ -76,8 +78,24 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
       // token gets cleared, and the user is force re-logged-in.
       await loadApiBaseUrl();
       await initialize();
+      // Sliding session renewal (MYS-2538). AFTER initialize(): the token has
+      // to be loaded and on the client before a refresh can carry it. Renewal
+      // is not a session event — it swaps a credential in place, so it must not
+      // race the getMe() that decides whether this session is valid at all.
+      void renewSessionNow();
     })();
   }, [initialize, qc]);
+
+  // Renewal follows USE, not a clock (see lib/session-renewal.ts): the two
+  // transitions that mean "a person came back" are launch (above) and
+  // foreground. Deliberately no interval — a phone in a pocket must not keep a
+  // session alive for someone who stopped using the app months ago.
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") maybeRenewSession();
+    });
+    return () => subscription.remove();
+  }, []);
 
   return <>{children}</>;
 }
@@ -91,6 +109,10 @@ export default function RootLayout() {
           <QueryClientProvider client={queryClient}>
             <ThemeProvider value={NAV_THEME[colorScheme]}>
               <AuthInitializer>
+                {/* Any touch anywhere counts as use, so a session cannot
+                    expire under the hands of someone who has had the app open
+                    in the foreground for longer than the renewal cadence. */}
+                <SessionActivityBoundary>
                 <LightboxProvider>
                   <StatusBar style={isDarkColorScheme ? "light" : "dark"} />
                   <ActionSheetProvider>
@@ -102,6 +124,7 @@ export default function RootLayout() {
                   </ActionSheetProvider>
                   <PortalHost />
                 </LightboxProvider>
+                </SessionActivityBoundary>
               </AuthInitializer>
             </ThemeProvider>
           </QueryClientProvider>

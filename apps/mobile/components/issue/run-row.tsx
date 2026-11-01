@@ -355,8 +355,15 @@ function CancelButton({
 }) {
   const mutation = useCancelTask(issueId);
   const { t } = useTranslation();
+  // The row is not removed while the stop is in flight (MYS-2538), so the
+  // button has to say what is happening instead of relying on the row
+  // disappearing. `isPending` covers the HTTP round trip; `isSuccess` covers the
+  // window before the authoritative task list lands, when the row is still on
+  // screen showing a `running` status the server has already moved past.
+  const stopping = mutation.isPending || mutation.isSuccess;
 
   const onPress = () => {
+    if (stopping) return;
     Alert.alert(
       t("runs.cancelTaskTitle"),
       t("runs.cancelTaskMessage"),
@@ -374,10 +381,17 @@ function CancelButton({
   return (
     <Pressable
       onPress={onPress}
-      disabled={mutation.isPending}
+      disabled={stopping}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: stopping, busy: mutation.isPending }}
+      accessibilityLabel={
+        stopping ? t("runs.cancelling") : t("runs.cancel")
+      }
       className="px-3 py-1.5 rounded-md bg-secondary active:opacity-70"
     >
-      <Text className="text-caption font-medium text-foreground">{t("runs.cancel")}</Text>
+      <Text className="text-caption font-medium text-foreground">
+        {stopping ? t("runs.cancelling") : t("runs.cancel")}
+      </Text>
     </Pressable>
   );
 }

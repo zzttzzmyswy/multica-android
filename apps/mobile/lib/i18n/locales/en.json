@@ -2793,6 +2793,7 @@
   "runConfirm.titleAssign": "Confirm assignment?",
   "runs.active": "Active",
   "runs.agentRuns": "Agent Runs",
+  "runs.cancelling": "Stopping…",
   "runs.cancel": "Cancel",
   "runs.cancelTask": "Cancel task",
   "runs.cancelTaskMessage": "The agent will stop after the current step.",

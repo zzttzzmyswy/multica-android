@@ -116,6 +116,11 @@ overrides:
   postcss: 8.5.10
   uuid: 11.1.1
 
+patchedDependencies:
+  react-native-enriched-markdown@0.5.0:
+    hash: b84e4dcaaed4e282ded65e5dc424ab4d504b96206da231a7576204be1e3d4db0
+    path: patches/react-native-enriched-markdown@0.5.0.patch
+
 importers:
 
   .:
@@ -484,7 +489,7 @@ importers:
         version: 0.83.6(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0)
       react-native-enriched-markdown:
         specifier: ^0.5.0
-        version: 0.5.0(@expo/config-plugins@55.0.11)(katex@0.16.11)(react-native@0.83.6(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)
+        version: 0.5.0(patch_hash=b84e4dcaaed4e282ded65e5dc424ab4d504b96206da231a7576204be1e3d4db0)(@expo/config-plugins@55.0.11)(katex@0.16.11)(react-native@0.83.6(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)
       react-native-gesture-handler:
         specifier: ~2.30.1
         version: 2.30.1(react-native@0.83.6(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)
@@ -780,7 +785,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 'catalog:'
-        version: 4.1.0(@opentelemetry/api@1.9.1)(@types/node@25.5.0)(jsdom@29.0.1(@noble/hashes@1.8.0))(msw@2.12.14(@types/node@25.5.0)(typescript@5.9.3))(vite@8.0.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@types/node@25.5.0)(jiti@2.6.1)(terser@5.47.1)(yaml@2.9.0))
+        version: 4.1.0(@opentelemetry/api@1.9.1)(@types/node@25.5.0)(jsdom@29.0.1(@noble/hashes@1.8.0))(msw@2.12.14(@types/node@25.5.0)(typescript@5.9.3))(vite@8.0.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@types/node@25.5.0)(jiti@1.21.7)(terser@5.47.1)(yaml@2.9.0))
 
   packages/core:
     dependencies:
@@ -20714,7 +20719,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  react-native-enriched-markdown@0.5.0(@expo/config-plugins@55.0.11)(katex@0.16.11)(react-native@0.83.6(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0):
+  react-native-enriched-markdown@0.5.0(patch_hash=b84e4dcaaed4e282ded65e5dc424ab4d504b96206da231a7576204be1e3d4db0)(@expo/config-plugins@55.0.11)(katex@0.16.11)(react-native@0.83.6(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0):
     dependencies:
       react: 19.2.0
       react-native: 0.83.6(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0)

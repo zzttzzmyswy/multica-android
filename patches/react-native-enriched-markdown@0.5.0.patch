@@ -1,0 +1,57 @@
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/spans/LineHeightSpan.kt b/android/src/main/java/com/swmansion/enriched/markdown/spans/LineHeightSpan.kt
+index c2306811e4b2822557577105e12652a8e38f90f7..f94a6edf4efe8d55e4c5cca823758f9130764a3e 100644
+--- a/android/src/main/java/com/swmansion/enriched/markdown/spans/LineHeightSpan.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/spans/LineHeightSpan.kt
+@@ -1,6 +1,7 @@
+ package com.swmansion.enriched.markdown.spans
+ 
+ import android.graphics.Paint
++import android.text.Spanned
+ import kotlin.math.ceil
+ import kotlin.math.floor
+ import android.text.style.LineHeightSpan as AndroidLineHeightSpan
+@@ -10,6 +11,23 @@ class LineHeightSpan(
+ ) : AndroidLineHeightSpan {
+   private val lineHeight: Int = ceil(height.toDouble()).toInt()
+ 
++  /**
++   * Spacer lines (a lone "\n" carrying a [MarginBottomSpan]) are left alone.
++   *
++   * `MarginBottomSpan` already sizes a spacer to exactly `marginBottom`. Both
++   * spans implement `android.text.style.LineHeightSpan` and edit the same
++   * `FontMetricsInt` in place, so a spacer's final height depends on which one
++   * runs LAST — and Android does not call them in the same order for the shadow
++   * node's `StaticLayout` (the layout Yoga measures the view from) and for the
++   * `TextView`'s own layout (the one that draws). Yoga therefore sizes the view
++   * using one spacer height while the TextView draws another, so a long message
++   * draws past its own bottom edge and overlaps whatever follows it.
++   *
++   * Ported into this patch from upstream issue #1060 / PR #1102's sibling fix.
++   * That change is merged on the library's `main` but is in no published
++   * version yet (v1.1.1 is the latest release, 2026-10-06; the fix landed
++   * 2026-10-30), so the app carries it until a release includes it.
++   */
+   override fun chooseHeight(
+     text: CharSequence?,
+     start: Int,
+@@ -19,9 +37,20 @@ class LineHeightSpan(
+     fm: Paint.FontMetricsInt?,
+   ) {
+     if (fm == null) return
++    if (isSpacerLine(text, start, end)) return
+ 
+     val leading = lineHeight - ((-fm.ascent) + fm.descent)
+     fm.ascent -= ceil(leading / 2.0f).toInt()
+     fm.descent += floor(leading / 2.0f).toInt()
+   }
++
++  private fun isSpacerLine(
++    text: CharSequence?,
++    start: Int,
++    end: Int,
++  ): Boolean =
++    text is Spanned &&
++      end - start == 1 &&
++      text[start] == '\n' &&
++      text.getSpans(start, end, MarginBottomSpan::class.java).isNotEmpty()
+ }

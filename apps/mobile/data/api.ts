@@ -501,9 +501,12 @@ import {
   EMPTY_ISSUE_TRIGGER_PREVIEW,
   MikaBootstrapResponseSchema,
   EMPTY_MIKA_BOOTSTRAP,
+  RefreshSessionResponseSchema,
+  EMPTY_REFRESH_SESSION_RESPONSE,
 } from "./schemas";
 import type { ZodType } from "zod";
 import type { AppConfigResponse, CancelAgentTasksResponse } from "./schemas";
+import type { RenewalResponse as RefreshSessionResponse } from "@/lib/session-renewal-policy";
 import type {
   ChatMessagesCursor,
   ChatMessagesPage,
@@ -938,6 +941,27 @@ class ApiClient {
       method: "POST",
       body: JSON.stringify({ email }),
     });
+  }
+
+  /**
+   * `POST /api/auth/refresh` — sliding session renewal (MYS-2538).
+   *
+   * The server holds the policy: it answers `renewed` and how long until the
+   * next check is worth doing. `renewed: false` is a normal answer (the session
+   * is not inside its renewal window yet), not an error.
+   *
+   * Parsed with a fail-closed fallback: an unreadable body means "nothing was
+   * renewed", so the caller keeps the session it has. A fallback that claimed
+   * renewal would swap a working token for nothing.
+   */
+  async refreshSession(opts?: { signal?: AbortSignal }): Promise<RefreshSessionResponse> {
+    return this.fetchValidatedWith(
+      "/api/auth/refresh",
+      RefreshSessionResponseSchema,
+      EMPTY_REFRESH_SESSION_RESPONSE,
+      { method: "POST" },
+      { signal: opts?.signal, endpoint: "refreshSession" },
+    );
   }
 
   async verifyCode(email: string, code: string): Promise<LoginResponse> {

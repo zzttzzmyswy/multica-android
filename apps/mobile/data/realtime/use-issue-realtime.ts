@@ -9,10 +9,17 @@
  *   - activity:created → timeline
  *   - reaction:added / reaction:removed → comment reactions on timeline
  *   - issue_reaction:added / issue_reaction:removed → issue-level reactions on detail
- *   - task:queued / task:dispatch / task:progress / task:completed /
- *     task:failed / task:cancelled → invalidate timeline + detail (task
- *     state can flip an issue's status server-side without firing
- *     issue:updated, so we refetch the authoritative detail too)
+ *   - task:queued / task:coalesced / task:dispatch / task:progress /
+ *     task:completed / task:failed / task:cancelled → invalidate timeline +
+ *     detail (task state can flip an issue's status server-side without
+ *     firing issue:updated, so we refetch the authoritative detail too)
+ *
+ *     `task:coalesced` is the one with no status change: a reply posted while
+ *     the agent already has a queued run folds into that run, which re-homes
+ *     the run's block under the newest comment it answers. Nothing else fires,
+ *     so without this subscription an open issue keeps the run under the
+ *     earlier comment and the new reply has no visible queue row at all
+ *     (upstream #9702).
  *   - reconnect → invalidate detail + timeline (we might've missed events
  *     while disconnected; server has no replay buffer for this client)
  *
@@ -244,6 +251,7 @@ export function useIssueRealtime(
 
         // ----- Agent task progress -----
         ws.on("task:queued", onTaskEvent),
+        ws.on("task:coalesced", onTaskEvent),
         ws.on("task:dispatch", onTaskEvent),
         ws.on("task:progress", onTaskEvent),
         ws.on("task:completed", onTaskEvent),
