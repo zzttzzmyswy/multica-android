@@ -95,3 +95,48 @@ describe("applySavedView", () => {
     ).toBe("view-1");
   });
 });
+
+describe("applySavedView carries the agent-running condition (iteration 281, MYS-2539)", () => {
+  /** A view whose ONLY condition is "an agent is running it". */
+  function agentView(agentRunningFilter: boolean): IssueView {
+    return {
+      id: "view-2",
+      name: "Running now",
+      query: { agentRunningFilter },
+      display: {},
+      revision: 1,
+    } as unknown as IssueView;
+  }
+
+  it("writes the condition under the STORE's field name", () => {
+    // The device-reproduced defect: `applySavedView` spread the codec's
+    // snapshot verbatim, so this wrote an `agentRunningFilter` key the store
+    // never reads and left `workingOnly` at the previous value. Reopening the
+    // view silently dropped its condition, and the pure codec suite was green
+    // because it never looked at what `applySavedView` hands the store.
+    const store = makeStore();
+    applySavedView({
+      view: agentView(true),
+      store,
+      containerKey: CONTAINER,
+      sortBy: "position",
+    });
+    expect(store.get().workingOnly).toBe(true);
+    // …and no inert duplicate key was planted beside it.
+    expect(store.get()).not.toHaveProperty("agentRunningFilter");
+  });
+
+  it("clears the condition for a view that fixed it off", () => {
+    // The other direction, so a stale `true` from a previously-opened view
+    // cannot leak through.
+    const store = makeStore();
+    store.setState({ workingOnly: true });
+    applySavedView({
+      view: agentView(false),
+      store,
+      containerKey: CONTAINER,
+      sortBy: "position",
+    });
+    expect(store.get().workingOnly).toBe(false);
+  });
+});

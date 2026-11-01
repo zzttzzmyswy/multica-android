@@ -265,11 +265,15 @@ describe("workingOnly (iteration-127)", () => {
     expect(store.getState().statusFilters).toEqual([]);
   });
 
-  it("survives a saved-view reset (views never carry it)", () => {
-    // `workingOnly` is deliberately absent from IssueFilterSnapshot — running
-    // state is second-to-second, so opening a saved view must not switch it
-    // either way. It just keeps whatever the user had.
+  it("is RESTORED from a saved-view reset (views carry it — iteration 281)", () => {
+    // It used to be kept across a view reset ("views never carry it"). After
+    // upstream MUL-8436 the condition IS a view field, so opening a view has
+    // to set it to what the view fixed — in both directions. Leaving the
+    // user's previous session value in place is what made a web view open
+    // with a different result set on the phone.
     store.getState().toggleWorkingOnly();
+    expect(store.getState().workingOnly).toBe(true);
+
     store.getState().resetFiltersTo({
       statusFilters: ["todo"],
       priorityFilters: [],
@@ -280,9 +284,29 @@ describe("workingOnly (iteration-127)", () => {
       includeNoProject: false,
       labelFilters: [],
       propertyFilters: {},
+      agentRunningFilter: false,
+    });
+    expect(store.getState().workingOnly).toBe(false);
+    expect(store.getState().statusFilters).toEqual(["todo"]);
+  });
+
+  it("is turned ON by a view that fixed it (the reverse direction)", () => {
+    store.getState().clearFilters();
+    expect(store.getState().workingOnly).toBe(false);
+
+    store.getState().resetFiltersTo({
+      statusFilters: [],
+      priorityFilters: [],
+      assigneeFilters: [],
+      includeNoAssignee: false,
+      creatorFilters: [],
+      projectFilters: [],
+      includeNoProject: false,
+      labelFilters: [],
+      propertyFilters: {},
+      agentRunningFilter: true,
     });
     expect(store.getState().workingOnly).toBe(true);
-    expect(store.getState().statusFilters).toEqual(["todo"]);
   });
 
   it("carries no working dimension of its own (iteration-213)", () => {
@@ -321,6 +345,7 @@ describe("resetFiltersTo (iteration-65)", () => {
       includeNoProject: false,
       labelFilters: [],
       propertyFilters: {},
+      agentRunningFilter: false,
     });
 
     const state = store.getState();
@@ -351,6 +376,7 @@ describe("resetFiltersTo (iteration-65)", () => {
       includeNoProject: false,
       labelFilters: [],
       propertyFilters: {},
+      agentRunningFilter: false,
     });
     expect(store.getState().dateFilter).not.toBeNull();
   });

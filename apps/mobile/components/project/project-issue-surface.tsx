@@ -585,6 +585,12 @@ export function ProjectIssueSurface({
           onClearProperty={(id) =>
             useProjectIssuesViewStore.getState().clearPropertyFilter(id)
           }
+          onClearAgentRunning={() =>
+            // The toggle is the store's only setter for this field, so
+            // "turn it off" has to be conditional to stay idempotent.
+            useProjectIssuesViewStore.getState().workingOnly &&
+            useProjectIssuesViewStore.getState().toggleWorkingOnly()
+          }
           onClearDate={() =>
             useProjectIssuesViewStore.getState().setDateFilter(null)
           }

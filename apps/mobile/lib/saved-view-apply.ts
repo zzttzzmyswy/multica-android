@@ -28,6 +28,7 @@ import {
   sanitizeViewDisplay,
   sanitizeViewQuery,
 } from "@/data/stores/issue-view-codec";
+import { snapshotToStoreFields } from "@/data/stores/issue-filter-slice";
 import { useActiveIssueViewStore } from "@/data/stores/active-issue-view-store";
 import type { IssuesScope } from "@/data/stores/issues-view-store";
 import type { MyIssuesScope } from "@/data/queries/issue-keys";
@@ -93,7 +94,10 @@ export function applySavedView({
   const snapshot = sanitizeViewQuery(view.query);
   const display = sanitizeViewDisplay(view.display, sortBy);
   store.setState({
-    ...snapshot,
+    // Not `...snapshot`: the codec's snapshot is web's vocabulary, and the
+    // store's field for the agent-running condition is `workingOnly`. Spreading
+    // it verbatim reopened every view with that condition silently dropped.
+    ...snapshotToStoreFields(snapshot),
     // Date is a user layer on top of a view (web semantics) — opening a view
     // clears whatever band was applied over the previous one.
     dateFilter: null,

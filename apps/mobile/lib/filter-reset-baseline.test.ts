@@ -33,6 +33,7 @@ const EMPTY: IssueFilterDims = {
   labelFilters: [],
   propertyFilters: {},
   dateFilter: null,
+  workingOnly: false,
 };
 
 const VIEW_QUERY = {
@@ -45,12 +46,13 @@ const VIEW_QUERY = {
   includeNoProject: false,
   labelFilters: [],
   propertyFilters: {},
+  agentRunningFilter: false,
 };
 
 /** The live slice after a view has been applied — what the sheet sees. */
 function viewState(
-  overrides: Partial<IssueFilterDims & { workingOnly: boolean }> = {},
-): IssueFilterDims & { workingOnly?: boolean } {
+  overrides: Partial<IssueFilterDims> = {},
+): IssueFilterDims {
   return {
     statusFilters: ["todo", "in_progress"],
     priorityFilters: ["high"],
@@ -62,6 +64,7 @@ function viewState(
     labelFilters: [],
     propertyFilters: {},
     dateFilter: null,
+    workingOnly: false,
     ...overrides,
   };
 }
@@ -194,7 +197,7 @@ describe("activeFilterDimensions counts only what the user added", () => {
     ).toEqual(["property:prop-a", "property:prop-b"]);
   });
 
-  it("the date window and the working-only toggle are user layers, never view-fixed", () => {
+  it("the date window is a user layer no view fixes", () => {
     const baseline = baselineFromViewQuery(VIEW_QUERY);
     expect(
       activeFilterDimensions(
@@ -204,16 +207,36 @@ describe("activeFilterDimensions counts only what the user added", () => {
         baseline,
       ),
     ).toEqual(["date"]);
-    expect(
-      activeFilterDimensions(viewState({ workingOnly: true }), baseline),
-    ).toEqual(["workingOnly"]);
     expect(activeFilterDimensions(EMPTY, baseline)).toEqual([]);
+  });
+
+  it("the agent-running condition counts only when the view does not fix it", () => {
+    // Iteration 281: it IS a view dimension now, so an open view that fixes
+    // it absorbs it (no chip, no trigger dot) — the asymmetric rule web uses
+    // (`agentRunningFilter && !baseline?.agentRunning`).
+    expect(
+      activeFilterDimensions(viewState({ workingOnly: true }), baselineFromViewQuery(VIEW_QUERY)),
+    ).toEqual(["agentRunning"]);
+    expect(
+      activeFilterDimensions(
+        viewState({ workingOnly: true }),
+        baselineFromViewQuery({ ...VIEW_QUERY, agentRunningFilter: true }),
+      ),
+    ).toEqual([]);
+    // A view that fixes it ON with the live filter OFF adds no chip either:
+    // removing a promise is not "adding a filter".
+    expect(
+      activeFilterDimensions(
+        viewState({ workingOnly: false }),
+        baselineFromViewQuery({ ...VIEW_QUERY, agentRunningFilter: true }),
+      ),
+    ).toEqual([]);
   });
 });
 
-describe("applyFilterReset undoes the user layers on every path", () => {
+describe("applyFilterReset restores the view, and nulls the date on every path", () => {
   /** Records what a Reset did, in call order. */
-  function recorder(workingOnly = false) {
+  function recorder() {
     const calls: string[] = [];
     const actions = {
       resetFiltersTo: (snapshot: unknown) => {
@@ -221,36 +244,32 @@ describe("applyFilterReset undoes the user layers on every path", () => {
       },
       clearFilters: () => calls.push("clearFilters"),
       setDateFilter: (value: unknown) => calls.push(`setDateFilter:${value}`),
-      toggleWorkingOnly: () => calls.push("toggleWorkingOnly"),
     };
-    return { calls, actions, state: { workingOnly } };
+    return { calls, actions };
   }
 
-  it("inside a view: restores the view, nulls the date, turns workingOnly off", () => {
-    const baseline = baselineFromViewQuery(VIEW_QUERY);
-    const r = recorder(true);
-    applyFilterReset(r.state, baseline, r.actions);
+  it("inside a view: restores the view's snapshot and nulls the date", () => {
+    const baseline = baselineFromViewQuery({
+      ...VIEW_QUERY,
+      agentRunningFilter: true,
+    });
+    const r = recorder();
+    applyFilterReset(baseline, r.actions);
     expect(r.calls[0]).toMatch(/^resetFiltersTo:/);
     expect(r.calls).toContain("setDateFilter:null");
-    expect(r.calls).toContain("toggleWorkingOnly");
     // Never the "erase everything" primitive while a view is open.
     expect(r.calls).not.toContain("clearFilters");
+    // The agent-running condition travels INSIDE the snapshot (iteration
+    // 281), so the view's own `true` is restored rather than toggled away.
+    expect(r.calls[0]).toContain('"agentRunningFilter":true');
   });
 
-  it("outside a view: clears, and STILL nulls the date and workingOnly", () => {
-    // The date window and the quick filter are not part of `clearFilters`'
-    // own contract on the quick-filter side and are trivially forgotten at a
-    // call site that only thinks about the snapshot.
-    const r = recorder(true);
-    applyFilterReset(r.state, null, r.actions);
+  it("outside a view: clears, and still nulls the date", () => {
+    // The date window is outside `clearFilters`' contract, so it is trivially
+    // forgotten at a call site that only thinks about the snapshot.
+    const r = recorder();
+    applyFilterReset(null, r.actions);
     expect(r.calls).toContain("clearFilters");
     expect(r.calls).toContain("setDateFilter:null");
-    expect(r.calls).toContain("toggleWorkingOnly");
-  });
-
-  it("leaves an already-off workingOnly alone (the toggle is not a setter)", () => {
-    const r = recorder(false);
-    applyFilterReset(r.state, null, r.actions);
-    expect(r.calls).not.toContain("toggleWorkingOnly");
   });
 });

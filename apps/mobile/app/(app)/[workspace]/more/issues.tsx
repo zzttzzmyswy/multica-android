@@ -654,6 +654,12 @@ export default function IssuesPage() {
           onClearProperty={(id) =>
             useIssuesViewStore.getState().clearPropertyFilter(id)
           }
+          onClearAgentRunning={() =>
+            // The toggle is the store's only setter for this field, so
+            // "turn it off" has to be conditional to stay idempotent.
+            useIssuesViewStore.getState().workingOnly &&
+            useIssuesViewStore.getState().toggleWorkingOnly()
+          }
           onClearDate={() =>
             useIssuesViewStore.getState().setDateFilter(null)
           }

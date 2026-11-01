@@ -123,7 +123,17 @@ export const ISSUE_GROUPING_OPTIONS: {
  *  fixes, and what `resetFiltersTo` restores. Mirrors web
  *  `view-store.ts` `FilterSnapshot` field-for-field so the same blob opens
  *  the same visible set on either client. Date is excluded: `dateFilter`
- *  lives outside the snapshot (views never carry a date window). */
+ *  lives outside the snapshot (views never carry a date window).
+ *
+ *  `agentRunningFilter` is the tenth member and it IS carried (iteration 281,
+ *  MYS-2539). It used to be excluded here on the reasoning that running state
+ *  moves second-to-second, so a stored toggle could drop the user on an
+ *  unexplained empty list. Upstream retired that reasoning in `4d85b17ff`
+ *  (MUL-8436): the condition became a view field like any other, persisted
+ *  and savable. Excluding it stopped being "a deliberate mobile difference"
+ *  and became a one-way loss — a view saved on web with "Agent is running"
+ *  opened on the phone with the condition silently dropped, so the same view
+ *  showed a different N per client (the parity rule in apps/mobile/CLAUDE.md). */
 export interface IssueFilterSnapshot {
   statusFilters: IssueStatus[];
   priorityFilters: IssuePriority[];
@@ -134,6 +144,25 @@ export interface IssueFilterSnapshot {
   includeNoProject: boolean;
   labelFilters: string[];
   propertyFilters: PropertyFilterValue;
+  agentRunningFilter: boolean;
+}
+
+/**
+ * A sanitized snapshot in the STORE's own vocabulary.
+ *
+ * `sanitizeViewQuery` speaks web's blob vocabulary (`agentRunningFilter`);
+ * the store stores it as `workingOnly`. Every write path that feeds a
+ * snapshot into a store must go through here — spreading the raw snapshot
+ * plants `agentRunningFilter` as an inert key the store never reads and
+ * leaves `workingOnly` at whatever the previous state was (iteration 281:
+ * that is exactly how a view's condition vanished on reopen while every unit
+ * test stayed green).
+ */
+export function snapshotToStoreFields(
+  snapshot: IssueFilterSnapshot,
+): Omit<IssueFilterSnapshot, "agentRunningFilter"> & { workingOnly: boolean } {
+  const { agentRunningFilter, ...rest } = snapshot;
+  return { ...rest, workingOnly: agentRunningFilter };
 }
 
 export interface IssueFilterSlice {
@@ -148,11 +177,19 @@ export interface IssueFilterSlice {
   propertyFilters: PropertyFilterValue;
   dateFilter: IssueDateFilterValue | null;
   /**
-   * Show only issues with a RUNNING agent task (web `agentRunningFilter` →
-   * `workingOnly`). Deliberately NOT persisted and NOT part of
-   * `IssueFilterSnapshot`: running state changes second-to-second, so a
-   * stored toggle would let the user return to an unexplained empty list.
-   * Web reaches the same conclusion at view-store.ts:525-531.
+   * Show only issues with a RUNNING agent task — web's `agentRunningFilter`.
+   *
+   * Carried in `IssueFilterSnapshot` and in a view's query blob (iteration
+   * 281, MYS-2539). It used to be session-only here; see the
+   * `IssueFilterSnapshot` docblock for why that stopped being defensible.
+   *
+   * The FIELD NAME stays `workingOnly` on mobile, because that spelling is
+   * load-bearing across the row predicates (`lib/filter-issues.ts`), the
+   * server-window projection (`lib/issue-row-narrowing.ts`) and three
+   * surfaces. Only the wire/view contract had to agree with web, and that
+   * agreement lives in the codec (`data/stores/issue-view-codec.ts`), which
+   * maps this field to the `agentRunningFilter` key. Renaming the field
+   * itself would be a 100-site mechanical edit that buys no behaviour.
    */
   workingOnly: boolean;
   sortBy: IssueSortField;
@@ -282,7 +319,8 @@ export interface IssueFilterSlice {
   /** Replace every filter field at once — how opening a saved view returns
    *  to the view's own conditions instead of to the prior session state.
    *  Mirrors web `view-store.ts` `resetFiltersTo`. Like web, `dateFilter`
-   *  is NOT part of the snapshot (views never carry a date window). */
+   *  is NOT part of the snapshot (views never carry a date window);
+   *  `agentRunningFilter` IS, since iteration 281. */
   resetFiltersTo: (snapshot: IssueFilterSnapshot) => void;
   /** Clear one filter dimension (a filter-bar chip). Paired boolean flags
    *  (no-assignee / no-project) clear with their dimension — matches web's
@@ -299,6 +337,7 @@ export type FilterDimension =
   | "project"
   | "label"
   | "date"
+  | "agentRunning"
   | `property:${string}`;
 
 export const PROPERTY_FILTER_PREFIX = "property:";
@@ -552,7 +591,13 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
         dateFilter: null,
         workingOnly: false,
       }),
-    resetFiltersTo: (snapshot) => set({ ...snapshot }),
+    // The snapshot is web's vocabulary (`agentRunningFilter`) and the store's
+    // field is mobile's (`workingOnly`), so the renamed member is translated
+    // rather than spread verbatim — a plain `set(snapshot)` would plant an
+    // `agentRunningFilter` key the store never reads and leave `workingOnly`
+    // at whatever the previous view left it (iteration 281). The translation
+    // lives in the codec so every write path shares it.
+    resetFiltersTo: (snapshot) => set(snapshotToStoreFields(snapshot)),
     clearFilterDimension: (dimension) =>
       set((state) => {
         switch (dimension) {
@@ -570,6 +615,8 @@ export function createIssueFilterActions<T extends IssueFilterSlice>(
             return { labelFilters: [] };
           case "date":
             return { dateFilter: null };
+          case "agentRunning":
+            return { workingOnly: false };
           default: {
             const propertyId = propertyIdFromDimension(dimension);
             if (!propertyId || !(propertyId in state.propertyFilters)) {

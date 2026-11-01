@@ -118,9 +118,11 @@ describe("the filter sheet resets to the view, not to nothing", () => {
   });
 
   it("performs the reset through the tested routine", () => {
-    // `applyFilterReset` owns the view-vs-clear branch AND the trailing
-    // date / workingOnly undo, so neither can be dropped at a call site.
-    expect(panel).toContain("applyFilterReset(s, baseline");
+    // `applyFilterReset` owns the view-vs-clear branch AND the trailing date
+    // undo, so neither can be dropped at a call site. The agent-running
+    // condition needs no trailing undo any more — it rides in the snapshot
+    // since iteration 281, so it is not a parameter here.
+    expect(panel).toContain("applyFilterReset(baseline");
     // Neither primitive may be called directly: a second copy of the branch
     // is how the two halves drift apart.
     expect(panel).not.toMatch(/act\(\)\.resetFiltersTo\(/);

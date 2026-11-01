@@ -294,6 +294,7 @@ export function ActiveFilterChips({
   onClearNoAssignee,
   onClearNoProject,
   onClearProperty,
+  onClearAgentRunning,
   onClearDate,
   onClearAll,
   onSave,
@@ -313,6 +314,10 @@ export function ActiveFilterChips({
   onClearNoAssignee: () => void;
   onClearNoProject: () => void;
   onClearProperty: (id: string) => void;
+  /** Turn the agent-running condition off (web chips bar's `agentRunning`
+   *  chip `onRemove`: `toggleAgentRunningFilter()`). Only rendered when the
+   *  open view does not already fix the condition — see `issueFilterDelta`. */
+  onClearAgentRunning: () => void;
   onClearDate: () => void;
   /**
    * Drop every chip at once — web's `clearAll` (`filter-chips-bar.tsx:706-716`).
@@ -471,6 +476,18 @@ export function ActiveFilterChips({
       onClear: remove(`property:${propertyId}`, () =>
         onClearProperty(propertyId),
       ),
+    });
+  }
+  // Web renders this among the "active" chips, before the date window
+  // (`filter-chips-bar.tsx`: the `agentRunningFilter && !baseline?.agentRunning`
+  // block sits above the date chip). Same icon idea — a bot — rendered with
+  // the same Chip primitive as every other dimension so the bar stays
+  // uniform.
+  if (delta.agentRunning) {
+    chips.push({
+      key: "agent-running",
+      label: translate("filter.workingOnly"),
+      onClear: remove("agentRunning", onClearAgentRunning),
     });
   }
   const { dateFilter } = filterState;
