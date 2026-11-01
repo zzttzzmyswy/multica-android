@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { Stack, router, useLocalSearchParams } from "expo-router";
@@ -27,8 +28,18 @@ import { IconButton } from "@/components/ui/icon-button";
 import { HeaderSearchButton } from "@/components/ui/header-search-button";
 import { TimelineList } from "@/components/issue/timeline-list";
 import { BatchActionBar } from "@/components/issue/batch-action-bar";
-import { AgentHeaderBadge } from "@/components/issue/agent-header-badge";
-import { IssueWakeupHeaderBadge } from "@/components/issue/issue-wakeup-header-badge";
+import {
+  AgentHeaderBadge,
+  useIssueAgentBadgePresent,
+} from "@/components/issue/agent-header-badge";
+import {
+  IssueWakeupHeaderBadge,
+  useIssueWakeupBadgePresent,
+} from "@/components/issue/issue-wakeup-header-badge";
+import {
+  planHeaderActions,
+  type HeaderActionKey,
+} from "@/lib/issue-header-actions";
 import { InlineCommentComposer } from "@/components/issue/inline-comment-composer";
 import {
   issueDetailOptions,
@@ -69,6 +80,36 @@ import { useStatusLabel } from "@/lib/status-options";
 import { resolveCatalogState } from "@/lib/catalog-state";
 import { showMarkDuplicateAction } from "@/lib/issue-duplicates";
 import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
+
+/** Labels for header actions that the bar folded into the overflow menu.
+ *  Each is the same string its toolbar button announces, so a reader who
+ *  looked for the button recognises the entry. */
+type FoldableActionKey = "archive" | "threadNav" | "find";
+
+const FOLDED_ACTION_LABEL: Record<
+  FoldableActionKey,
+  (
+    t: (id: string) => string,
+    archiveMode: "archive" | "unarchive" | null,
+  ) => string
+> = {
+  threadNav: (t) => t("threadNav.open"),
+  find: (t) => t("detail.find.placeholder"),
+  archive: (t, archiveMode) =>
+    t(
+      archiveMode === "unarchive"
+        ? "inbox.detail.unarchive"
+        : "inbox.detail.archive",
+    ),
+};
+
+/** Narrow a plan entry to the foldable ones — `search` / the badges / the
+ *  overflow button are pinned by `planHeaderActions` and never appear in
+ *  `folded`, so this is total in practice; the guard keeps it honest if the
+ *  policy ever changes. */
+function isFoldableAction(key: HeaderActionKey): key is FoldableActionKey {
+  return key === "archive" || key === "threadNav" || key === "find";
+}
 
 export default function IssueDetail() {
   // `highlight` + `h` come from inbox deep-link (apps/mobile/app/(app)/
@@ -339,6 +380,32 @@ export default function IssueDetail() {
     const mutate = archiveMode === "archive" ? archive : unarchive;
     mutate.mutate(inboxItemId, { onSuccess: () => router.back() });
   }, [inboxItemId, archiveMode, archive, unarchive]);
+
+  // ── Header action budget (MYS-2534) ────────────────────────────────────
+  // The native header sizes its title LAST, so the trailing actions decide
+  // whether the identifier survives: seven 40dp buttons left it 27dp on a
+  // 411dp phone and it rendered as "MYS-…". `planHeaderActions` decides what
+  // the bar can afford and folds the rest into the overflow menu; the two
+  // badges report their own presence so nothing invisible reserves width.
+  const { width: windowWidth } = useWindowDimensions();
+  const agentBadgePresent = useIssueAgentBadgePresent(id);
+  const wakeupBadgePresent = useIssueWakeupBadgePresent(id);
+  const headerActions = useMemo(() => {
+    // Only what will actually draw. A badge that renders null must not reserve
+    // width — that would fold a real button to make room for nothing.
+    const present: HeaderActionKey[] = ["search", "threadNav", "find", "overflow"];
+    if (fromInbox && inboxItemId && archiveMode) present.push("archive");
+    if (agentBadgePresent) present.push("agentBadge");
+    if (wakeupBadgePresent) present.push("wakeupBadge");
+    return planHeaderActions(windowWidth, present);
+  }, [
+    windowWidth,
+    fromInbox,
+    inboxItemId,
+    archiveMode,
+    agentBadgePresent,
+    wakeupBadgePresent,
+  ]);
   const { data: pins } = useQuery(pinListOptions(wsId, userId));
   const isPinned =
     !!issue &&
@@ -424,16 +491,37 @@ export default function IssueDetail() {
     if (issueLink) actions.push({ kind: "openWeb", label: t("issue.openWeb") });
     actions.push({ kind: "delete", label: t("issue.deleteIssue") });
     const destructiveIndex = actions.length - 1;
+    // Actions the header bar had no width for (MYS-2534) are reachable here,
+    // at the top of the sheet: they are navigational, they were in the toolbar
+    // a moment ago, and burying them between "copy link" and "delete" would
+    // read as an afterthought. Placed AFTER `cancel` so its index-0 contract
+    // holds, and BEFORE the issue's own actions so the sheet keeps one block
+    // of "go somewhere" above one block of "change the issue".
+    const foldedActions: ActionEntry[] = headerActions.folded
+      .filter(isFoldableAction)
+      .map((key) => ({
+        kind: key,
+        label: FOLDED_ACTION_LABEL[key](t, archiveMode),
+      }));
+    if (foldedActions.length > 0) {
+      actions.splice(1, 0, ...foldedActions);
+    }
     ActionSheet.showActionSheetWithOptions(
       {
         options: actions.map((a) => a.label),
         cancelButtonIndex: 0,
-        destructiveButtonIndex: destructiveIndex,
+        destructiveButtonIndex: actions.indexOf(actions[destructiveIndex]),
         title: issue.identifier,
       },
       (i) => {
         const kind = actions[i]?.kind;
-        if (kind === "pin") {
+        if (kind === "threadNav") {
+          setThreadNavOpen(true);
+        } else if (kind === "find") {
+          setFindOpen(true);
+        } else if (kind === "archive" || kind === "unarchive") {
+          onToggleInboxArchive();
+        } else if (kind === "pin") {
           createPin.mutate({ item_type: "issue", item_id: issue.id });
         } else if (kind === "unpin") {
           deletePin.mutate({ itemType: "issue", itemId: issue.id });
@@ -484,6 +572,11 @@ export default function IssueDetail() {
     createSubIssue,
     copyWorkdirPath,
     t,
+    // Folded header actions (MYS-2534) are dispatched from this same sheet, so
+    // the callback has to rebuild when the plan changes.
+    headerActions.folded,
+    onToggleInboxArchive,
+    archiveMode,
   ]);
 
   return (
@@ -494,7 +587,7 @@ export default function IssueDetail() {
           headerBackTitle: t("common.back"),
           headerRight: issue
             ? () => (
-                <View className="flex-row items-center gap-2">
+                <View className="flex-row items-center gap-1">
                   {/* Global search, carrying THIS issue's id so the panel can
                    *  offer its four issue-scoped commands (web gates them on
                    *  `currentIssueId`). Second in the group only to the
@@ -507,33 +600,47 @@ export default function IssueDetail() {
                    *  replaces the navigator default outright, so the entry
                    *  has to be composed in here — see
                    *  components/ui/header-search-button.tsx. */}
-                  <HeaderSearchButton issueId={id} />
+                  <HeaderSearchButton issueId={id} toolbar />
                   {/* Thread navigator — the same position web gives it,
                    *  because it navigates the document while everything to
                    *  its right acts on the issue. Web hides it on mobile (its
                    *  own comment says the panel "needs a sheet"); this button
-                   *  is that sheet. */}
-                  <IconButton
-                    name="list-outline"
-                    onPress={() => setThreadNavOpen(true)}
-                    accessibilityLabel={t("threadNav.open")}
-                  />
+                   *  is that sheet.
+                   *
+                   *  First to fold when the bar runs out of width: the
+                   *  overflow menu carries the same entry (see the
+                   *  `threadNav` case in `onPressMore`), so folding it costs
+                   *  one tap. */}
+                  {headerActions.visible.includes("threadNav") ? (
+                    <IconButton
+                      name="list-outline"
+                      onPress={() => setThreadNavOpen(true)}
+                      accessibilityLabel={t("threadNav.open")}
+                      toolbar
+                    />
+                  ) : null}
                   {/* In-page find — web's Cmd/Ctrl+F. Placed next to the
                    *  thread navigator because the two are complements, not
                    *  duplicates: the navigator jumps to a THREAD by its root
                    *  comment's preview, while find searches every comment's
                    *  full body. Neither replaces the other, so this must not
                    *  displace the navigator's button. */}
-                  <IconButton
-                    name="search-outline"
-                    onPress={() => setFindOpen(true)}
-                    accessibilityLabel={t("detail.find.placeholder")}
-                  />
+                  {headerActions.visible.includes("find") ? (
+                    <IconButton
+                      name="search-outline"
+                      onPress={() => setFindOpen(true)}
+                      accessibilityLabel={t("detail.find.placeholder")}
+                      toolbar
+                    />
+                  ) : null}
                   {/* Inbox-origin archive toggle. Archive (main view) vs
                    *  Unarchive (archived view), mirroring web's inbox detail
                    *  panel; hidden for every other entry point into the issue.
                    */}
-                  {fromInbox && inboxItemId && archiveMode ? (
+                  {fromInbox &&
+                  inboxItemId &&
+                  archiveMode &&
+                  headerActions.visible.includes("archive") ? (
                     <IconButton
                       name={
                         archiveMode === "archive"
@@ -546,17 +653,21 @@ export default function IssueDetail() {
                           ? "inbox.detail.archive"
                           : "inbox.detail.unarchive",
                       )}
+                      toolbar
                     />
                   ) : null}
                   {/* Ambient agent-working badge — renders null when no
                    *  active tasks, so it doesn't crowd the header in the
                    *  common case. See agent-header-badge.tsx. */}
                   <AgentHeaderBadge issueId={id} />
-                  <IssueWakeupHeaderBadge issueId={id} />
+                  {headerActions.visible.includes("wakeupBadge") ? (
+                    <IssueWakeupHeaderBadge issueId={id} />
+                  ) : null}
                   <IconButton
                     name="ellipsis-horizontal"
                     onPress={onPressMore}
                     accessibilityLabel={t("issue.actions")}
+                    toolbar
                   />
                 </View>
               )

@@ -35,7 +35,15 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { useTranslation } from "@/lib/i18n/react";
 import { searchPath } from "@/lib/search-route";
 
-export function HeaderSearchButton({ issueId }: { issueId?: string | null }) {
+export function HeaderSearchButton({
+  issueId,
+  toolbar = false,
+}: {
+  issueId?: string | null;
+  /** Render at the native toolbar's 32dp box — see `IconButton`'s `toolbar`.
+   *  Every route that puts this in a `Stack.Screen` `headerRight` passes it. */
+  toolbar?: boolean;
+}) {
   const { t } = useTranslation();
   const slug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
 
@@ -46,6 +54,7 @@ export function HeaderSearchButton({ issueId }: { issueId?: string | null }) {
         if (slug) router.push(searchPath(slug, issueId));
       }}
       accessibilityLabel={t("a11y.search")}
+      toolbar={toolbar}
     />
   );
 }

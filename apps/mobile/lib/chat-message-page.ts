@@ -95,16 +95,104 @@ export function mergeOlderMessages(
  *
  * Dedupes by id (a page can repeat rows the window already holds) and
  * re-sorts, because the two sets are no longer contiguous.
+ *
+ * A row the window already holds is NOT automatically "nothing new". Two
+ * server writes can land behind one message id: the message row itself, then
+ * a follow-up that binds its attachments (`LinkAttachmentsToChatMessage`,
+ * server/internal/service/task.go). The optimistic send plus the `chat:message`
+ * echo put the row in the cache before the second commit, so the cached copy
+ * has no `attachments` — and discarding the refetch leaves it that way for the
+ * life of the cache (`staleTime: Infinity`). That is MYS-2534: an image sent
+ * from chat reached the agent but never appeared in the bubble. Known rows are
+ * therefore refreshed in place, keeping the reference when nothing actually
+ * changed so an unrelated refetch still doesn't re-render every bubble.
  */
 export function mergeNewestMessages(
   prev: ChatMessage[],
   page: ChatMessage[],
 ): ChatMessage[] {
   if (page.length === 0) return prev;
-  const known = new Set(prev.map((message) => message.id));
-  const fresh = page.filter((message) => !known.has(message.id));
-  if (fresh.length === 0) return prev;
-  return [...prev, ...fresh].sort(compareMessages);
+  const byId = new Map(prev.map((message) => [message.id, message]));
+  const fresh: ChatMessage[] = [];
+  const refreshed: ChatMessage[] = [];
+  for (const incoming of page) {
+    const cached = byId.get(incoming.id);
+    if (!cached) {
+      fresh.push(incoming);
+      continue;
+    }
+    const next = refreshKnownMessage(cached, incoming);
+    if (next !== cached) refreshed.push(next);
+  }
+  if (fresh.length === 0 && refreshed.length === 0) return prev;
+  if (fresh.length === 0) {
+    // Only in-place refreshes: keep the existing order and splice replacements
+    // rather than re-sorting a list that is already correctly ordered.
+    const replacements = new Map(refreshed.map((message) => [message.id, message]));
+    return prev.map((message) => replacements.get(message.id) ?? message);
+  }
+  const merged = new Map(byId);
+  for (const message of refreshed) merged.set(message.id, message);
+  for (const message of fresh) merged.set(message.id, message);
+  return [...merged.values()].sort(compareMessages);
+}
+
+/**
+ * Field-by-field refresh of a row the cache already holds.
+ *
+ * Direction matters per field, and it is not "the server always wins":
+ *
+ *   - `attachments` is server-authoritative and, unlike every other field,
+ *     routinely arrives LATE (the bind is a second transaction). A server
+ *     answer always replaces the cached list, including an explicit `[]`
+ *     (the last attachment was removed).
+ *   - Everything else can be written by the client first — the optimistic
+ *     send stamps ids, `chat:done` stamps `elapsed_ms` / `message_kind`, the
+ *     quick-actions pass stamps `quick_actions`. Those survive a refetch that
+ *     predates them, so a field the page omits falls back to the cached value.
+ *
+ * Returns the SAME object when no field moved, which is what lets the caller
+ * detect "nothing changed" without a deep compare.
+ */
+function refreshKnownMessage(
+  cached: ChatMessage,
+  incoming: ChatMessage,
+): ChatMessage {
+  const attachments = incoming.attachments ?? cached.attachments;
+  const merged: ChatMessage = {
+    ...cached,
+    ...incoming,
+    // Restate after the spread: `incoming` may carry `attachments: undefined`,
+    // and an explicit key with an undefined value would still clobber the
+    // cached list.
+    attachments,
+  };
+  return sameMessage(cached, merged) ? cached : merged;
+}
+
+/** Shallow field comparison for the row shapes `ChatMessage` actually uses.
+ *  `attachments` is compared by identity first (the common case: the same
+ *  array the server just handed back is the one already cached) and then by
+ *  its members' ids, so a re-fetched-but-identical list doesn't churn. */
+function sameMessage(a: ChatMessage, b: ChatMessage): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const key of keys) {
+    if (key === "attachments") continue;
+    const av = (a as unknown as Record<string, unknown>)[key];
+    const bv = (b as unknown as Record<string, unknown>)[key];
+    if (av !== bv) return false;
+  }
+  return sameAttachments(a.attachments, b.attachments);
+}
+
+function sameAttachments(
+  a: ChatMessage["attachments"],
+  b: ChatMessage["attachments"],
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.length !== b.length) return false;
+  return a.every((attachment, i) => attachment.id === b[i].id);
 }
 
 /**

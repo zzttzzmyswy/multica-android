@@ -38,6 +38,22 @@ interface Props {
   issueId: string;
 }
 
+/**
+ * Does this issue's agent badge render anything?
+ *
+ * Exposed so the issue detail header can budget its action width (MYS-2534)
+ * without declaring the badge's data dependency a second time — a header that
+ * reserved space for an invisible badge would fold a real button to make room
+ * for nothing. Shares the same query, so it costs no extra request.
+ */
+export function useIssueAgentBadgePresent(issueId: string): boolean {
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const { data: active = [] } = useQuery(
+    issueActiveTasksOptions(wsId, issueId),
+  );
+  return useMemo(() => summarizeIssueWork(active).state !== "idle", [active]);
+}
+
 export function AgentHeaderBadge({ issueId }: Props) {
   const { t } = useTranslation();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
