@@ -110,6 +110,7 @@ import type {
   WorkspaceWorkingAgent,
 } from "@multica/core/types";
 import type { CloudRuntimeNode } from "@multica/core/runtimes";
+import type { RenewalResponse as RefreshSessionResponse } from "@/lib/session-renewal-policy";
 import type { MikaBootstrapResponse } from "@multica/core/types";
 import type { ChatMessageKind } from "@multica/core/types/chat";
 import {
@@ -3219,4 +3220,30 @@ export const EMPTY_WORKSPACE_SYSTEM_WAKEUP_LIST: WorkspaceSystemWakeup[] = [];
 export const EMPTY_ISSUE_TRIGGER_PREVIEW: IssueTriggerPreview = {
   triggers: [],
   total_count: 0,
+};
+
+/**
+ * `POST /api/auth/refresh` — sliding session renewal (MYS-2538).
+ *
+ * Fail CLOSED: an unreadable response means "nothing was renewed", so the
+ * client keeps the session it already has and retries later. A fallback that
+ * claimed renewal would hand the app an empty credential and sign the user
+ * out — the exact failure this feature exists to prevent.
+ *
+ * `renewed: false` is a normal answer, not an error: it means the session is
+ * not inside its renewal window yet.
+ */
+export const RefreshSessionResponseSchema = z
+  .object({
+    token: z.string().optional(),
+    expires_at: z.string().optional(),
+    renewed: z.boolean().catch(false).default(false),
+    check_again_in_seconds: z.number().int().nonnegative().catch(0).default(0),
+  })
+  .loose();
+
+export const EMPTY_REFRESH_SESSION_RESPONSE: RefreshSessionResponse = {
+  expires_at: undefined,
+  renewed: false,
+  check_again_in_seconds: 0,
 };

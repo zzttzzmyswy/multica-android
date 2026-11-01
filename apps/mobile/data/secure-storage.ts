@@ -18,3 +18,15 @@ export async function setToken(token: string): Promise<void> {
 export async function clearToken(): Promise<void> {
   await SecureStore.deleteItemAsync(TOKEN_KEY);
 }
+
+/**
+ * Persist a token obtained from a RENEWAL (MYS-2538).
+ *
+ * Separate from `setToken` so the write is separately observable and testable,
+ * and so the renewal path cannot accidentally be given a fresh-login semantic
+ * (e.g. clearing other session state). Renewal replaces exactly one credential;
+ * nothing else about the session changes.
+ */
+export async function commitRenewedToken(token: string): Promise<void> {
+  await SecureStore.setItemAsync(TOKEN_KEY, token);
+}

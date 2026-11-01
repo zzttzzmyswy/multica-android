@@ -46,6 +46,11 @@ import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useFailedCommentsStore } from "@/data/stores/failed-comments-store";
 import { patchSubscribersList } from "@/lib/subscription";
+import {
+  clearCancelRequested,
+  markCancelRequested,
+  type CancelMarkerTask,
+} from "@/lib/run-cancel-policy";
 import { patchIssueBatch } from "@/lib/batch-issues";
 import {
   WRITE_FAILURE_CONFLICT_CODE_KEY,
@@ -1120,21 +1125,35 @@ export function useCancelTask(issueId: string) {
 
   return useMutation({
     mutationFn: (taskId: string) => api.cancelTaskById(taskId),
+    // The row is NOT removed (MYS-2538): the run still exists server-side, and
+    // removing it made the row vanish under the pointer — then reappear if the
+    // request failed. It stays, marked as stopping, until the server's own
+    // task list says it is `cancelled`. Policy + reasoning live in
+    // lib/run-cancel-policy.ts.
     onMutate: async (taskId) => {
       const activeKey = issueKeys.activeTasks(wsId, issueId);
+      const tasksKey = issueKeys.tasks(wsId, issueId);
       await qc.cancelQueries({ queryKey: activeKey });
-      const prev = qc.getQueryData<AgentTask[]>(activeKey);
-      qc.setQueryData<AgentTask[]>(activeKey, (old) =>
-        old ? old.filter((t) => t.id !== taskId) : old,
+      qc.setQueryData<CancelMarkerTask[]>(activeKey, (old) =>
+        markCancelRequested(old, taskId),
       );
-      return { prev, activeKey };
+      return { activeKey, tasksKey };
     },
-    onError: (_err, _taskId, ctx) => {
-      if (ctx?.prev) qc.setQueryData(ctx.activeKey, ctx.prev);
+    onError: (_err, taskId, ctx) => {
+      // A failed stop must stop claiming it is stopping. The row itself was
+      // never removed, so there is nothing else to restore.
+      if (!ctx) return;
+      qc.setQueryData<CancelMarkerTask[]>(ctx.activeKey, (old) =>
+        clearCancelRequested(old, taskId),
+      );
     },
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: issueKeys.activeTasks(wsId, issueId) });
-      qc.invalidateQueries({ queryKey: issueKeys.tasks(wsId, issueId) });
+    // Read the keys from the context, not the closure: pending mutation options
+    // can outlive a workspace switch, and the callback would then invalidate
+    // the new workspace's cache.
+    onSettled: (_data, _err, _taskId, ctx) => {
+      if (!ctx) return;
+      qc.invalidateQueries({ queryKey: ctx.activeKey });
+      qc.invalidateQueries({ queryKey: ctx.tasksKey });
     },
   });
 }
