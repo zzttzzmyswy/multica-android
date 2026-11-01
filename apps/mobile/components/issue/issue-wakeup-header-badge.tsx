@@ -18,6 +18,7 @@
  * to the section: the sheet is reachable from anywhere in the issue, and the
  * section is only ever one screenful from the top.
  */
+import { useMemo } from "react";
 import { Pressable } from "react-native";
 import { router } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -41,6 +42,25 @@ import {
 
 interface Props {
   issueId: string;
+}
+
+/**
+ * Does this issue's wakeup badge render anything?
+ *
+ * The presence half of the badge, split out for the issue detail header's
+ * action budget (MYS-2534) — see `useIssueAgentBadgePresent` for the same
+ * reasoning. Shares the badge's two queries, so calling both costs nothing.
+ */
+export function useIssueWakeupBadgePresent(issueId: string): boolean {
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const { data: rules = [] } = useQuery(issueWakeupsOptions(wsId, issueId));
+  const { data: system = [] } = useQuery(
+    issueSystemWakeupsOptions(wsId, issueId),
+  );
+  return useMemo(
+    () => primaryWakeup(rules, system) != null,
+    [rules, system],
+  );
 }
 
 export function IssueWakeupHeaderBadge({ issueId }: Props) {

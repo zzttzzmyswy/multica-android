@@ -123,6 +123,18 @@ module.exports = {
           to: { height: "0" },
         },
       },
+      // Native Stack toolbar buttons. `size="icon"` on RNR's Button is 40dp —
+      // airy for a 20pt glyph, and wide enough that the issue detail header's
+      // seven of them squeezed the title to 27dp (MYS-2534). The visual box is
+      // 32dp; `IconButton toolbar` restores the 44dp tappable area with
+      // hitSlop, so reach is unchanged. Kept in sync with
+      // lib/header-title-budget.ts (`HEADER_ACTION_SIZE`).
+      width: {
+        "header-icon": "2rem",
+      },
+      height: {
+        "header-icon": "2rem",
+      },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",

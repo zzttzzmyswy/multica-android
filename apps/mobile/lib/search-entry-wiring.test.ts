@@ -163,7 +163,12 @@ describe("the issue detail page hands its id to the panel", () => {
     // This is what makes the four issue-scoped commands appear on the one
     // screen web shows them on. `<HeaderSearchGroup />` here would satisfy the
     // reachability check above while silently disabling all four rows.
-    expect(src).toMatch(/<HeaderSearchButton\s+issueId=\{id\}\s*\/>/);
+    //
+    // Matched loosely on purpose: the element also carries presentation props
+    // (MYS-2534 added `toolbar`), and a regex pinned to the exact attribute
+    // list would fail on a change that keeps the behaviour. What must hold is
+    // that `issueId` is the route's `id` — not omitted, and not a constant.
+    expect(src).toMatch(/<HeaderSearchButton\b[^>]*\bissueId=\{id\}/s);
   });
 });
 

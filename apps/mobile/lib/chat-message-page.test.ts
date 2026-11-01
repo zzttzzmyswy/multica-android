@@ -129,6 +129,56 @@ describe("mergeNewestMessages", () => {
     expect(mergeNewestMessages(loaded, [])).toBe(loaded);
     expect(mergeNewestMessages(loaded, [msg("a")])).toBe(loaded);
   });
+
+  // MYS-2534. The id-dedupe above treats "already known" as "nothing to do",
+  // which is only sound for fields the cache cannot be behind on. Attachments
+  // are exactly the opposite: they are bound to the message by a SECOND server
+  // write (LinkAttachmentsToChatMessage) that commits after the row the
+  // optimistic send + WS echo already put in the cache. So the cached copy of
+  // a just-sent image message has `attachments: undefined` forever, and the
+  // refetch that would have carried them is discarded here — the bubble renders
+  // text only, while the agent (which reads them server-side) sees the image.
+  it("refreshes a known row when the page carries data the cache lacks", () => {
+    const attachment = {
+      id: "att-1",
+      filename: "photo.jpg",
+      url: "https://example.test/photo.jpg",
+      download_url: "/api/attachments/att-1/download",
+      markdown_url: "https://example.test/photo.jpg",
+      content_type: "image/jpeg",
+      size_bytes: 1024,
+    } as never;
+    const cached: ChatMessage = { ...msg("a"), attachments: undefined };
+    const fromServer: ChatMessage = { ...msg("a"), attachments: [attachment] };
+
+    const merged = mergeNewestMessages([cached], [fromServer]);
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0].attachments).toEqual([attachment]);
+  });
+
+  // The complement, and the reason this cannot be "always take the server
+  // copy": an optimistic row carries client-only fields the server never
+  // sends, and a refetch must not blank them.
+  it("keeps cached client-only fields the page cannot know about", () => {
+    const cached: ChatMessage = {
+      ...msg("a"),
+      elapsed_ms: 4200,
+      message_kind: "message",
+    };
+
+    const merged = mergeNewestMessages([cached], [{ ...msg("a") }]);
+
+    expect(merged[0].elapsed_ms).toBe(4200);
+    expect(merged[0].message_kind).toBe("message");
+  });
+
+  it("still returns the same array when a known row brings nothing new", () => {
+    const loaded = [{ ...msg("a"), attachments: [] }];
+    expect(
+      mergeNewestMessages(loaded, [{ ...msg("a"), attachments: [] }]),
+    ).toBe(loaded);
+  });
 });
 
 describe("isSessionRunning", () => {
