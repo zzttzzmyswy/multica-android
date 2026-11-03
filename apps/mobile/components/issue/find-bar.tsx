@@ -94,7 +94,7 @@ export function FindBar({
         onSubmitEditing={onNext}
         // The field's own chrome would double up with the bar's border, so the
         // height / padding / background are stripped back to a bare input.
-        className="h-9 flex-1 border-0 bg-transparent px-1"
+        className="min-h-9 flex-1 border-0 bg-transparent px-1"
       />
       {/* Fixed-width counter so the arrows do not shift as the numbers grow
           from 1/9 to 10/9. Blank before a query is typed — web leaves this

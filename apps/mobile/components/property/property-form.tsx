@@ -426,7 +426,7 @@ export function PropertyForm({ property }: PropertyFormProps) {
                         placeholder={t("properties.form.optionNamePlaceholder")}
                         editable={!isSubmitting}
                         maxLength={MAX_NAME_LENGTH}
-                        className="h-9 flex-1"
+                        className="min-h-9 flex-1"
                       />
                       <Pressable
                         onPress={() => {

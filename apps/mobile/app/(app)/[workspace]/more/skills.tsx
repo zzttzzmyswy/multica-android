@@ -407,7 +407,7 @@ export default function SkillsPage() {
                     autoCorrect={false}
                     autoCapitalize="none"
                     returnKeyType="search"
-                    className="h-9"
+                    className="min-h-9"
                   />
                 </View>
                 {narrowed ? (
