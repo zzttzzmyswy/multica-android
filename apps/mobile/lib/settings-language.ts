@@ -6,6 +6,12 @@
  *   - the persisted app-locale override (AppLocale | null) handled by lib/i18n
  *   - the server-facing `user.language` value ("zh-Hans" | "en" | null) sent
  *     via PATCH /api/me so the preference follows the account across devices.
+ *
+ * MOBILE SHIPS EXACTLY THESE TWO LANGUAGES (owner decision, MYS-2580). Web
+ * also ships ja / ko / zh-Hant; mobile deliberately does not. The API still
+ * accepts those values because the contract is shared with web, so the
+ * narrowing lives here and in `SUPPORTED_LOCALES` — not in the server enum.
+ * `lib/i18n/locale-scope.test.ts` pins both halves.
  */
 import type { AppLocale } from "./i18n";
 
