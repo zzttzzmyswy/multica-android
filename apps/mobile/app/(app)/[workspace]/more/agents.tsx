@@ -577,7 +577,7 @@ export default function AgentsPage() {
                       autoCorrect={false}
                       autoCapitalize="none"
                       returnKeyType="search"
-                      className="h-9"
+                      className="min-h-9"
                     />
                   </View>
                   <AgentSortPicker
@@ -841,7 +841,7 @@ function AgentsScopeTabs({
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      className="flex-grow-0"
+      className="flex-grow-0 shrink-0"
       contentContainerClassName="px-3 pt-2 gap-1.5"
     >
       {AGENT_SCOPES.map((value) => {
@@ -890,7 +890,7 @@ function ScopeFilterChips({
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      className="flex-grow-0"
+      className="flex-grow-0 shrink-0"
       contentContainerClassName="px-3 py-2 gap-1.5"
     >
       {OPTIONS.map((o) => {

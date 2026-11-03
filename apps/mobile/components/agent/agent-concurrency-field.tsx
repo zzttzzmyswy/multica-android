@@ -78,7 +78,7 @@ export function AgentConcurrencyField({
         accessibilityLabel={t("agents.detail.fieldConcurrency")}
         // Monospaced digits so the number does not jitter as it changes,
         // matching web's `font-mono tabular-nums`.
-        className="h-9 font-mono tabular-nums"
+        className="min-h-9 font-mono tabular-nums"
       />
       <Text className="text-caption text-muted-foreground">
         {t("agents.detail.concurrencyRange", {

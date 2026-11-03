@@ -579,7 +579,7 @@ function CustomPricingDialog({
                           onChangeText={(v) => updateField(key, field, v)}
                           keyboardType="numeric"
                           placeholder="0.00"
-                          className="h-9 px-2.5 text-caption"
+                          className="min-h-9 px-2.5 text-caption"
                         />
                       </View>
                     ))}
