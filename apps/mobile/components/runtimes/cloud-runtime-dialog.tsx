@@ -37,7 +37,8 @@ import {
   useDeleteCloudRuntimeNode,
 } from "@/data/queries/cloud-runtime";
 import { useWorkspaceStore } from "@/data/workspace-store";
-import { useTranslation } from "@/lib/i18n/react";
+import { formatCloudRuntimeNodeCreatedAt } from "@/lib/cloud-runtime-format";
+import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -49,17 +50,6 @@ const DEFAULT_DISK_SIZE_GB = 20;
 function valueOrUndefined(value: string): string | undefined {
   const trimmed = value.trim();
   return trimmed ? trimmed : undefined;
-}
-
-function formatDateTime(value: string): string | null {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
 }
 
 export function CloudRuntimeDialog({ onClose }: { onClose: () => void }) {
@@ -364,13 +354,14 @@ function NodeRow({
   onDelete: () => void;
 }) {
   const { t } = useTranslation();
+  const intlLocale = useIntlLocale();
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
   const title =
     node.name.trim() ||
     node.instance_id.trim() ||
     t("runtimes.cloudRuntime.nodeFallbackName");
-  const created = formatDateTime(node.created_at);
+  const created = formatCloudRuntimeNodeCreatedAt(node.created_at, intlLocale);
 
   return (
     <View className="rounded-lg border border-border px-3 py-2.5">

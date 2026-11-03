@@ -32,7 +32,7 @@ import {
   SelectValue,
 } from "@multica/ui/components/ui/select";
 import { cn } from "@multica/ui/lib/utils";
-import { useT } from "../../i18n";
+import { useLocale, useT } from "../../i18n";
 
 const CLOUD_RUNTIME_INSTANCE_TYPES = ["t4g.medium", "t4g.large"] as const;
 const DEFAULT_INSTANCE_TYPE = CLOUD_RUNTIME_INSTANCE_TYPES[0];
@@ -297,12 +297,13 @@ function LabeledInput({
 
 function CloudRuntimeNodeRow({ node, wsId }: { node: CloudRuntimeNode; wsId: string }) {
   const { t } = useT("runtimes");
+  const locale = useLocale();
   const deleteNode = useDeleteCloudRuntimeNode(wsId);
   const title =
     node.name.trim() ||
     node.instance_id.trim() ||
     t(($) => $.cloud_runtime.node_fallback_name);
-  const created = formatDateTime(node.created_at);
+  const created = formatDateTime(node.created_at, locale);
   return (
     <div className="rounded-md border bg-background px-3 py-2.5">
       <div className="flex min-w-0 items-start justify-between gap-3">
@@ -391,10 +392,14 @@ function valueOrUndefined(value: string): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
-function formatDateTime(value: string): string | null {
+// `locale` must be the APP locale from `useLocale()`, never left undefined:
+// Intl then falls back to `navigator.language`, so a Chinese UI in an
+// English-language browser renders "Nov 2, 09:30 AM" between Chinese labels.
+// That is precisely what `i18n/use-locale.ts` exists to prevent.
+function formatDateTime(value: string, locale: string): string | null {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(locale, {
     month: "short",
     day: "numeric",
     hour: "2-digit",
