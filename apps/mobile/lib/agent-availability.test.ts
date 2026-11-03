@@ -40,15 +40,40 @@ import { resolveWorkspaceAgentAvailability } from "./agent-availability";
 const WS = "ws-1";
 const ME = "user-me";
 
+/**
+ * An agent record shaped like the server serialises it: reachability is read
+ * from `permission_mode` + `invocation_targets` (MUL-3963), never from the
+ * DERIVED `visibility` projection. The default here is the common case — a
+ * `public_to` agent granted to the whole workspace.
+ */
 function agent(overrides: Partial<Agent> = {}): Agent {
+  const permission_mode = overrides.permission_mode ?? "public_to";
+  const invocation_targets = overrides.invocation_targets ?? [
+    { target_type: "workspace" as const, target_id: null },
+  ];
   return {
     id: "agent-1",
     workspace_id: WS,
     archived_at: null,
-    visibility: "workspace",
     owner_id: null,
+    permission_mode,
+    invocation_targets,
+    visibility:
+      permission_mode === "public_to" &&
+      invocation_targets.some((t) => t.target_type === "workspace")
+        ? "workspace"
+        : "private",
     ...overrides,
   } as Agent;
+}
+
+/** A `private` agent — owner-only, no admin bypass. */
+function privateAgent(overrides: Partial<Agent> = {}): Agent {
+  return agent({
+    permission_mode: "private",
+    invocation_targets: [],
+    ...overrides,
+  });
 }
 
 const MEMBER = { user_id: ME, role: "member" as const };
@@ -93,11 +118,7 @@ describe("workspace agent availability", () => {
     it("is none when a private agent belongs to someone else", () => {
       expect(
         resolveWorkspaceAgentAvailability(
-          base({
-            agents: [
-              agent({ visibility: "private", owner_id: "user-someone-else" }),
-            ],
-          }),
+          base({ agents: [privateAgent({ owner_id: "user-someone-else" })] }),
         ),
       ).toBe("none");
     });
@@ -105,7 +126,7 @@ describe("workspace agent availability", () => {
     it("is available for a private agent the caller owns", () => {
       expect(
         resolveWorkspaceAgentAvailability(
-          base({ agents: [agent({ visibility: "private", owner_id: ME })] }),
+          base({ agents: [privateAgent({ owner_id: ME })] }),
         ),
       ).toBe("available");
     });

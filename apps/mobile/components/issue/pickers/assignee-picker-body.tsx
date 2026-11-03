@@ -38,6 +38,8 @@ import { agentListOptions } from "@/data/queries/agents";
 import { squadListOptions } from "@/data/queries/squads";
 import { assigneeFrequencyOptions } from "@/data/queries/assignee-frequency";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { useAuthStore } from "@/data/auth-store";
+import { useCurrentMemberRole } from "@/data/use-current-member-role";
 import { catalogRead, retryCatalogs } from "@/lib/catalog-read";
 import {
   buildAssigneeFrequencyMap,
@@ -49,6 +51,7 @@ import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { isAgentRuntimeBound } from "@/lib/is-agent-runtime-bound";
 import { isRestrictedAgent } from "@/lib/agent-list-access";
+import { assigneeRowBlock } from "@/lib/assignee-row-gate";
 import { useTranslation } from "@/lib/i18n/react";
 
 const AVATAR_SIZE = 36;
@@ -113,6 +116,11 @@ export function AssigneePickerBody({
 }: Props) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { t } = useTranslation();
+  // Who the viewer is, for the per-row permission gate (MYS-2550). Web reads
+  // the same pair (`useAuthStore` + the member row) inside its assignee picker
+  // and greys a row the caller may not invoke.
+  const userId = useAuthStore((s) => s.user?.id);
+  const { role } = useCurrentMemberRole();
   // Four-state reads (MYS-1907): all three directories gate the empty slot.
   // A failed member/agent/squad read used to answer 「无匹配结果。」, which reads
   // as "your search matched nothing" rather than "the directory never arrived".
@@ -246,17 +254,42 @@ export function AssigneePickerBody({
         return `s:${row.squad.id}`;
       }}
       renderItem={({ item }) => {
-        const needsRuntime =
-          (item.kind === "agent" && !isAgentRuntimeBound(item.agent)) ||
-          (item.kind === "squad" &&
-            !runnableAgentIds.has(item.squad.leader_id));
+        // Two independent gates, in web's precedence (MYS-2550): invoke
+        // permission first, then the runtime. Before this the picker consulted
+        // only the runtime, so a row the caller may not invoke looked pickable
+        // and the refusal arrived as a 403 after the write.
+        const block = assigneeRowBlock({
+          kind: item.kind,
+          agent: item.kind === "agent" ? item.agent : undefined,
+          runtimeBound:
+            item.kind === "agent"
+              ? isAgentRuntimeBound(item.agent)
+              : item.kind === "squad"
+                ? runnableAgentIds.has(item.squad.leader_id)
+                : undefined,
+          userId,
+          role,
+        });
+        const blocked = block !== null;
+        // The sentence that says WHY. Rendered under the row rather than in a
+        // tooltip: a phone has no hover, the same reason the runtime reason is
+        // spelled out here (web keeps the runtime copy in a `title`).
+        const reason =
+          block === "permission"
+            ? t("picker.agentPermissionDenied")
+            : block === "runtime"
+              ? item.kind === "squad"
+                ? t("picker.squadRuntimeReason")
+                : t("picker.agentRuntimeReason")
+              : null;
         return (
           <Pressable
-          disabled={needsRuntime}
+          disabled={blocked}
           onPress={() => select(item)}
+          accessibilityState={{ disabled: blocked }}
           className={cn(
             "flex-row items-center gap-3 px-4 py-3 active:bg-secondary",
-            needsRuntime && "opacity-50",
+            blocked && "opacity-50",
           )}
         >
           {item.kind === "unassigned" ? (
@@ -277,15 +310,22 @@ export function AssigneePickerBody({
           ) : (
             <ActorAvatar type="squad" id={item.squad.id} size={AVATAR_SIZE} />
           )}
-          <Text className="flex-1 text-title-sm text-foreground">
-            {item.kind === "unassigned"
-              ? t("picker.unassigned")
-              : item.kind === "member"
-                ? item.member.name
-                : item.kind === "agent"
-                  ? item.agent.name
-                  : item.squad.name}
-          </Text>
+          <View className="flex-1">
+            <Text className="text-title-sm text-foreground">
+              {item.kind === "unassigned"
+                ? t("picker.unassigned")
+                : item.kind === "member"
+                  ? item.member.name
+                  : item.kind === "agent"
+                    ? item.agent.name
+                    : item.squad.name}
+            </Text>
+            {reason ? (
+              <Text className="text-micro text-muted-foreground" numberOfLines={2}>
+                {reason}
+              </Text>
+            ) : null}
+          </View>
           {/* Restricted agents carry web's lock (assignee-picker.tsx). It sits
               beside the type tag rather than hugging the name so the right-hand
               group keeps the value-cell rhythm the rest of the row uses.
@@ -303,14 +343,16 @@ export function AssigneePickerBody({
           {/* Right-aligned secondary label. Mirrors Apple's
               UITableViewCellStyleValue1 / UIListContentConfiguration.valueCell
               pattern used throughout iOS Settings — type tag in lighter font on
-              the same row. Members carry no tag (they're the default actor). */}
+              the same row. Members carry no tag (they're the default actor).
+              The runtime tag stays a short word: the reason line above already
+              carries the full sentence. */}
           {item.kind === "agent" ? (
             <Text className="text-body text-muted-foreground">
               {isAgentRuntimeBound(item.agent) ? t("picker.agent") : t("picker.needsRuntime")}
             </Text>
           ) : item.kind === "squad" ? (
             <Text className="text-body text-muted-foreground">
-              {needsRuntime ? t("picker.leaderNeedsRuntime") : t("picker.squad")}
+              {block === "runtime" ? t("picker.leaderNeedsRuntime") : t("picker.squad")}
             </Text>
           ) : null}
           {isSelected(item) ? (

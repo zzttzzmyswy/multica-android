@@ -1,3 +1,43 @@
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/renderer/ListRenderer.kt b/android/src/main/java/com/swmansion/enriched/markdown/renderer/ListRenderer.kt
+index bef9a1f5ebf4eb46b0e35280d888419fd537439e..bcfc2a719c127b595b1737152b32709cde7f12cb 100644
+--- a/android/src/main/java/com/swmansion/enriched/markdown/renderer/ListRenderer.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/renderer/ListRenderer.kt
+@@ -3,7 +3,9 @@ package com.swmansion.enriched.markdown.renderer
+ import android.text.SpannableStringBuilder
+ import com.swmansion.enriched.markdown.parser.MarkdownASTNode
+ import com.swmansion.enriched.markdown.spans.MarginBottomSpan
++import android.text.Spanned
+ import com.swmansion.enriched.markdown.utils.text.span.SPAN_FLAGS_EXCLUSIVE_EXCLUSIVE
++import com.swmansion.enriched.markdown.utils.text.span.SPAN_FLAGS_LINE_HEIGHT_PRIORITY
+ import com.swmansion.enriched.markdown.utils.text.span.applyMarginTop
+ import com.swmansion.enriched.markdown.utils.text.span.createLineHeightSpan
+ 
+@@ -55,11 +57,24 @@ class ListRenderer(
+     depth: Int,
+     style: com.swmansion.enriched.markdown.styles.BaseBlockStyle,
+   ) {
++    // Patched (see patches/README.md): a list-wide LineHeightSpan is set AFTER
++    // its items, and those items already carry MarginBottomSpans on their
++    // trailing spacer lines. Android applies a line's LineHeightSpans in
++    // getSpans() order, and that order differs between the shadow node's
++    // measuring StaticLayout and the TextView's drawing layout — so the two
++    // disagreed about which span wins on a spacer line, Yoga sized the list
++    // from one answer while the TextView drew the other, and the last item
++    // rendered below the block's bottom edge (over the reaction bar).
++    //
++    // SPAN_PRIORITY makes this span iterate FIRST in both layouts, so the
++    // margin span always lands on top of it and both agree. Upstream's own fix
++    // for this is PR #1102, merged on the library's `main` after the last
++    // release.
+     builder.setSpan(
+       createLineHeightSpan(style.lineHeight),
+       start,
+       builder.length,
+-      SPAN_FLAGS_EXCLUSIVE_EXCLUSIVE,
++      SPAN_FLAGS_LINE_HEIGHT_PRIORITY,
+     )
+ 
+     // External bottom margin is only handled by the root-level list
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/spans/LineHeightSpan.kt b/android/src/main/java/com/swmansion/enriched/markdown/spans/LineHeightSpan.kt
 index c2306811e4b2822557577105e12652a8e38f90f7..f94a6edf4efe8d55e4c5cca823758f9130764a3e 100644
 --- a/android/src/main/java/com/swmansion/enriched/markdown/spans/LineHeightSpan.kt
@@ -55,3 +95,55 @@ index c2306811e4b2822557577105e12652a8e38f90f7..f94a6edf4efe8d55e4c5cca823758f91
 +      text[start] == '\n' &&
 +      text.getSpans(start, end, MarginBottomSpan::class.java).isNotEmpty()
  }
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/utils/text/span/SpanFlags.kt b/android/src/main/java/com/swmansion/enriched/markdown/utils/text/span/SpanFlags.kt
+index b8e9a3483692e228c842081b7ccecb2a022a836c..2e3d2055f256c0c5a563975b43c6350daa8e5789 100644
+--- a/android/src/main/java/com/swmansion/enriched/markdown/utils/text/span/SpanFlags.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/utils/text/span/SpanFlags.kt
+@@ -1,5 +1,19 @@
+ package com.swmansion.enriched.markdown.utils.text.span
+ 
+ import android.text.SpannableString
++import android.text.Spanned
+ 
+ const val SPAN_FLAGS_EXCLUSIVE_EXCLUSIVE = SpannableString.SPAN_EXCLUSIVE_EXCLUSIVE
++
++/**
++ * `SPAN_EXCLUSIVE_EXCLUSIVE` with the maximum span priority.
++ *
++ * Higher-priority spans are iterated — and therefore applied and drawn — FIRST,
++ * so a lower-priority span over the same range lands on top instead of being
++ * normalized away. Used by [ListRenderer] for a list-wide `LineHeightSpan` that
++ * is set after its items' `MarginBottomSpan`s and must not override them.
++ *
++ * Ported from upstream (PR #1102).
++ */
++const val SPAN_FLAGS_LINE_HEIGHT_PRIORITY =
++  Spanned.SPAN_EXCLUSIVE_EXCLUSIVE or Spanned.SPAN_PRIORITY
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/utils/text/view/TextViewSetup.kt b/android/src/main/java/com/swmansion/enriched/markdown/utils/text/view/TextViewSetup.kt
+index 1feab30e51c7d8dc030128d76e8a33fec7d03dbe..3e52aa1c21d4229f8f37038d293ab7d1991dc5d9 100644
+--- a/android/src/main/java/com/swmansion/enriched/markdown/utils/text/view/TextViewSetup.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/utils/text/view/TextViewSetup.kt
+@@ -10,6 +10,23 @@ import com.swmansion.enriched.markdown.accessibility.AccessibleMarkdownTextView
+ fun AccessibleMarkdownTextView.setupAsMarkdownTextView() {
+   setBackgroundColor(Color.TRANSPARENT)
+   includeFontPadding = false
++  // Match the measuring StaticLayout, which sets BREAK_STRATEGY_HIGH_QUALITY
++  // (MeasurementStore.measure/createStaticLayout). TextView defaults to
++  // BREAK_STRATEGY_SIMPLE, and for CJK — which breaks between almost any two
++  // characters — the two strategies pick different break points. Same text,
++  // same width, different LINE COUNT: Yoga sized the block from the measuring
++  // pass while the TextView drew more lines, so the overflow landed past the
++  // block's bottom edge (on the reaction bar under an issue comment).
++  //
++  // This is the asymmetry that made the bug look content-dependent: it only
++  // shows when SIMPLE and HIGH_QUALITY happen to disagree on break points, so
++  // most comments are fine and a few wrap one line taller than they measure.
++  //
++  // GUARD: this value and the measuring side must stay equal; see
++  // apps/mobile/lib/markdown/spacer-line-patch.test.ts.
++  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
++    breakStrategy = android.graphics.text.LineBreaker.BREAK_STRATEGY_HIGH_QUALITY
++  }
+   movementMethod = LinkLongPressMovementMethod.createInstance()
+   setTextIsSelectable(true)
+   customSelectionActionModeCallback = createSelectionActionModeCallback(this)
