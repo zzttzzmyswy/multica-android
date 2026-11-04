@@ -31,7 +31,45 @@ export const issueViewKeys = {
     ] as const,
   detail: (wsId: string | null, id: string) =>
     [...issueViewKeys.all(wsId), "detail", id] as const,
+  everywhere: (wsId: string | null) =>
+    [...issueViewKeys.all(wsId), "everywhere"] as const,
 };
+
+/**
+ * Every view the caller can open, across workspace, my and project scopes —
+ * web's `issueViewEverywhereOptions` (`packages/core/issue-views/queries.ts`).
+ *
+ * Backs the "All views" directory. Before this existed the mobile client had
+ * no cross-scope read at all: each surface could only list the one scope it
+ * was mounted on, so a view hidden from its bar, or one shared from another
+ * scope, was unreachable from the phone.
+ *
+ * The fallback is for servers predating the `scope_type=all` branch
+ * (`server/internal/handler/issue_view.go:263`): they answer 400, and the two
+ * scopes they DO expose give the same rows minus project-scoped ones. The
+ * fallback deliberately does NOT catch every error — a network failure
+ * answered with a shorter list would render "you have fewer views than you
+ * do" as fact, which is the same assertion-of-absence defect this codebase
+ * has already fixed twice (`catalogRead` / `recordRead`). So the fallback
+ * rethrows whenever it cannot produce a list either.
+ */
+export function issueViewEverywhereOptions(wsId: string | null) {
+  return queryOptions({
+    queryKey: issueViewKeys.everywhere(wsId),
+    queryFn: async (): Promise<IssueView[]> => {
+      try {
+        return await api.listIssueViews({ scope_type: "all" });
+      } catch {
+        const [workspace, my] = await Promise.all([
+          api.listIssueViews({ scope_type: "workspace" }),
+          api.listIssueViews({ scope_type: "my" }),
+        ]);
+        return [...workspace, ...my];
+      }
+    },
+    enabled: !!wsId,
+  });
+}
 
 export function issueViewListOptions(
   wsId: string | null,
