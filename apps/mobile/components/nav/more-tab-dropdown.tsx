@@ -86,6 +86,11 @@ interface NavItem {
 // owner/admin-only management surface (see canManageProperties below).
 const NAV_ITEMS: NavItem[] = [
   { labelKey: "nav.issues", icon: "list", path: "/more/issues" },
+  // The directory of every view the user can open, across workspace / my /
+  // project scopes. Web reaches it from the sidebar's views panel
+  // (`All views`); the phone has no sidebar, so it lives here beside the
+  // Issue surfaces it opens.
+  { labelKey: "nav.allViews", icon: "layers-outline", path: "/more/all-views" },
   {
     labelKey: "nav.autopilots",
     icon: "flash",

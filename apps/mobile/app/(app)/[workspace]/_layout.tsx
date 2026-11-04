@@ -492,6 +492,12 @@ export default function WorkspaceLayout() {
           name="more/issues"
           options={{ title: t("screen.issues"), headerBackTitle: t("common.back") }}
         />
+        {/* Every view the user can open, across scopes — the mobile
+            counterpart of web's `/:slug/views` directory. */}
+        <Stack.Screen
+          name="more/all-views"
+          options={{ title: t("issueViews.directory.title"), headerBackTitle: t("common.back") }}
+        />
         <Stack.Screen
           name="more/autopilots"
           options={{ title: t("screen.autopilots"), headerBackTitle: t("common.back") }}
