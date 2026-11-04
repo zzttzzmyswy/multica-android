@@ -42,6 +42,7 @@ import {
 } from "@/lib/install-update";
 import { useDownloadsStore } from "@/data/downloads-store";
 import { resolveAppVersion, resolveBuildNumber } from "@/lib/app-identity";
+import { readPreviousBootFailure } from "@/lib/boot-diagnostics";
 import { checkUpdateInstallTarget } from "@/lib/release-identity";
 import { cn } from "@/lib/utils";
 
@@ -63,6 +64,10 @@ export default function AboutPage() {
 
   const appVersion = resolveAppVersion(Constants);
   const buildNumber = resolveBuildNumber(Constants);
+  // Read once on mount: the marker is written before module eval and cleared
+  // on a successful first render, so a value here means the previous cold
+  // start died during that stage.
+  const [bootFailure] = useState(() => readPreviousBootFailure());
 
   const query = useLatestRelease(true);
   const [phase, setPhase] = useState<CheckPhase>("idle");
@@ -172,6 +177,17 @@ export default function AboutPage() {
         <Separator className="my-3" />
         <InfoRow label={t("about.buildLabel")} value={buildNumber} />
         <Separator className="my-3" />
+        {/* Surfaces the breadcrumb left by an interrupted boot. A user who
+            reports "it closes on launch" can read the stage off this row
+            without adb — see lib/boot-diagnostics.ts. Rendered only when a
+            previous boot actually failed, so a healthy install shows nothing
+            extra. */}
+        {bootFailure ? (
+          <>
+            <InfoRow label={t("about.lastBootLabel")} value={bootFailure} />
+            <Separator className="my-3" />
+          </>
+        ) : null}
         <InfoRow label={t("about.intro")} value="" last />
       </View>
 

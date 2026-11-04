@@ -82,6 +82,7 @@
   "about.downloadingWithPct": "正在下载… {{pct}}%",
   "about.idle": "从 GitHub 检查是否有新版本。",
   "about.intro": "随时随地查看你的工作区、任务与智能体。",
+  "about.lastBootLabel": "上次启动",
   "about.latestVersion": "最新版本：v{{version}}",
   "about.sourceCode": "源代码",
   "about.subtitle": "安卓客户端",
