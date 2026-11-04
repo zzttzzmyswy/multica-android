@@ -23,12 +23,32 @@ import { SessionActivityBoundary } from "@/components/auth/session-activity-boun
 import { maybeRenewSession, renewSessionNow } from "@/lib/session-renewal";
 import { NAV_THEME } from "@/lib/theme";
 import { useColorScheme } from "@/lib/use-color-scheme";
+import { markBootComplete, markBootStep } from "@/lib/boot-diagnostics";
+import { FatalErrorBoundary } from "@/components/fatal-error-boundary";
+
+// Boot breadcrumb: if the app dies during module evaluation, the next cold
+// start can say WHERE (see lib/boot-diagnostics.ts). Written before anything
+// else can throw, so a failure below is attributable rather than a silent
+// close with nothing to report.
+markBootStep("root-layout:module-eval");
 
 // Kick off Shiki highlighter init at module load — fires once per process,
 // finishes before the user navigates to any screen with a code block. If
 // init fails (engine unavailable) the highlighter falls back to plain
 // text; nothing here is allowed to throw.
-prewarmHighlighter();
+//
+// Guarded: `createHighlighterCore` can throw SYNCHRONOUSLY (bad theme/grammar
+// payload, native engine refusing the call), which `.catch()` inside
+// `initHighlighter` cannot intercept. At module top level an uncaught throw
+// aborts the entry module — in a release build that is an instant close with
+// no red box and no log, which is exactly the 0.6.122 report (MYS-2582). The
+// prewarm is an optimisation, so it must never be able to take the app down.
+markBootStep("root-layout:prewarm-highlighter");
+try {
+  prewarmHighlighter();
+} catch (err) {
+  console.warn("[boot] highlighter prewarm threw; continuing without it:", err);
+}
 
 function AuthInitializer({ children }: { children: React.ReactNode }) {
   const initialize = useAuthStore((s) => s.initialize);
@@ -102,34 +122,42 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
 
 export default function RootLayout() {
   const { colorScheme, isDarkColorScheme } = useColorScheme();
+  // Reaching the first render means module eval + provider construction all
+  // succeeded, so the marker can be cleared: the next cold start will not
+  // report this boot as a failure.
+  useEffect(() => {
+    markBootComplete();
+  }, []);
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <KeyboardProvider>
-          <QueryClientProvider client={queryClient}>
-            <ThemeProvider value={NAV_THEME[colorScheme]}>
-              <AuthInitializer>
-                {/* Any touch anywhere counts as use, so a session cannot
-                    expire under the hands of someone who has had the app open
-                    in the foreground for longer than the renewal cadence. */}
-                <SessionActivityBoundary>
-                <LightboxProvider>
-                  <StatusBar style={isDarkColorScheme ? "light" : "dark"} />
-                  <ActionSheetProvider>
-                    <Stack screenOptions={{ headerShown: false }}>
-                      <Stack.Screen name="index" />
-                      <Stack.Screen name="(auth)" />
-                      <Stack.Screen name="(app)" />
-                    </Stack>
-                  </ActionSheetProvider>
-                  <PortalHost />
-                </LightboxProvider>
-                </SessionActivityBoundary>
-              </AuthInitializer>
-            </ThemeProvider>
-          </QueryClientProvider>
-        </KeyboardProvider>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+    <FatalErrorBoundary>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <KeyboardProvider>
+            <QueryClientProvider client={queryClient}>
+              <ThemeProvider value={NAV_THEME[colorScheme]}>
+                <AuthInitializer>
+                  {/* Any touch anywhere counts as use, so a session cannot
+                      expire under the hands of someone who has had the app open
+                      in the foreground for longer than the renewal cadence. */}
+                  <SessionActivityBoundary>
+                  <LightboxProvider>
+                    <StatusBar style={isDarkColorScheme ? "light" : "dark"} />
+                    <ActionSheetProvider>
+                      <Stack screenOptions={{ headerShown: false }}>
+                        <Stack.Screen name="index" />
+                        <Stack.Screen name="(auth)" />
+                        <Stack.Screen name="(app)" />
+                      </Stack>
+                    </ActionSheetProvider>
+                    <PortalHost />
+                  </LightboxProvider>
+                  </SessionActivityBoundary>
+                </AuthInitializer>
+              </ThemeProvider>
+            </QueryClientProvider>
+          </KeyboardProvider>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </FatalErrorBoundary>
   );
 }

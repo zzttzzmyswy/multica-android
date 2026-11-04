@@ -82,6 +82,7 @@
   "about.downloadingWithPct": "Downloading… {{pct}}%",
   "about.idle": "Check for the latest version from GitHub.",
   "about.intro": "View your workspace, issues and agents on the go.",
+  "about.lastBootLabel": "Last boot",
   "about.latestVersion": "Latest: v{{version}}",
   "about.sourceCode": "Source code",
   "about.subtitle": "Android client",
