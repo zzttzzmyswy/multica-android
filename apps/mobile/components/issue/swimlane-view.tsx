@@ -69,7 +69,7 @@ import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { StatusIcon } from "@/components/ui/status-icon";
 import { IssuesLoading } from "@/components/issue/issues-loading";
-import { useStatusLabel, useStatusOptions } from "@/lib/status-options";
+import { useIssueStatusOptions, useStatusLabel } from "@/lib/status-options";
 import { translate } from "@/lib/i18n";
 import { useTranslation } from "@/lib/i18n/react";
 import { ActionSheet } from "@/lib/action-sheet";
@@ -791,7 +791,11 @@ const SwimlaneCard = memo(function SwimlaneCard({
 }) {
   const { t } = useTranslation();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
-  const { options } = useStatusOptions(wsId);
+  // Scoped to THIS issue's workflow (MUL-7420). Offering the whole catalog let
+  // the member pick a column the server refuses; `project_id` is passed through
+  // verbatim — `null` means "outside any project", which narrows to Default
+  // rather than lifting the limit, so it must not be coalesced.
+  const { options } = useIssueStatusOptions(wsId, issue.project_id, issue.status);
   const updateIssue = useUpdateIssue(issue.id);
 
   const move = useCallback(

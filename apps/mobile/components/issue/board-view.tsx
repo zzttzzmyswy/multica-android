@@ -132,7 +132,7 @@ import type { Issue, IssueProperty, IssueStatus } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { StatusIcon } from "@/components/ui/status-icon";
-import { useStatusLabel, useStatusOptions } from "@/lib/status-options";
+import { useIssueStatusOptions, useStatusLabel } from "@/lib/status-options";
 import { translate } from "@/lib/i18n";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
@@ -528,9 +528,12 @@ function IssueCardWithMenu({
   const { t } = useTranslation();
   const updateIssue = useUpdateIssue(issue.id);
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
-  // Shared with the picker/filter — every entry point that can set a status
-  // offers the same set (catalog active statuses incl. custom keys).
-  const { options } = useStatusOptions(wsId);
+  // Shared with the picker/filter, but SCOPED to this issue's project workflow
+  // (MUL-7420): the card's status sheet is a write surface, so it may only
+  // offer columns the server will accept. `project_id` goes through verbatim —
+  // `null` (no project) narrows to the Default workflow rather than lifting the
+  // limit, while `undefined` would mean "spans projects" and offer everything.
+  const { options } = useIssueStatusOptions(wsId, issue.project_id, issue.status);
 
   const showStatusSheet = useCallback(() => {
     const labels = options.map((o) => o.label);

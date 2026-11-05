@@ -115,6 +115,7 @@ import type {
   ListProjectsResponse,
   ListPropertiesResponse,
   ListIssueStatusesResponse,
+  ListIssueWorkflowsResponse,
   ListQuickActionsResponse,
   MemberWithUser,
   UpdateMemberRequest,
@@ -472,6 +473,11 @@ import {
   ListIssueStatusesResponseSchema,
   EMPTY_ISSUE_STATUS_ENTRY,
   EMPTY_LIST_ISSUE_STATUSES_RESPONSE,
+  // Workspace workflows (MUL-7420) — the read behind every status control's
+  // option list. Mobile-local schema: the fork's core has no workflow schema
+  // yet (see data/schemas.ts).
+  ListIssueWorkflowsResponseSchema,
+  EMPTY_LIST_ISSUE_WORKFLOWS_RESPONSE,
   CloudRuntimeNodeListSchema,
   CloudRuntimeNodeSchema,
   EMPTY_CLOUD_RUNTIME_NODE,
@@ -4310,6 +4316,42 @@ class ApiClient {
       ListIssueStatusesResponseSchema,
       EMPTY_LIST_ISSUE_STATUSES_RESPONSE,
       { endpoint: "GET /api/issue-statuses" },
+    );
+  }
+
+  /**
+   * Workspace workflows (MUL-7420) — `GET /api/issue-workflows`.
+   *
+   * Deliberately NOT wrapped in a fallback-to-empty `catch`, unlike
+   * `listIssueStatuses` above. A 404 there means "this backend predates the
+   * endpoint", and an empty catalog is then the truth. Here an empty list
+   * means "no workflow limits any status", which is a *claim about what the
+   * user may do* — and a network failure would make that claim falsely, on
+   * every status control in the app. The query layer keeps the failure
+   * distinct instead (`data/queries/workflows.ts`).
+   *
+   * A 404 is still mapped to "no workflows": that is the one case where the
+   * server really is telling us the concept does not exist.
+   */
+  async listIssueWorkflows(opts?: {
+    signal?: AbortSignal;
+  }): Promise<ListIssueWorkflowsResponse> {
+    let raw: unknown;
+    try {
+      raw = await this.fetch<unknown>("/api/issue-workflows", {
+        signal: opts?.signal,
+      });
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return EMPTY_LIST_ISSUE_WORKFLOWS_RESPONSE;
+      }
+      throw error;
+    }
+    return parseWithFallback(
+      raw,
+      ListIssueWorkflowsResponseSchema,
+      EMPTY_LIST_ISSUE_WORKFLOWS_RESPONSE,
+      { endpoint: "GET /api/issue-workflows" },
     );
   }
 

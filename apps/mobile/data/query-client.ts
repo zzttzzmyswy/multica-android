@@ -26,7 +26,28 @@ import { translate } from "@/lib/i18n";
 import {
   reportWriteFailure,
   writeFailureDetail,
+  workflowRefusalCopy,
 } from "@/lib/write-failure";
+import { alertStatusLabel } from "@/lib/status-label-alert";
+import { issueStatusKeys } from "@/data/queries/issue-statuses";
+import { useWorkspaceStore } from "@/data/workspace-store";
+import type { IssueStatusEntry } from "@multica/core/types";
+
+/**
+ * Resolves a status key for the alert channel, which runs outside React.
+ *
+ * Reads the catalog from THIS client's cache rather than importing a helper
+ * that owns one: the client is defined in this module, so a helper reaching
+ * back for it would close an import cycle through every mutation's error path.
+ * A cold cache is fine — built-in keys still resolve through i18n.
+ */
+function alertStatusLabelFromCache(statusKey: string): string {
+  const wsId = useWorkspaceStore.getState().currentWorkspaceId;
+  const catalog = wsId
+    ? queryClient.getQueryData<IssueStatusEntry[]>(issueStatusKeys.list(wsId))
+    : undefined;
+  return alertStatusLabel(statusKey, catalog);
+}
 
 export const queryClient = new QueryClient({
   mutationCache: new MutationCache({
@@ -44,6 +65,18 @@ export const queryClient = new QueryClient({
         // 「请刷新后重试」 (MYS-2137). The classifier tests all passed
         // throughout, because they exercise `writeFailureDetail` directly.
         Alert.alert(title, writeFailureDetail(error, mutation, translate)),
+        // Project-workflow refusals (MUL-7420) get their own sentence and take
+        // the failure off the generic path: the server's body for these is
+        // written for a caller ("status X is not in workflow Y"), and the
+        // member's real question is which column they SHOULD pick. Rendered
+        // here — the one place every mutation's failures pass — so no write
+        // path can forget it.
+        () =>
+          workflowRefusalCopy(
+            error,
+            (id, vars) => translate(id, vars as Record<string, string | number> | undefined),
+            alertStatusLabelFromCache,
+          ),
       );
     },
   }),

@@ -71,3 +71,49 @@ export function isCustomStatus(
   if (!entry) return false;
   return entry.is_system !== true && status !== categoryOf(status);
 }
+/**
+ * Regroups a decided option list by category, ordering the GROUPS by where
+ * each category first appears in `options` (iteration 288).
+ *
+ * `buildStatusOptionGroups` above derives groups from the raw catalog ENTRIES
+ * and emits them in canonical category order. That is right for the unscoped
+ * catalog, but wrong for a list a project workflow produced: a workflow is a
+ * PIPELINE, and its step order is the order the board shows and the order web's
+ * flat picker renders. Re-sorting it by category scatters the pipeline — the
+ * live Default workflow lists `… in_review, blocked, done, cancelled`, and the
+ * canonical category order renders Done above Blocked.
+ *
+ * So this variant keeps the caller's order intact and only decides where the
+ * headings go: a category's heading appears at its first option, and any later
+ * option of the same category joins that group. Categories with no options are
+ * dropped entirely rather than drawn as an empty heading.
+ *
+ * `categories` is still needed to recognise a category the caller produced that
+ * has no options — see the third assertion in the suite; an unknown category is
+ * ordered by first appearance like any other, so the function degrades sanely
+ * for a custom status the catalog has not resolved.
+ */
+export function groupStatusOptionsByAppearance(
+  options: readonly StatusOption[],
+  categories: readonly IssueStatusCategory[],
+): StatusOptionGroup[] {
+  const known = new Set<string>(categories);
+  const groups: StatusOptionGroup[] = [];
+  const byCategory = new Map<string, StatusOptionGroup>();
+  for (const option of options) {
+    // An option whose category the caller's vocabulary does not contain still
+    // gets a heading of its own, at its own position: dropping it would hide a
+    // status that is genuinely on offer.
+    const category = known.has(option.category)
+      ? option.category
+      : option.category;
+    let group = byCategory.get(category);
+    if (!group) {
+      group = { category, options: [] };
+      byCategory.set(category, group);
+      groups.push(group);
+    }
+    group.options.push(option);
+  }
+  return groups;
+}

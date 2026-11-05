@@ -21,6 +21,13 @@ export interface Project {
   issue_count: number;
   done_count: number;
   resource_count: number;
+  /**
+   * The workflow this project uses; null for the workspace Default workflow.
+   * Optional because older servers do not send it — the deployed server does
+   * (`GET /api/projects` carries it), which is what lets mobile resolve a
+   * project's workflow at all. (MUL-7420)
+   */
+  workflow_id?: string | null;
 }
 
 export interface CreateProjectRequest {

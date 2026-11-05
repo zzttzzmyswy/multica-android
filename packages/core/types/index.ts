@@ -203,6 +203,24 @@ export type {
   UpdateProjectResourceRequest,
   ListProjectResourcesResponse,
 } from "./project";
+export type {
+  IssueWorkflow,
+  IssueWorkflowDryRunResponse,
+  IssueWorkflowHandler,
+  IssueWorkflowHandlerType,
+  IssueWorkflowMappingPlan,
+  IssueWorkflowMappingRequirement,
+  IssueWorkflowStep,
+  IssueWorkflowStepInput,
+  IssueWorkflowStatusCount,
+  IssueWorkflowWriteRequest,
+  ListIssueWorkflowsResponse,
+  NewWorkflowStatus,
+  SetProjectWorkflowRequest,
+  SetWorkflowHandoffRequest,
+  WorkflowHandoffPreview,
+  WorkflowHandoffRun,
+} from "./issue-workflow";
 export type { PinnedItem, PinnedItemType, CreatePinRequest, ReorderPinsRequest } from "./pin";
 export type {
   GitHubInstallation,
