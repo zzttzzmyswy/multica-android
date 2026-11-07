@@ -29,6 +29,10 @@ import {
   projectStatusLabel,
 } from "@/lib/project-status";
 import { useActorLookup } from "@/data/use-actor-name";
+import { useIssueWorkflows } from "@/data/queries/workflows";
+import { useProjectWorkflowPermissions } from "@/data/use-project-workflow-permissions";
+import { useWorkspaceStore } from "@/data/workspace-store";
+import { handoffStepCount, resolveProjectWorkflow } from "@/lib/workflow";
 import { isActorTypeResolved } from "@/lib/actor-name-state";
 import { projectLeadCell } from "@/lib/project-inline-edit";
 import { useColorScheme } from "@/lib/use-color-scheme";
@@ -42,6 +46,9 @@ interface Props {
   onPressLead: () => void;
   onPressStartDate: () => void;
   onPressDueDate: () => void;
+  /** Opens the workflow picker. Omitted by a caller with no such route (there
+   *  is only one today); the row then renders read-only. */
+  onPressWorkflow?: () => void;
 }
 
 export function ProjectPropertiesSection({
@@ -51,6 +58,7 @@ export function ProjectPropertiesSection({
   onPressLead,
   onPressStartDate,
   onPressDueDate,
+  onPressWorkflow,
 }: Props) {
   const { t } = useTranslation();
   const intlLocale = useIntlLocale();
@@ -140,6 +148,8 @@ export function ProjectPropertiesSection({
         }
       />
       <Separator />
+      <WorkflowRow project={project} onPress={onPressWorkflow} />
+      <Separator />
       <DateRow
         label={t("projects.detail.startDate")}
         value={project.start_date}
@@ -155,6 +165,156 @@ export function ProjectPropertiesSection({
         onPress={onPressDueDate}
       />
     </View>
+  );
+}
+
+/**
+ * The project's Workflow property (MUL-7420, MYS-2690) — web's
+ * `ProjectWorkflowPropRow` (`packages/views/projects/components/project-detail.tsx:104`).
+ *
+ * Web renders this row for EVERYONE and only lets admins/leads change it; a
+ * plain member sees the name as text. Mobile keeps that split and expresses it
+ * the way a touch UI must: the row stays visible (the fact "this project runs
+ * Content" is not privileged), but a member without the permission gets a
+ * non-pressable row with no chevron, so it does not invite a tap that can only
+ * end in a 403.
+ *
+ * ## The three states the value can be in, and why they must not collapse
+ *
+ *   - the read is still in flight → the name slot draws a skeleton. Printing
+ *     「Default」 here would be an assertion the client cannot yet make, and it
+ *     is the specific wrong answer most of the time (a project on a named
+ *     workflow would flash Default first).
+ *   - the read FAILED → 「—」 plus the unverified sentence as a subtitle. The
+ *     `workflows` hook distinguishes this from "no workflows"; folding the two
+ *     would claim the project uses Default when nobody knows.
+ *   - resolved → the workflow's own name, or 「Default」 for the workspace
+ *     Default (which is also what a project naming a deleted workflow gets —
+ *     `resolveProjectWorkflow` treats a dangling id as Default, as the server
+ *     does).
+ *
+ * The handoff count rides in the subtitle rather than beside the name: this
+ * row's value column is narrow on a phone, and a sibling summary takes width
+ * from the one word that matters. Same call web made for its sidebar row
+ * (MUL-8119, `project-workflow-row.tsx:171`).
+ */
+function WorkflowRow({
+  project,
+  onPress,
+}: {
+  project: Project;
+  onPress?: () => void;
+}) {
+  const { t } = useTranslation();
+  const { colorScheme } = useColorScheme();
+  const { workflows, state } = useIssueWorkflows(useWorkspaceStore((s) => s.currentWorkspaceId));
+  const { canManageProject, roleResolved } = useProjectWorkflowPermissions(project);
+  const current = resolveProjectWorkflow(workflows, project);
+
+  const pending = state === "pending" && !workflows;
+  const failed = state === "failed";
+
+  // No permission, no route, or an unresolved read → not pressable. The
+  // permission half is `canManageProject`, which mirrors the server; the
+  // affordance only ever SHOWS the write, it never substitutes for the gate.
+  const pressable = !!onPress && canManageProject && !pending && !failed;
+
+  const handoffs = current ? handoffStepCount(current) : 0;
+  const subtitle = current
+    ? [
+        t(
+          current.steps.length === 1
+            ? "workflow.project.statuses_one"
+            : "workflow.project.statuses_other",
+          { count: current.steps.length },
+        ),
+        handoffs > 0
+          ? t(
+              handoffs === 1
+                ? "workflow.project.handoffs_one"
+                : "workflow.project.handoffs_other",
+              { count: handoffs },
+            )
+          : t("workflow.project.noHandoffs"),
+      ].join(" · ")
+    : null;
+
+  const body = (
+    <>
+      <Text className="w-20 text-body text-muted-foreground">
+        {t("workflow.project.label")}
+      </Text>
+      <Ionicons
+        name="git-branch-outline"
+        size={15}
+        color={THEME[colorScheme].mutedForeground}
+      />
+      <View className="min-w-0 flex-1">
+        {pending ? (
+          <Skeleton
+            className="h-3.5 w-20"
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          />
+        ) : (
+          <Text
+            className={
+              failed || !current
+                ? "text-body text-muted-foreground"
+                : "text-body text-foreground"
+            }
+            numberOfLines={1}
+          >
+            {failed || !current ? "—" : current.name}
+          </Text>
+        )}
+        {subtitle && !failed ? (
+          <Text className="mt-0.5 text-caption text-muted-foreground" numberOfLines={1}>
+            {subtitle}
+          </Text>
+        ) : null}
+        {failed ? (
+          <Text className="mt-0.5 text-caption text-muted-foreground" numberOfLines={2}>
+            {t("workflow.project.unverified")}
+          </Text>
+        ) : null}
+        {/* A member without the permission sees the fact but not a tap that can
+            only end in a 403. Saying WHY is what keeps the missing chevron from
+            reading as a rendering bug — the same reason web's read-only branch
+            keeps the row (project-workflow-row.tsx:157). */}
+        {!failed && !!onPress && !canManageProject && roleResolved ? (
+          <Text className="mt-0.5 text-caption text-muted-foreground" numberOfLines={2}>
+            {t("workflow.project.readOnly")}
+          </Text>
+        ) : null}
+      </View>
+    </>
+  );
+
+  if (!pressable) {
+    return (
+      <View
+        className="flex-row items-center gap-3 px-4 py-3"
+        accessibilityRole="text"
+        accessibilityLabel={`${t("workflow.project.label")}: ${
+          failed || !current ? t("workflow.project.unverified") : current.name
+        }`}
+      >
+        {body}
+      </View>
+    );
+  }
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={t("workflow.project.pickerTitle")}
+      className="flex-row items-center gap-3 px-4 py-3 active:bg-secondary"
+    >
+      {body}
+      <Chevron />
+    </Pressable>
   );
 }
 

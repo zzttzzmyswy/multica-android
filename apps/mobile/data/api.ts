@@ -116,6 +116,9 @@ import type {
   ListPropertiesResponse,
   ListIssueStatusesResponse,
   ListIssueWorkflowsResponse,
+  IssueWorkflowDryRunResponse,
+  IssueWorkflowMappingPlan,
+  SetProjectWorkflowRequest,
   ListQuickActionsResponse,
   MemberWithUser,
   UpdateMemberRequest,
@@ -478,6 +481,8 @@ import {
   // yet (see data/schemas.ts).
   ListIssueWorkflowsResponseSchema,
   EMPTY_LIST_ISSUE_WORKFLOWS_RESPONSE,
+  IssueWorkflowDryRunResponseSchema,
+  EMPTY_ISSUE_WORKFLOW_DRY_RUN,
   CloudRuntimeNodeListSchema,
   CloudRuntimeNodeSchema,
   EMPTY_CLOUD_RUNTIME_NODE,
@@ -4353,6 +4358,62 @@ class ApiClient {
       EMPTY_LIST_ISSUE_WORKFLOWS_RESPONSE,
       { endpoint: "GET /api/issue-workflows" },
     );
+  }
+
+  /**
+   * What switching a project to `workflowId` would do to its issues —
+   * `POST /api/projects/{id}/workflow` with `dry_run: true` (MUL-7420).
+   *
+   * Deliberately its own call rather than a query: it is a POST the server
+   * answers without writing, it is read once immediately before the write it
+   * previews, and caching it would let a stale plan describe a project that
+   * moved under it. Upstream does the same (`api.dryRunProjectWorkflow`).
+   *
+   * `workflowId: null` previews "back to the workspace Default", which is a
+   * real question — Default lists the whole catalog, so almost nothing needs
+   * mapping, but the plan still reports how many issues are on archived
+   * statuses Default no longer accepts.
+   */
+  async dryRunProjectWorkflow(
+    projectId: string,
+    workflowId: string | null,
+    opts?: { signal?: AbortSignal },
+  ): Promise<IssueWorkflowDryRunResponse> {
+    const raw = await this.fetch<unknown>(`/api/projects/${projectId}/workflow`, {
+      method: "POST",
+      body: JSON.stringify({ workflow_id: workflowId, dry_run: true }),
+      signal: opts?.signal,
+    });
+    return parseWithFallback(
+      raw,
+      IssueWorkflowDryRunResponseSchema,
+      EMPTY_ISSUE_WORKFLOW_DRY_RUN,
+      { endpoint: "POST /api/projects/{id}/workflow (dry run)" },
+    );
+  }
+
+  /**
+   * Switches a project's workflow, moving the issues on statuses the target
+   * does not list into `status_mapping`'s destinations in the same
+   * transaction (MUL-7420).
+   *
+   * Raw `this.fetch`, like every write here: a drifted body must not be read
+   * as success. The server's 409 (`workflow_status_mapping_required`) carries
+   * the plan naming every status it still needs, so the error is more
+   * informative than any fallback could be — `lib/workflow-mapping-refusal.ts`
+   * reads it.
+   *
+   * `workflow_id: null` switches back to Default. It is NOT "leave unchanged";
+   * see `lib/project-workflow.ts:projectWorkflowIdFor`.
+   */
+  async setProjectWorkflow(
+    projectId: string,
+    body: SetProjectWorkflowRequest,
+  ): Promise<void> {
+    await this.fetch<unknown>(`/api/projects/${projectId}/workflow`, {
+      method: "POST",
+      body: JSON.stringify({ ...body, dry_run: false }),
+    });
   }
 
   // Create a custom status. Raw this.fetch (same convention as createLabel):
