@@ -43,6 +43,12 @@
  */
 export const WRITE_FAILURE_TITLE_KEY = "writeFailureTitleKey";
 
+// The workflow refusal reader lives in its own module (pure, duck-typed) and is
+// re-exported here so every caller of the write-failure rules finds it at one
+// import site.
+import { workflowWriteRefusal } from "@/lib/workflow-write-refusal";
+
+
 /** The slice of a mutation this module needs: its meta, and nothing else. */
 export interface WriteFailureMutationLike {
   options?: { meta?: Record<string, unknown> | null } | null;
@@ -119,7 +125,15 @@ export function writeFailureTitleKey(
  *  A blank message is treated as absent: `Error("")` carries no information, and
  *  passing it through would give the alert an empty body where `undefined`
  *  correctly renders the title alone — the same distinction `Alert.alert(title)`
- *  makes. */
+ *  makes.
+ *
+ *  WORKFLOW REFUSALS DO NOT COME THROUGH HERE. They are a family of server
+ *  codes whose body is written for an agent reading a CLI response
+ *  (`status "in_progress" is not part of this project's workflow "Content"; use
+ *  one of: …`), and they need a sentence this function cannot build — one that
+ *  names the allowed statuses in the member's language. `reportWriteFailure`
+ *  therefore takes them off the channel before this is ever called, via
+ *  `workflowRefusalCopy`. See `lib/workflow-write-refusal.ts`. */
 export function writeFailureDetail(
   error: unknown,
   mutation?: WriteFailureMutationLike | null,
@@ -296,11 +310,81 @@ export function reportWriteFailure(
   mutation: WriteFailureMutationLike | null | undefined,
   translate: (id: string) => string,
   alert: WriteFailureAlerter,
+  /** Optional: renders a workflow refusal's own sentences. Passed in rather
+   *  than imported so this module keeps its no-`@/data/api` property, and as a
+   *  THUNK so the (cheap) check does not run for mutations that opted out. */
+  workflowRefusal?: () => WorkflowRefusalCopy | null,
 ): void {
   // A hook that reports its own failures takes them off this channel, or the
   // user sees two alerts for one failure — see WRITE_FAILURE_HANDLED_KEY.
   if (writeFailureHandledByHook(mutation)) return;
+  // A workflow refusal gets its own sentence INSTEAD of the generic title, not
+  // in addition to it: 「更新失败」 over the specific line would still leave the
+  // member unable to tell a workflow rule from a transient failure.
+  const refusal = workflowRefusal?.();
+  if (refusal) {
+    alert(refusal.title, refusal.body);
+    return;
+  }
   const titleKey = writeFailureTitleKey(mutation);
   if (!titleKey) return;
   alert(translate(titleKey), writeFailureDetail(error, mutation, translate));
+}
+
+/** The rendered pair a workflow refusal shows instead of the generic line. */
+export interface WorkflowRefusalCopy {
+  title: string;
+  body: string;
+}
+
+/**
+ * Turns a failed write into the workflow refusals' own copy, or `null` for
+ * every other failure.
+ *
+ * Lives here, next to `reportWriteFailure`, because the choice it makes —
+ * "this failure is a workflow refusal, so the generic title must not be shown"
+ * — is the same decision `reportWriteFailure` acts on. Keeping the two apart is
+ * how a refusal ends up with BOTH the specific sentence and a generic title
+ * above it.
+ *
+ * `translate` is used both for the fixed strings and, via `statusLabel`, for
+ * the status keys the server names in `allowed_statuses`: those arrive as raw
+ * keys (`todo`, `in_progress`) and would read as jargon, or worse as raw ids,
+ * on a non-English client.
+ */
+export function workflowRefusalCopy(
+  error: unknown,
+  translate: (id: string, vars?: Record<string, unknown>) => string,
+  statusLabel: (statusKey: string) => string,
+): WorkflowRefusalCopy | null {
+  const refusal = workflowWriteRefusal(error);
+  if (!refusal) return null;
+  if (refusal.kind === "workflow_step_moved") {
+    return {
+      title: translate("workflow.stepMovedTitle"),
+      body: translate("workflow.stepMovedBody", {
+        step: statusLabel(refusal.step),
+        current: statusLabel(refusal.currentStatus),
+      }),
+    };
+  }
+  const allowed = refusal.allowedStatuses.map(statusLabel).join(", ");
+  // Three shapes, each saying something the others cannot: with a workflow
+  // name AND list, name both; with a name only, name it; with neither, say
+  // just what is true. A single template would have to leave visible gaps
+  // ("()"/"「」") in the poorer cases.
+  let body: string;
+  if (refusal.workflowName && allowed) {
+    body = translate("workflow.notInWorkflowBody", {
+      workflow: refusal.workflowName,
+      allowed,
+    });
+  } else if (refusal.workflowName) {
+    body = translate("workflow.notInWorkflowBodyNoList", {
+      workflow: refusal.workflowName,
+    });
+  } else {
+    body = translate("workflow.notInWorkflowBodyNoName");
+  }
+  return { title: translate("workflow.notInWorkflowTitle"), body };
 }

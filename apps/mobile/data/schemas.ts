@@ -46,8 +46,10 @@ import type {
   IssueStatusEntry,
   IssueSubscriber,
   IssueTriggerPreview,
+  IssueWorkflowHandlerType,
   Label,
   ListIssueStatusesResponse,
+  ListIssueWorkflowsResponse,
   ListLabelsResponse,
   ListProjectResourcesResponse,
   ListProjectsResponse,
@@ -371,6 +373,73 @@ export const EMPTY_LIST_ISSUE_STATUSES_RESPONSE: ListIssueStatusesResponse = {
 
 export const EMPTY_RESOURCE_LABELS_RESPONSE: ResourceLabelsResponse = {
   labels: [],
+};
+
+/**
+ * Workspace workflows (MUL-7420) — `GET /api/issue-workflows`.
+ *
+ * Transcribed from upstream `packages/core/api/schemas.ts` rather than
+ * imported: the fork's core has no workflow schema yet. The handler enum
+ * degrades an unknown type to `"none"` on purpose, exactly as upstream does —
+ * a newer server may add a handler this build cannot render, and the step's
+ * STATUS must still show. Dropping the step instead would take a column off
+ * the board, which is the kind of silent divergence this round removes.
+ */
+const ISSUE_WORKFLOW_HANDLER_TYPES = new Set<string>([
+  "none",
+  "agent",
+  "squad",
+  "member",
+  "project_lead",
+  "creator",
+]);
+
+const IssueWorkflowHandlerSchema = z
+  .object({
+    type: z.string().transform((value): IssueWorkflowHandlerType =>
+      ISSUE_WORKFLOW_HANDLER_TYPES.has(value)
+        ? (value as IssueWorkflowHandlerType)
+        : "none",
+    ),
+    id: z.string().optional(),
+  })
+  .loose();
+
+const IssueWorkflowStepSchema = z
+  .object({
+    status_key: z.string(),
+    handler: IssueWorkflowHandlerSchema.default({ type: "none" }),
+    instructions: z.string().default(""),
+    next_status_key: z.string().optional(),
+    back_status_key: z.string().optional(),
+  })
+  .loose();
+
+export const IssueWorkflowSchema = z
+  .object({
+    id: z.string(),
+    workspace_id: z.string(),
+    name: z.string(),
+    description: z.string().default(""),
+    is_default: z.boolean().default(false),
+    owner_id: z.string().nullable().default(null),
+    steps: z.array(IssueWorkflowStepSchema).default([]),
+    project_ids: z.array(z.string()).default([]),
+    created_at: z.string().default(""),
+    updated_at: z.string().default(""),
+  })
+  .loose();
+
+export const ListIssueWorkflowsResponseSchema = z
+  .object({
+    workflows: z.array(IssueWorkflowSchema).default([]),
+    total: z.number().default(0),
+  })
+  .loose();
+
+export const EMPTY_LIST_ISSUE_WORKFLOWS_RESPONSE: ListIssueWorkflowsResponse = {
+  workflows: [],
+  total: 0,
 };
 
 export const ProjectSchema = z.object({

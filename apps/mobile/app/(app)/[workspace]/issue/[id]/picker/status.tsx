@@ -27,6 +27,14 @@ export default function IssueStatusPickerRoute() {
   return (
     <StatusPickerBody
       value={issue?.status ?? "todo"}
+      // The issue's OWN project decides which statuses exist (MUL-7420). The
+      // three-valued contract matters here: a cached issue with no project
+      // yields `null`, which narrows to the Default workflow — the server's own
+      // rule for a project-less issue — and must not become `undefined` ("this
+      // surface spans projects"), which would offer the whole catalog and
+      // restore the defect. Left `undefined` only while the issue itself is
+      // unknown, where there is nothing truthful to narrow by.
+      projectId={issue ? issue.project_id : undefined}
       onChange={(next) => {
         updateIssue.mutate({ status: next });
         router.back();
