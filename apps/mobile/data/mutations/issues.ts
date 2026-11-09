@@ -564,6 +564,12 @@ export function useUpdateIssue(
         assignee_id: target.assignee_id,
         parent_issue_id: target.parent_issue_id,
         project_id: target.project_id,
+        // A dropped card can hand the issue off exactly like a tapped status,
+        // so the drop carries the confirmation's stop choice through to
+        // `POST /api/issues/{id}/move` — the server honours the field there
+        // too (issue_move.go allowlist, MUL-7420). Dropping WITHOUT it would
+        // leave the previous agent running on an issue it no longer owns.
+        stop_previous_assignee_runs: target.stop_previous_assignee_runs,
         ...moveIntent,
       });
     },
@@ -621,6 +627,14 @@ export function useUpdateIssue(
         // pointer is not the relation. Web strips it identically
         // (packages/core/issues/mutations.ts:209,321).
         duplicate_of_issue_id: _duplicateOfIssueId,
+        // stop_previous_assignee_runs / enter_workflow_step are the fourth and
+        // fifth control fields (MUL-7420, MYS-2743): they steer what the write
+        // DOES to the handoff, and neither is an `Issue` column. Left in, every
+        // optimistic row would carry fields no renderer reads and no response
+        // confirms, and `stop_previous_assignee_runs: true` would sit in the
+        // cache describing a run that has already been stopped.
+        stop_previous_assignee_runs: _stopPreviousAssigneeRuns,
+        enter_workflow_step: _enterWorkflowStep,
         // expected_revision / title_base are the concurrency GATE fields
         // (MYS-2132). They describe the reading the editor produced this patch
         // from, not a new state for the issue, so they must never land in the

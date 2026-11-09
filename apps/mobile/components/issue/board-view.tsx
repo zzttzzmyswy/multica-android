@@ -139,6 +139,8 @@ import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { ActionSheet } from "@/lib/action-sheet";
 import { useUpdateIssue } from "@/data/mutations/issues";
+import { useHandoffGate } from "@/data/use-handoff-gate";
+import { HandoffConfirmDialog } from "./workflow-handoff-dialog";
 import {
   useSetIssueProperty,
   useUnsetIssueProperty,
@@ -534,6 +536,9 @@ function IssueCardWithMenu({
   // `null` (no project) narrows to the Default workflow rather than lifting the
   // limit, while `undefined` would mean "spans projects" and offer everything.
   const { options } = useIssueStatusOptions(wsId, issue.project_id, issue.status);
+  // Both of the card's write paths — the status sheet and a drag-drop — can
+  // hand the issue off, so both go through the one gate (MUL-7420, MYS-2743).
+  const handoff = useHandoffGate(issue);
 
   const showStatusSheet = useCallback(() => {
     const labels = options.map((o) => o.label);
@@ -547,70 +552,105 @@ function IssueCardWithMenu({
       },
       (index) => {
         if (index == null || index >= optionKeys.length) return;
-        updateIssue.mutate({ status: optionKeys[index] });
+        const next = optionKeys[index];
+        if (next === issue.status) return;
+        handoff.gate({ kind: "status", status: next }, (control) => {
+          updateIssue.mutate({ status: next, ...control });
+        });
       },
     );
-  }, [options, t, updateIssue]);
+  }, [options, t, updateIssue, issue.status, handoff]);
 
   // The board drives the drop but the mutation hook is bound to an issue id,
   // so the card lends its own mutate (and its sheet) to the board. Refs keep
   // the handle stable, so registering it does not churn the board's map.
   const mutateRef = useRef(updateIssue.mutate);
   mutateRef.current = updateIssue.mutate;
+  // The drop's own write: it must pass through the same gate, but it is invoked
+  // from the board's gesture loop, so it reads the CURRENT gate through a ref
+  // rather than re-registering the handle on every render.
+  const handoffRef = useRef(handoff);
+  handoffRef.current = handoff;
   const sheetRef = useRef(showStatusSheet);
   sheetRef.current = showStatusSheet;
   useEffect(() => {
     if (!registerCard) return;
     registerCard(issue.id, {
-      commit: (vars, onSettled) =>
-        mutateRef.current(vars, { onSettled }),
+      commit: (vars, onSettled) => {
+        // A drop into another column is a status change the user made with
+        // their finger; it hands off exactly like one made through the sheet.
+        const landed = vars.status;
+        if (landed && landed !== issue.status) {
+          handoffRef.current.gate({ kind: "status", status: landed }, (control) => {
+            mutateRef.current({ ...vars, ...control }, { onSettled });
+          });
+          return;
+        }
+        mutateRef.current(vars, { onSettled });
+      },
       openStatusSheet: () => sheetRef.current(),
     });
     return () => registerCard(issue.id, null);
-  }, [registerCard, issue.id]);
+  }, [registerCard, issue.id, issue.status]);
 
   /** Set by the long-press below; read once by `onPressOut`. */
   const liftedByPress = useRef(false);
 
   return (
-    <BoardCard
-      issue={issue}
-      cardProperties={cardProperties}
-      cardPropertyIds={cardPropertyIds}
-      onPress={onOpen}
-      dimmed={lifted}
-      onLongPress={
-        onLift
-          ? (event) => {
-              liftedByPress.current = true;
-              onLift(event);
-            }
-          : showStatusSheet
-      }
-      onPressOut={() => {
-        // The card must stay mounted while it is lifted (it is only dimmed,
-        // never swapped for a placeholder) or this would never run: the board
-        // only ever takes the responder on a MOVE, so a lift the user released
-        // without moving would leave the board stuck holding a card forever.
-        // Deferred one frame because a capture that lands in the same event
-        // batch as this terminate has not necessarily raised the flag yet.
-        if (!liftedByPress.current) return;
-        liftedByPress.current = false;
-        requestAnimationFrame(() => {
-          if (boardCaptured.current) return;
-          onLiftEnd?.();
-        });
-      }}
-      accessibilityHint={onLift ? t("issues.boardCardHint") : undefined}
-      accessibilityActions={[
-        { name: "moveToStatus", label: t("filter.moveToStatus") },
-      ]}
-      onAccessibilityAction={(actionName) => {
-        // A screen reader cannot drag, so the sheet stays reachable this way
-        // on every board — drag or no drag.
-        if (actionName === "moveToStatus") showStatusSheet();
-      }}
-    />
+    <>
+      <BoardCard
+        issue={issue}
+        cardProperties={cardProperties}
+        cardPropertyIds={cardPropertyIds}
+        onPress={onOpen}
+        dimmed={lifted}
+        onLongPress={
+          onLift
+            ? (event) => {
+                liftedByPress.current = true;
+                onLift(event);
+              }
+            : showStatusSheet
+        }
+        onPressOut={() => {
+          // The card must stay mounted while it is lifted (it is only dimmed,
+          // never swapped for a placeholder) or this would never run: the board
+          // only ever takes the responder on a MOVE, so a lift the user released
+          // without moving would leave the board stuck holding a card forever.
+          // Deferred one frame because a capture that lands in the same event
+          // batch as this terminate has not necessarily raised the flag yet.
+          if (!liftedByPress.current) return;
+          liftedByPress.current = false;
+          requestAnimationFrame(() => {
+            if (boardCaptured.current) return;
+            onLiftEnd?.();
+          });
+        }}
+        accessibilityHint={onLift ? t("issues.boardCardHint") : undefined}
+        accessibilityActions={[
+          { name: "moveToStatus", label: t("filter.moveToStatus") },
+        ]}
+        onAccessibilityAction={(actionName) => {
+          // A screen reader cannot drag, so the sheet stays reachable this way
+          // on every board — drag or no drag.
+          if (actionName === "moveToStatus") showStatusSheet();
+        }}
+      />
+      {/* Rendered by the card itself, not by the board: the sheet asks about
+          THIS issue, and a board-level dialog would have to be told which card
+          opened it. Every card that can hand off therefore carries its own. */}
+      <HandoffConfirmDialog
+        // Gated on `pending` — an unconditional issue opens the sheet on every
+        // card's first render with an empty target (see picker/status.tsx).
+        issue={handoff.pending ? { id: issue.id, identifier: issue.identifier } : null}
+        target={handoff.pending ?? { kind: "status", status: "" }}
+        preview={handoff.preview ?? null}
+        readState={handoff.readState}
+        onRetry={handoff.retry}
+        onCancel={handoff.cancel}
+        onConfirm={handoff.confirm}
+      />
+    </>
   );
 }
 

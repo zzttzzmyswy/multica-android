@@ -213,6 +213,7 @@ import type {
   CommentSubIssuePreview,
   CommentSubIssueManualIssue,
   CommentSubIssueQuickCreate,
+  WorkflowHandoffPreview,
 } from "@multica/core/types";
 import type {
   CloudRuntimeNode,
@@ -483,6 +484,10 @@ import {
   EMPTY_LIST_ISSUE_WORKFLOWS_RESPONSE,
   IssueWorkflowDryRunResponseSchema,
   EMPTY_ISSUE_WORKFLOW_DRY_RUN,
+  // Handoff confirmation (MUL-7420, MYS-2743) — what a status change or a
+  // project move would do, asked BEFORE writing.
+  WorkflowHandoffPreviewSchema,
+  EMPTY_WORKFLOW_HANDOFF_PREVIEW,
   CloudRuntimeNodeListSchema,
   CloudRuntimeNodeSchema,
   EMPTY_CLOUD_RUNTIME_NODE,
@@ -4389,6 +4394,43 @@ class ApiClient {
       IssueWorkflowDryRunResponseSchema,
       EMPTY_ISSUE_WORKFLOW_DRY_RUN,
       { endpoint: "POST /api/projects/{id}/workflow (dry run)" },
+    );
+  }
+
+  /**
+   * What moving an issue to `status` — or into project `projectId` — would do
+   * under its project's workflow (MUL-7420, MYS-2743).
+   *
+   * Writes nothing. An empty `status` is OMITTED rather than sent: the project
+   * -move form has no status to name, and the server reads a present-but-empty
+   * one as a real request. Upstream omits it the same way
+   * (`api.previewWorkflowHandoff`).
+   *
+   * Deliberately NOT wrapped in a fallback-to-empty `catch`, unlike
+   * `listIssueStatuses`. The fallback here would say "no handoff", and the
+   * caller would then apply the move silently — which is precisely the
+   * behaviour this endpoint exists to end. The QUERY layer keeps a failed read
+   * distinct instead (`data/queries/workflow-handoff.ts`), and the dialog
+   * refuses to confirm on it.
+   */
+  async previewWorkflowHandoff(
+    issueId: string,
+    status: string,
+    projectId?: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<WorkflowHandoffPreview> {
+    const query = new URLSearchParams();
+    if (status) query.set("status", status);
+    if (projectId) query.set("project_id", projectId);
+    const raw = await this.fetch<unknown>(
+      `/api/issues/${issueId}/workflow-handoff?${query.toString()}`,
+      { signal: opts?.signal },
+    );
+    return parseWithFallback(
+      raw,
+      WorkflowHandoffPreviewSchema,
+      EMPTY_WORKFLOW_HANDOFF_PREVIEW,
+      { endpoint: "GET /api/issues/{id}/workflow-handoff" },
     );
   }
 
