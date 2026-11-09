@@ -167,6 +167,17 @@ describe("the mapping dialog offers only destinations the server accepts", () =>
   it("pre-fills from the plan", () => {
     expect(dialog()).toContain("defaultStatusMapping(");
   });
+
+  it("decides the 'nothing moves' box through the resolver, not a bare count", () => {
+    // The pure suite proves `mappingSummaryKind` hides the box when every issue
+    // moves; this proves the DIALOG asks it. A row that branched on
+    // `staying === 0` alone — the defect — would still pass the pure suite.
+    const src = dialog();
+    expect(src).toContain("mappingSummaryKind(");
+    // The buggy shape, spelled out so a regression fails here too: no bare
+    // `staying > 0 ? … : nothingMoves` ternary may remain in the render path.
+    expect(src).not.toMatch(/staying > 0\s*\n?\s*\?/);
+  });
 });
 
 describe("the switch write refreshes every cache it changes", () => {

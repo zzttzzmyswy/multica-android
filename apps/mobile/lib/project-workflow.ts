@@ -224,6 +224,37 @@ export function statusMappingPayload(
 }
 
 /**
+ * Whether the mapping dialog may draw its "these keep their status" box at all,
+ * and which sentence it says. Three outcomes, and the third is the one that was
+ * missing.
+ *
+ *   - `"unchanged"` — some issues stay put. Name them and their count.
+ *   - `"nothingMoves"` — the plan requires nothing, so the whole project keeps
+ *     its statuses. This is the sentence 「nothing moves」, and it is TRUE here
+ *     precisely because `required` is empty.
+ *   - `"hidden"` — rows ARE required and nothing stays. Every issue in the
+ *     project moves. There is no true sentence of the "nothing moves" family to
+ *     print, so the box is not drawn.
+ *
+ * The third case is reachable, not theoretical: the server builds `unchanged`
+ * only from statuses the target workflow ALLOWS (`mappingPlan`,
+ * `issue_workflow.go:562`), so a project whose issues all sit on statuses the
+ * target lacks answers `{required: [7 issues], unchanged: []}`. Rendering
+ * 「nothing moves」 there contradicts the row list directly above it — web guards
+ * the same box with `staying > 0 || required.length === 0`
+ * (`workflow-mapping-dialog.tsx:156`).
+ */
+export type MappingSummaryKind = "unchanged" | "nothingMoves" | "hidden";
+
+export function mappingSummaryKind(
+  plan: IssueWorkflowMappingPlan | null | undefined,
+): MappingSummaryKind {
+  if (mappingUnchangedIssues(plan) > 0) return "unchanged";
+  if (mappingRequirements(plan).length === 0) return "nothingMoves";
+  return "hidden";
+}
+
+/**
  * The projects using one workflow, for the picker's "Used by: …" line.
  *
  * Two different facts have to agree here, and they live in different places:

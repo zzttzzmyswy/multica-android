@@ -30,6 +30,7 @@ import {
   mappingAffectedIssues,
   mappingNeedsChoice,
   mappingRequirements,
+  mappingSummaryKind,
   mappingUnchangedIssues,
   projectWorkflowChoiceChanges,
   projectWorkflowIdFor,
@@ -233,6 +234,55 @@ describe("dry-run plan (server contract: IssueWorkflowMappingPlan)", () => {
       "editing",
     ]);
     expect(mappingRequirements(null)).toEqual([]);
+  });
+});
+
+describe("mappingSummaryKind — the box that must not lie", () => {
+  const allMoving = plan({
+    // Reachable, not synthetic: the server builds `unchanged` only from
+    // statuses the target ALLOWS (`mappingPlan`, issue_workflow.go:562), so a
+    // project whose issues all sit on statuses the target lacks answers
+    // exactly this.
+    required: [{ status_key: "drafting", issue_count: 7, suggested_status_key: "todo" }],
+    unchanged: [],
+    total_issues: 7,
+    affected_issues: 7,
+  });
+
+  const someStay = plan({
+    required: [{ status_key: "drafting", issue_count: 2, suggested_status_key: "todo" }],
+    unchanged: [{ status_key: "todo", issue_count: 5 }],
+    total_issues: 7,
+    affected_issues: 2,
+  });
+
+  it("says 'nothing moves' only when nothing is required", () => {
+    // The sentence is TRUE here and only here: `required` is empty AND nothing
+    // is listed as unchanged either, so there is genuinely nothing to report
+    // moving. (With `unchanged` rows present the box says THOSE keep their
+    // status instead — upstream's inner ternary, same file line 158.)
+    expect(mappingSummaryKind(plan())).toBe("nothingMoves");
+    expect(mappingSummaryKind(null)).toBe("nothingMoves");
+    expect(
+      mappingSummaryKind(plan({ unchanged: [{ status_key: "todo", issue_count: 5 }] })),
+    ).toBe("unchanged");
+  });
+
+  it("names the issues that stay when some do", () => {
+    expect(mappingSummaryKind(someStay)).toBe("unchanged");
+  });
+
+  it("HIDES the box when every issue moves", () => {
+    // The defect this closes: `staying === 0` with rows required used to fall
+    // through to 「Every issue's status is in both workflows, so nothing moves」
+    // — printed directly under a list saying seven issues need a destination.
+    // Upstream guards the whole box with `staying > 0 || required.length === 0`
+    // (`workflow-mapping-dialog.tsx:156`).
+    expect(mappingSummaryKind(allMoving)).toBe("hidden");
+    // Restate it as the contradiction it was, so a future "simplification" back
+    // to `staying === 0 ? nothingMoves` fails loudly rather than reading fine.
+    expect(mappingAffectedIssues(allMoving)).toBe(7);
+    expect(mappingUnchangedIssues(allMoving)).toBe(0);
   });
 });
 
