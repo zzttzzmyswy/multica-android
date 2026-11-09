@@ -55,6 +55,7 @@ import {
   defaultStatusMapping,
   mappingAffectedIssues,
   mappingRequirements,
+  mappingSummaryKind,
   mappingUnchangedIssues,
   statusMappingComplete,
 } from "@/lib/project-workflow";
@@ -122,6 +123,7 @@ export function WorkflowMappingDialog({
   const required = mappingRequirements(plan);
   const moving = mappingAffectedIssues(plan);
   const staying = mappingUnchangedIssues(plan);
+  const summaryKind = mappingSummaryKind(plan);
   const complete = statusMappingComplete(plan, mapping);
   const separator = t("workflow.listSeparator");
   const unchangedNames = (plan?.unchanged ?? [])
@@ -299,24 +301,29 @@ export function WorkflowMappingDialog({
               );
             })}
 
-            <View className="mt-3 flex-row items-start gap-2 rounded-lg bg-secondary/60 px-3 py-2.5">
-              <Ionicons
-                name="checkmark-circle-outline"
-                size={14}
-                color={theme.mutedForeground}
-                style={{ marginTop: 2 }}
-              />
-              <Text className="flex-1 text-caption leading-5 text-foreground">
-                {staying > 0
-                  ? t(
-                      staying === 1
-                        ? "workflow.mapping.unchanged_one"
-                        : "workflow.mapping.unchanged_other",
-                      { count: staying, statuses: unchangedNames },
-                    )
-                  : t("workflow.mapping.nothingMoves")}
-              </Text>
-            </View>
+            {/* Only when it can be TRUE — see `mappingSummaryKind`. A plan with
+                rows required and nothing staying means every issue moves, and
+                「nothing moves」 there contradicts the list directly above. */}
+            {summaryKind !== "hidden" ? (
+              <View className="mt-3 flex-row items-start gap-2 rounded-lg bg-secondary/60 px-3 py-2.5">
+                <Ionicons
+                  name="checkmark-circle-outline"
+                  size={14}
+                  color={theme.mutedForeground}
+                  style={{ marginTop: 2 }}
+                />
+                <Text className="flex-1 text-caption leading-5 text-foreground">
+                  {summaryKind === "unchanged"
+                    ? t(
+                        staying === 1
+                          ? "workflow.mapping.unchanged_one"
+                          : "workflow.mapping.unchanged_other",
+                        { count: staying, statuses: unchangedNames },
+                      )
+                    : t("workflow.mapping.nothingMoves")}
+                </Text>
+              </View>
+            ) : null}
 
             <Text className="mt-2 text-caption leading-5 text-muted-foreground">
               {t("workflow.mapping.note")}
