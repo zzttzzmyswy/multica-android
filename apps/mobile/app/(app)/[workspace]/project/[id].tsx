@@ -237,6 +237,13 @@ export default function ProjectDetail() {
                         params: { workspace: wsSlug, id },
                       });
                   }}
+                  onPressWorkflow={() => {
+                    if (wsSlug)
+                      router.push({
+                        pathname: "/[workspace]/project/[id]/picker/workflow",
+                        params: { workspace: wsSlug, id },
+                      });
+                  }}
                 />
                 <ProjectResourcesSection
                   projectId={id}

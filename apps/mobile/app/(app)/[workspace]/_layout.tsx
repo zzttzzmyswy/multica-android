@@ -361,6 +361,14 @@ export default function WorkspaceLayout() {
           name="project/[id]/picker/lead"
           options={SHEET_OPTIONS}
         />
+        {/* Project workflow picker (MUL-7420, MYS-2690). A route rather than a
+            dropdown for the same reason the properties above are routes: the
+            choice needs three lines per item (name, status/handoff counts, who
+            else uses it) and a thumb-scrollable list. */}
+        <Stack.Screen
+          name="project/[id]/picker/workflow"
+          options={SHEET_OPTIONS}
+        />
         {/* Project start/due date calendar sheets (MYS-1021): same
             spinner + Done/Clear header as the issue date sheets, writing
             project.start_date / project.due_date. */}

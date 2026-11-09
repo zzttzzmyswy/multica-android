@@ -47,6 +47,7 @@ import type {
   IssueSubscriber,
   IssueTriggerPreview,
   IssueWorkflowHandlerType,
+  IssueWorkflowDryRunResponse,
   Label,
   ListIssueStatusesResponse,
   ListIssueWorkflowsResponse,
@@ -442,6 +443,60 @@ export const EMPTY_LIST_ISSUE_WORKFLOWS_RESPONSE: ListIssueWorkflowsResponse = {
   total: 0,
 };
 
+/**
+ * `POST /api/projects/{id}/workflow` with `dry_run: true` — what a switch
+ * would do to the project's issues (MYS-2690).
+ *
+ * Transcribed from the server's `workflowMappingPlan`
+ * (`server/internal/handler/issue_workflow.go:102`). The three counts default
+ * to 0 and the rows to `[]` for the same reason every read schema here does:
+ * a body that drifted must degrade to "nothing to move" — a statement the
+ * caller already handles — rather than throw into a screen. The DANGEROUS
+ * direction is the other one, and it is handled where it belongs: a plan whose
+ * `affected_issues` is 0 while `required` is not gets its total recomputed
+ * from the rows (`lib/project-workflow.ts:mappingAffectedIssues`), so a
+ * drifted count can never print "update 0 issues" beside a real move.
+ */
+const IssueWorkflowMappingRequirementSchema = z
+  .object({
+    status_key: z.string(),
+    issue_count: z.number().default(0),
+    suggested_status_key: z.string().default(""),
+  })
+  .loose();
+
+const IssueWorkflowStatusCountSchema = z
+  .object({
+    status_key: z.string(),
+    issue_count: z.number().default(0),
+  })
+  .loose();
+
+export const IssueWorkflowMappingPlanSchema = z
+  .object({
+    required: z.array(IssueWorkflowMappingRequirementSchema).default([]),
+    unchanged: z.array(IssueWorkflowStatusCountSchema).default([]),
+    total_issues: z.number().default(0),
+    affected_issues: z.number().default(0),
+  })
+  .loose();
+
+export const IssueWorkflowDryRunResponseSchema = z
+  .object({
+    dry_run: z.literal(true).default(true),
+    plan: IssueWorkflowMappingPlanSchema,
+  })
+  .loose();
+
+/** The "nothing would move" plan. Used when the dry run's body drifted: the
+ *  honest reading of a body this client cannot parse is "no statuses to map",
+ *  and the subsequent write either succeeds or the server names the statuses
+ *  it wants — a refusal the write channel reports with its own sentence. */
+export const EMPTY_ISSUE_WORKFLOW_DRY_RUN: IssueWorkflowDryRunResponse = {
+  dry_run: true,
+  plan: { required: [], unchanged: [], total_issues: 0, affected_issues: 0 },
+};
+
 export const ProjectSchema = z.object({
   id: z.string(),
   workspace_id: z.string(),
@@ -456,6 +511,11 @@ export const ProjectSchema = z.object({
   // parses to null instead of degrading the batch to the empty fallback.
   start_date: z.string().nullable().default(null),
   due_date: z.string().nullable().default(null),
+  // The workflow this project runs (MUL-7420). null is the workspace Default —
+  // NOT "unset", and NOT "leave it alone" (see lib/project-workflow.ts). An
+  // older server omits the key; default(null) folds that into the same answer,
+  // which is also how the server itself reads an absent reference.
+  workflow_id: z.string().nullable().default(null),
   created_at: z.string(),
   updated_at: z.string(),
   issue_count: z.number().default(0),
