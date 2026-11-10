@@ -86,6 +86,12 @@ export default function IssueProjectPickerRoute() {
                   ...control,
                 });
               },
+              // No `onAbandon`: this route holds nothing of its own. It stays
+              // mounted showing the picker until a write issues, so a cancelled
+              // or unverifiable move leaves the user exactly where they were —
+              // on the picker, with the issue's project unchanged. Closing it
+              // here would be a second, unexplained reaction to the same cancel
+              // the handoff sheet has already reported.
             );
           }}
         />

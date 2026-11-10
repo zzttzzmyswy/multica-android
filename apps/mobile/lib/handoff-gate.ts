@@ -19,9 +19,22 @@
  *   - `refuse` — the workflow read has not answered, so even the cheap question
  *     cannot be settled. Writing anyway would be exactly the silent reassign
  *     this iteration removes, and it is the *common* case at cold start, so it
- *     is not a corner: the surface says the verification is unavailable (the
- *     same line the picker already shows for an unverified list) and does not
- *     write.
+ *     is not a corner.
+ *
+ * ## `refuse` is not "do nothing"
+ *
+ * This outcome is easy to misread as "abandon the move", and the first version
+ * of the gate did: it returned without holding the write, so the surface's
+ * action sheet simply vanished. That is both unexplained and — worse — left
+ * whatever the caller had already committed (the board's settle lock) with no
+ * owner, freezing the board's lane order until the screen was re-entered.
+ *
+ * So `refuse` means "the cheap predicate cannot answer; ask the server
+ * instead": the caller holds the write and opens the preview, which is the one
+ * authority that can still speak to this specific move. If the preview says the
+ * move hands off, the user confirms it; if it says it does not, the write is
+ * applied without a prompt. Either way the move is decided by a real answer
+ * rather than by a guess, and the caller's hold always has a release path.
  *
  * ## Why `apply` may only come from a POSITIVE answer
  *

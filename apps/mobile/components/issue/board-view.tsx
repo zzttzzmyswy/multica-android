@@ -294,7 +294,21 @@ type BoardMoveVars = {
  * there for the same reason.
  */
 type CardHandle = {
-  commit: (vars: BoardMoveVars, onSettled: () => void) => void;
+  /**
+   * Perform the drop's move.
+   *
+   * `onSettled` releases the board's settle lock once the write has actually
+   * been issued and settled; `onAbandon` releases it when the write never is
+   * (the handoff sheet was cancelled, or the gate could not verify the move).
+   * Both are required — a drop that ends up writing nothing is a normal
+   * outcome, and a lock with no release path freezes the board's lane order for
+   * the rest of the screen's life (MYS-2743).
+   */
+  commit: (
+    vars: BoardMoveVars,
+    onSettled: () => void,
+    onAbandon: () => void,
+  ) => void;
   openStatusSheet: () => void;
 };
 
@@ -576,14 +590,21 @@ function IssueCardWithMenu({
   useEffect(() => {
     if (!registerCard) return;
     registerCard(issue.id, {
-      commit: (vars, onSettled) => {
+      commit: (vars, onSettled, onAbandon) => {
         // A drop into another column is a status change the user made with
         // their finger; it hands off exactly like one made through the sheet.
         const landed = vars.status;
         if (landed && landed !== issue.status) {
-          handoffRef.current.gate({ kind: "status", status: landed }, (control) => {
-            mutateRef.current({ ...vars, ...control }, { onSettled });
-          });
+          handoffRef.current.gate(
+            { kind: "status", status: landed },
+            (control) => {
+              mutateRef.current({ ...vars, ...control }, { onSettled });
+            },
+            // The board locked its lanes before it got here. If the user
+            // cancels — or the workflow read hasn't answered — no write is
+            // issued, so no settle ever arrives to unlock them.
+            { onAbandon },
+          );
           return;
         }
         mutateRef.current(vars, { onSettled });
@@ -1264,6 +1285,12 @@ export function BoardView({
       // Engage the settle lock BEFORE the mutation can invalidate anything:
       // the refetch would otherwise win the race and the card would jump back
       // for a frame before landing.
+      //
+      // …but the lock's owner is the WRITE, not the drop. A drop that ends up
+      // writing nothing (the handoff sheet cancelled, or the workflow read not
+      // answered) must release it, or `laneIdsForRender` serves this frozen
+      // frame forever and the board stops following the server. The gate's
+      // `onAbandon` below is that release; `onSettled` is the other.
       setSettledLaneIds(targetIds);
       endDrag();
 
@@ -1295,6 +1322,7 @@ export function BoardView({
           ? provisionalPosition(lane, at, positionsOf(lane))
           : (moved?.position ?? 0);
       const onSettled = () => setSettledLaneIds(null);
+      const onAbandon = () => setSettledLaneIds(null);
       const handle = cardsRef.current.get(current.issueId);
       if (handle && section) {
         handle.commit(
@@ -1313,6 +1341,7 @@ export function BoardView({
             move_intent: moveAnchors(lane, at),
           },
           onSettled,
+          onAbandon,
         );
       } else {
         onSettled();
