@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -971,7 +970,10 @@ func runAgentAvatar(cmd *cobra.Command, args []string) error {
 		file.Close()
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), cli.AtLeastAPITimeout(60*time.Second))
+	// Sized from the file like every other upload entry: this context is the
+	// parent of the request that carries the bytes, so a fixed floor here caps
+	// the transfer no matter what the HTTP client allows.
+	ctx, cancel := context.WithTimeout(context.Background(), cli.UploadTimeout(info.Size()))
 	defer cancel()
 
 	// Agent existence pre-check.

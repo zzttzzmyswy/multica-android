@@ -16,28 +16,35 @@ WITH due AS MATERIALIZED (
     SELECT cand.id FROM attachment_upload_session AS cand
     WHERE cand.next_attempt_at <= now()
       AND (
-          (cand.state = 'pending' AND cand.expires_at <= now() - $3::interval)
-          OR (cand.state = 'completed' AND (cand.lease_expires_at IS NULL OR cand.lease_expires_at <= now()))
-          OR (cand.state = 'deleting' AND (cand.lease_expires_at IS NULL OR cand.lease_expires_at <= now()))
-          OR (cand.state = 'tombstoned' AND (cand.lease_expires_at IS NULL OR cand.lease_expires_at <= now()))
+          (cand.publish_state = 'pending' AND cand.cleanup_state = 'none'
+              AND cand.expires_at <= now() - $3::interval - $4::interval)
+          OR (cand.publish_state = 'completed' AND cand.cleanup_state = 'none')
+          OR (cand.cleanup_state = 'claimed'
+              AND (cand.lease_expires_at IS NULL OR cand.lease_expires_at <= now()))
+          OR (cand.cleanup_state = 'tombstoned'
+              AND (cand.lease_expires_at IS NULL OR cand.lease_expires_at <= now()))
       )
     ORDER BY cand.next_attempt_at
     LIMIT 1
     FOR UPDATE SKIP LOCKED
 )
 UPDATE attachment_upload_session AS session
-SET state = CASE WHEN session.state = 'tombstoned' THEN 'tombstoned' ELSE 'deleting' END,
+SET cleanup_state = CASE
+        WHEN session.cleanup_state = 'tombstoned' THEN 'tombstoned'
+        ELSE 'claimed'
+    END,
     lease_token = $1,
     lease_expires_at = now() + $2::interval,
     attempt = session.attempt + 1
 FROM due
 WHERE session.id = due.id
-RETURNING session.id, session.workspace_id, session.actor_type, session.actor_id, session.actor_user_id, session.issue_id, session.comment_id, session.chat_session_id, session.task_id, session.filename, session.declared_content_type, session.expected_size, session.staging_key, session.final_key, session.state, session.attachment_id, session.lease_token, session.lease_expires_at, session.attempt, session.next_attempt_at, session.last_error, session.tombstone_pass, session.expires_at, session.created_at, session.completed_at
+RETURNING session.id, session.workspace_id, session.actor_type, session.actor_id, session.actor_user_id, session.issue_id, session.comment_id, session.chat_session_id, session.task_id, session.filename, session.declared_content_type, session.expected_size, session.staging_key, session.final_key, session.publish_state, session.cleanup_state, session.attachment_id, session.lease_token, session.lease_expires_at, session.attempt, session.next_attempt_at, session.last_error, session.tombstone_pass, session.expires_at, session.created_at, session.completed_at
 `
 
 type ClaimNextAttachmentUploadSessionForReconcileParams struct {
 	LeaseToken    pgtype.UUID     `json:"lease_token"`
 	LeaseDuration pgtype.Interval `json:"lease_duration"`
+	UploadGrace   pgtype.Interval `json:"upload_grace"`
 	SettleDelay   pgtype.Interval `json:"settle_delay"`
 }
 
@@ -47,17 +54,28 @@ type ClaimNextAttachmentUploadSessionForReconcileParams struct {
 // move the LIMIT window to another row after the update. Mirrors
 // ClaimNextChannelMediaPendingObjectForReconcile.
 //
-// Due means (a) 'pending' rows whose presigned URL has been expired for longer
-// than the settle delay — the session never completed, so its staging object
-// (if any) is garbage; (b) 'completed' rows, whose staging object is garbage
-// because the published attachment reads final_key; (c) 'deleting' rows whose
-// lease expired (a crashed worker); (d) tombstones, because a PUT the client
-// abandoned can still materialize the staging object after a delete returns.
+// Due means:
+//
+//	(a) never-published rows ('pending') whose completion deadline (expires_at
+//	    plus the handler's fixed grace) passed more than the settle delay ago —
+//	    the session cannot be published any more, so anything in the bucket is
+//	    garbage. The grace is repeated here as an interval because it must not
+//	    drift from the handler's value; both are 5 minutes and a test pins it;
+//	(b) published rows whose staging object has not been reclaimed yet;
+//	(c) 'claimed' rows whose lease expired (a crashed worker);
+//	(d) tombstones, because a PUT the client abandoned can still materialize
+//	    the staging object after a delete returns.
+//
 // FOR UPDATE SKIP LOCKED keeps replicas off each other's row; the
 // object-storage DELETE happens outside any transaction, gated by the lease
 // token. No row (ErrNoRows) means nothing is due — the sweep is done.
 func (q *Queries) ClaimNextAttachmentUploadSessionForReconcile(ctx context.Context, arg ClaimNextAttachmentUploadSessionForReconcileParams) (AttachmentUploadSession, error) {
-	row := q.db.QueryRow(ctx, claimNextAttachmentUploadSessionForReconcile, arg.LeaseToken, arg.LeaseDuration, arg.SettleDelay)
+	row := q.db.QueryRow(ctx, claimNextAttachmentUploadSessionForReconcile,
+		arg.LeaseToken,
+		arg.LeaseDuration,
+		arg.UploadGrace,
+		arg.SettleDelay,
+	)
 	var i AttachmentUploadSession
 	err := row.Scan(
 		&i.ID,
@@ -74,7 +92,8 @@ func (q *Queries) ClaimNextAttachmentUploadSessionForReconcile(ctx context.Conte
 		&i.ExpectedSize,
 		&i.StagingKey,
 		&i.FinalKey,
-		&i.State,
+		&i.PublishState,
+		&i.CleanupState,
 		&i.AttachmentID,
 		&i.LeaseToken,
 		&i.LeaseExpiresAt,
@@ -91,15 +110,15 @@ func (q *Queries) ClaimNextAttachmentUploadSessionForReconcile(ctx context.Conte
 
 const completeAttachmentUploadSession = `-- name: CompleteAttachmentUploadSession :execrows
 UPDATE attachment_upload_session
-SET state = 'completed',
+SET publish_state = 'completed',
     attachment_id = $1,
     completed_at = now(),
-    -- Hand the row straight to the reconciler for staging cleanup; the lease
-    -- is null so any replica may claim it on the next sweep.
-    next_attempt_at = now(),
-    last_error = NULL
+    -- Make the row due for its staging-object reclaim on the next sweep even if
+    -- it had already been attempted, without claiming it here (the reconciler
+    -- owns cleanup_state and the lease).
+    next_attempt_at = now()
 WHERE id = $2
-  AND state = 'pending'
+  AND publish_state = 'pending'
 `
 
 type CompleteAttachmentUploadSessionParams struct {
@@ -107,9 +126,10 @@ type CompleteAttachmentUploadSessionParams struct {
 	ID           pgtype.UUID `json:"id"`
 }
 
-// Guarded by state so a row cannot be completed twice even if a caller skips
-// the lock. attachment_id records the published attachment for cleanup and
-// idempotent replay.
+// Publishes the session. Guarded on publish_state so a row cannot be published
+// twice even if a caller somehow skips the lock; cleanup_state is untouched, so
+// a concurrent or later sweep cannot undo this.
+// attachment_id records the published attachment for replay.
 func (q *Queries) CompleteAttachmentUploadSession(ctx context.Context, arg CompleteAttachmentUploadSessionParams) (int64, error) {
 	result, err := q.db.Exec(ctx, completeAttachmentUploadSession, arg.AttachmentID, arg.ID)
 	if err != nil {
@@ -131,7 +151,7 @@ INSERT INTO attachment_upload_session (
     $6, $7, $8,
     $9, $10, $11
 )
-RETURNING id, workspace_id, actor_type, actor_id, actor_user_id, issue_id, comment_id, chat_session_id, task_id, filename, declared_content_type, expected_size, staging_key, final_key, state, attachment_id, lease_token, lease_expires_at, attempt, next_attempt_at, last_error, tombstone_pass, expires_at, created_at, completed_at
+RETURNING id, workspace_id, actor_type, actor_id, actor_user_id, issue_id, comment_id, chat_session_id, task_id, filename, declared_content_type, expected_size, staging_key, final_key, publish_state, cleanup_state, attachment_id, lease_token, lease_expires_at, attempt, next_attempt_at, last_error, tombstone_pass, expires_at, created_at, completed_at
 `
 
 type CreateAttachmentUploadSessionParams struct {
@@ -152,11 +172,16 @@ type CreateAttachmentUploadSessionParams struct {
 	TaskID              pgtype.UUID        `json:"task_id"`
 }
 
-// Presigned direct-upload sessions. See migration 657 for the state machine.
+// Presigned direct-upload sessions. See migration 657 for the two-axis state
+// machine (publish_state / cleanup_state).
 //
 // The completing transaction is the only writer that publishes an attachment,
 // and it does so under LockAttachmentUploadSessionForComplete, so concurrent
 // completions of one session serialize instead of each creating a row.
+//
+// Cleanup writes touch ONLY cleanup_state; publishing writes touch ONLY
+// publish_state. That separation is what keeps a reclaim sweep from making a
+// published upload unreplayable.
 func (q *Queries) CreateAttachmentUploadSession(ctx context.Context, arg CreateAttachmentUploadSessionParams) (AttachmentUploadSession, error) {
 	row := q.db.QueryRow(ctx, createAttachmentUploadSession,
 		arg.ID,
@@ -191,7 +216,8 @@ func (q *Queries) CreateAttachmentUploadSession(ctx context.Context, arg CreateA
 		&i.ExpectedSize,
 		&i.StagingKey,
 		&i.FinalKey,
-		&i.State,
+		&i.PublishState,
+		&i.CleanupState,
 		&i.AttachmentID,
 		&i.LeaseToken,
 		&i.LeaseExpiresAt,
@@ -210,33 +236,27 @@ const deleteAttachmentUploadSession = `-- name: DeleteAttachmentUploadSession :e
 DELETE FROM attachment_upload_session
 WHERE id = $1
   AND lease_token = $2
+  AND (
+      publish_state = 'pending'
+      OR (completed_at IS NOT NULL AND completed_at <= now() - $3::interval)
+  )
 `
 
 type DeleteAttachmentUploadSessionParams struct {
-	ID         pgtype.UUID `json:"id"`
-	LeaseToken pgtype.UUID `json:"lease_token"`
+	ID              pgtype.UUID     `json:"id"`
+	LeaseToken      pgtype.UUID     `json:"lease_token"`
+	ReplayRetention pgtype.Interval `json:"replay_retention"`
 }
 
 // Drops a fully settled session. Lease-token guarded like every other
 // reconciler write so a replica whose lease expired cannot delete a row
 // another replica has since claimed.
+//
+// A PUBLISHED row is only deletable once its replay-retention window has
+// passed; this predicate is the last line of defence if a caller forgets the
+// hold above, because deleting it early would silently break idempotency.
 func (q *Queries) DeleteAttachmentUploadSession(ctx context.Context, arg DeleteAttachmentUploadSessionParams) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteAttachmentUploadSession, arg.ID, arg.LeaseToken)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const deleteAttachmentUploadSessionByID = `-- name: DeleteAttachmentUploadSessionByID :execrows
-DELETE FROM attachment_upload_session
-WHERE id = $1
-`
-
-// Unconditional removal for tests and for callers that already hold the row
-// lock (a completing transaction that must not leave a session behind).
-func (q *Queries) DeleteAttachmentUploadSessionByID(ctx context.Context, id pgtype.UUID) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteAttachmentUploadSessionByID, id)
+	result, err := q.db.Exec(ctx, deleteAttachmentUploadSession, arg.ID, arg.LeaseToken, arg.ReplayRetention)
 	if err != nil {
 		return 0, err
 	}
@@ -245,10 +265,9 @@ func (q *Queries) DeleteAttachmentUploadSessionByID(ctx context.Context, id pgty
 
 const expirePendingAttachmentUploadSessionsForWorkspace = `-- name: ExpirePendingAttachmentUploadSessionsForWorkspace :execrows
 UPDATE attachment_upload_session
-SET state = CASE
-        WHEN state = 'tombstoned' THEN 'tombstoned'
-        WHEN state = 'completed' THEN 'completed'
-        ELSE 'deleting'
+SET cleanup_state = CASE
+        WHEN cleanup_state = 'tombstoned' THEN 'tombstoned'
+        ELSE 'claimed'
     END,
     lease_token = NULL,
     lease_expires_at = NULL,
@@ -259,7 +278,9 @@ WHERE workspace_id = $1
 
 // Workspace teardown: hand every unsettled session to the reconciler so the
 // objects go with the workspace, instead of deleting rows that still name an
-// object nothing would then reclaim.
+// object nothing would then reclaim. Only cleanup columns move, so a session
+// that was already published keeps its replay state until the workspace is
+// gone.
 func (q *Queries) ExpirePendingAttachmentUploadSessionsForWorkspace(ctx context.Context, workspaceID pgtype.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, expirePendingAttachmentUploadSessionsForWorkspace, workspaceID)
 	if err != nil {
@@ -269,7 +290,7 @@ func (q *Queries) ExpirePendingAttachmentUploadSessionsForWorkspace(ctx context.
 }
 
 const getAttachmentUploadSession = `-- name: GetAttachmentUploadSession :one
-SELECT id, workspace_id, actor_type, actor_id, actor_user_id, issue_id, comment_id, chat_session_id, task_id, filename, declared_content_type, expected_size, staging_key, final_key, state, attachment_id, lease_token, lease_expires_at, attempt, next_attempt_at, last_error, tombstone_pass, expires_at, created_at, completed_at FROM attachment_upload_session
+SELECT id, workspace_id, actor_type, actor_id, actor_user_id, issue_id, comment_id, chat_session_id, task_id, filename, declared_content_type, expected_size, staging_key, final_key, publish_state, cleanup_state, attachment_id, lease_token, lease_expires_at, attempt, next_attempt_at, last_error, tombstone_pass, expires_at, created_at, completed_at FROM attachment_upload_session
 WHERE id = $1
 `
 
@@ -294,7 +315,8 @@ func (q *Queries) GetAttachmentUploadSession(ctx context.Context, id pgtype.UUID
 		&i.ExpectedSize,
 		&i.StagingKey,
 		&i.FinalKey,
-		&i.State,
+		&i.PublishState,
+		&i.CleanupState,
 		&i.AttachmentID,
 		&i.LeaseToken,
 		&i.LeaseExpiresAt,
@@ -309,15 +331,49 @@ func (q *Queries) GetAttachmentUploadSession(ctx context.Context, id pgtype.UUID
 	return i, err
 }
 
+const holdAttachmentUploadSessionForReplay = `-- name: HoldAttachmentUploadSessionForReplay :execrows
+UPDATE attachment_upload_session
+SET lease_token = NULL,
+    lease_expires_at = NULL,
+    attempt = 0,
+    next_attempt_at = $1,
+    last_error = NULL
+WHERE id = $2
+  AND lease_token = $3
+  AND publish_state = 'completed'
+`
+
+type HoldAttachmentUploadSessionForReplayParams struct {
+	HoldUntil  pgtype.Timestamptz `json:"hold_until"`
+	ID         pgtype.UUID        `json:"id"`
+	LeaseToken pgtype.UUID        `json:"lease_token"`
+}
+
+// Keeps a PUBLISHED session's row alive after its objects are reclaimed, until
+// its replay-retention window ends. The row is what makes a repeated
+// complete-upload idempotent: dropping it while a client may still retry turns
+// a successful publish into a 404 for anyone whose response was lost.
+//
+// Only cleanup columns move: publish_state stays 'completed' so the replay path
+// still resolves the same attachment, and next_attempt_at is parked at the
+// retention boundary instead of being swept over and over.
+func (q *Queries) HoldAttachmentUploadSessionForReplay(ctx context.Context, arg HoldAttachmentUploadSessionForReplayParams) (int64, error) {
+	result, err := q.db.Exec(ctx, holdAttachmentUploadSessionForReplay, arg.HoldUntil, arg.ID, arg.LeaseToken)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const lockAttachmentUploadSessionForComplete = `-- name: LockAttachmentUploadSessionForComplete :one
-SELECT id, workspace_id, actor_type, actor_id, actor_user_id, issue_id, comment_id, chat_session_id, task_id, filename, declared_content_type, expected_size, staging_key, final_key, state, attachment_id, lease_token, lease_expires_at, attempt, next_attempt_at, last_error, tombstone_pass, expires_at, created_at, completed_at FROM attachment_upload_session
+SELECT id, workspace_id, actor_type, actor_id, actor_user_id, issue_id, comment_id, chat_session_id, task_id, filename, declared_content_type, expected_size, staging_key, final_key, publish_state, cleanup_state, attachment_id, lease_token, lease_expires_at, attempt, next_attempt_at, last_error, tombstone_pass, expires_at, created_at, completed_at FROM attachment_upload_session
 WHERE id = $1
 FOR UPDATE
 `
 
 // Serializes complete-upload for one session: the second concurrent caller
-// blocks here, then re-reads the row and sees 'completed', so exactly one
-// attachment row and one revision bump are ever produced.
+// blocks here, then re-reads the row and sees publish_state = 'completed', so
+// exactly one attachment row and one revision bump are ever produced.
 func (q *Queries) LockAttachmentUploadSessionForComplete(ctx context.Context, id pgtype.UUID) (AttachmentUploadSession, error) {
 	row := q.db.QueryRow(ctx, lockAttachmentUploadSessionForComplete, id)
 	var i AttachmentUploadSession
@@ -336,7 +392,8 @@ func (q *Queries) LockAttachmentUploadSessionForComplete(ctx context.Context, id
 		&i.ExpectedSize,
 		&i.StagingKey,
 		&i.FinalKey,
-		&i.State,
+		&i.PublishState,
+		&i.CleanupState,
 		&i.AttachmentID,
 		&i.LeaseToken,
 		&i.LeaseExpiresAt,
@@ -369,7 +426,8 @@ type ReleaseAttachmentUploadSessionParams struct {
 }
 
 // Returns a claimed session to the queue with backoff. Used when the object
-// store refused a delete; the row survives so the retry is not lost.
+// store refused a delete; the row survives so the retry is not lost. Only
+// cleanup columns are written.
 func (q *Queries) ReleaseAttachmentUploadSession(ctx context.Context, arg ReleaseAttachmentUploadSessionParams) error {
 	_, err := q.db.Exec(ctx, releaseAttachmentUploadSession,
 		arg.Backoff,
@@ -382,7 +440,7 @@ func (q *Queries) ReleaseAttachmentUploadSession(ctx context.Context, arg Releas
 
 const tombstoneAttachmentUploadSession = `-- name: TombstoneAttachmentUploadSession :execrows
 UPDATE attachment_upload_session
-SET state = 'tombstoned',
+SET cleanup_state = 'tombstoned',
     lease_token = NULL,
     lease_expires_at = NULL,
     attempt = 0,
@@ -403,6 +461,8 @@ type TombstoneAttachmentUploadSessionParams struct {
 // Records one completed re-delete pass and schedules the next one. The row is
 // kept because a PUT the client abandoned can still materialize the object
 // after a delete returns; only after the last pass is the row dropped.
+// publish_state is deliberately not touched: a published session stays
+// replayable for as long as its row exists.
 func (q *Queries) TombstoneAttachmentUploadSession(ctx context.Context, arg TombstoneAttachmentUploadSessionParams) (int64, error) {
 	result, err := q.db.Exec(ctx, tombstoneAttachmentUploadSession,
 		arg.TombstonePass,

@@ -1,8 +1,13 @@
--- Presigned direct-upload sessions. See migration 657 for the state machine.
+-- Presigned direct-upload sessions. See migration 657 for the two-axis state
+-- machine (publish_state / cleanup_state).
 --
 -- The completing transaction is the only writer that publishes an attachment,
 -- and it does so under LockAttachmentUploadSessionForComplete, so concurrent
 -- completions of one session serialize instead of each creating a row.
+--
+-- Cleanup writes touch ONLY cleanup_state; publishing writes touch ONLY
+-- publish_state. That separation is what keeps a reclaim sweep from making a
+-- published upload unreplayable.
 
 -- name: CreateAttachmentUploadSession :one
 INSERT INTO attachment_upload_session (
@@ -27,26 +32,27 @@ WHERE id = $1;
 
 -- name: LockAttachmentUploadSessionForComplete :one
 -- Serializes complete-upload for one session: the second concurrent caller
--- blocks here, then re-reads the row and sees 'completed', so exactly one
--- attachment row and one revision bump are ever produced.
+-- blocks here, then re-reads the row and sees publish_state = 'completed', so
+-- exactly one attachment row and one revision bump are ever produced.
 SELECT * FROM attachment_upload_session
 WHERE id = $1
 FOR UPDATE;
 
 -- name: CompleteAttachmentUploadSession :execrows
--- Guarded by state so a row cannot be completed twice even if a caller skips
--- the lock. attachment_id records the published attachment for cleanup and
--- idempotent replay.
+-- Publishes the session. Guarded on publish_state so a row cannot be published
+-- twice even if a caller somehow skips the lock; cleanup_state is untouched, so
+-- a concurrent or later sweep cannot undo this.
+-- attachment_id records the published attachment for replay.
 UPDATE attachment_upload_session
-SET state = 'completed',
+SET publish_state = 'completed',
     attachment_id = sqlc.arg(attachment_id),
     completed_at = now(),
-    -- Hand the row straight to the reconciler for staging cleanup; the lease
-    -- is null so any replica may claim it on the next sweep.
-    next_attempt_at = now(),
-    last_error = NULL
+    -- Make the row due for its staging-object reclaim on the next sweep even if
+    -- it had already been attempted, without claiming it here (the reconciler
+    -- owns cleanup_state and the lease).
+    next_attempt_at = now()
 WHERE id = sqlc.arg(id)
-  AND state = 'pending';
+  AND publish_state = 'pending';
 
 -- name: ClaimNextAttachmentUploadSessionForReconcile :one
 -- Short-transaction claim of ONE due session, taken immediately before that
@@ -55,12 +61,17 @@ WHERE id = sqlc.arg(id)
 -- move the LIMIT window to another row after the update. Mirrors
 -- ClaimNextChannelMediaPendingObjectForReconcile.
 --
--- Due means (a) 'pending' rows whose presigned URL has been expired for longer
--- than the settle delay — the session never completed, so its staging object
--- (if any) is garbage; (b) 'completed' rows, whose staging object is garbage
--- because the published attachment reads final_key; (c) 'deleting' rows whose
--- lease expired (a crashed worker); (d) tombstones, because a PUT the client
--- abandoned can still materialize the staging object after a delete returns.
+-- Due means:
+--   (a) never-published rows ('pending') whose completion deadline (expires_at
+--       plus the handler's fixed grace) passed more than the settle delay ago —
+--       the session cannot be published any more, so anything in the bucket is
+--       garbage. The grace is repeated here as an interval because it must not
+--       drift from the handler's value; both are 5 minutes and a test pins it;
+--   (b) published rows whose staging object has not been reclaimed yet;
+--   (c) 'claimed' rows whose lease expired (a crashed worker);
+--   (d) tombstones, because a PUT the client abandoned can still materialize
+--       the staging object after a delete returns.
+--
 -- FOR UPDATE SKIP LOCKED keeps replicas off each other's row; the
 -- object-storage DELETE happens outside any transaction, gated by the lease
 -- token. No row (ErrNoRows) means nothing is due — the sweep is done.
@@ -68,17 +79,23 @@ WITH due AS MATERIALIZED (
     SELECT cand.id FROM attachment_upload_session AS cand
     WHERE cand.next_attempt_at <= now()
       AND (
-          (cand.state = 'pending' AND cand.expires_at <= now() - sqlc.arg(settle_delay)::interval)
-          OR (cand.state = 'completed' AND (cand.lease_expires_at IS NULL OR cand.lease_expires_at <= now()))
-          OR (cand.state = 'deleting' AND (cand.lease_expires_at IS NULL OR cand.lease_expires_at <= now()))
-          OR (cand.state = 'tombstoned' AND (cand.lease_expires_at IS NULL OR cand.lease_expires_at <= now()))
+          (cand.publish_state = 'pending' AND cand.cleanup_state = 'none'
+              AND cand.expires_at <= now() - sqlc.arg(upload_grace)::interval - sqlc.arg(settle_delay)::interval)
+          OR (cand.publish_state = 'completed' AND cand.cleanup_state = 'none')
+          OR (cand.cleanup_state = 'claimed'
+              AND (cand.lease_expires_at IS NULL OR cand.lease_expires_at <= now()))
+          OR (cand.cleanup_state = 'tombstoned'
+              AND (cand.lease_expires_at IS NULL OR cand.lease_expires_at <= now()))
       )
     ORDER BY cand.next_attempt_at
     LIMIT 1
     FOR UPDATE SKIP LOCKED
 )
 UPDATE attachment_upload_session AS session
-SET state = CASE WHEN session.state = 'tombstoned' THEN 'tombstoned' ELSE 'deleting' END,
+SET cleanup_state = CASE
+        WHEN session.cleanup_state = 'tombstoned' THEN 'tombstoned'
+        ELSE 'claimed'
+    END,
     lease_token = sqlc.arg(lease_token),
     lease_expires_at = now() + sqlc.arg(lease_duration)::interval,
     attempt = session.attempt + 1
@@ -88,7 +105,8 @@ RETURNING session.*;
 
 -- name: ReleaseAttachmentUploadSession :exec
 -- Returns a claimed session to the queue with backoff. Used when the object
--- store refused a delete; the row survives so the retry is not lost.
+-- store refused a delete; the row survives so the retry is not lost. Only
+-- cleanup columns are written.
 UPDATE attachment_upload_session
 SET lease_token = NULL,
     lease_expires_at = NULL,
@@ -101,8 +119,10 @@ WHERE id = sqlc.arg(id)
 -- Records one completed re-delete pass and schedules the next one. The row is
 -- kept because a PUT the client abandoned can still materialize the object
 -- after a delete returns; only after the last pass is the row dropped.
+-- publish_state is deliberately not touched: a published session stays
+-- replayable for as long as its row exists.
 UPDATE attachment_upload_session
-SET state = 'tombstoned',
+SET cleanup_state = 'tombstoned',
     lease_token = NULL,
     lease_expires_at = NULL,
     attempt = 0,
@@ -112,29 +132,51 @@ SET state = 'tombstoned',
 WHERE id = sqlc.arg(id)
   AND lease_token = sqlc.arg(lease_token);
 
+-- name: HoldAttachmentUploadSessionForReplay :execrows
+-- Keeps a PUBLISHED session's row alive after its objects are reclaimed, until
+-- its replay-retention window ends. The row is what makes a repeated
+-- complete-upload idempotent: dropping it while a client may still retry turns
+-- a successful publish into a 404 for anyone whose response was lost.
+--
+-- Only cleanup columns move: publish_state stays 'completed' so the replay path
+-- still resolves the same attachment, and next_attempt_at is parked at the
+-- retention boundary instead of being swept over and over.
+UPDATE attachment_upload_session
+SET lease_token = NULL,
+    lease_expires_at = NULL,
+    attempt = 0,
+    next_attempt_at = sqlc.arg(hold_until),
+    last_error = NULL
+WHERE id = sqlc.arg(id)
+  AND lease_token = sqlc.arg(lease_token)
+  AND publish_state = 'completed';
+
 -- name: DeleteAttachmentUploadSession :execrows
 -- Drops a fully settled session. Lease-token guarded like every other
 -- reconciler write so a replica whose lease expired cannot delete a row
 -- another replica has since claimed.
+--
+-- A PUBLISHED row is only deletable once its replay-retention window has
+-- passed; this predicate is the last line of defence if a caller forgets the
+-- hold above, because deleting it early would silently break idempotency.
 DELETE FROM attachment_upload_session
 WHERE id = sqlc.arg(id)
-  AND lease_token = sqlc.arg(lease_token);
-
--- name: DeleteAttachmentUploadSessionByID :execrows
--- Unconditional removal for tests and for callers that already hold the row
--- lock (a completing transaction that must not leave a session behind).
-DELETE FROM attachment_upload_session
-WHERE id = $1;
+  AND lease_token = sqlc.arg(lease_token)
+  AND (
+      publish_state = 'pending'
+      OR (completed_at IS NOT NULL AND completed_at <= now() - sqlc.arg(replay_retention)::interval)
+  );
 
 -- name: ExpirePendingAttachmentUploadSessionsForWorkspace :execrows
 -- Workspace teardown: hand every unsettled session to the reconciler so the
 -- objects go with the workspace, instead of deleting rows that still name an
--- object nothing would then reclaim.
+-- object nothing would then reclaim. Only cleanup columns move, so a session
+-- that was already published keeps its replay state until the workspace is
+-- gone.
 UPDATE attachment_upload_session
-SET state = CASE
-        WHEN state = 'tombstoned' THEN 'tombstoned'
-        WHEN state = 'completed' THEN 'completed'
-        ELSE 'deleting'
+SET cleanup_state = CASE
+        WHEN cleanup_state = 'tombstoned' THEN 'tombstoned'
+        ELSE 'claimed'
     END,
     lease_token = NULL,
     lease_expires_at = NULL,

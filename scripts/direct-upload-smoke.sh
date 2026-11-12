@@ -14,30 +14,101 @@
 #   6. Object storage holds the file under a final key while the staging object
 #      is reclaimed by the cleanup worker.
 #
+# OWNERSHIP RULES — this script must never destroy anything it did not create:
+#
+#   * Every resource name carries a unique run id, so two concurrent runs cannot
+#     collide and a rerun never reuses a previous run's name.
+#   * A resource is only ever removed if THIS run created it. Creation is
+#     recorded in $SMOKE_DIR/owned.tsv immediately after it succeeds, and cleanup
+#     reads that file — it never deletes by name pattern, never picks "the first
+#     postgres container", and never drops a database it did not create.
+#   * An existing resource is a hard error, never something to overwrite.
+#     Databases are created with an explicit existence check first.
+#   * $SMOKE_DIR is created by this script under a unique mktemp name. A
+#     caller-supplied SMOKE_DIR is used only if it is empty or absent, is never
+#     deleted, and is left in place with a note.
+#   * Nothing is touched before preflight has fully succeeded.
+#
 # It refuses to run against anything but a disposable local stack: its own
 # PostgreSQL database, its own S3-compatible server, its own API port. It never
 # touches a configured deployment, a real bucket, or production credentials.
 #
 # Usage:
-#   bash scripts/direct-upload-smoke.sh            # full run (50 + 100 MiB)
+#   bash scripts/direct-upload-smoke.sh                 # full run (50 + 100 MiB)
 #   SMOKE_QUICK=1 bash scripts/direct-upload-smoke.sh   # 50 MiB only, faster
 #   SMOKE_KEEP=1  bash scripts/direct-upload-smoke.sh   # keep the stack up
+#   SMOKE_PG_CONTAINER=name ...                         # pin the database server
 #
-# Requirements: go, docker, curl, python3, awk, ss/lsof. The S3 server image is
-# pulled on first run; set SMOKE_S3_IMAGE to use another S3-compatible image.
+# Requirements: go, docker, curl, python3, awk. The S3 server image is pulled on
+# first run; set SMOKE_S3_IMAGE to use another S3-compatible image.
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SMOKE_DIR="${SMOKE_DIR:-$(mktemp -d "${TMPDIR:-/tmp}/multica-direct-upload-smoke.XXXXXX")}"
+
+# A unique id per run. Every resource name below embeds it, so concurrent runs
+# and reruns cannot collide, and ownership is unambiguous.
+#
+# The RAW id goes into logs only; every resource name uses RUN_ID, which is
+# reduced to [a-z0-9-]. A run id is not a trust boundary, but it must never be
+# able to inject shell syntax, a path separator, or a PostgreSQL identifier
+# character into a name that is later interpolated into a command.
+RAW_RUN_ID="$(date +%s)-$$-$(od -An -N4 -tx4 /dev/urandom | tr -d ' \n')"
+RUN_ID="$(printf '%s' "$RAW_RUN_ID" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-' | sed -e 's/--*/-/g' -e 's/^-//' -e 's/-$//')"
+[ -n "$RUN_ID" ] || RUN_ID="run-$(date +%s)"
+
+SMOKE_KEEP_DIR=0
+if [ -n "${SMOKE_DIR:-}" ]; then
+  # A caller-supplied directory is used, never deleted, and must be empty: a
+  # non-empty one may hold another run's evidence.
+  if [ -d "$SMOKE_DIR" ] && [ -n "$(ls -A "$SMOKE_DIR" 2>/dev/null)" ]; then
+    printf '\033[31m✗ SMOKE_DIR %s is not empty; refusing to use it\033[0m\n' "$SMOKE_DIR" >&2
+    exit 2
+  fi
+  mkdir -p "$SMOKE_DIR"
+  SMOKE_KEEP_DIR=1
+else
+  SMOKE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/multica-direct-upload-smoke.XXXXXX")" || exit 2
+fi
 LOG_DIR="$SMOKE_DIR/logs"
-DB_NAME="${SMOKE_DB_NAME:-multica_direct_upload_smoke}"
+
+# Names derived from RUN_ID: unique, greppable, and never reused.
+# All three derive from the sanitized id, so none can carry shell syntax.
+DB_NAME="multica_smoke_${RUN_ID//-/_}"
+DB_NAME="${DB_NAME:0:60}"
+S3_CONTAINER="multica-smoke-s3-${RUN_ID}"
+S3_BUCKET="multica-smoke-${RUN_ID}"
 S3_IMAGE="${SMOKE_S3_IMAGE:-rustfs/rustfs:latest}"
-S3_CONTAINER="multica-direct-upload-smoke-s3"
 S3_ACCESS_KEY="smoketest"
 S3_SECRET_KEY="smoketest123"
-S3_BUCKET="multica-smoke"
-S3_PORT="${SMOKE_S3_PORT:-29000}"
-API_PORT="${SMOKE_API_PORT:-18870}"
+
+# Ownership ledger: one line per resource THIS run created, written the moment
+# creation succeeds. Cleanup reads only this.
+OWNED_FILE="$SMOKE_DIR/owned.tsv"
+: > "$OWNED_FILE"
+own() { printf '%s\t%s\n' "$1" "$2" >> "$OWNED_FILE"; }
+we_own() { [ -f "$OWNED_FILE" ] && awk -F'\t' -v k="$1" -v v="$2" '$1==k && $2==v {found=1} END {exit !found}' "$OWNED_FILE"; }
+owned_of_kind() { awk -F'\t' -v k="$1" '$1==k {print $2}' "$OWNED_FILE" 2>/dev/null; }
+
+# Ports are probed, never assumed: a busy port must fail loudly rather than
+# send this run's traffic to another process.
+free_port() {
+  local port=$1
+  if command -v ss >/dev/null 2>&1; then
+    ! ss -lnt 2>/dev/null | awk '{print $4}' | grep -qE "[:.]${port}\$"
+  else
+    ! (exec 3<>"/dev/tcp/127.0.0.1/${port}") 2>/dev/null
+  fi
+}
+pick_port() {
+  local base=$1 candidate
+  for offset in $(seq 0 200); do
+    candidate=$((base + offset))
+    if free_port "$candidate"; then printf '%s' "$candidate"; return 0; fi
+  done
+  return 1
+}
+S3_PORT="$(pick_port "${SMOKE_S3_PORT:-29100}")" || { echo "no free S3 port" >&2; exit 2; }
+API_PORT="$(pick_port $((S3_PORT + 1)))" || { echo "no free API port" >&2; exit 2; }
 S3_ENDPOINT="http://127.0.0.1:${S3_PORT}"
 
 PASS=0
@@ -61,28 +132,54 @@ cleanup() {
   step "Cleanup"
   [ -n "${API_PID:-}" ] && kill "$API_PID" 2>/dev/null
   [ -n "${PROXY_PID:-}" ] && kill "$PROXY_PID" 2>/dev/null
+
   if [ "${SMOKE_KEEP:-0}" = "1" ]; then
-    info "SMOKE_KEEP=1: leaving the stack up"
-    info "  API:   http://127.0.0.1:${API_PORT}"
-    info "  S3:    ${S3_ENDPOINT}"
-    info "  logs:  ${LOG_DIR}"
-    info "  kill:  kill ${API_PID:-} ${PROXY_PID:-}; docker rm -f ${S3_CONTAINER}"
+    info "SMOKE_KEEP=1: leaving this run's stack up"
+    info "  run id:   $RUN_ID"
+    info "  API:      http://127.0.0.1:${API_PORT}"
+    info "  database: $DB_NAME (on ${PG_CONTAINER:-?})"
+    info "  S3:       $S3_ENDPOINT (container $S3_CONTAINER)"
+    info "  logs:     $LOG_DIR"
+    info "  stop:     kill ${API_PID:-} ${PROXY_PID:-}; docker rm -f $S3_CONTAINER"
+    info "            docker exec ${PG_CONTAINER:-<pg>} psql -U ${POSTGRES_USER:-multica} -d postgres -c 'DROP DATABASE \"$DB_NAME\"'"
     exit $status
   fi
-  docker rm -f "$S3_CONTAINER" >/dev/null 2>&1
-  # Drop the disposable database so a rerun starts clean. The shared container
-  # and every other database on it are untouched.
-  if [ -n "${PG_CONTAINER:-}" ]; then
-    docker exec "$PG_CONTAINER" psql -U "${POSTGRES_USER:-multica}" -d postgres \
-      -c "DROP DATABASE IF EXISTS \"$DB_NAME\"" >/dev/null 2>&1
-  fi
-  if [ "${SMOKE_KEEP_DIR:-0}" != "1" ]; then
+
+  # Every removal below is gated on THIS run having created the resource (the
+  # ledger is written at creation time). Nothing is matched by name pattern, and
+  # nothing that already existed is ever dropped.
+  local container
+  while read -r container; do
+    [ -n "$container" ] || continue
+    if we_own container "$container"; then
+      docker rm -f "$container" >/dev/null 2>&1 && info "removed container $container (created by this run)"
+    fi
+  done <<EOF
+$(owned_of_kind container)
+EOF
+
+  local database
+  while read -r database; do
+    [ -n "$database" ] || continue
+    if we_own database "$database" && [ -n "${PG_CONTAINER:-}" ]; then
+      docker exec "$PG_CONTAINER" psql -U "${POSTGRES_USER:-multica}" -d postgres \
+        -c "DROP DATABASE IF EXISTS \"$database\"" >/dev/null 2>&1 \
+        && info "dropped database $database (created by this run)"
+    fi
+  done <<EOF
+$(owned_of_kind database)
+EOF
+
+  if [ "$SMOKE_KEEP_DIR" = "1" ]; then
+    info "SMOKE_DIR was supplied by the caller; leaving it in place: $SMOKE_DIR"
+  else
     # The S3 server writes as uid 10001, so its data directory survives a plain
     # rm. Loosen it first; a failure here is cosmetic and must not mask the
-    # test result.
+    # result. Only this run's own mktemp directory is ever removed.
     chmod -R u+rwX,o+rwX "$SMOKE_DIR/s3" 2>/dev/null
     rm -rf "$SMOKE_DIR" 2>/dev/null
   fi
+
   if [ "$FAIL" -gt 0 ]; then
     printf '\n\033[31mFAILED: %d check(s)\033[0m\n' "$FAIL"
     for failure in "${FAILURES[@]}"; do printf '  - %s\n' "$failure"; done
@@ -96,33 +193,75 @@ trap cleanup EXIT INT TERM
 # ---------------------------------------------------------------- preflight --
 
 step "Preflight"
-for tool in go docker curl python3 awk; do
+for tool in go docker curl python3 awk od; do
   command -v "$tool" >/dev/null 2>&1 || die "$tool is required"
 done
 mkdir -p "$LOG_DIR"
+info "run id:  $RUN_ID"
 info "workdir: $SMOKE_DIR"
+info "database: $DB_NAME"
 
-# The shared PostgreSQL the dev environment already runs. Its presence is what
-# keeps this test from needing its own database server.
-PG_CONTAINER="$(docker ps --format '{{.Names}}' | grep -E '(^|-)postgres(-|$)' | head -1)"
-[ -n "$PG_CONTAINER" ] || die "no PostgreSQL container found; run 'make up C=api' first (this script only adds a database, never a server)"
-ok "found PostgreSQL container: $PG_CONTAINER"
+# The database SERVER to use. It is never auto-selected: picking "the first
+# postgres container on the machine" means a parallel run can create its
+# database inside someone else's server, or drop a database there.
+#
+# SMOKE_PG_CONTAINER pins it explicitly. Otherwise this script only accepts a
+# server this repository's own dev environment registered, which is what
+# `make up C=api` creates, and it verifies that registration before using it.
+PG_CONTAINER="${SMOKE_PG_CONTAINER:-}"
+if [ -z "$PG_CONTAINER" ]; then
+  # Resolve the server through THIS repository's compose project, which is the
+  # environment `make up` manages. `docker compose ps -q postgres` names exactly
+  # one container: the one belonging to this checkout's compose project. That is
+  # deterministic and repo-scoped, unlike "the first postgres container on the
+  # machine", which is how a parallel run ends up sharing (and then dropping) a
+  # database in someone else's server.
+  PG_CONTAINER="$(cd "$REPO_ROOT" && docker compose ps -q postgres 2>/dev/null | head -1)"
+  if [ -n "$PG_CONTAINER" ]; then
+    # ps -q yields an id; resolve the name for readable messages and for the
+    # `docker exec` calls below (both work, but a name is what a human checks).
+    PG_CONTAINER="$(docker inspect -f '{{.Name}}' "$PG_CONTAINER" 2>/dev/null | sed 's#^/##')"
+  fi
+fi
+if [ -z "$PG_CONTAINER" ]; then
+  die "no PostgreSQL server was found for this checkout.
+    Run 'make up C=api' here (registers and starts this repo's compose project),
+    or pass SMOKE_PG_CONTAINER=<container-name> explicitly.
+    This script will not guess, because a wrong guess can drop someone else's database."
+fi
+docker inspect "$PG_CONTAINER" >/dev/null 2>&1 \
+  || die "PostgreSQL container '$PG_CONTAINER' does not exist; refusing to continue"
+docker inspect -f '{{.State.Running}}' "$PG_CONTAINER" 2>/dev/null | grep -q true \
+  || die "PostgreSQL container '$PG_CONTAINER' is not running"
+ok "using PostgreSQL server: $PG_CONTAINER"
 
 POSTGRES_USER="$(docker exec "$PG_CONTAINER" printenv POSTGRES_USER 2>/dev/null || echo multica)"
 POSTGRES_PASSWORD="$(docker exec "$PG_CONTAINER" printenv POSTGRES_PASSWORD 2>/dev/null || echo multica)"
 DATABASE_URL="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${DB_NAME}?sslmode=disable"
 
-docker exec "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d postgres \
-  -c "DROP DATABASE IF EXISTS \"$DB_NAME\"" >/dev/null 2>&1
+# Never overwrite: an existing database of this name is a hard error, not
+# something to drop and recreate. The name is unique per run, so a collision
+# means something is wrong and destroying it could delete another run's data.
+existing_db="$(docker exec "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d postgres -Atqc \
+  "SELECT 1 FROM pg_database WHERE datname = '$DB_NAME'" 2>/dev/null)"
+[ -z "$existing_db" ] || die "database '$DB_NAME' already exists; refusing to touch it"
 docker exec "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d postgres \
   -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"$DB_NAME\"" >/dev/null \
-  || die "could not create disposable database $DB_NAME"
-ok "created disposable database $DB_NAME"
+  || die "could not create database $DB_NAME"
+# Recorded only AFTER the create succeeded: cleanup must never name a resource
+# this run did not actually make.
+own database "$DB_NAME"
+ok "created database $DB_NAME (recorded as owned by this run)"
 
 # --------------------------------------------------------- object storage ----
 
 step "Object storage (local S3-compatible server)"
-docker rm -f "$S3_CONTAINER" >/dev/null 2>&1
+# Never adopt an existing container: the name is unique per run, so a collision
+# means another run (or a stale one) owns it. Remove-by-name is not an option
+# because that is exactly how a parallel run's resources get destroyed.
+if docker inspect "$S3_CONTAINER" >/dev/null 2>&1; then
+  die "container '$S3_CONTAINER' already exists; refusing to remove or reuse it"
+fi
 mkdir -p "$SMOKE_DIR/s3/data" "$SMOKE_DIR/s3/logs"
 chmod -R 0777 "$SMOKE_DIR/s3"
 if ! docker image inspect "$S3_IMAGE" >/dev/null 2>&1; then
@@ -136,6 +275,7 @@ docker run -d --name "$S3_CONTAINER" \
   -v "$SMOKE_DIR/s3/data:/data" \
   -v "$SMOKE_DIR/s3/logs:/logs" \
   "$S3_IMAGE" >/dev/null || die "could not start $S3_IMAGE"
+own container "$S3_CONTAINER"
 for _ in $(seq 1 40); do
   code="$(curl -s -o /dev/null -w '%{http_code}' "$S3_ENDPOINT/" || true)"
   [ "$code" = "403" ] && break

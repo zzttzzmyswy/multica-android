@@ -543,8 +543,34 @@ func TestUploadTransferCeiling_ScalesWithFileSize(t *testing.T) {
 	if large < 20*60*1e9 {
 		t.Fatalf("100 MiB ceiling = %s, want at least 20 minutes", large)
 	}
-	if small < TransferFloor() {
-		t.Fatalf("small ceiling %s is below the transfer floor %s", small, TransferFloor())
+	if small < TransferCeiling() {
+		t.Fatalf("small ceiling %s is below the shared transfer ceiling %s", small, TransferCeiling())
+	}
+}
+
+// TestNewUploadHTTPClient_LeavesSharedTransportAlone guards the boundary the
+// rework moved: the wide ceiling must belong to THIS upload client only. If it
+// ever leaked into the shared constructor, every other command's timeout
+// behaviour would change silently.
+func TestNewUploadHTTPClient_LeavesSharedTransportAlone(t *testing.T) {
+	shared := NewStallAwareHTTPClient()
+	if shared.Timeout != TransferCeiling() {
+		t.Fatalf("shared client timeout = %s, want the shared ceiling %s", shared.Timeout, TransferCeiling())
+	}
+
+	upload := newUploadHTTPClient(100 << 20)
+	if upload.Timeout <= shared.Timeout {
+		t.Fatalf("100 MiB upload client timeout = %s, want wider than the shared %s", upload.Timeout, shared.Timeout)
+	}
+	// The small-file case must be indistinguishable from the shared client.
+	small := newUploadHTTPClient(1 << 10)
+	if small.Timeout != shared.Timeout {
+		t.Fatalf("small upload client timeout = %s, want the shared %s", small.Timeout, shared.Timeout)
+	}
+	// The progress guard is what actually detects a dead transfer, and it is
+	// unchanged: only the backstop matters.
+	if upload.Transport == nil || shared.Transport == nil {
+		t.Fatal("clients lost their transport")
 	}
 }
 

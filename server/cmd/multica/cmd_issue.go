@@ -1441,6 +1441,38 @@ func collectLocalAttachments(cmd *cobra.Command, attachments []string) ([]pendin
 	return pending, nil
 }
 
+// pendingAttachmentsTotalBytes sums the preflighted attachment sizes so the
+// command's context covers the WHOLE upload, not one file: a multi-file
+// `comment add` must not get a single file's budget.
+func pendingAttachmentsTotalBytes(pending []pendingAttachment) int64 {
+	var total int64
+	for _, att := range pending {
+		total += att.size
+	}
+	return total
+}
+
+// attachmentCommandTimeout sizes the context of a command that uploads
+// attachments.
+//
+// The historical flat 60s could not be extended from inside the uploader — this
+// context is the parent of every request in the command, so an inner HTTP
+// timeout that outlives it is never reached. Sizing from the bytes being sent
+// is what lets a large file finish while still leaving a bounded deadline;
+// user cancellation is unaffected.
+func attachmentCommandTimeout(paths []string) time.Duration {
+	if len(paths) == 0 {
+		return cli.APITimeout()
+	}
+	var total int64
+	for _, path := range paths {
+		if info, err := os.Stat(path); err == nil && !info.IsDir() {
+			total += info.Size()
+		}
+	}
+	return cli.UploadTimeout(total)
+}
+
 func issueAttachmentPaths(cmd *cobra.Command) ([]string, error) {
 	flag := cmd.Flags().Lookup("attachment")
 	if flag == nil {
@@ -1578,15 +1610,14 @@ func runIssueCreate(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	// Use a longer timeout when attachments are present (file uploads can be slow).
-	timeout := cli.APITimeout()
 	attachments, err := issueAttachmentPaths(cmd)
 	if err != nil {
 		return err
 	}
-	if len(attachments) > 0 {
-		timeout = cli.AtLeastAPITimeout(60 * time.Second)
-	}
+	// Budget the whole command from the bytes being uploaded: the flat 60s this
+	// used to apply capped large transfers regardless of the HTTP client's own
+	// timeout, because this context is the parent of every request below.
+	timeout := attachmentCommandTimeout(attachments)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -1839,10 +1870,7 @@ func runIssueUpdate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	timeout := cli.APITimeout()
-	if len(attachmentPaths) > 0 {
-		timeout = cli.AtLeastAPITimeout(60 * time.Second)
-	}
+	timeout := attachmentCommandTimeout(attachmentPaths)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -2702,7 +2730,7 @@ func runIssueCommentAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("--steer / --steer-active cannot be combined with --attachment: a running turn takes text only; post the files in a separate comment")
 	}
 	if len(attachments) > 0 {
-		timeout = cli.AtLeastAPITimeout(60 * time.Second)
+		timeout = attachmentCommandTimeout(attachments)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()

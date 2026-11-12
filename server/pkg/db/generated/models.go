@@ -303,7 +303,8 @@ type AttachmentUploadSession struct {
 	ExpectedSize        int64              `json:"expected_size"`
 	StagingKey          string             `json:"staging_key"`
 	FinalKey            string             `json:"final_key"`
-	State               string             `json:"state"`
+	PublishState        string             `json:"publish_state"`
+	CleanupState        string             `json:"cleanup_state"`
 	AttachmentID        pgtype.UUID        `json:"attachment_id"`
 	LeaseToken          pgtype.UUID        `json:"lease_token"`
 	LeaseExpiresAt      pgtype.Timestamptz `json:"lease_expires_at"`

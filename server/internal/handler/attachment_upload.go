@@ -57,6 +57,13 @@ const (
 	// shared extractor already applies to a malformed file.
 	attachmentMetadataProbeBytes = 1 << 20
 
+	// completeUploadGrace is how long past the presigned URL's expiry a
+	// completion is still accepted: a PUT that began just before the credential
+	// died may still be finishing. It is short and finite, so a session cannot
+	// be completed at an arbitrary later point, and it is DERIVED from
+	// expires_at rather than stored, so the two cannot disagree.
+	completeUploadGrace = 5 * time.Minute
+
 	// attachmentUploadStorageTimeout bounds the object-storage work inside one
 	// complete-upload (HEAD + prefix read + server-side copy), so a
 	// black-holed store cannot hold the session row lock — and, for a comment
@@ -87,6 +94,28 @@ const (
 	codeUploadTargetInvalid      = "attachment_upload_target_invalid"
 )
 
+const (
+	// completedPublishState is the publish_state of a session whose attachment
+	// row exists. The cleanup worker moving its own cleanup_state never changes
+	// this, which is what keeps an idempotent replay working.
+	completedPublishState = "completed"
+)
+
+// sessionExpired reports whether a session is past its hard completion
+// deadline: expires_at plus completeUploadGrace.
+//
+// The deadline is derived, never stored, so it always follows expires_at — an
+// operator or test that moves the expiry moves the deadline with it. Crucially
+// this does NOT depend on the cleanup worker having reached the row: a session
+// must stop being completable at its deadline even if the sweep is late, which
+// is what makes the policy a policy rather than an accident of sweep timing.
+func sessionExpired(session db.AttachmentUploadSession) bool {
+	if !session.ExpiresAt.Valid {
+		return true
+	}
+	return !time.Now().Before(session.ExpiresAt.Time.Add(completeUploadGrace))
+}
+
 // StorageSupportsDirectUpload reports whether a backend can serve the
 // presigned-upload endpoints. The capability is all-or-nothing: a backend that
 // can presign a PUT but not inspect or finalize the object would strand every
@@ -98,13 +127,43 @@ func StorageSupportsDirectUpload(s storage.Storage) bool {
 }
 
 type presignUploadRequest struct {
-	Filename      string `json:"filename"`
-	ContentType   string `json:"content_type"`
+	Filename    string `json:"filename"`
+	ContentType string `json:"content_type"`
+	// SizeBytes stays a plain int64 so it reads naturally at every call site.
+	// Whether the client SENT it is tracked separately by sizeBytesSet, because
+	// an omitted field and an explicit 0 mean different things: the multipart
+	// endpoint has always published empty files, so 0 is valid, while a missing
+	// size is a malformed request.
 	SizeBytes     int64  `json:"size_bytes"`
 	IssueID       string `json:"issue_id"`
 	CommentID     string `json:"comment_id"`
 	ChatSessionID string `json:"chat_session_id"`
 	TaskID        string `json:"task_id"`
+
+	// sizeBytesSet records whether the JSON body actually contained
+	// "size_bytes". Hand-built requests (tests, internal callers) set the value
+	// directly and are treated as present.
+	sizeBytesSet bool
+}
+
+// UnmarshalJSON decodes the request while recording whether size_bytes was
+// present. A struct-level decoder is used instead of a pointer field so the
+// value stays a plain int64 everywhere it is read.
+func (p *presignUploadRequest) UnmarshalJSON(data []byte) error {
+	type plain presignUploadRequest
+	var decoded plain
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	var presence struct {
+		SizeBytes *json.RawMessage `json:"size_bytes"`
+	}
+	if err := json.Unmarshal(data, &presence); err != nil {
+		return err
+	}
+	*p = presignUploadRequest(decoded)
+	p.sizeBytesSet = presence.SizeBytes != nil
+	return nil
 }
 
 type presignUploadResponse struct {
@@ -181,6 +240,7 @@ func (h *Handler) PresignAttachmentUpload(w http.ResponseWriter, r *http.Request
 	finalKey := attachmentObjectKey(workspaceID, userID, sessionID.String(), filename)
 	stagingKey := uploadStagingPrefix + "/" + workspaceID + "/" + sessionID.String()
 
+	expiresAt := time.Now().Add(uploadPresignTTL)
 	uploadURL, headers, err := capable.PresignPut(r.Context(), stagingKey, uploadPresignTTL, contentType, sizeBytes)
 	if err != nil {
 		slog.Error("failed to presign upload", "error", err)
@@ -203,7 +263,7 @@ func (h *Handler) PresignAttachmentUpload(w http.ResponseWriter, r *http.Request
 		ExpectedSize:        sizeBytes,
 		StagingKey:          stagingKey,
 		FinalKey:            finalKey,
-		ExpiresAt:           pgtype.Timestamptz{Time: time.Now().Add(uploadPresignTTL), Valid: true},
+		ExpiresAt:           pgtype.Timestamptz{Time: expiresAt, Valid: true},
 	}); err != nil {
 		slog.Error("failed to record upload session", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to start upload")
@@ -258,17 +318,33 @@ func (h *Handler) CompleteAttachmentUpload(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	switch session.State {
-	case "completed":
+	// Both the replay and the first publication must re-check the CURRENT
+	// access of the session's target. The credential was issued earlier; a
+	// member removed from a private project in the meantime must not be able to
+	// publish into it, and must not be able to use a replay to read the
+	// attachment it already published. The saved actor check above is not
+	// enough on its own: it only proves the same caller came back.
+	if !h.revalidateAttachmentUploadTarget(w, r, h.Queries, session) {
+		return
+	}
+
+	if session.PublishState == completedPublishState {
 		// Idempotent replay: hand back what the first completion published, so a
 		// client that timed out can retry without creating anything new.
+		//
+		// cleanup_state is deliberately irrelevant here. The reclaim sweep moves
+		// it while this row's attachment stays published, and refusing a replay
+		// because the sweep had run would break the one case replay exists for:
+		// a committed publish whose response was lost.
 		h.writeCompletedAttachmentUpload(w, r, session)
 		return
-	case "pending":
-		// The only state that may publish.
-	default:
-		// The reconciler holds or has settled this session: its objects are
-		// being deleted and a late complete would race that delete.
+	}
+
+	// A session that was never published is only completable inside its
+	// deadline. Checking expires_at here — rather than trusting the sweep to
+	// have noticed the row — is what makes the deadline real: the sweep runs
+	// once a minute and may not have reached this row yet.
+	if sessionExpired(session) {
 		writeErrorCode(w, http.StatusConflict, codeUploadSessionExpired,
 			"upload session expired; request a new upload URL")
 		return
@@ -324,7 +400,7 @@ func (h *Handler) publishAttachmentUpload(
 		writeError(w, http.StatusInternalServerError, "failed to complete upload")
 		return publishedAttachmentUpload{}, false, false
 	}
-	if locked.State != "pending" {
+	if locked.PublishState != "pending" {
 		// Another caller won the race while this one waited. Return what it
 		// published without touching the finalized object.
 		if err := tx.Commit(r.Context()); err != nil {
@@ -332,19 +408,21 @@ func (h *Handler) publishAttachmentUpload(
 			writeError(w, http.StatusInternalServerError, "failed to complete upload")
 			return publishedAttachmentUpload{}, false, false
 		}
-		if locked.State != "completed" {
-			writeErrorCode(w, http.StatusConflict, codeUploadSessionExpired,
-				"upload session expired; request a new upload URL")
-			return publishedAttachmentUpload{}, false, false
-		}
 		attachment, ok := h.loadPublishedAttachment(w, r, locked)
 		return attachment, false, ok
 	}
 
 	// Re-validate the target inside the transaction that publishes the row: a
-	// target deleted while the bytes uploaded must refuse the attachment rather
-	// than leave a row pointing at a gone issue/comment/chat.
+	// target deleted, or access lost, while the bytes uploaded must refuse the
+	// attachment rather than leave a row pointing at a gone or now-invisible
+	// issue/comment/chat. This runs under the session lock, so the decision
+	// cannot be raced by another completion.
 	if !h.revalidateAttachmentUploadTarget(w, r, qtx, locked) {
+		return publishedAttachmentUpload{}, false, false
+	}
+	if sessionExpired(locked) {
+		writeErrorCode(w, http.StatusConflict, codeUploadSessionExpired,
+			"upload session expired; request a new upload URL")
 		return publishedAttachmentUpload{}, false, false
 	}
 
@@ -542,12 +620,32 @@ func (h *Handler) loadPublishedAttachment(w http.ResponseWriter, r *http.Request
 	return publishedAttachmentUpload{row: attachment}, true
 }
 
-// revalidateAttachmentUploadTarget re-checks, inside the publishing
-// transaction, that every binding the session recorded still exists. A target
-// deleted during the upload refuses the publication instead of leaving a
-// dangling reference.
+// revalidateAttachmentUploadTarget re-proves, from the CURRENT database state,
+// that this caller may still act on the session's target. It is the same set of
+// gates presign applies, so revocation between presign and complete is refused
+// for both the first publication and an idempotent replay.
+//
+// It deliberately re-derives the caller from the request rather than trusting
+// the session's stored actor: the stored actor proves who STARTED the upload,
+// not what they may still reach. Every gate below consults live membership,
+// project visibility, private-agent access or the task token, exactly as the
+// corresponding route would.
 func (h *Handler) revalidateAttachmentUploadTarget(w http.ResponseWriter, r *http.Request, qtx *db.Queries, session db.AttachmentUploadSession) bool {
 	workspaceID := uuidToString(session.WorkspaceID)
+	userID := requestUserID(r)
+	if userID == "" {
+		writeError(w, http.StatusUnauthorized, "user not authenticated")
+		return false
+	}
+	// A session can outlive a membership change; membership is the first thing
+	// every path below assumes.
+	if _, err := h.getWorkspaceMember(r.Context(), userID, workspaceID); err != nil {
+		writeErrorCode(w, http.StatusForbidden, codeUploadTargetInvalid,
+			"you no longer have access to this workspace")
+		return false
+	}
+	actorType, actorID := h.resolveActor(r, userID, workspaceID)
+
 	if session.IssueID.Valid {
 		issue, err := qtx.GetIssueInWorkspace(r.Context(), db.GetIssueInWorkspaceParams{
 			ID:          session.IssueID,
@@ -558,14 +656,14 @@ func (h *Handler) revalidateAttachmentUploadTarget(w http.ResponseWriter, r *htt
 				"the issue this upload targeted no longer exists")
 			return false
 		}
+		// The project gate is the one a member loses when they are removed from
+		// a private project, so it must run on publication and on replay.
 		if !h.requireProjectVisible(w, r, workspaceID, issue.ProjectID, http.StatusConflict,
 			"the issue this upload targeted is no longer available") {
 			return false
 		}
 	}
 	if session.CommentID.Valid {
-		// The attachment insert takes the comment's own lock, so this only has to
-		// prove the comment is still live at publication time.
 		comment, err := qtx.GetCommentInWorkspace(r.Context(), db.GetCommentInWorkspaceParams{
 			ID:          session.CommentID,
 			WorkspaceID: session.WorkspaceID,
@@ -575,29 +673,74 @@ func (h *Handler) revalidateAttachmentUploadTarget(w http.ResponseWriter, r *htt
 				"the comment this upload targeted no longer exists")
 			return false
 		}
+		// A comment inherits its issue's project visibility. Checking only
+		// existence let a revoked member publish into a private comment.
+		if !h.requireIssueIDVisible(w, r, workspaceID, comment.IssueID, http.StatusConflict,
+			"the comment this upload targeted is no longer available") {
+			return false
+		}
 	}
 	if session.ChatSessionID.Valid {
+		// Mirror the presign gate: the session must still be a member-visible
+		// Chat AND the caller must still be able to reach its agent. A cached
+		// session id cannot be used to resurrect a command-only chat, and losing
+		// access to a private agent withdraws the ability to upload into it.
+		chatSession, err := qtx.GetChatSessionInWorkspace(r.Context(), db.GetChatSessionInWorkspaceParams{
+			ID:          session.ChatSessionID,
+			WorkspaceID: session.WorkspaceID,
+		})
+		if err != nil {
+			writeErrorCode(w, http.StatusConflict, codeUploadTargetInvalid,
+				"the chat session this upload targeted no longer exists")
+			return false
+		}
 		if _, err := qtx.GetPublicChatSessionInWorkspace(r.Context(), db.GetPublicChatSessionInWorkspaceParams{
 			ID:          session.ChatSessionID,
 			WorkspaceID: session.WorkspaceID,
 		}); err != nil {
 			writeErrorCode(w, http.StatusConflict, codeUploadTargetInvalid,
-				"the chat session this upload targeted no longer exists")
+				"the chat session this upload targeted is no longer available")
+			return false
+		}
+		agent, err := qtx.GetAgent(r.Context(), chatSession.AgentID)
+		if err != nil {
+			writeErrorCode(w, http.StatusConflict, codeUploadTargetInvalid,
+				"the agent for this upload's chat session no longer exists")
+			return false
+		}
+		if !h.canAccessPrivateAgent(r.Context(), agent, actorType, actorID, workspaceID) {
+			writeErrorCode(w, http.StatusForbidden, codeUploadTargetInvalid,
+				"you no longer have access to this chat session's agent")
 			return false
 		}
 	}
 	if session.TaskID.Valid {
-		// The task must still be the session's own task. Publishing onto a task
-		// that its agent no longer owns would let an attachment ride a reply
-		// belonging to someone else, so the agent binding is re-checked here and
-		// not only at presign time.
+		// The task binding is a task-token scope, not a stored fact: re-prove
+		// that THIS request is the same task-scoped run, that the task still
+		// belongs to this actor, and that it has not finished. A stored task id
+		// alone must never authorize a write.
+		if r.Header.Get("X-Actor-Source") != "task_token" {
+			writeErrorCode(w, http.StatusForbidden, codeUploadTargetInvalid,
+				"task uploads may only be completed from within the same agent task")
+			return false
+		}
+		if boundTaskID := strings.TrimSpace(r.Header.Get("X-Task-ID")); !strings.EqualFold(boundTaskID, uuidToString(session.TaskID)) {
+			writeErrorCode(w, http.StatusForbidden, codeUploadTargetInvalid,
+				"this task token does not match the upload's task")
+			return false
+		}
 		task, err := qtx.GetAgentTaskInWorkspace(r.Context(), db.GetAgentTaskInWorkspaceParams{
 			ID:          session.TaskID,
 			WorkspaceID: session.WorkspaceID,
 		})
-		if err != nil || uuidToString(task.AgentID) != uuidToString(session.ActorID) {
+		if err != nil || uuidToString(task.AgentID) != uuidToString(session.ActorID) || actorType != "agent" || actorID != uuidToString(session.ActorID) {
 			writeErrorCode(w, http.StatusConflict, codeUploadTargetInvalid,
-				"the task this upload targeted no longer exists")
+				"the task this upload targeted is no longer available")
+			return false
+		}
+		if task.Status == "completed" || task.Status == "failed" || task.Status == "cancelled" {
+			writeErrorCode(w, http.StatusConflict, codeUploadTargetInvalid,
+				"the task this upload targeted has already finished")
 			return false
 		}
 	}
@@ -765,11 +908,24 @@ func validatePresignUploadRequest(w http.ResponseWriter, req presignUploadReques
 		writeError(w, http.StatusBadRequest, "content_type is not a valid media type")
 		return "", "", 0, false
 	}
-	sizeBytes = req.SizeBytes
-	if sizeBytes <= 0 {
-		writeError(w, http.StatusBadRequest, "size_bytes must be greater than zero")
+	// A request that reached here through JSON with no size_bytes is malformed.
+	// A directly constructed request carries no presence bit, so its value is
+	// taken at face value.
+	if !req.sizeBytesSet && req.SizeBytes != 0 {
+		req.sizeBytesSet = true
+	}
+	if !req.sizeBytesSet && req.SizeBytes == 0 {
+		writeError(w, http.StatusBadRequest, "size_bytes is required")
 		return "", "", 0, false
 	}
+	sizeBytes = req.SizeBytes
+	if sizeBytes < 0 {
+		writeError(w, http.StatusBadRequest, "size_bytes must not be negative")
+		return "", "", 0, false
+	}
+	// 0 is accepted: the multipart path has always published empty files, and a
+	// client that cannot upload one here would also not fall back (a 400 is not
+	// a fallback signal), so rejecting it would be a silent regression.
 	if sizeBytes > maxUploadSize {
 		writeError(w, http.StatusRequestEntityTooLarge, "file exceeds the 100 MiB upload limit")
 		return "", "", 0, false

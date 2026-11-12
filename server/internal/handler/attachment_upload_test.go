@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -443,7 +444,7 @@ func TestCompleteAttachmentUpload_RejectsSourceChangedDuringCompletion(t *testin
 	// The session is still pending, so the client can retry with a fresh PUT.
 	var state string
 	if err := testPool.QueryRow(context.Background(),
-		`SELECT state FROM attachment_upload_session WHERE id = $1`, presign.AttachmentID).Scan(&state); err != nil {
+		`SELECT publish_state FROM attachment_upload_session WHERE id = $1`, presign.AttachmentID).Scan(&state); err != nil {
 		t.Fatalf("read session state: %v", err)
 	}
 	if state != "pending" {
@@ -486,13 +487,24 @@ func TestPresignAttachmentUpload_RejectsOversizeAndEmpty(t *testing.T) {
 	issueID := seedIssueForUpload(t)
 
 	cases := []struct {
-		name       string
-		req        presignUploadRequest
+		name string
+		req  presignUploadRequest
+		// rawBody, when set, is sent verbatim instead of marshaling req. It
+		// exists for the case that has no struct representation at all: a body
+		// that simply omits size_bytes.
+		rawBody    string
 		wantStatus int
 	}{
 		{
-			name:       "zero bytes",
-			req:        presignUploadRequest{Filename: "a.txt", ContentType: "text/plain", SizeBytes: 0},
+			// Absent is a validation error; an explicit 0 is NOT (see the
+			// empty-file compatibility test below).
+			name:       "missing size field",
+			rawBody:    `{"filename":"a.txt","content_type":"text/plain"}`,
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "negative size",
+			req:        presignUploadRequest{Filename: "a.txt", ContentType: "text/plain", SizeBytes: -1},
 			wantStatus: http.StatusBadRequest,
 		},
 		{
@@ -521,7 +533,10 @@ func TestPresignAttachmentUpload_RejectsOversizeAndEmpty(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			body, _ := json.Marshal(tc.req)
+			body := []byte(tc.rawBody)
+			if tc.rawBody == "" {
+				body, _ = json.Marshal(tc.req)
+			}
 			r := httptest.NewRequest(http.MethodPost, "/api/attachments/presign-upload", bytes.NewReader(body))
 			r.Header.Set("Content-Type", "application/json")
 			r.Header.Set("X-User-ID", testUserID)
@@ -640,7 +655,7 @@ func TestCompleteAttachmentUpload_TargetDeletedDuringUpload(t *testing.T) {
 	// retry with a live target rather than being told it succeeded.
 	var state string
 	if err := testPool.QueryRow(context.Background(),
-		`SELECT state FROM attachment_upload_session WHERE id = $1`, presign.AttachmentID).Scan(&state); err != nil {
+		`SELECT publish_state FROM attachment_upload_session WHERE id = $1`, presign.AttachmentID).Scan(&state); err != nil {
 		t.Fatalf("read session state: %v", err)
 	}
 	if state != "pending" {
@@ -797,11 +812,13 @@ func TestCompleteAttachmentUpload_ExpiredSessionRefused(t *testing.T) {
 	}, testUserID, testWorkspaceID)
 	store.putStagingObject(store.presignedKeys[0], []byte("hi"), "text/plain")
 
-	// The reconciler claims sessions before deleting their objects; a complete
-	// that arrives afterwards must be refused rather than racing the delete.
+	// Move the expiry past the completion deadline. This is the real policy: a
+	// session stops being completable at expires_at + grace whether or not the
+	// cleanup worker has noticed it.
 	if _, err := testPool.Exec(context.Background(),
-		`UPDATE attachment_upload_session SET state = 'deleting' WHERE id = $1`, presign.AttachmentID); err != nil {
-		t.Fatalf("mark session deleting: %v", err)
+		`UPDATE attachment_upload_session SET expires_at = now() - interval '1 hour' WHERE id = $1`,
+		presign.AttachmentID); err != nil {
+		t.Fatalf("expire session: %v", err)
 	}
 
 	w := completeUpload(t, presign.AttachmentID, testUserID, testWorkspaceID)
@@ -819,6 +836,7 @@ func claimDueSession(t *testing.T) (db.AttachmentUploadSession, bool) {
 		db.ClaimNextAttachmentUploadSessionForReconcileParams{
 			LeaseToken:    pgtype.UUID{Bytes: [16]byte{1}, Valid: true},
 			LeaseDuration: pgtype.Interval{Microseconds: int64(time.Minute / time.Microsecond), Valid: true},
+			UploadGrace:   pgtype.Interval{Microseconds: int64(service.AttachmentUploadCompleteGrace / time.Microsecond), Valid: true},
 			SettleDelay: pgtype.Interval{
 				Microseconds: int64(service.AttachmentUploadReconcileSettleDelay / time.Microsecond),
 				Valid:        true,
@@ -856,7 +874,8 @@ func TestClaimAttachmentUploadSession_RespectsExpiryAndLease(t *testing.T) {
 		t.Fatalf("claimed a session whose presigned URL has not expired")
 	}
 
-	// An expired session past the settle delay is reclaimable.
+	// Reclaimable only once the completion deadline (expiry + grace) is past by
+	// the settle delay, so a session that could still be completed is never swept.
 	if _, err := testPool.Exec(context.Background(), `
 		UPDATE attachment_upload_session
 		SET expires_at = now() - interval '1 hour', next_attempt_at = now()
@@ -870,12 +889,242 @@ func TestClaimAttachmentUploadSession_RespectsExpiryAndLease(t *testing.T) {
 	if uuidToString(claimed.ID) != live.AttachmentID {
 		t.Fatalf("claimed session %q, want %q", uuidToString(claimed.ID), live.AttachmentID)
 	}
-	if claimed.State != "deleting" {
-		t.Fatalf("claimed session state = %q, want deleting (the claim fences publishing)", claimed.State)
+	if claimed.CleanupState != "claimed" {
+		t.Fatalf("claimed session cleanup state = %q, want claimed", claimed.CleanupState)
+	}
+	if claimed.PublishState != "pending" {
+		t.Fatalf("claim moved publish_state to %q; cleanup must never touch it", claimed.PublishState)
 	}
 
 	// A claimed session's lease keeps a second replica off it.
 	if _, ok := claimDueSession(t); ok {
 		t.Fatalf("claimed a session another replica holds the lease on")
+	}
+}
+
+// TestEmptyFileParityWithMultipartPath pins the compatibility the rework had to
+// restore: the multiplexed endpoint has always published an empty file, and the
+// direct path must not be stricter. A 400 here would be a silent regression
+// because the CLI does not treat 400 as a fallback signal.
+func TestEmptyFileParityWithMultipartPath(t *testing.T) {
+	store := installDirectUploadStorage(t)
+	issueID := seedIssueForUpload(t)
+
+	// The legacy path first: this is the behaviour being matched.
+	legacyStore := &mockStorage{}
+	origStorage := testHandler.Storage
+	testHandler.Storage = legacyStore
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	if _, err := writer.CreateFormFile("file", "empty.txt"); err != nil {
+		t.Fatalf("create form file: %v", err)
+	}
+	writer.Close()
+	req := httptest.NewRequest(http.MethodPost, "/api/upload-file", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("X-User-ID", testUserID)
+	req.Header.Set("X-Workspace-ID", testWorkspaceID)
+	legacyRecorder := httptest.NewRecorder()
+	testHandler.UploadFile(legacyRecorder, req)
+	testHandler.Storage = origStorage
+	if legacyRecorder.Code != http.StatusOK {
+		t.Fatalf("legacy empty-file upload = %d: %s", legacyRecorder.Code, legacyRecorder.Body.String())
+	}
+	var legacyAttachment AttachmentResponse
+	if err := json.Unmarshal(legacyRecorder.Body.Bytes(), &legacyAttachment); err != nil {
+		t.Fatalf("decode legacy response: %v", err)
+	}
+	if legacyAttachment.SizeBytes != 0 {
+		t.Fatalf("legacy size_bytes = %d, want 0", legacyAttachment.SizeBytes)
+	}
+
+	// The direct path must agree: an explicit 0 is accepted and published.
+	presign := presignUpload(t, presignUploadRequest{
+		Filename: "empty.txt", ContentType: "text/plain", SizeBytes: 0, IssueID: issueID,
+	}, testUserID, testWorkspaceID)
+	store.putStagingObject(store.presignedKeys[0], nil, "text/plain")
+	w := completeUpload(t, presign.AttachmentID, testUserID, testWorkspaceID)
+	if w.Code != http.StatusOK {
+		t.Fatalf("direct empty-file upload = %d, want 200: %s", w.Code, w.Body.String())
+	}
+	var directAttachment AttachmentResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &directAttachment); err != nil {
+		t.Fatalf("decode direct response: %v", err)
+	}
+	if directAttachment.SizeBytes != 0 {
+		t.Fatalf("direct size_bytes = %d, want 0", directAttachment.SizeBytes)
+	}
+	// Both paths report the same shape, which is what makes them interchangeable
+	// for a client.
+	if directAttachment.ID == "" || directAttachment.MarkdownURL == "" {
+		t.Fatalf("direct empty-file response is missing the attachment contract: %+v", directAttachment)
+	}
+}
+
+// TestSessionExpiryPolicyIsDerivedAndFinite nails the completion deadline:
+// it follows expires_at, it is finite, and it does not depend on the cleanup
+// worker having run.
+func TestSessionExpiryPolicyIsDerivedAndFinite(t *testing.T) {
+	if completeUploadGrace <= 0 {
+		t.Fatalf("grace = %s, want a positive finite window", completeUploadGrace)
+	}
+	if completeUploadGrace > time.Hour {
+		t.Fatalf("grace = %s, too long to bound a started PUT meaningfully", completeUploadGrace)
+	}
+
+	now := time.Now()
+	cases := []struct {
+		name    string
+		expires time.Time
+		want    bool
+	}{
+		{"inside the presign window", now.Add(time.Minute), false},
+		{"inside the grace window", now.Add(-time.Minute), false},
+		{"just past the grace window", now.Add(-completeUploadGrace - time.Second), true},
+		{"long expired", now.Add(-time.Hour), true},
+	}
+	for _, tc := range cases {
+		session := db.AttachmentUploadSession{
+			ExpiresAt: pgtype.Timestamptz{Time: tc.expires, Valid: true},
+		}
+		if got := sessionExpired(session); got != tc.want {
+			t.Errorf("%s: sessionExpired = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+
+	// An unset expiry must fail closed rather than publishing forever.
+	if !sessionExpired(db.AttachmentUploadSession{}) {
+		t.Error("a session with no expiry was treated as completable")
+	}
+}
+
+// TestCompleteIsReplayableAcrossEveryCleanupPhase proves the publish result and
+// the cleanup state are independent: no phase of the reclaim may make a
+// published session unreplayable, and no replay may re-copy or re-emit.
+func TestCompleteIsReplayableAcrossEveryCleanupPhase(t *testing.T) {
+	store := installDirectUploadStorage(t)
+	issueID := seedIssueForUpload(t)
+
+	presign := presignUpload(t, presignUploadRequest{
+		Filename: "kept.txt", ContentType: "text/plain", SizeBytes: 5, IssueID: issueID,
+	}, testUserID, testWorkspaceID)
+	store.putStagingObject(store.presignedKeys[0], []byte("hello"), "text/plain")
+
+	first := completeUpload(t, presign.AttachmentID, testUserID, testWorkspaceID)
+	if first.Code != http.StatusOK {
+		t.Fatalf("first complete = %d: %s", first.Code, first.Body.String())
+	}
+	var published AttachmentResponse
+	if err := json.Unmarshal(first.Body.Bytes(), &published); err != nil {
+		t.Fatalf("decode first complete: %v", err)
+	}
+	copiesAfterFirst := store.finalizeCalls
+
+	var revisionBefore int64
+	if err := testPool.QueryRow(context.Background(),
+		`SELECT revision FROM issue WHERE id = $1`, issueID).Scan(&revisionBefore); err != nil {
+		t.Fatalf("read issue revision: %v", err)
+	}
+
+	// Walk every cleanup phase the row can be in, including the tombstones the
+	// widening re-delete schedule walks through, and assert the replay survives
+	// each one unchanged.
+	cleanupStates := []string{"none", "claimed", "tombstoned"}
+	for _, cleanupState := range cleanupStates {
+		t.Run("cleanup_state="+cleanupState, func(t *testing.T) {
+			if _, err := testPool.Exec(context.Background(), `
+				UPDATE attachment_upload_session SET cleanup_state = $2, lease_token = NULL, lease_expires_at = NULL
+				WHERE id = $1`, presign.AttachmentID, cleanupState); err != nil {
+				t.Fatalf("set cleanup state: %v", err)
+			}
+
+			replay := completeUpload(t, presign.AttachmentID, testUserID, testWorkspaceID)
+			if replay.Code != http.StatusOK {
+				t.Fatalf("replay during cleanup_state=%s = %d, want 200: %s",
+					cleanupState, replay.Code, replay.Body.String())
+			}
+			var replayed AttachmentResponse
+			if err := json.Unmarshal(replay.Body.Bytes(), &replayed); err != nil {
+				t.Fatalf("decode replay: %v", err)
+			}
+			if replayed.ID != published.ID {
+				t.Fatalf("replay returned attachment %q, want the published %q", replayed.ID, published.ID)
+			}
+			// A replay must not copy again...
+			if store.finalizeCalls != copiesAfterFirst {
+				t.Fatalf("replay re-copied the object (%d finalizations, want %d)",
+					store.finalizeCalls, copiesAfterFirst)
+			}
+			// ...and must not bump the issue revision, which is what would
+			// signal a second attachment to every watching client.
+			var revisionNow int64
+			if err := testPool.QueryRow(context.Background(),
+				`SELECT revision FROM issue WHERE id = $1`, issueID).Scan(&revisionNow); err != nil {
+				t.Fatalf("read issue revision: %v", err)
+			}
+			if revisionNow != revisionBefore {
+				t.Fatalf("replay bumped the issue revision %d -> %d", revisionBefore, revisionNow)
+			}
+			// publish_state must never be touched by cleanup.
+			var publishState string
+			if err := testPool.QueryRow(context.Background(),
+				`SELECT publish_state FROM attachment_upload_session WHERE id = $1`,
+				presign.AttachmentID).Scan(&publishState); err != nil {
+				t.Fatalf("read publish state: %v", err)
+			}
+			if publishState != "completed" {
+				t.Fatalf("publish_state = %q, want completed", publishState)
+			}
+		})
+	}
+}
+
+// TestActualSweepPreservesReplay runs the real reconciler (not a simulated
+// state) and then replays, which is the exact sequence a lost response plus a
+// coincidental sweep produces in production.
+func TestActualSweepPreservesReplay(t *testing.T) {
+	store := installDirectUploadStorage(t)
+	issueID := seedIssueForUpload(t)
+
+	presign := presignUpload(t, presignUploadRequest{
+		Filename: "swept.txt", ContentType: "text/plain", SizeBytes: 2, IssueID: issueID,
+	}, testUserID, testWorkspaceID)
+	store.putStagingObject(store.presignedKeys[0], []byte("hi"), "text/plain")
+
+	first := completeUpload(t, presign.AttachmentID, testUserID, testWorkspaceID)
+	if first.Code != http.StatusOK {
+		t.Fatalf("first complete = %d: %s", first.Code, first.Body.String())
+	}
+
+	// A published session is due for staging cleanup immediately; run the real
+	// worker enough times to exhaust its tombstone schedule.
+	reconciler := &service.AttachmentUploadReconciler{Queries: testHandler.Queries, Storage: store}
+	for pass := 0; pass < len([]int{0, 1, 2, 3, 4}); pass++ {
+		reconciler.RunOnce(context.Background())
+		if _, err := testPool.Exec(context.Background(), `
+			UPDATE attachment_upload_session
+			SET next_attempt_at = now(), lease_token = NULL, lease_expires_at = NULL
+			WHERE id = $1`, presign.AttachmentID); err != nil {
+			t.Fatalf("advance sweep: %v", err)
+		}
+	}
+
+	replay := completeUpload(t, presign.AttachmentID, testUserID, testWorkspaceID)
+	if replay.Code != http.StatusOK {
+		t.Fatalf("replay after a real sweep = %d, want 200: %s", replay.Code, replay.Body.String())
+	}
+	var replayed AttachmentResponse
+	if err := json.Unmarshal(replay.Body.Bytes(), &replayed); err != nil {
+		t.Fatalf("decode replay: %v", err)
+	}
+	if replayed.ID == "" || replayed.MarkdownURL == "" {
+		t.Fatalf("replay after sweep lost the attachment contract: %+v", replayed)
+	}
+
+	// The published object must still be readable: it is what the attachment
+	// points at, and the sweep must never have deleted it.
+	finalKey := attachmentObjectKey(testWorkspaceID, testUserID, presign.AttachmentID, "swept.txt")
+	if _, ok := store.object(finalKey); !ok {
+		t.Fatalf("the sweep deleted the PUBLISHED object at %q", finalKey)
 	}
 }

@@ -14,17 +14,31 @@
 -- into responses. This table is invisible to every one of them; the attachment
 -- row is only written inside the completing transaction.
 --
--- State machine:
---   pending   → credential issued; the client may still be PUTting. Only a
---               complete-upload under this row's lock may publish it.
---   completed → the attachment row exists. The row survives only to drive
---               staging-object cleanup, then the reconciler deletes it.
---   deleting  → the reconciler holds a lease and is removing the objects.
---   tombstoned→ objects were deleted, but the row is kept so a late PUT that
---               materializes after the delete is re-deleted on a widening
---               schedule (a DELETE cannot be ordered against a PUT the client
---               already abandoned; see channel_media_pending_object, whose
---               ledger this reuses the shape of).
+-- Two INDEPENDENT pieces of state live on a row, and they must never overwrite
+-- each other:
+--
+--   publish_state — whether the upload has been published. Immutable once set.
+--     pending   → credential issued; the client may still be PUTting. Only a
+--                 complete-upload under this row's lock may publish it.
+--     completed → the attachment row exists (attachment_id). This stays
+--                 'completed' forever: a client that lost the response must be
+--                 able to retry and get the same attachment back, so the
+--                 cleanup worker sees it and still reclaims its staging object.
+--
+--   cleanup_state — where the reclaim of the staging/abandoned objects stands.
+--                 Owned solely by the reconciler.
+--     none      → nothing to reclaim yet.
+--     claimed   → the reconciler holds a lease and is removing the objects.
+--     tombstoned→ objects were deleted, but the row is kept so a late PUT that
+--                 materializes after the delete is re-deleted on a widening
+--                 schedule (a DELETE cannot be ordered against a PUT the client
+--                 already abandoned; see channel_media_pending_object).
+--
+-- Why they are separate columns: a single state column forced cleanup to move
+-- 'completed' rows into a deleting state, which then made an idempotent replay
+-- of complete-upload fail with "expired" while the attachment it named still
+-- existed. A response lost after a committed publish, coinciding with a sweep,
+-- reproduced it immediately.
 --
 -- `id` is also the attachment id the response reports and the complete-upload
 -- path parameter, so the client never has to correlate two identifiers.
@@ -54,8 +68,10 @@ CREATE TABLE IF NOT EXISTS attachment_upload_session (
     expected_size         BIGINT NOT NULL,
     staging_key           TEXT NOT NULL,
     final_key             TEXT NOT NULL,
-    state                 TEXT NOT NULL DEFAULT 'pending'
-        CHECK (state IN ('pending', 'completed', 'deleting', 'tombstoned')),
+    publish_state         TEXT NOT NULL DEFAULT 'pending'
+        CHECK (publish_state IN ('pending', 'completed')),
+    cleanup_state         TEXT NOT NULL DEFAULT 'none'
+        CHECK (cleanup_state IN ('none', 'claimed', 'tombstoned')),
     attachment_id         UUID,
     -- Reconciler bookkeeping, mirroring channel_media_pending_object: a lease
     -- so two replicas do not delete the same session concurrently, a retry
@@ -66,8 +82,11 @@ CREATE TABLE IF NOT EXISTS attachment_upload_session (
     next_attempt_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
     last_error            TEXT,
     tombstone_pass        INT NOT NULL DEFAULT 0,
-    -- When the presigned PUT stops being valid. The reconciler waits an extra
-    -- settle window past this before touching a pending session's objects.
+    -- When the presigned PUT stops being valid. This is the ONLY stored
+    -- deadline: the completion deadline is expires_at plus a fixed grace
+    -- (see handler.completeUploadGrace), computed by whoever reads it. Deriving
+    -- rather than storing means the two can never disagree — not when an
+    -- operator moves expires_at, and not when a test does.
     expires_at            TIMESTAMPTZ NOT NULL,
     created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
     completed_at          TIMESTAMPTZ

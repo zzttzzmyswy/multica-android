@@ -40,6 +40,20 @@ import (
 // Every deadline is a DURATION handed to SQL, never a timestamp computed here,
 // so replicas with drifting clocks all act on the database's now().
 const (
+	// AttachmentUploadReplayRetention is how long a PUBLISHED session's row is
+	// kept after publication so a repeated complete-upload still returns the
+	// same attachment. It exists because the one client that needs it is the one
+	// whose response was lost: dropping the row the moment its objects are
+	// reclaimed turns a successful publish into a 404 on retry. It only bounds
+	// the replay window; it never affects the attachment, which is a normal row.
+	AttachmentUploadReplayRetention = 24 * time.Hour
+
+	// AttachmentUploadCompleteGrace mirrors the handler's completion grace. It
+	// is declared here as well because this package owns the sweep, and the
+	// sweep must not reclaim a session's objects while completion is still
+	// accepted. A test pins the two to the same value.
+	AttachmentUploadCompleteGrace = 5 * time.Minute
+
 	// AttachmentUploadReconcileSettleDelay is how long past a session's expiry
 	// the reconciler waits before reclaiming an incomplete upload's staging
 	// object. The presigned URL is dead at expires_at; the delay covers a PUT
@@ -65,6 +79,17 @@ const (
 	// Backoff for failed object-storage deletes: base << (attempt-1), capped.
 	attachmentUploadReconcileBackoffBase = time.Minute
 	attachmentUploadReconcileBackoffCap  = time.Hour
+)
+
+const (
+	// publishedState is the publish_state of a session whose attachment row
+	// exists. It never reverts: an idempotent replay depends on it, and the
+	// cleanup worker must not be able to make a published upload unreplayable.
+	publishedState = "completed"
+	// cleanupTombstoned is the cleanup_state of a row deleted once and waiting
+	// for a re-delete pass. (The channel-media reconciler next door uses the
+	// bare name tombstonedState for its own single-axis table.)
+	cleanupTombstoned = "tombstoned"
 )
 
 // attachmentUploadTombstoneRedelete is the widening re-delete schedule for a
@@ -144,7 +169,11 @@ func (r *AttachmentUploadReconciler) RunOnce(ctx context.Context) {
 		session, err := r.Queries.ClaimNextAttachmentUploadSessionForReconcile(ctx, db.ClaimNextAttachmentUploadSessionForReconcileParams{
 			LeaseToken:    leaseToken,
 			LeaseDuration: pgInterval(attachmentUploadReconcileLease),
-			SettleDelay:   pgInterval(AttachmentUploadReconcileSettleDelay),
+			// The session's own completion grace, so the sweep never reclaims
+			// objects while completion is still allowed. Kept equal to the
+			// handler's completeUploadGrace by TestUploadGraceMatchesHandler.
+			UploadGrace: pgInterval(AttachmentUploadCompleteGrace),
+			SettleDelay: pgInterval(AttachmentUploadReconcileSettleDelay),
 		})
 		if errors.Is(err, pgx.ErrNoRows) {
 			break
@@ -164,13 +193,17 @@ func (r *AttachmentUploadReconciler) RunOnce(ctx context.Context) {
 
 // settle reclaims one claimed session's objects.
 func (r *AttachmentUploadReconciler) settle(ctx context.Context, session db.AttachmentUploadSession, leaseToken pgtype.UUID) {
-	// A completed session's attachment reads final_key, so only the staging
-	// object is garbage. A session that never completed has no attachment, so
-	// both keys are candidates — a final key can only exist for a session whose
-	// copy landed but whose transaction did not, and leaving it would be an
-	// unreferenced object nothing else could name.
+	// A published session's attachment reads final_key, so only the staging
+	// object is garbage. A session that was never published has no attachment,
+	// so both keys are candidates — a final key can only exist for a session
+	// whose copy landed but whose transaction did not, and leaving it would be
+	// an unreferenced object nothing else could name.
+	//
+	// publish_state decides this, never cleanup_state: cleanup_state moves as
+	// the reclaim progresses, and treating a swept-but-published session as
+	// unpublished would delete the object its attachment reads.
 	keys := []string{session.StagingKey}
-	if !session.AttachmentID.Valid {
+	if session.PublishState != publishedState {
 		keys = append(keys, session.FinalKey)
 	}
 
@@ -197,18 +230,28 @@ func (r *AttachmentUploadReconciler) settle(ctx context.Context, session db.Atta
 		r.tombstone(ctx, session, leaseToken, next, idx)
 		return
 	}
+
+	// A published session keeps its row until the replay-retention window ends:
+	// its attachment is already safe, but the row is the only thing that can
+	// answer a retried complete-upload with the same attachment.
+	if session.PublishState == publishedState && session.CompletedAt.Valid {
+		if holdUntil := session.CompletedAt.Time.Add(AttachmentUploadReplayRetention); time.Now().Before(holdUntil) {
+			r.hold(ctx, session, leaseToken, holdUntil)
+			return
+		}
+	}
 	r.clear(ctx, session, leaseToken)
 }
 
 // nextTombstonePass returns the delay before this session's next re-delete pass
 // and the schedule position to record, or ok=false when the schedule is
 // exhausted and the row may be dropped. A session deleted for the first time
-// (state 'deleting') starts at index 0; a tombstone advances from the
+// (cleanup_state 'claimed') starts at index 0; a tombstone advances from the
 // tombstone_pass its last successful delete recorded, so a failed re-delete in
 // between (which only writes last_error) cannot restart the walk.
 func (r *AttachmentUploadReconciler) nextTombstonePass(session db.AttachmentUploadSession) (delay time.Duration, idx int, ok bool) {
 	idx = 0
-	if session.State == tombstonedState {
+	if session.CleanupState == cleanupTombstoned {
 		idx = int(session.TombstonePass) + 1
 	}
 	if idx >= len(attachmentUploadTombstoneRedelete) {
@@ -268,13 +311,38 @@ func (r *AttachmentUploadReconciler) release(ctx context.Context, session db.Att
 		"error", cause)
 }
 
+// hold parks a published session until its replay window ends. Its objects are
+// already gone; only the row remains, so a retry can still resolve the same
+// attachment.
+func (r *AttachmentUploadReconciler) hold(ctx context.Context, session db.AttachmentUploadSession, leaseToken pgtype.UUID, until time.Time) {
+	if ctx.Err() != nil {
+		return
+	}
+	n, err := r.Queries.HoldAttachmentUploadSessionForReplay(ctx, db.HoldAttachmentUploadSessionForReplayParams{
+		HoldUntil:  pgtype.Timestamptz{Time: until, Valid: true},
+		ID:         session.ID,
+		LeaseToken: leaseToken,
+	})
+	if err != nil {
+		r.logger().Warn("attachment upload reconciler: hold for replay failed",
+			"session_id", util.UUIDToString(session.ID), "error", err)
+		return
+	}
+	if n > 0 {
+		r.logger().Info("attachment upload reconciler: objects reclaimed; session held for replay",
+			"session_id", util.UUIDToString(session.ID),
+			"until", until.Format(time.RFC3339))
+	}
+}
+
 func (r *AttachmentUploadReconciler) clear(ctx context.Context, session db.AttachmentUploadSession, leaseToken pgtype.UUID) {
 	if ctx.Err() != nil {
 		return
 	}
 	n, err := r.Queries.DeleteAttachmentUploadSession(ctx, db.DeleteAttachmentUploadSessionParams{
-		ID:         session.ID,
-		LeaseToken: leaseToken,
+		ID:              session.ID,
+		LeaseToken:      leaseToken,
+		ReplayRetention: pgInterval(AttachmentUploadReplayRetention),
 	})
 	if err != nil {
 		r.logger().Warn("attachment upload reconciler: clear failed", "session_id", util.UUIDToString(session.ID), "error", err)

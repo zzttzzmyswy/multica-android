@@ -18,14 +18,19 @@ import (
 
 // Presigned direct-upload support for the S3 backend.
 //
-// The upload primitive is a presigned PUT against a staging key. A PUT
-// credential cannot carry a size or content-type condition of its own, so the
-// server enforces both after the fact: it inspects the staged object, then
-// copies it to a final key under an If-Match on the ETag it inspected. A client
-// that re-PUTs its (still valid) staging URL therefore cannot change the bytes
-// of a published attachment — the copy either matches the inspected version or
-// fails. The final key is never presigned, so no client credential can write
-// it directly.
+// The upload primitive is a presigned PUT against a staging key. A SigV4
+// presigned PUT DOES bind Content-Type and Content-Length, because both are in
+// the canonical request — so the store itself rejects a body of the wrong size
+// or declared type (see PresignPut below).
+//
+// What it cannot bind is everything else: the presigned URL stays usable until
+// it expires, so the client can re-PUT different bytes of the same length to
+// the same key. That is why the size/type binding is not treated as the
+// guarantee. The guarantee comes from the copy: the server inspects the staged
+// object, then copies it to a final key under an If-Match on the ETag it just
+// inspected. A re-PUT that lands in between fails the precondition instead of
+// substituting bytes into a published attachment, and the final key is never
+// presigned, so no client credential can write it directly.
 
 // presignPutTTL bounds one PUT credential. S3 rejects an expiry beyond seven
 // days for SigV4; the API's own limit (900s) is set by the handler, and this

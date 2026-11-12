@@ -271,7 +271,7 @@ func (c *APIClient) putAttachmentObject(ctx context.Context, uploadURL string, h
 	// upload mid-body) or any per-host state. The ceiling scales with the file
 	// size at a deliberately pessimistic floor rate, so a healthily slow
 	// transfer is never truncated and a wedged one still ends.
-	client := NewStallAwareHTTPClientWithCeiling(uploadTransferCeiling(source.Size))
+	client := newUploadHTTPClient(source.Size)
 	resp, err := client.Do(req)
 	if err != nil {
 		// The URL is not interpolated: a wrapped *url.Error carries the full
@@ -359,6 +359,17 @@ const (
 	// a transfer that has genuinely wedged; the stall guard handles the case
 	// where it goes quiet.
 	uploadRateFloorBytesPerSecond = 64 << 10
+
+	// uploadCommandOverhead is added to a sized transfer budget for the
+	// metadata requests around the transfer: presign, complete-upload, and the
+	// command's own API calls.
+	uploadCommandOverhead = 2 * time.Minute
+
+	// uploadTimeoutCeiling bounds the whole command even for the largest
+	// accepted file, so a wedged transfer cannot hold a terminal forever. It is
+	// derived from the same pessimistic rate the transfer ceiling uses, with
+	// headroom, and is a hard cap rather than a target.
+	uploadTimeoutCeiling = 2 * time.Hour
 )
 
 func completeUploadRetryDelay(attempt int) time.Duration {
@@ -367,13 +378,69 @@ func completeUploadRetryDelay(attempt int) time.Duration {
 
 // uploadTransferCeiling sizes a PUT's backstop from the file length at the
 // pessimistic floor rate, plus a fixed allowance for connection setup.
+//
+// The ceiling never drops below the shared transfer ceiling, so a small upload
+// keeps exactly the transport behaviour every other command has.
 func uploadTransferCeiling(size int64) time.Duration {
 	seconds := size / uploadRateFloorBytesPerSecond
 	ceiling := time.Duration(seconds)*time.Second + 2*time.Minute
-	if ceiling < TransferFloor() {
-		return TransferFloor()
+	if floor := TransferCeiling(); ceiling < floor {
+		return floor
 	}
 	return ceiling
+}
+
+// UploadTimeout returns the command-level budget for a bulk attachment
+// transfer.
+//
+// The per-request HTTP timeouts below cannot help when the PARENT context
+// expires first: a context.WithTimeout created before the upload starts caps
+// the whole command, and no inner client timeout can extend it. Callers with
+// attachments therefore size their context from this function instead of the
+// historical flat 60s, which is what truncated large uploads at exactly 60.001s
+// on a healthy transfer.
+//
+// totalBytes is the sum of every attachment in the command, so a multi-file
+// call budgets for all of them rather than each one in isolation. The budget is
+// bounded: the user's own cancellation still wins, and the result never exceeds
+// uploadTimeoutCeiling.
+func UploadTimeout(totalBytes int64) time.Duration {
+	budget := APITimeout()
+	if sized := uploadTransferCeiling(totalBytes) + uploadCommandOverhead; sized > budget {
+		budget = sized
+	}
+	if budget > uploadTimeoutCeiling {
+		return uploadTimeoutCeiling
+	}
+	return budget
+}
+
+// UploadSourcesTotalBytes sums the sizes of the files a command will upload, so
+// multi-attachment commands get one budget covering all of them.
+func UploadSourcesTotalBytes(sources []UploadSource) int64 {
+	var total int64
+	for _, source := range sources {
+		if source.Size > 0 {
+			total += source.Size
+		}
+	}
+	return total
+}
+
+// newUploadHTTPClient builds the HTTP client a bulk transfer uses.
+//
+// It is deliberately local to this file rather than a change to
+// NewStallAwareHTTPClient: every other command must keep the shared transport's
+// behaviour, and only an upload of known size has a legitimate reason to widen
+// the whole-request ceiling. The progress guard (StallTimeout) is unchanged, so
+// a transfer that goes quiet still fails at the shared threshold; only the
+// backstop that would otherwise kill a healthy long transfer moves.
+func newUploadHTTPClient(size int64) *http.Client {
+	client := NewStallAwareHTTPClient()
+	if ceiling := uploadTransferCeiling(size); ceiling > client.Timeout {
+		client.Timeout = ceiling
+	}
+	return client
 }
 
 // multipartUploadAttachment is the legacy path, used only when the server has no
@@ -424,7 +491,7 @@ func (c *APIClient) multipartUploadAttachment(ctx context.Context, source Upload
 	// multipart request is chunked and the size ceiling cannot be signed. Use a
 	// stall-aware client sized for the file rather than the API's fixed timeout,
 	// which is what made large uploads fail deterministically.
-	httpClient := NewStallAwareHTTPClientWithCeiling(uploadTransferCeiling(source.Size))
+	httpClient := newUploadHTTPClient(source.Size)
 	resp, err := httpClient.Do(req)
 	err = wrapTransport(req, err)
 	if err != nil {

@@ -71,7 +71,7 @@ func StallTimeout() time.Duration {
 // threshold cannot produce a ceiling that fires first and hides it.
 func TransferCeiling() time.Duration {
 	ceiling := defaultTransferCeiling
-	if floor := TransferFloor(); floor > ceiling {
+	if floor := 4 * StallTimeout(); floor > ceiling {
 		ceiling = floor
 	}
 	return ceiling
@@ -125,21 +125,7 @@ func (e *StallError) Unwrap() error { return e.Err }
 // file: bounded connect/TLS/header phases, a response body that fails when it
 // stops making progress, and a loose whole-request ceiling behind both.
 func NewStallAwareHTTPClient() *http.Client {
-	return NewStallAwareHTTPClientWithCeiling(TransferCeiling())
-}
-
-// NewStallAwareHTTPClientWithCeiling is NewStallAwareHTTPClient with a
-// caller-supplied whole-request ceiling. It exists for transfers whose
-// legitimate duration depends on their size rather than on the network: a
-// 100 MiB upload over a slow link is healthy for many minutes, and the default
-// ceiling would kill it mid-body. The ceiling is clamped up to the transfer
-// floor so a caller cannot accidentally configure one that fires before a
-// stalled-transfer guard would.
-func NewStallAwareHTTPClientWithCeiling(ceiling time.Duration) *http.Client {
 	idle := StallTimeout()
-	if minCeiling := TransferFloor(); ceiling < minCeiling {
-		ceiling = minCeiling
-	}
 	base := &http.Transport{
 		// ProxyFromEnvironment matches http.DefaultTransport. Dropping it
 		// would silently break every user behind a corporate proxy, which is
@@ -159,22 +145,12 @@ func NewStallAwareHTTPClientWithCeiling(ceiling time.Duration) *http.Client {
 	return &http.Client{
 		Transport: &stallGuardTransport{base: base, idle: idle},
 		// The wall clock stays, but demoted from primary failure test to
-		// backstop. Dropping it to 0 would have left a stalled request
-		// *upload* — which the response-body guard cannot see — with no
-		// deadline at all.
-		Timeout: ceiling,
+		// backstop, and set loose enough that no healthy transfer reaches it.
+		// Dropping it to 0 would have left a stalled request *upload* — which
+		// the response-body guard cannot see — with no deadline at all, so
+		// removing one wall clock would have quietly removed two.
+		Timeout: TransferCeiling(),
 	}
-}
-
-// TransferFloor is the smallest whole-request ceiling a caller may configure.
-// It never drops below the stall budget, so the progress guard always trips
-// first and the ceiling cannot hide it.
-func TransferFloor() time.Duration {
-	floor := 4 * StallTimeout()
-	if floor < defaultTransferCeiling {
-		return defaultTransferCeiling
-	}
-	return floor
 }
 
 // StallAwareContext derives a command context for a client built by
