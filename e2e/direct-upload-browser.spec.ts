@@ -370,8 +370,13 @@ test("a browser uploads an oversized file straight to storage and reads it back"
   expect(readBack.objectUrl).not.toContain("/upload-staging/");
   expect(readFileSync(pngPath)).toHaveLength(fixture.bytes);
 
+  // Interaction evidence. Written into the run's evidence directory as well as
+  // attached, so the smoke script can hand a reviewer the file directly instead
+  // of pointing at a gitignored `test-results/` tree.
+  const shot = await page.screenshot({ fullPage: false });
+  writeFileSync(join(SMOKE_DIR, "direct-upload-preview.png"), shot);
   await testInfo.attach("direct-upload-preview", {
-    body: await page.screenshot({ fullPage: false }),
+    body: shot,
     contentType: "image/png",
   });
 
