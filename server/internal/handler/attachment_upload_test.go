@@ -56,6 +56,9 @@ type directUploadStorage struct {
 	// window between the handler's inspection and the conditional copy. It lets
 	// a test land a racing PUT deterministically instead of by interleaving.
 	beforeFinalize func()
+	// beforeReadPrefix runs at the start of ReadPrefix: the window between the
+	// HEAD that measured the object and the probe read that describes it.
+	beforeReadPrefix func()
 }
 
 type directUploadObject struct {
@@ -134,12 +137,26 @@ func (s *directUploadStorage) HeadObject(ctx context.Context, key string) (stora
 	return storage.ObjectInfo{Size: int64(len(object.body)), ETag: object.etag, ContentType: object.contentType}, nil
 }
 
-func (s *directUploadStorage) ReadPrefix(ctx context.Context, key string, n int) ([]byte, error) {
+func (s *directUploadStorage) ReadPrefix(ctx context.Context, key string, n int, etag string) ([]byte, error) {
+	if s.beforeReadPrefix != nil {
+		s.beforeReadPrefix()
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	object, ok := s.objects[key]
 	if !ok {
 		return nil, storage.ErrObjectNotFound
+	}
+	// Enforce the version condition exactly as the real backend does. A double
+	// that ignored it would make the handler's binding untestable: it would
+	// return the bytes of whatever object happens to be there and the
+	// "probe and copy describe the same object" guarantee would pass by
+	// accident.
+	if etag != "" && object.etag != etag {
+		return nil, storage.ErrSourceChanged
+	}
+	if n <= 0 {
+		return nil, fmt.Errorf("read prefix: %d is not a positive byte count", n)
 	}
 	if len(object.body) <= n {
 		return append([]byte(nil), object.body...), nil
@@ -1126,5 +1143,90 @@ func TestActualSweepPreservesReplay(t *testing.T) {
 	finalKey := attachmentObjectKey(testWorkspaceID, testUserID, presign.AttachmentID, "swept.txt")
 	if _, ok := store.object(finalKey); !ok {
 		t.Fatalf("the sweep deleted the PUBLISHED object at %q", finalKey)
+	}
+}
+
+// TestProbeAndCopyBindTheSameObjectVersion reproduces the A -> B -> A sequence
+// the review named: HEAD measures version A, a same-length PUT replaces it with
+// B, the probe read happens, then A is restored before the conditional copy.
+// Copying A is legal, so only binding the PROBE to A keeps the published
+// metadata describing the published bytes.
+func TestProbeAndCopyBindTheSameObjectVersion(t *testing.T) {
+	store := installDirectUploadStorage(t)
+	data := bytes.Repeat([]byte("a"), 64) // sniffs as text/plain
+
+	presign := presignUpload(t, presignUploadRequest{
+		Filename: "payload.bin", ContentType: "application/octet-stream", SizeBytes: int64(len(data)),
+	}, testUserID, testWorkspaceID)
+	stagingKey := store.presignedKeys[0]
+	store.putStagingObject(stagingKey, data, "application/octet-stream")
+
+	// Between HEAD and the probe read, swap in a same-length object with a PNG
+	// signature, then restore the original before the copy.
+	pngBytes := make([]byte, len(data))
+	copy(pngBytes, []byte("\x89PNG\r\n\x1a\n"))
+	store.beforeReadPrefix = func() {
+		store.mu.Lock()
+		store.objects[stagingKey] = directUploadObject{
+			body: pngBytes, contentType: "application/octet-stream", etag: etagOf(pngBytes),
+		}
+		store.mu.Unlock()
+	}
+	defer func() { store.beforeReadPrefix = nil }()
+
+	w := completeUpload(t, presign.AttachmentID, testUserID, testWorkspaceID)
+	// Refusing a source that moved is the correct outcome; the test accepts it,
+	// exactly like the reviewer's.
+	if w.Code != http.StatusOK {
+		if w.Code != http.StatusConflict {
+			t.Fatalf("status = %d, want 200 or a 409 refusal: %s", w.Code, w.Body.String())
+		}
+		return
+	}
+	var result AttachmentResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	// The published metadata must describe the published bytes (the original),
+	// not the object that happened to be staged during the probe.
+	want := http.DetectContentType(data)
+	if result.ContentType != want {
+		t.Fatalf("published content_type = %q, but the copied bytes sniff as %q — metadata and bytes describe different objects",
+			result.ContentType, want)
+	}
+}
+
+// TestCompleteSucceedsForVerifiedEmptyObject covers item 3 end to end at the
+// handler: a zero-byte staging object must publish, not 502.
+func TestCompleteSucceedsForVerifiedEmptyObject(t *testing.T) {
+	store := installDirectUploadStorage(t)
+	issueID := seedIssueForUpload(t)
+
+	presign := presignUpload(t, presignUploadRequest{
+		Filename: "empty.txt", ContentType: "text/plain", SizeBytes: 0, IssueID: issueID,
+	}, testUserID, testWorkspaceID)
+	store.putStagingObject(store.presignedKeys[0], nil, "text/plain")
+
+	w := completeUpload(t, presign.AttachmentID, testUserID, testWorkspaceID)
+	if w.Code != http.StatusOK {
+		t.Fatalf("empty upload completion = %d, want 200: %s", w.Code, w.Body.String())
+	}
+	var att AttachmentResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &att); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if att.SizeBytes != 0 {
+		t.Fatalf("size_bytes = %d, want 0", att.SizeBytes)
+	}
+	// The MIME semantics must survive: text/plain for empty content, matching
+	// the multipart path, never an empty string.
+	if !strings.HasPrefix(att.ContentType, "text/plain") {
+		t.Fatalf("content_type = %q, want text/plain", att.ContentType)
+	}
+	// The object must be published at the final key with the same (zero) length.
+	finalKey := attachmentObjectKey(testWorkspaceID, testUserID, presign.AttachmentID, "empty.txt")
+	published, ok := store.object(finalKey)
+	if !ok || len(published.body) != 0 {
+		t.Fatalf("final object missing or non-empty: exists=%v len=%d", ok, len(published.body))
 	}
 }

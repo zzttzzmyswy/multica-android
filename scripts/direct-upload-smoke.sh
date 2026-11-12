@@ -490,8 +490,16 @@ async def handle(reader, writer):
                 chunked = True
         writer.write(status_line)
         for line in response_headers:
+            # Drop any hop-by-hop framing the upstream chose: this proxy closes
+            # the connection after every response (see the finally block), so it
+            # must SAY so. Relaying an upstream keep-alive unchanged left the
+            # client reusing a socket that was about to be closed, which
+            # surfaced intermittently as "Could not reach the Multica server"
+            # on the request AFTER a successful one.
+            if line.lower().startswith((b"connection:", b"keep-alive:")):
+                continue
             writer.write(line)
-        writer.write(b"\r\n")
+        writer.write(b"Connection: close\r\n\r\n")
 
         if chunked:
             while True:
@@ -684,6 +692,55 @@ if [ "${SMOKE_QUICK:-0}" != "1" ]; then
   check_upload 100
 else
   info "SMOKE_QUICK=1: skipping the 100 MiB round trip"
+fi
+
+# ------------------------------------------------------------- empty file ----
+
+step "Zero-byte upload against real S3-compatible storage"
+# This exists because an in-memory double cannot reproduce the behaviour that
+# broke it: a real S3-compatible server answers a byte-RANGE request against a
+# zero-length object with 416 InvalidRange, so an unconditional ranged probe
+# fails completion even though the object is valid.
+EMPTY_FILE="$WORK/empty.bin"
+: > "$EMPTY_FILE"
+EMPTY_JSON="$( cd "$WORK" && MULTICA_SERVER_URL="$PROXY_URL" \
+  "$SMOKE_DIR/multica" issue create --title "smoke empty" \
+    --attachment "$(basename "$EMPTY_FILE")" --output json 2>"$LOG_DIR/cli-empty.log")"
+EMPTY_STATUS=$?
+if [ $EMPTY_STATUS -eq 0 ]; then
+  ok "zero-byte file uploaded through the presigned path"
+else
+  bad "zero-byte upload failed: $(tail -3 "$LOG_DIR/cli-empty.log" | tr '\n' ' ')"
+fi
+EMPTY_ISSUE_ID="$(printf '%s' "$EMPTY_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("id",""))' 2>/dev/null)"
+EMPTY_ATTACHMENT_ID=""
+if [ -n "$EMPTY_ISSUE_ID" ]; then
+  EMPTY_ATTACHMENT_ID="$(curl -s "$API_URL/api/issues/$EMPTY_ISSUE_ID/attachments" \
+    -H "Authorization: Bearer $pat" -H "X-Workspace-ID: $WS_ID" \
+    | python3 -c 'import json,sys; rows=json.load(sys.stdin); print(rows[0]["id"] if rows else "")' 2>/dev/null)"
+fi
+if [ -n "$EMPTY_ATTACHMENT_ID" ]; then
+  EMPTY_DL="$WORK/empty-download.bin"
+  if curl -sL -o "$EMPTY_DL" -w '%{http_code}' "$PROXY_URL/api/attachments/$EMPTY_ATTACHMENT_ID/download" \
+      -H "Authorization: Bearer $pat" | grep -q 200; then
+    if [ ! -s "$EMPTY_DL" ]; then
+      ok "zero-byte attachment downloads as an empty body"
+    else
+      bad "zero-byte attachment downloaded $(wc -c < "$EMPTY_DL") bytes"
+    fi
+  else
+    bad "zero-byte attachment download failed"
+  fi
+  # The published metadata must still describe empty text, not an empty string.
+  EMPTY_CT="$(curl -s "$API_URL/api/attachments/$EMPTY_ATTACHMENT_ID" \
+    -H "Authorization: Bearer $pat" -H "X-Workspace-ID: $WS_ID" \
+    | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("content_type",""), d.get("size_bytes",""))' 2>/dev/null)"
+  case "$EMPTY_CT" in
+    "text/plain"*" 0") ok "zero-byte attachment reports text/plain and size 0 ($EMPTY_CT)" ;;
+    *) bad "zero-byte attachment metadata = '$EMPTY_CT', want text/plain and size 0" ;;
+  esac
+else
+  bad "could not resolve the zero-byte attachment for verification"
 fi
 
 # ---------------------------------------------------------------- over cap --

@@ -48,6 +48,9 @@ type fakeCapturedRequest struct {
 	contentType   string
 	contentRange  string
 	contentLength int64
+	// getIfMatch is the If-Match a GetObject carried, which is how the probe
+	// read's version condition is observed.
+	getIfMatch string
 }
 
 func newFakeObjectStore(t *testing.T) (*fakeObjectStore, *S3Storage) {
@@ -81,6 +84,7 @@ func (s *fakeObjectStore) handle(w http.ResponseWriter, r *http.Request) {
 		contentType:   r.Header.Get("Content-Type"),
 		contentRange:  r.Header.Get("Range"),
 		contentLength: r.ContentLength,
+		getIfMatch:    r.Header.Get("If-Match"),
 	})
 	objects := s.objects
 	copyStatus := s.copyStatus
@@ -151,11 +155,25 @@ func (s *fakeObjectStore) handle(w http.ResponseWriter, r *http.Request) {
 		object, ok := objects[key]
 		s.mu.Unlock()
 		if !ok {
-			w.WriteHeader(http.StatusNotFound)
+			writeS3Error(w, http.StatusNotFound)
+			return
+		}
+		// Enforce the version condition, so the probe read's If-Match is
+		// exercised rather than merely recorded.
+		if required := r.Header.Get("If-Match"); required != "" &&
+			strings.Trim(required, `"`) != strings.Trim(object.etag, `"`) {
+			writeS3Error(w, http.StatusPreconditionFailed)
 			return
 		}
 		w.Header().Set("ETag", object.etag)
-		if r.Header.Get("Range") != "" {
+		if rangeHeader := r.Header.Get("Range"); rangeHeader != "" {
+			// A real S3-compatible server answers a range against an EMPTY
+			// object with 416 InvalidRange. Reproducing that here is what lets
+			// the empty-object path be tested without a live server.
+			if len(object.body) == 0 {
+				writeS3Error(w, http.StatusRequestedRangeNotSatisfiable)
+				return
+			}
 			w.WriteHeader(http.StatusPartialContent)
 		}
 		_, _ = w.Write(object.body)
@@ -176,6 +194,8 @@ func writeS3Error(w http.ResponseWriter, status int) {
 		code = "NoSuchKey"
 	case http.StatusPreconditionFailed:
 		code = "PreconditionFailed"
+	case http.StatusRequestedRangeNotSatisfiable:
+		code = "InvalidRange"
 	}
 	w.Header().Set("Content-Type", "application/xml")
 	w.WriteHeader(status)
@@ -328,7 +348,7 @@ func TestS3HeadObjectAndReadPrefix(t *testing.T) {
 
 	// The prefix read is bounded, and asks for it as a Range so the store does
 	// not ship the whole object.
-	prefix, err := store.ReadPrefix(context.Background(), "upload-staging/ws/s", 4)
+	prefix, err := store.ReadPrefix(context.Background(), "upload-staging/ws/s", 4, "")
 	if err != nil {
 		t.Fatalf("ReadPrefix: %v", err)
 	}
@@ -353,7 +373,7 @@ func TestS3HeadObjectAndReadPrefix(t *testing.T) {
 	if _, err := store.HeadObject(context.Background(), "upload-staging/missing"); !errors.Is(err, ErrObjectNotFound) {
 		t.Fatalf("HeadObject error = %v, want ErrObjectNotFound", err)
 	}
-	if _, err := store.ReadPrefix(context.Background(), "upload-staging/missing", 4); !errors.Is(err, ErrObjectNotFound) {
+	if _, err := store.ReadPrefix(context.Background(), "upload-staging/missing", 4, ""); !errors.Is(err, ErrObjectNotFound) {
 		t.Fatalf("ReadPrefix error = %v, want ErrObjectNotFound", err)
 	}
 }
@@ -375,5 +395,86 @@ func TestCopySourceEscapesSegments(t *testing.T) {
 	got := copySource("bucket", "a b/c+d/e.txt")
 	if got != "bucket/a%20b/c%2Bd/e.txt" {
 		t.Fatalf("copySource = %q", got)
+	}
+}
+
+// TestS3ReadPrefix_SendsVersionConditionAndMapsPrecondition covers the storage
+// half of the "probe and copy describe the same object" guarantee: the read
+// must actually carry If-Match, and a failed precondition must surface as
+// ErrSourceChanged rather than as bytes of whatever is there now.
+func TestS3ReadPrefix_SendsVersionConditionAndMapsPrecondition(t *testing.T) {
+	remote, store := newFakeObjectStore(t)
+	remote.objects["upload-staging/ws/s"] = fakeStoredObject{
+		body: []byte("0123456789"), contentType: "text/plain", etag: `"e1"`,
+	}
+
+	// Matching ETag: the request carries the condition and the bytes come back.
+	prefix, err := store.ReadPrefix(context.Background(), "upload-staging/ws/s", 4, "e1")
+	if err != nil {
+		t.Fatalf("ReadPrefix with a matching ETag: %v", err)
+	}
+	if !strings.HasPrefix(string(prefix), "0123") {
+		t.Fatalf("ReadPrefix = %q", prefix)
+	}
+	remote.mu.Lock()
+	var sawIfMatch string
+	for _, captured := range remote.requests {
+		if captured.method == http.MethodGet && captured.getIfMatch != "" {
+			sawIfMatch = captured.getIfMatch
+		}
+	}
+	remote.mu.Unlock()
+	if strings.Trim(sawIfMatch, `"`) != "e1" {
+		t.Fatalf("probe read sent If-Match %q, want the measured ETag", sawIfMatch)
+	}
+
+	// Stale ETag: the store must refuse and the client must see ErrSourceChanged,
+	// never the current object's bytes.
+	if _, err := store.ReadPrefix(context.Background(), "upload-staging/ws/s", 4, "stale"); !errors.Is(err, ErrSourceChanged) {
+		t.Fatalf("ReadPrefix with a stale ETag = %v, want ErrSourceChanged", err)
+	}
+}
+
+// TestS3ReadPrefix_EmptyObjectUsesConditionalWholeRead covers item 3 on the
+// storage side. A real S3-compatible server answers a Range request against a
+// zero-length object with 416, so a ranged read alone makes every empty upload
+// fail completion. The fallback must still carry the version condition.
+func TestS3ReadPrefix_EmptyObjectUsesConditionalWholeRead(t *testing.T) {
+	remote, store := newFakeObjectStore(t)
+	remote.objects["upload-staging/ws/empty"] = fakeStoredObject{
+		body: nil, contentType: "text/plain", etag: `"empty1"`,
+	}
+
+	prefix, err := store.ReadPrefix(context.Background(), "upload-staging/ws/empty", 1024, "empty1")
+	if err != nil {
+		t.Fatalf("ReadPrefix on an empty object: %v", err)
+	}
+	if len(prefix) != 0 {
+		t.Fatalf("ReadPrefix on an empty object returned %d bytes", len(prefix))
+	}
+
+	// The fallback read must be conditional too, or a racing PUT could be
+	// described as the empty version.
+	if _, err := store.ReadPrefix(context.Background(), "upload-staging/ws/empty", 1024, "stale"); !errors.Is(err, ErrSourceChanged) {
+		t.Fatalf("unconditional fallback read accepted a stale ETag: %v", err)
+	}
+
+	// And the first attempt really did hit the 416 path, so this is exercising
+	// the fallback rather than a fake that silently returns empty.
+	remote.mu.Lock()
+	var gotRanged, gotUnranged bool
+	for _, captured := range remote.requests {
+		if captured.method != http.MethodGet {
+			continue
+		}
+		if captured.contentRange != "" {
+			gotRanged = true
+		} else {
+			gotUnranged = true
+		}
+	}
+	remote.mu.Unlock()
+	if !gotRanged || !gotUnranged {
+		t.Fatalf("expected a ranged attempt then an unranged fallback (ranged=%v unranged=%v)", gotRanged, gotUnranged)
 	}
 }

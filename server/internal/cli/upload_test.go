@@ -50,12 +50,15 @@ type fakeDirectUploadServer struct {
 }
 
 type recordedPut struct {
-	body          []byte
-	contentLength int64
-	contentType   string
-	authorization string
-	cookie        string
-	clientHeaders []string
+	body []byte
+	// transferEncoding and contentLength together describe how the body was
+	// framed, which is what a zero-byte upload gets wrong.
+	transferEncoding []string
+	contentLength    int64
+	contentType      string
+	authorization    string
+	cookie           string
+	clientHeaders    []string
 }
 
 func newFakeDirectUploadServer(t *testing.T) (*fakeDirectUploadServer, *httptest.Server) {
@@ -125,11 +128,12 @@ func (f *fakeDirectUploadServer) handlePut(w http.ResponseWriter, r *http.Reques
 	}
 	f.mu.Lock()
 	f.putRequests = append(f.putRequests, recordedPut{
-		body:          body,
-		contentLength: r.ContentLength,
-		contentType:   r.Header.Get("Content-Type"),
-		authorization: r.Header.Get("Authorization"),
-		cookie:        r.Header.Get("Cookie"),
+		body:             body,
+		transferEncoding: append([]string(nil), r.TransferEncoding...),
+		contentLength:    r.ContentLength,
+		contentType:      r.Header.Get("Content-Type"),
+		authorization:    r.Header.Get("Authorization"),
+		cookie:           r.Header.Get("Cookie"),
 	})
 	status := f.putStatus
 	f.mu.Unlock()
@@ -603,5 +607,35 @@ func TestSanitizeUploadTransportError_StripsSignedURL(t *testing.T) {
 	}
 	if !strings.Contains(sanitized.Error(), "Put") {
 		t.Fatalf("sanitized error lost the operation: %v", sanitized)
+	}
+}
+
+// TestUploadAttachmentFile_EmptyFileIsNotChunked guards the framing of a
+// zero-byte PUT. Handing net/http a reader with ContentLength 0 makes it send
+// the body chunked, and a real S3-compatible server rejects that for a
+// presigned PUT with "UnexpectedContent: This request does not support
+// content" — so an empty file could never be uploaded directly. A fake storage
+// server cannot catch this, which is why the assertion is on the wire framing.
+func TestUploadAttachmentFile_EmptyFileIsNotChunked(t *testing.T) {
+	fake, server := newFakeDirectUploadServer(t)
+	client := NewAPIClient(server.URL, "ws-1", "test-token")
+
+	path := writeTestFile(t, "empty.bin", 0)
+	if _, err := client.UploadAttachmentFile(context.Background(), path, "issue-1"); err != nil {
+		t.Fatalf("UploadAttachmentFile on an empty file: %v", err)
+	}
+	if len(fake.putRequests) != 1 {
+		t.Fatalf("PUT count = %d, want 1", len(fake.putRequests))
+	}
+	put := fake.putRequests[0]
+	if len(put.transferEncoding) != 0 {
+		t.Fatalf("empty upload was sent with Transfer-Encoding %v; a presigned PUT must carry an explicit Content-Length",
+			put.transferEncoding)
+	}
+	if put.contentLength != 0 {
+		t.Fatalf("Content-Length = %d, want 0", put.contentLength)
+	}
+	if len(put.body) != 0 {
+		t.Fatalf("body carried %d bytes for an empty file", len(put.body))
 	}
 }

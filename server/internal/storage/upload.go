@@ -53,10 +53,20 @@ type UploadPresigner interface {
 // prefix of it for content sniffing without pulling the whole body.
 type ObjectInspector interface {
 	HeadObject(ctx context.Context, key string) (ObjectInfo, error)
-	// ReadPrefix returns at most n leading bytes of the object. Callers pass a
-	// small n because it exists to feed an image/MIME sniffer, never to load
-	// the file.
-	ReadPrefix(ctx context.Context, key string, n int) ([]byte, error)
+	// ReadPrefix returns at most n leading bytes of the object.
+	//
+	// A NON-EMPTY etag makes the read conditional: the store must return the
+	// bytes of that exact object version or report a precondition failure. Call
+	// it with the ETag HeadObject just returned whenever the bytes will be used
+	// to describe an object that a later conditional copy will publish.
+	//
+	// Why the condition is load-bearing rather than defensive: the presigned URL
+	// stays usable, so a client can PUT version B between the HEAD that
+	// measured version A and this read. Without the condition the probe would
+	// describe B while the copy (conditioned on A) publishes A — the published
+	// bytes and the published metadata would describe different objects. Callers
+	// pass a small n: this feeds a MIME/image sniffer, never a file load.
+	ReadPrefix(ctx context.Context, key string, n int, etag string) ([]byte, error)
 }
 
 // ObjectFinalizer moves a staging object to its permanent key without routing

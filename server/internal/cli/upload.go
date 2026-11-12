@@ -249,7 +249,17 @@ func (c *APIClient) putAttachmentObject(ctx context.Context, uploadURL string, h
 	}
 	defer reader.Close()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, uploadURL, reader)
+	// A zero-byte body is sent as http.NoBody with an explicit zero length.
+	// Handing net/http a non-nil reader with ContentLength 0 makes it fall back
+	// to chunked transfer encoding, and S3-compatible servers reject that for a
+	// presigned PUT ("UnexpectedContent: This request does not support
+	// content"), so an empty file could never be uploaded directly. NoBody is
+	// what makes the request carry no body at all, which is a valid empty PUT.
+	var payload io.Reader = reader
+	if source.Size == 0 {
+		payload = http.NoBody
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, uploadURL, payload)
 	if err != nil {
 		return fmt.Errorf("build upload request: %w", err)
 	}

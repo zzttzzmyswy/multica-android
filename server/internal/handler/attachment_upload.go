@@ -449,16 +449,40 @@ func (h *Handler) publishAttachmentUpload(
 		return publishedAttachmentUpload{}, false, false
 	}
 
-	probe, err := capable.ReadPrefix(storageCtx, locked.StagingKey, attachmentMetadataProbeBytes)
-	if err != nil {
-		if errors.Is(err, storage.ErrObjectNotFound) {
-			writeErrorCode(w, http.StatusConflict, codeUploadObjectMissing,
-				"the uploaded object was not found; upload the file before completing")
+	// Read the probe bytes from the EXACT version HEAD just measured. Passing
+	// the ETag is what binds the description to the object: the presigned URL
+	// stays usable, so a client can PUT a different same-length object between
+	// the HEAD and this read. Without the condition the probe would describe
+	// that object while the conditional copy (pinned to the HEAD's ETag) would
+	// publish the other one — bytes and metadata describing different files.
+	//
+	// A verified-empty object is read as no bytes at all. There is nothing to
+	// sniff, and asking the store for a byte RANGE of an empty object is a 416
+	// on real S3-compatible servers — which is what made empty uploads fail
+	// completion with a 502 while in-memory doubles happily returned an empty
+	// slice.
+	var probe []byte
+	if info.Size > 0 {
+		probe, err = capable.ReadPrefix(storageCtx, locked.StagingKey, attachmentMetadataProbeBytes, info.ETag)
+		if err != nil {
+			switch {
+			case errors.Is(err, storage.ErrObjectNotFound):
+				writeErrorCode(w, http.StatusConflict, codeUploadObjectMissing,
+					"the uploaded object was not found; upload the file before completing")
+			case errors.Is(err, storage.ErrSourceChanged):
+				// The object moved between measurement and read. Refusing is the
+				// only safe answer: re-reading would describe a version the copy
+				// is not pinned to, and retrying the whole completion would race
+				// the same way. The client re-uploads, which is cheap and
+				// unambiguous.
+				writeErrorCode(w, http.StatusConflict, codeUploadObjectChanged,
+					"uploaded object changed while completing; upload the file again")
+			default:
+				slog.Error("failed to read uploaded object", "error", err)
+				writeError(w, http.StatusBadGateway, "failed to read uploaded object")
+			}
 			return publishedAttachmentUpload{}, false, false
 		}
-		slog.Error("failed to read uploaded object", "error", err)
-		writeError(w, http.StatusBadGateway, "failed to read uploaded object")
-		return publishedAttachmentUpload{}, false, false
 	}
 
 	// The uploader's declared Content-Type is deliberately not the published
@@ -617,7 +641,109 @@ func (h *Handler) loadPublishedAttachment(w http.ResponseWriter, r *http.Request
 		writeErrorCode(w, http.StatusNotFound, codeUploadSessionNotFound, "upload session has no published attachment")
 		return publishedAttachmentUpload{}, false
 	}
+	// Re-check access on the attachment as it is bound NOW, not on the target
+	// the session recorded at presign time.
+	//
+	// The session's own target is usually empty: the CLI uploads unbound first
+	// and binds afterwards (`issue create --attachment` needs the file before
+	// the issue exists), so a replay that only re-validated the session would
+	// check nothing. The attachment's binding is what actually decides who may
+	// read it, and it can change after publication.
+	if !h.requireAttachmentAccessForRequest(w, r, session, attachment) {
+		return publishedAttachmentUpload{}, false
+	}
 	return publishedAttachmentUpload{row: attachment}, true
+}
+
+// requireAttachmentAccessForRequest re-proves that this request may still act
+// on a PUBLISHED attachment, using its current binding. It is the replay-path
+// counterpart of revalidateAttachmentUploadTarget, which can only see the
+// session's original target.
+//
+// Each branch mirrors the gate the corresponding read route applies, so a
+// replay cannot hand out a response the attachment's own endpoints would deny.
+func (h *Handler) requireAttachmentAccessForRequest(w http.ResponseWriter, r *http.Request, session db.AttachmentUploadSession, att db.Attachment) bool {
+	workspaceID := uuidToString(session.WorkspaceID)
+	userID := requestUserID(r)
+	if userID == "" {
+		writeError(w, http.StatusUnauthorized, "user not authenticated")
+		return false
+	}
+	if _, err := h.getWorkspaceMember(r.Context(), userID, workspaceID); err != nil {
+		writeErrorCode(w, http.StatusForbidden, codeUploadTargetInvalid,
+			"you no longer have access to this workspace")
+		return false
+	}
+	// Project visibility covers issue-bound and comment-bound attachments,
+	// including one adopted into a private project after it was published. This
+	// is the same helper the attachment read routes use, so the two cannot
+	// disagree about what "visible" means.
+	if !h.requireAttachmentVisible(w, r, workspaceID, att) {
+		return false
+	}
+	if att.CommentID.Valid {
+		// A comment is written under its own lock at publication, but a replay
+		// happens later: a comment deleted or tombstoned since then must not
+		// yield attachment URLs.
+		comment, err := h.Queries.GetCommentInWorkspace(r.Context(), db.GetCommentInWorkspaceParams{
+			ID:          att.CommentID,
+			WorkspaceID: att.WorkspaceID,
+		})
+		if err != nil || comment.DeletedAt.Valid {
+			writeErrorCode(w, http.StatusConflict, codeUploadTargetInvalid,
+				"the comment this upload was bound to no longer exists")
+			return false
+		}
+	}
+	if att.ChatSessionID.Valid && !att.ChatMessageID.Valid {
+		// Chat-bound rows follow the same gates as a chat upload: the session
+		// must still be a member-visible Chat and its agent still reachable.
+		actorType, actorID := h.resolveActor(r, userID, workspaceID)
+		chatSession, err := h.Queries.GetChatSessionInWorkspace(r.Context(), db.GetChatSessionInWorkspaceParams{
+			ID:          att.ChatSessionID,
+			WorkspaceID: att.WorkspaceID,
+		})
+		if err != nil {
+			writeErrorCode(w, http.StatusConflict, codeUploadTargetInvalid,
+				"the chat session this upload was bound to no longer exists")
+			return false
+		}
+		if _, err := h.Queries.GetPublicChatSessionInWorkspace(r.Context(), db.GetPublicChatSessionInWorkspaceParams{
+			ID:          att.ChatSessionID,
+			WorkspaceID: att.WorkspaceID,
+		}); err != nil {
+			writeErrorCode(w, http.StatusConflict, codeUploadTargetInvalid,
+				"the chat session this upload was bound to is no longer available")
+			return false
+		}
+		agent, err := h.Queries.GetAgent(r.Context(), chatSession.AgentID)
+		if err != nil {
+			writeErrorCode(w, http.StatusConflict, codeUploadTargetInvalid,
+				"the agent for this upload's chat session no longer exists")
+			return false
+		}
+		if !h.canAccessPrivateAgent(r.Context(), agent, actorType, actorID, workspaceID) {
+			writeErrorCode(w, http.StatusForbidden, codeUploadTargetInvalid,
+				"you no longer have access to this chat session's agent")
+			return false
+		}
+	}
+	if att.TaskID.Valid && !att.ChatMessageID.Valid {
+		// A task-scoped row is only meaningful to the run that produced it. A
+		// replay from a different credential (or after that run ended) must not
+		// resolve it.
+		if r.Header.Get("X-Actor-Source") != "task_token" {
+			writeErrorCode(w, http.StatusForbidden, codeUploadTargetInvalid,
+				"task uploads may only be replayed from within the same agent task")
+			return false
+		}
+		if boundTaskID := strings.TrimSpace(r.Header.Get("X-Task-ID")); !strings.EqualFold(boundTaskID, uuidToString(att.TaskID)) {
+			writeErrorCode(w, http.StatusForbidden, codeUploadTargetInvalid,
+				"this task token does not match the upload's task")
+			return false
+		}
+	}
+	return true
 }
 
 // revalidateAttachmentUploadTarget re-proves, from the CURRENT database state,

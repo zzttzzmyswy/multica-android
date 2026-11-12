@@ -125,20 +125,81 @@ func (s *S3Storage) HeadObject(ctx context.Context, key string) (ObjectInfo, err
 
 // ReadPrefix reads at most n leading bytes of an object, for MIME sniffing and
 // image dimension extraction. The body is closed on every path.
-func (s *S3Storage) ReadPrefix(ctx context.Context, key string, n int) ([]byte, error) {
+func (s *S3Storage) ReadPrefix(ctx context.Context, key string, n int, etag string) ([]byte, error) {
 	if key == "" {
 		return nil, fmt.Errorf("s3 ReadPrefix: empty key")
 	}
-	out, err := s.client.GetObject(ctx, &s3.GetObjectInput{
+	if n <= 0 {
+		return nil, fmt.Errorf("s3 ReadPrefix: %d is not a positive byte count", n)
+	}
+	input := &s3.GetObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
-		Range:  aws.String(fmt.Sprintf("bytes=0-%d", int64(n))),
-	}, s.uploadChecksumOptions()...)
+	}
+	// Range only for a non-empty object: S3 rejects a range request against a
+	// zero-length object with 416 InvalidRange, which would make every empty
+	// upload fail at completion even though the object is perfectly valid.
+	// Emptiness is not known here, so a zero upper bound is expressed by
+	// omitting Range and reading the (necessarily tiny) body instead: any
+	// non-empty object yields at least one byte, which the LimitReader below
+	// bounds.
+	//
+	// A non-empty etag makes the read conditional on that exact version, so the
+	// bytes cannot belong to a PUT that landed after the caller's HEAD.
+	if etag != "" {
+		input.IfMatch = aws.String(`"` + strings.Trim(etag, `"`) + `"`)
+	}
+	// n is a byte count, so the inclusive range end is n-1.
+	input.Range = aws.String(fmt.Sprintf("bytes=0-%d", int64(n)-1))
+	out, err := s.client.GetObject(ctx, input, s.uploadChecksumOptions()...)
 	if err != nil {
-		if isS3NotFound(err) {
+		switch {
+		case isS3NotFound(err):
 			return nil, ErrObjectNotFound
+		case isS3PreconditionFailed(err):
+			return nil, ErrSourceChanged
+		case isS3InvalidRange(err):
+			// The object is empty (or the store refuses the range for an
+			// equivalent reason): re-read it without a Range. This is the only
+			// case where the unconditional form is correct, because the object
+			// has no bytes to select from and its size (0) was verified by the
+			// caller's HEAD.
+			return s.readWholeSmallObject(ctx, key, n, etag)
+		default:
+			return nil, fmt.Errorf("s3 GetObject: %w", err)
 		}
-		return nil, fmt.Errorf("s3 GetObject: %w", err)
+	}
+	defer out.Body.Close()
+	// n+1 so a caller can distinguish "exactly n bytes" from "more than n".
+	buf, err := io.ReadAll(io.LimitReader(out.Body, int64(n)+1))
+	if err != nil {
+		return nil, fmt.Errorf("s3 GetObject body: %w", err)
+	}
+	return buf, nil
+}
+
+// readWholeSmallObject reads an object the store refused to serve as a range —
+// in practice an empty one — still under the caller's version condition. The
+// read is bounded by n+1 bytes, so a store that answers this for a large object
+// cannot make the caller buffer it.
+func (s *S3Storage) readWholeSmallObject(ctx context.Context, key string, n int, etag string) ([]byte, error) {
+	input := &s3.GetObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+	}
+	if etag != "" {
+		input.IfMatch = aws.String(`"` + strings.Trim(etag, `"`) + `"`)
+	}
+	out, err := s.client.GetObject(ctx, input, s.uploadChecksumOptions()...)
+	if err != nil {
+		switch {
+		case isS3NotFound(err):
+			return nil, ErrObjectNotFound
+		case isS3PreconditionFailed(err):
+			return nil, ErrSourceChanged
+		default:
+			return nil, fmt.Errorf("s3 GetObject: %w", err)
+		}
 	}
 	defer out.Body.Close()
 	buf, err := io.ReadAll(io.LimitReader(out.Body, int64(n)+1))
@@ -248,6 +309,20 @@ func isS3NotFound(err error) bool {
 	// reports the bare status instead.
 	var respErr interface{ HTTPStatusCode() int }
 	if errors.As(err, &respErr) && respErr.HTTPStatusCode() == http.StatusNotFound {
+		return true
+	}
+	return false
+}
+
+// isS3InvalidRange reports a 416, which S3 returns for a Range request against
+// an empty object (and for a range that starts past EOF).
+func isS3InvalidRange(err error) bool {
+	var apiErr smithy.APIError
+	if errors.As(err, &apiErr) && apiErr.ErrorCode() == "InvalidRange" {
+		return true
+	}
+	var respErr interface{ HTTPStatusCode() int }
+	if errors.As(err, &respErr) && respErr.HTTPStatusCode() == http.StatusRequestedRangeNotSatisfiable {
 		return true
 	}
 	return false
