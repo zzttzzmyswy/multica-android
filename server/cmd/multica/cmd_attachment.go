@@ -78,15 +78,20 @@ func runAttachmentUpload(cmd *cobra.Command, args []string) error {
 	if isHTTPURL(path) {
 		return fmt.Errorf("upload accepts a local file path, not a URL: %s", path)
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("read file %s: %w", path, err)
+	// Fail on a missing/directory/unreadable path before any request, and
+	// record the size the upload credential will be signed for.
+	if _, err := cli.NewLocalUploadSource(path); err != nil {
+		return fmt.Errorf("upload attachment: %w", err)
 	}
 
+	// The upload streams the file, so the budget cannot be a fixed 60s: that
+	// is the timeout large files used to fail on. APIContext honors
+	// MULTICA_HTTP_TIMEOUT, and the transfer itself is bounded by the
+	// stall-aware client and a size-scaled ceiling inside the uploader.
 	ctx, cancel := context.WithTimeout(context.Background(), cli.AtLeastAPITimeout(60*time.Second))
 	defer cancel()
 
-	att, err := client.UploadChatAttachment(ctx, data, path, taskID)
+	att, err := client.UploadChatAttachmentFile(ctx, path, taskID)
 	if err != nil {
 		return fmt.Errorf("upload attachment: %w", err)
 	}

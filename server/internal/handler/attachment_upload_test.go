@@ -1,0 +1,881 @@
+package handler
+
+import (
+	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+
+	"github.com/multica-ai/multica/server/internal/service"
+	"github.com/multica-ai/multica/server/internal/storage"
+	"github.com/multica-ai/multica/server/internal/testutil"
+	db "github.com/multica-ai/multica/server/pkg/db/generated"
+)
+
+// directUploadStorage is an in-memory stand-in for a presign-capable backend.
+//
+// It models the two properties the handler depends on rather than just
+// recording calls:
+//
+//   - Put writes to a staging key exactly as an S3 PUT does, so a test can PUT
+//     again after completion and see whether the published bytes change.
+//   - FinalizeObject copies under an If-Match on the ETag, so a source that
+//     changed between inspection and finalization fails instead of silently
+//     publishing different bytes. That is the property the "re-PUT after
+//     complete" test exists to prove.
+type directUploadStorage struct {
+	mu sync.Mutex
+
+	objects map[string]directUploadObject
+	// presignedKeys records every key a credential was issued for.
+	presignedKeys []string
+	// finalizeCalls counts destination writes, so a test can prove a replayed
+	// complete-upload did not copy again.
+	finalizeCalls int
+	// deleteCalls records the keys cleanup actually asked to delete.
+	deleteCalls []string
+	// failDeletes makes DeleteObject fail until cleared, for the backoff test.
+	failDeletes bool
+	// headCalls counts object inspections.
+	headCalls int
+	// beforeFinalize runs at the start of FinalizeObject, which is exactly the
+	// window between the handler's inspection and the conditional copy. It lets
+	// a test land a racing PUT deterministically instead of by interleaving.
+	beforeFinalize func()
+}
+
+type directUploadObject struct {
+	body        []byte
+	contentType string
+	etag        string
+}
+
+func newDirectUploadStorage() *directUploadStorage {
+	return &directUploadStorage{objects: map[string]directUploadObject{}}
+}
+
+func (s *directUploadStorage) Upload(ctx context.Context, key string, data []byte, contentType, filename string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.objects[key] = directUploadObject{body: append([]byte(nil), data...), contentType: contentType, etag: etagOf(data)}
+	return s.ObjectURL(key), nil
+}
+
+func (s *directUploadStorage) Delete(ctx context.Context, key string) { _ = s.DeleteObject(ctx, key) }
+
+func (s *directUploadStorage) DeleteObject(ctx context.Context, key string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.failDeletes {
+		return fmt.Errorf("object store unavailable")
+	}
+	s.deleteCalls = append(s.deleteCalls, key)
+	delete(s.objects, key)
+	return nil
+}
+
+func (s *directUploadStorage) DeleteKeys(ctx context.Context, keys []string) {
+	for _, key := range keys {
+		_ = s.DeleteObject(ctx, key)
+	}
+}
+
+func (s *directUploadStorage) KeyFromURL(rawURL string) string {
+	return strings.TrimPrefix(rawURL, s.ObjectURL(""))
+}
+
+func (s *directUploadStorage) ObjectURL(key string) string { return "https://cdn.example.com/" + key }
+
+func (s *directUploadStorage) CdnDomain() string { return "cdn.example.com" }
+
+func (s *directUploadStorage) GetReader(ctx context.Context, key string) (io.ReadCloser, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	object, ok := s.objects[key]
+	if !ok {
+		return nil, fmt.Errorf("no such key: %s", key)
+	}
+	return io.NopCloser(bytes.NewReader(object.body)), nil
+}
+
+// PresignPut issues a URL that the test's own PUT helper consumes.
+func (s *directUploadStorage) PresignPut(ctx context.Context, key string, ttl time.Duration, contentType string, contentLength int64) (string, map[string]string, error) {
+	s.mu.Lock()
+	s.presignedKeys = append(s.presignedKeys, key)
+	s.mu.Unlock()
+	return "https://storage.example.com/" + key + "?X-Amz-Signature=test", map[string]string{
+		"Content-Type":   contentType,
+		"Content-Length": fmt.Sprintf("%d", contentLength),
+	}, nil
+}
+
+func (s *directUploadStorage) HeadObject(ctx context.Context, key string) (storage.ObjectInfo, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.headCalls++
+	object, ok := s.objects[key]
+	if !ok {
+		return storage.ObjectInfo{}, storage.ErrObjectNotFound
+	}
+	return storage.ObjectInfo{Size: int64(len(object.body)), ETag: object.etag, ContentType: object.contentType}, nil
+}
+
+func (s *directUploadStorage) ReadPrefix(ctx context.Context, key string, n int) ([]byte, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	object, ok := s.objects[key]
+	if !ok {
+		return nil, storage.ErrObjectNotFound
+	}
+	if len(object.body) <= n {
+		return append([]byte(nil), object.body...), nil
+	}
+	return append([]byte(nil), object.body[:n]...), nil
+}
+
+func (s *directUploadStorage) FinalizeObject(ctx context.Context, srcKey, srcETag, dstKey string, expectedSize int64, contentType, contentDisposition, cacheControl string) error {
+	if s.beforeFinalize != nil {
+		s.beforeFinalize()
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.finalizeCalls++
+	source, ok := s.objects[srcKey]
+	if !ok {
+		return storage.ErrObjectNotFound
+	}
+	if source.etag != srcETag {
+		// This is the whole point of the precondition: a PUT that landed after
+		// inspection must not be copied into a published attachment.
+		return storage.ErrSourceChanged
+	}
+	if int64(len(source.body)) != expectedSize {
+		return fmt.Errorf("source is %d bytes, expected %d", len(source.body), expectedSize)
+	}
+	// The object store copies the bytes; the destination metadata is the
+	// server's replacement, exactly as MetadataDirective=REPLACE behaves.
+	s.objects[dstKey] = directUploadObject{
+		body:        append([]byte(nil), source.body...),
+		contentType: contentType,
+		etag:        source.etag,
+	}
+	return nil
+}
+
+// putStagingObject simulates the client's PUT against its presigned URL.
+func (s *directUploadStorage) putStagingObject(key string, body []byte, contentType string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.objects[key] = directUploadObject{body: append([]byte(nil), body...), contentType: contentType, etag: etagOf(body)}
+}
+
+func (s *directUploadStorage) object(key string) (directUploadObject, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	object, ok := s.objects[key]
+	return object, ok
+}
+
+func (s *directUploadStorage) storedKeys() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	keys := make([]string, 0, len(s.objects))
+	for key := range s.objects {
+		keys = append(keys, key)
+	}
+	return keys
+}
+
+func etagOf(body []byte) string {
+	sum := sha256.Sum256(body)
+	return hex.EncodeToString(sum[:])
+}
+
+// installDirectUploadStorage swaps in the fake backend for one test.
+func installDirectUploadStorage(t *testing.T) *directUploadStorage {
+	t.Helper()
+	store := newDirectUploadStorage()
+	origStorage := testHandler.Storage
+	testHandler.Storage = store
+	t.Cleanup(func() { testHandler.Storage = origStorage })
+	return store
+}
+
+// presignUpload issues a session through the handler and returns the parsed
+// response. It fails the test on any unexpected status.
+func presignUpload(t *testing.T, req presignUploadRequest, userID, workspaceID string) presignUploadResponse {
+	t.Helper()
+	body, err := json.Marshal(req)
+	if err != nil {
+		t.Fatalf("marshal presign request: %v", err)
+	}
+	r := httptest.NewRequest(http.MethodPost, "/api/attachments/presign-upload", bytes.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set("X-User-ID", userID)
+	r.Header.Set("X-Workspace-ID", workspaceID)
+	w := httptest.NewRecorder()
+	testHandler.PresignAttachmentUpload(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("presign-upload status = %d, want 200: %s", w.Code, w.Body.String())
+	}
+	var out presignUploadResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode presign response: %v", err)
+	}
+	return out
+}
+
+// completeUpload calls complete-upload for a session.
+func completeUpload(t *testing.T, attachmentID, userID, workspaceID string) *httptest.ResponseRecorder {
+	t.Helper()
+	r := httptest.NewRequest(http.MethodPost, "/api/attachments/"+attachmentID+"/complete-upload", nil)
+	r.Header.Set("X-User-ID", userID)
+	r.Header.Set("X-Workspace-ID", workspaceID)
+	r = testutil.WithURLParams(r, "id", attachmentID)
+	w := httptest.NewRecorder()
+	testHandler.CompleteAttachmentUpload(w, r)
+	return w
+}
+
+// seedIssue creates an issue owned by the test workspace and returns its id.
+func seedIssueForUpload(t *testing.T) string {
+	t.Helper()
+	return dbfx.Issue(t, "Direct upload target", testutil.Cols{
+		"description": "target for presigned upload tests",
+	})
+}
+
+func TestPresignAttachmentUpload_IssueAttachmentRoundTrip(t *testing.T) {
+	store := installDirectUploadStorage(t)
+	issueID := seedIssueForUpload(t)
+
+	// A tiny HTML-looking payload under an image extension is the interesting
+	// case: the uploader declares image/png, and the handler must publish what
+	// the BYTES are.
+	payload := []byte("<html><script>alert(1)</script></html>")
+	presign := presignUpload(t, presignUploadRequest{
+		Filename:    "chart.png",
+		ContentType: "image/png",
+		SizeBytes:   int64(len(payload)),
+		IssueID:     issueID,
+	}, testUserID, testWorkspaceID)
+
+	if presign.Method != http.MethodPut {
+		t.Fatalf("method = %q, want PUT", presign.Method)
+	}
+	if presign.ExpiresIn <= 0 || presign.ExpiresIn > 900 {
+		t.Fatalf("expires_in = %d, want 1..900", presign.ExpiresIn)
+	}
+	if presign.AttachmentID != presign.AttachmentID || presign.AttachmentID == "" {
+		t.Fatalf("attachment_id is empty")
+	}
+	// The credential must point at a staging key, never at a final key: the
+	// final key is what the published attachment reads, and a client that can
+	// write it can change the bytes after publication.
+	if len(store.presignedKeys) != 1 || !strings.HasPrefix(store.presignedKeys[0], uploadStagingPrefix+"/") {
+		t.Fatalf("presigned key = %v, want one key under %q", store.presignedKeys, uploadStagingPrefix)
+	}
+
+	store.putStagingObject(store.presignedKeys[0], payload, "image/png")
+
+	w := completeUpload(t, presign.AttachmentID, testUserID, testWorkspaceID)
+	if w.Code != http.StatusOK {
+		t.Fatalf("complete-upload status = %d, want 200: %s", w.Code, w.Body.String())
+	}
+	var att AttachmentResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &att); err != nil {
+		t.Fatalf("decode complete response: %v", err)
+	}
+	if att.ID != presign.AttachmentID {
+		t.Fatalf("attachment id = %q, want the session id %q", att.ID, presign.AttachmentID)
+	}
+	if att.IssueID == nil || *att.IssueID != issueID {
+		t.Fatalf("issue_id = %v, want %q", att.IssueID, issueID)
+	}
+	if att.SizeBytes != int64(len(payload)) {
+		t.Fatalf("size_bytes = %d, want %d", att.SizeBytes, len(payload))
+	}
+	// Sniffed from the bytes, not taken from the declared type.
+	if !strings.HasPrefix(att.ContentType, "text/html") {
+		t.Fatalf("content_type = %q, want the sniffed text/html", att.ContentType)
+	}
+	// The response is the ordinary attachment shape, which is what lets a
+	// client paste it into a body exactly like a proxied upload.
+	if att.MarkdownURL == "" || att.DownloadURL == "" {
+		t.Fatalf("response is missing markdown_url/download_url: %+v", att)
+	}
+
+	// The published object lives at the final key, and the staging key is still
+	// present (cleanup is the reconciler's job, not the request's).
+	finalKey := attachmentObjectKey(testWorkspaceID, testUserID, presign.AttachmentID, "chart.png")
+	published, ok := store.object(finalKey)
+	if !ok {
+		t.Fatalf("final object %q missing; keys=%v", finalKey, store.storedKeys())
+	}
+	if !bytes.Equal(published.body, payload) {
+		t.Fatalf("published bytes = %q, want %q", published.body, payload)
+	}
+	// The final object's metadata is the server's decision: the sniffed type,
+	// not the declared one.
+	if published.contentType != att.ContentType {
+		t.Fatalf("stored content type = %q, want %q", published.contentType, att.ContentType)
+	}
+	if _, ok := store.object(store.presignedKeys[0]); !ok {
+		t.Fatalf("staging object was removed inline; cleanup belongs to the reconciler")
+	}
+
+	// The issue's attachment list must see the row, and the revision event must
+	// have recorded a bump (CreateAttachment's CTE does that).
+	var revision int64
+	if err := testPool.QueryRow(context.Background(),
+		`SELECT revision FROM issue WHERE id = $1`, issueID).Scan(&revision); err != nil {
+		t.Fatalf("read issue revision: %v", err)
+	}
+	if revision == 0 {
+		t.Fatalf("issue revision was not bumped by the attachment insert")
+	}
+}
+
+func TestCompleteAttachmentUpload_RepeatedPUTDoesNotChangePublishedBytes(t *testing.T) {
+	store := installDirectUploadStorage(t)
+	issueID := seedIssueForUpload(t)
+
+	original := []byte("original content")
+	presign := presignUpload(t, presignUploadRequest{
+		Filename:    "notes.txt",
+		ContentType: "text/plain",
+		SizeBytes:   int64(len(original)),
+		IssueID:     issueID,
+	}, testUserID, testWorkspaceID)
+	store.putStagingObject(store.presignedKeys[0], original, "text/plain")
+
+	if w := completeUpload(t, presign.AttachmentID, testUserID, testWorkspaceID); w.Code != http.StatusOK {
+		t.Fatalf("first complete = %d: %s", w.Code, w.Body.String())
+	}
+
+	// The presigned URL is still valid, so the client re-PUTs different bytes
+	// of the same length to the staging key.
+	tampered := []byte("TAMPERED length!") // same length as "original content"
+	if len(tampered) != len(original) {
+		t.Fatalf("test fixture lengths differ: %d vs %d", len(tampered), len(original))
+	}
+	store.putStagingObject(store.presignedKeys[0], tampered, "text/plain")
+
+	// A second complete must be an idempotent replay: same attachment, no new
+	// copy, and the published object is still the original bytes.
+	w := completeUpload(t, presign.AttachmentID, testUserID, testWorkspaceID)
+	if w.Code != http.StatusOK {
+		t.Fatalf("replayed complete = %d: %s", w.Code, w.Body.String())
+	}
+	if store.finalizeCalls != 1 {
+		t.Fatalf("finalize ran %d times, want 1 (a replay must not copy again)", store.finalizeCalls)
+	}
+	finalKey := attachmentObjectKey(testWorkspaceID, testUserID, presign.AttachmentID, "notes.txt")
+	published, ok := store.object(finalKey)
+	if !ok {
+		t.Fatalf("final object missing")
+	}
+	if !bytes.Equal(published.body, original) {
+		t.Fatalf("published bytes = %q, want the original upload", published.body)
+	}
+}
+
+func TestCompleteAttachmentUpload_RejectsSourceChangedDuringCompletion(t *testing.T) {
+	store := installDirectUploadStorage(t)
+	issueID := seedIssueForUpload(t)
+
+	original := []byte("first version")
+	presign := presignUpload(t, presignUploadRequest{
+		Filename:    "notes.txt",
+		ContentType: "text/plain",
+		SizeBytes:   int64(len(original)),
+		IssueID:     issueID,
+	}, testUserID, testWorkspaceID)
+	stagingKey := store.presignedKeys[0]
+	store.putStagingObject(stagingKey, original, "text/plain")
+
+	// The client's presigned URL is still valid, so it re-PUTs the same length
+	// of different bytes in the window between the handler's HEAD and its copy.
+	// Without the If-Match precondition the copy would publish these bytes.
+	store.beforeFinalize = func() {
+		store.mu.Lock()
+		store.objects[stagingKey] = directUploadObject{
+			body:        []byte("SECOND VERSN"),
+			contentType: "text/plain",
+			etag:        etagOf([]byte("SECOND VERSN")),
+		}
+		store.mu.Unlock()
+	}
+
+	w := completeUpload(t, presign.AttachmentID, testUserID, testWorkspaceID)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), codeUploadObjectChanged) {
+		t.Fatalf("body = %s, want the changed-object code %q", w.Body.String(), codeUploadObjectChanged)
+	}
+	// Nothing was published: no attachment row, and no final object.
+	finalKey := attachmentObjectKey(testWorkspaceID, testUserID, presign.AttachmentID, "notes.txt")
+	if _, ok := store.object(finalKey); ok {
+		t.Fatalf("a rejected completion still wrote the final object")
+	}
+	var count int
+	if err := testPool.QueryRow(context.Background(),
+		`SELECT COUNT(*) FROM attachment WHERE id = $1`, presign.AttachmentID).Scan(&count); err != nil {
+		t.Fatalf("count attachments: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("a rejected completion created %d attachment rows", count)
+	}
+	// The session is still pending, so the client can retry with a fresh PUT.
+	var state string
+	if err := testPool.QueryRow(context.Background(),
+		`SELECT state FROM attachment_upload_session WHERE id = $1`, presign.AttachmentID).Scan(&state); err != nil {
+		t.Fatalf("read session state: %v", err)
+	}
+	if state != "pending" {
+		t.Fatalf("session state = %q, want pending after a refused completion", state)
+	}
+}
+
+func TestPresignAttachmentUpload_LocalBackendReturns501(t *testing.T) {
+	origStorage := testHandler.Storage
+	// A backend that satisfies Storage but not the upload capability.
+	testHandler.Storage = &mockStorage{}
+	t.Cleanup(func() { testHandler.Storage = origStorage })
+
+	body, _ := json.Marshal(presignUploadRequest{
+		Filename: "a.txt", ContentType: "text/plain", SizeBytes: 5,
+	})
+	r := httptest.NewRequest(http.MethodPost, "/api/attachments/presign-upload", bytes.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set("X-User-ID", testUserID)
+	r.Header.Set("X-Workspace-ID", testWorkspaceID)
+	w := httptest.NewRecorder()
+	testHandler.PresignAttachmentUpload(w, r)
+
+	if w.Code != http.StatusNotImplemented {
+		t.Fatalf("status = %d, want 501: %s", w.Code, w.Body.String())
+	}
+	var payload struct {
+		Code string `json:"code"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if payload.Code != codeUploadPresignUnsupported {
+		t.Fatalf("code = %q, want %q", payload.Code, codeUploadPresignUnsupported)
+	}
+}
+
+func TestPresignAttachmentUpload_RejectsOversizeAndEmpty(t *testing.T) {
+	installDirectUploadStorage(t)
+	issueID := seedIssueForUpload(t)
+
+	cases := []struct {
+		name       string
+		req        presignUploadRequest
+		wantStatus int
+	}{
+		{
+			name:       "zero bytes",
+			req:        presignUploadRequest{Filename: "a.txt", ContentType: "text/plain", SizeBytes: 0},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "over the 100 MiB cap",
+			req:        presignUploadRequest{Filename: "a.txt", ContentType: "text/plain", SizeBytes: maxUploadSize + 1},
+			wantStatus: http.StatusRequestEntityTooLarge,
+		},
+		{
+			name:       "path in filename",
+			req:        presignUploadRequest{Filename: "../escape.txt", ContentType: "text/plain", SizeBytes: 5},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "missing content type",
+			req:        presignUploadRequest{Filename: "a.txt", SizeBytes: 5},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name: "document and chat targets combined",
+			req: presignUploadRequest{
+				Filename: "a.txt", ContentType: "text/plain", SizeBytes: 5,
+				IssueID: issueID, ChatSessionID: "00000000-0000-0000-0000-000000000abc",
+			},
+			wantStatus: http.StatusBadRequest,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			body, _ := json.Marshal(tc.req)
+			r := httptest.NewRequest(http.MethodPost, "/api/attachments/presign-upload", bytes.NewReader(body))
+			r.Header.Set("Content-Type", "application/json")
+			r.Header.Set("X-User-ID", testUserID)
+			r.Header.Set("X-Workspace-ID", testWorkspaceID)
+			w := httptest.NewRecorder()
+			testHandler.PresignAttachmentUpload(w, r)
+			if w.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d: %s", w.Code, tc.wantStatus, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestCompleteAttachmentUpload_SizeMismatchAndMissingObject(t *testing.T) {
+	store := installDirectUploadStorage(t)
+	issueID := seedIssueForUpload(t)
+
+	t.Run("object missing", func(t *testing.T) {
+		presign := presignUpload(t, presignUploadRequest{
+			Filename: "a.txt", ContentType: "text/plain", SizeBytes: 5, IssueID: issueID,
+		}, testUserID, testWorkspaceID)
+		w := completeUpload(t, presign.AttachmentID, testUserID, testWorkspaceID)
+		if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), codeUploadObjectMissing) {
+			t.Fatalf("status = %d body = %s, want 409 %s", w.Code, w.Body.String(), codeUploadObjectMissing)
+		}
+	})
+
+	t.Run("stored size differs from the declaration", func(t *testing.T) {
+		presign := presignUpload(t, presignUploadRequest{
+			Filename: "a.txt", ContentType: "text/plain", SizeBytes: 5, IssueID: issueID,
+		}, testUserID, testWorkspaceID)
+		// Fewer bytes than declared: a truncated PUT must not be published as
+		// the declared file.
+		store.putStagingObject(store.presignedKeys[len(store.presignedKeys)-1], []byte("abc"), "text/plain")
+		w := completeUpload(t, presign.AttachmentID, testUserID, testWorkspaceID)
+		if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), codeUploadSizeMismatch) {
+			t.Fatalf("status = %d body = %s, want 409 %s", w.Code, w.Body.String(), codeUploadSizeMismatch)
+		}
+	})
+}
+
+func TestCompleteAttachmentUpload_CrossWorkspaceAndCrossActorDenied(t *testing.T) {
+	store := installDirectUploadStorage(t)
+	issueID := seedIssueForUpload(t)
+	presign := presignUpload(t, presignUploadRequest{
+		Filename: "a.txt", ContentType: "text/plain", SizeBytes: 2, IssueID: issueID,
+	}, testUserID, testWorkspaceID)
+	store.putStagingObject(store.presignedKeys[0], []byte("hi"), "text/plain")
+
+	// A workspace header naming a workspace the session does not belong to is
+	// indistinguishable from a missing session.
+	otherWorkspace := "00000000-0000-0000-0000-0000000000aa"
+	if w := completeUpload(t, presign.AttachmentID, testUserID, otherWorkspace); w.Code != http.StatusNotFound {
+		t.Fatalf("cross-workspace complete = %d, want 404: %s", w.Code, w.Body.String())
+	}
+
+	// A different user in the same workspace did not request this credential.
+	otherUser := dbfx.Insert(t, "user", testutil.Cols{
+		"name": "Other Uploader", "email": "other-uploader@multica.ai",
+	})
+	dbfx.InsertNoID(t, "member", testutil.Cols{
+		"workspace_id": testWorkspaceID, "user_id": otherUser, "role": "member",
+	}, "workspace_id = $1 AND user_id = $2", testWorkspaceID, otherUser)
+	if w := completeUpload(t, presign.AttachmentID, otherUser, testWorkspaceID); w.Code != http.StatusNotFound {
+		t.Fatalf("cross-actor complete = %d, want 404: %s", w.Code, w.Body.String())
+	}
+
+	// The rightful owner can still complete it.
+	if w := completeUpload(t, presign.AttachmentID, testUserID, testWorkspaceID); w.Code != http.StatusOK {
+		t.Fatalf("owner complete = %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestPresignAttachmentUpload_CrossWorkspaceIssueDenied(t *testing.T) {
+	installDirectUploadStorage(t)
+
+	// A member of another workspace cannot target this workspace's issue: the
+	// workspace membership check fires first, so the request never reaches the
+	// issue lookup.
+	otherUser := dbfx.Insert(t, "user", testutil.Cols{
+		"name": "Outsider", "email": "outsider@multica.ai",
+	})
+	body, _ := json.Marshal(presignUploadRequest{
+		Filename: "a.txt", ContentType: "text/plain", SizeBytes: 5,
+	})
+	r := httptest.NewRequest(http.MethodPost, "/api/attachments/presign-upload", bytes.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set("X-User-ID", otherUser)
+	r.Header.Set("X-Workspace-ID", testWorkspaceID)
+	w := httptest.NewRecorder()
+	testHandler.PresignAttachmentUpload(w, r)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestCompleteAttachmentUpload_TargetDeletedDuringUpload(t *testing.T) {
+	store := installDirectUploadStorage(t)
+	issueID := seedIssueForUpload(t)
+	presign := presignUpload(t, presignUploadRequest{
+		Filename: "a.txt", ContentType: "text/plain", SizeBytes: 2, IssueID: issueID,
+	}, testUserID, testWorkspaceID)
+	store.putStagingObject(store.presignedKeys[0], []byte("hi"), "text/plain")
+
+	// The issue disappears while the bytes are in flight.
+	if _, err := testPool.Exec(context.Background(), `DELETE FROM issue WHERE id = $1`, issueID); err != nil {
+		t.Fatalf("delete issue: %v", err)
+	}
+
+	w := completeUpload(t, presign.AttachmentID, testUserID, testWorkspaceID)
+	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), codeUploadTargetInvalid) {
+		t.Fatalf("status = %d body = %s, want 409 %s", w.Code, w.Body.String(), codeUploadTargetInvalid)
+	}
+
+	// Nothing was published, and the session stays pending so the client can
+	// retry with a live target rather than being told it succeeded.
+	var state string
+	if err := testPool.QueryRow(context.Background(),
+		`SELECT state FROM attachment_upload_session WHERE id = $1`, presign.AttachmentID).Scan(&state); err != nil {
+		t.Fatalf("read session state: %v", err)
+	}
+	if state != "pending" {
+		t.Fatalf("session state = %q, want pending", state)
+	}
+}
+
+func TestCompleteAttachmentUpload_UnboundThenBoundToComment(t *testing.T) {
+	store := installDirectUploadStorage(t)
+	issueID := seedIssueForUpload(t)
+
+	// Upload with no target, exactly what `issue create --attachment` does: the
+	// file must exist before the issue it will be pasted into does.
+	presign := presignUpload(t, presignUploadRequest{
+		Filename: "shot.png", ContentType: "image/png", SizeBytes: 4,
+	}, testUserID, testWorkspaceID)
+	store.putStagingObject(store.presignedKeys[0], []byte("abcd"), "image/png")
+
+	if w := completeUpload(t, presign.AttachmentID, testUserID, testWorkspaceID); w.Code != http.StatusOK {
+		t.Fatalf("complete unbound = %d: %s", w.Code, w.Body.String())
+	}
+
+	// The row is adoptable: no owner set, so the existing binding queries find
+	// it. This is the property that makes an unbound upload usable.
+	var issueNull, commentNull, chatNull, taskNull bool
+	if err := testPool.QueryRow(context.Background(), `
+		SELECT issue_id IS NULL, comment_id IS NULL, chat_session_id IS NULL, task_id IS NULL
+		FROM attachment WHERE id = $1`, presign.AttachmentID,
+	).Scan(&issueNull, &commentNull, &chatNull, &taskNull); err != nil {
+		t.Fatalf("read attachment ownership: %v", err)
+	}
+	if !issueNull || !commentNull || !chatNull || !taskNull {
+		t.Fatalf("unbound upload has an owner: issue=%v comment=%v chat=%v task=%v",
+			issueNull, commentNull, chatNull, taskNull)
+	}
+
+	// A comment created with attachment_ids adopts it, through the same path a
+	// proxied upload would take.
+	commentID := createCommentForUploadTest(t, issueID, presign.AttachmentID)
+	var boundComment pgtype.UUID
+	if err := testPool.QueryRow(context.Background(),
+		`SELECT comment_id FROM attachment WHERE id = $1`, presign.AttachmentID).Scan(&boundComment); err != nil {
+		t.Fatalf("read bound comment: %v", err)
+	}
+	if uuidToString(boundComment) != commentID {
+		t.Fatalf("binding did not adopt the direct upload: comment_id = %q, want %q",
+			uuidToString(boundComment), commentID)
+	}
+}
+
+// createCommentForUploadTest posts a comment with attachment_ids through the
+// handler, returning the new comment id.
+func createCommentForUploadTest(t *testing.T, issueID, attachmentID string) string {
+	t.Helper()
+	body, _ := json.Marshal(map[string]any{
+		"content":        "here is the file",
+		"attachment_ids": []string{attachmentID},
+	})
+	r := httptest.NewRequest(http.MethodPost, "/api/issues/"+issueID+"/comments", bytes.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set("X-User-ID", testUserID)
+	r.Header.Set("X-Workspace-ID", testWorkspaceID)
+	r = testutil.WithURLParams(r, "id", issueID)
+	w := httptest.NewRecorder()
+	testHandler.CreateComment(w, r)
+	if w.Code != http.StatusOK && w.Code != http.StatusCreated {
+		t.Fatalf("create comment = %d: %s", w.Code, w.Body.String())
+	}
+	var out map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode comment: %v", err)
+	}
+	id, _ := out["id"].(string)
+	if id == "" {
+		t.Fatalf("comment response has no id: %s", w.Body.String())
+	}
+	return id
+}
+
+func TestCompleteAttachmentUpload_CommentTargetDeletedRace(t *testing.T) {
+	store := installDirectUploadStorage(t)
+	issueID := seedIssueForUpload(t)
+	commentID := createCommentForUploadTestNoAttachments(t, issueID)
+
+	presign := presignUpload(t, presignUploadRequest{
+		Filename: "a.txt", ContentType: "text/plain", SizeBytes: 2, CommentID: commentID,
+	}, testUserID, testWorkspaceID)
+	store.putStagingObject(store.presignedKeys[0], []byte("hi"), "text/plain")
+
+	// Delete the comment while the upload is in flight. It has no replies, so
+	// the row disappears entirely.
+	if _, err := testPool.Exec(context.Background(),
+		`DELETE FROM comment WHERE id = $1`, commentID); err != nil {
+		t.Fatalf("delete comment: %v", err)
+	}
+
+	w := completeUpload(t, presign.AttachmentID, testUserID, testWorkspaceID)
+	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), codeUploadTargetInvalid) {
+		t.Fatalf("status = %d body = %s, want 409 %s", w.Code, w.Body.String(), codeUploadTargetInvalid)
+	}
+}
+
+func createCommentForUploadTestNoAttachments(t *testing.T, issueID string) string {
+	t.Helper()
+	body, _ := json.Marshal(map[string]any{"content": "target comment"})
+	r := httptest.NewRequest(http.MethodPost, "/api/issues/"+issueID+"/comments", bytes.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set("X-User-ID", testUserID)
+	r.Header.Set("X-Workspace-ID", testWorkspaceID)
+	r = testutil.WithURLParams(r, "id", issueID)
+	w := httptest.NewRecorder()
+	testHandler.CreateComment(w, r)
+	if w.Code != http.StatusOK && w.Code != http.StatusCreated {
+		t.Fatalf("create comment = %d: %s", w.Code, w.Body.String())
+	}
+	var out map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode comment: %v", err)
+	}
+	return out["id"].(string)
+}
+
+func TestPresignAttachmentUpload_TaskIDRequiresTaskToken(t *testing.T) {
+	installDirectUploadStorage(t)
+	issueID := seedIssueForUpload(t)
+
+	body, _ := json.Marshal(presignUploadRequest{
+		Filename: "a.txt", ContentType: "text/plain", SizeBytes: 5,
+		TaskID: "00000000-0000-0000-0000-0000000000bb",
+	})
+	r := httptest.NewRequest(http.MethodPost, "/api/attachments/presign-upload", bytes.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set("X-User-ID", testUserID)
+	r.Header.Set("X-Workspace-ID", testWorkspaceID)
+	_ = issueID
+	w := httptest.NewRecorder()
+	testHandler.PresignAttachmentUpload(w, r)
+
+	// A human session cannot tag an upload with a task: only a task-scoped mat_
+	// token may, and only with its own task.
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "task_id upload is only available") {
+		t.Fatalf("body = %s, want the task-token refusal", w.Body.String())
+	}
+}
+
+func TestCompleteAttachmentUpload_ExpiredSessionRefused(t *testing.T) {
+	store := installDirectUploadStorage(t)
+	issueID := seedIssueForUpload(t)
+	presign := presignUpload(t, presignUploadRequest{
+		Filename: "a.txt", ContentType: "text/plain", SizeBytes: 2, IssueID: issueID,
+	}, testUserID, testWorkspaceID)
+	store.putStagingObject(store.presignedKeys[0], []byte("hi"), "text/plain")
+
+	// The reconciler claims sessions before deleting their objects; a complete
+	// that arrives afterwards must be refused rather than racing the delete.
+	if _, err := testPool.Exec(context.Background(),
+		`UPDATE attachment_upload_session SET state = 'deleting' WHERE id = $1`, presign.AttachmentID); err != nil {
+		t.Fatalf("mark session deleting: %v", err)
+	}
+
+	w := completeUpload(t, presign.AttachmentID, testUserID, testWorkspaceID)
+	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), codeUploadSessionExpired) {
+		t.Fatalf("status = %d body = %s, want 409 %s", w.Code, w.Body.String(), codeUploadSessionExpired)
+	}
+}
+
+// claimDueSession runs one claim against the real database, returning
+// ErrNoRows-equivalent ok=false when nothing is due.
+func claimDueSession(t *testing.T) (db.AttachmentUploadSession, bool) {
+	t.Helper()
+	session, err := testHandler.Queries.ClaimNextAttachmentUploadSessionForReconcile(
+		context.Background(),
+		db.ClaimNextAttachmentUploadSessionForReconcileParams{
+			LeaseToken:    pgtype.UUID{Bytes: [16]byte{1}, Valid: true},
+			LeaseDuration: pgtype.Interval{Microseconds: int64(time.Minute / time.Microsecond), Valid: true},
+			SettleDelay: pgtype.Interval{
+				Microseconds: int64(service.AttachmentUploadReconcileSettleDelay / time.Microsecond),
+				Valid:        true,
+			},
+		})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return db.AttachmentUploadSession{}, false
+	}
+	if err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	return session, true
+}
+
+func TestClaimAttachmentUploadSession_RespectsExpiryAndLease(t *testing.T) {
+	store := installDirectUploadStorage(t)
+	issueID := seedIssueForUpload(t)
+
+	// live is still inside its presign window: its PUT may be in flight, so the
+	// claim must leave it alone.
+	live := presignUpload(t, presignUploadRequest{
+		Filename: "live.txt", ContentType: "text/plain", SizeBytes: 2, IssueID: issueID,
+	}, testUserID, testWorkspaceID)
+	store.putStagingObject(store.presignedKeys[len(store.presignedKeys)-1], []byte("hi"), "text/plain")
+
+	// Push every other due session out of the way so the claim below can only
+	// pick the one this test is about.
+	if _, err := testPool.Exec(context.Background(),
+		`UPDATE attachment_upload_session SET next_attempt_at = now() + interval '1 day' WHERE id <> $1`,
+		live.AttachmentID); err != nil {
+		t.Fatalf("park other sessions: %v", err)
+	}
+
+	if _, ok := claimDueSession(t); ok {
+		t.Fatalf("claimed a session whose presigned URL has not expired")
+	}
+
+	// An expired session past the settle delay is reclaimable.
+	if _, err := testPool.Exec(context.Background(), `
+		UPDATE attachment_upload_session
+		SET expires_at = now() - interval '1 hour', next_attempt_at = now()
+		WHERE id = $1`, live.AttachmentID); err != nil {
+		t.Fatalf("expire session: %v", err)
+	}
+	claimed, ok := claimDueSession(t)
+	if !ok {
+		t.Fatalf("did not claim an expired session")
+	}
+	if uuidToString(claimed.ID) != live.AttachmentID {
+		t.Fatalf("claimed session %q, want %q", uuidToString(claimed.ID), live.AttachmentID)
+	}
+	if claimed.State != "deleting" {
+		t.Fatalf("claimed session state = %q, want deleting (the claim fences publishing)", claimed.State)
+	}
+
+	// A claimed session's lease keeps a second replica off it.
+	if _, ok := claimDueSession(t); ok {
+		t.Fatalf("claimed a session another replica holds the lease on")
+	}
+}

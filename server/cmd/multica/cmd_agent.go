@@ -962,15 +962,13 @@ func runAgentAvatar(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("file too large: %d bytes (max 5MB)", info.Size())
 	}
 
-	fileData, err := os.ReadFile(filePath)
-	if err != nil {
-		return fmt.Errorf("read file: %w", err)
-	}
-
-	// Defensive re-check: guard against TOCTOU race where the file
-	// was swapped between stat and read.
-	if len(fileData) > maxSize {
-		return fmt.Errorf("file too large: %d bytes (max 5MB)", len(fileData))
+	// Open once to prove readability before anything is uploaded. The avatar is
+	// streamed rather than read into memory; the size guard above is the same
+	// bound the reader enforces when it opens the file per attempt.
+	if file, openErr := os.Open(filePath); openErr != nil {
+		return fmt.Errorf("read file: %w", openErr)
+	} else {
+		file.Close()
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), cli.AtLeastAPITimeout(60*time.Second))
@@ -982,7 +980,7 @@ func runAgentAvatar(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("get agent: %w", err)
 	}
 
-	id, url, err := client.UploadFileWithURL(ctx, fileData, filePath)
+	id, url, err := client.UploadFileWithURLStream(ctx, filePath)
 	if err != nil {
 		return fmt.Errorf("upload avatar: %w", err)
 	}

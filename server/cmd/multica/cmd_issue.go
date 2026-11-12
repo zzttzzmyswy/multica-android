@@ -1383,22 +1383,34 @@ func ensureAttachmentWithinWorkdir(cmd *cobra.Command, filePath string) error {
 	return nil
 }
 
-// pendingAttachment is a local --attachment file that passed URL filtering and
-// the workdir guard and has been read into memory, ready to upload.
+// pendingAttachment is a local --attachment file that passed URL filtering, the
+// workdir guard and the size/readability preflight, ready to upload.
+//
+// It holds the file's PATH and length, not its bytes. Uploading streams from
+// disk, so a command with three 100 MiB attachments costs one file descriptor
+// and one copy buffer rather than 300 MiB of heap — and the legacy multipart
+// fallback streams the same way instead of rebuilding the buffer it used to
+// build here.
 type pendingAttachment struct {
 	path string
-	data []byte
+	size int64
 }
 
-// collectLocalAttachments validates and reads ALL local --attachment paths up
-// front, before any upload. URL-shaped values are warned and skipped (the API
-// only accepts local paths). Each remaining path is run through the MUL-4252
-// workdir guard and read into memory; the first invalid or unreadable path
-// returns an error with nothing uploaded. Both `issue create` and
-// `comment add` share this so an invalid attachment can never leave an earlier
-// one uploaded as an orphaned issue attachment while the issue/comment is never
-// created (which would duplicate on retry). `issue update` also uses this
-// preflight so an invalid later path cannot leave earlier files uploaded.
+// collectLocalAttachments validates ALL local --attachment paths up front,
+// before any upload. URL-shaped values are warned and skipped (the API only
+// accepts local paths). Each remaining path is run through the MUL-4252 workdir
+// guard, then opened once to prove it is a readable regular file and to record
+// its length; the first invalid or unreadable path returns an error with
+// nothing uploaded. Both `issue create` and `comment add` share this so an
+// invalid attachment can never leave an earlier one uploaded as an orphaned
+// issue attachment while the issue/comment is never created (which would
+// duplicate on retry). `issue update` also uses this preflight so an invalid
+// later path cannot leave earlier files uploaded.
+//
+// The size is recorded here rather than at upload time because the presigned PUT
+// is signed with it: a file that changes size between the check and the upload
+// must fail loudly instead of sending bytes whose length contradicts the
+// credential.
 func collectLocalAttachments(cmd *cobra.Command, attachments []string) ([]pendingAttachment, error) {
 	pending := make([]pendingAttachment, 0, len(attachments))
 	for _, filePath := range attachments {
@@ -1409,11 +1421,22 @@ func collectLocalAttachments(cmd *cobra.Command, attachments []string) ([]pendin
 		if err := ensureAttachmentWithinWorkdir(cmd, filePath); err != nil {
 			return nil, err
 		}
-		data, readErr := os.ReadFile(filePath)
-		if readErr != nil {
-			return nil, fmt.Errorf("read attachment %s: %w", filePath, readErr)
+		info, statErr := os.Stat(filePath)
+		if statErr != nil {
+			return nil, fmt.Errorf("read attachment %s: %w", filePath, statErr)
 		}
-		pending = append(pending, pendingAttachment{path: filePath, data: data})
+		if info.IsDir() {
+			return nil, fmt.Errorf("read attachment %s: is a directory, not a file", filePath)
+		}
+		// Open once as well as stat: a path that stats but cannot be opened
+		// (permissions, a broken symlink target) must fail here, before any
+		// earlier file is uploaded.
+		file, openErr := os.Open(filePath)
+		if openErr != nil {
+			return nil, fmt.Errorf("read attachment %s: %w", filePath, openErr)
+		}
+		file.Close()
+		pending = append(pending, pendingAttachment{path: filePath, size: info.Size()})
 	}
 	return pending, nil
 }
@@ -1684,7 +1707,7 @@ func runIssueCreate(cmd *cobra.Command, _ []string) error {
 	// retry is safe and cannot duplicate.
 	uploaded := make([]cli.AttachmentResponse, 0, len(pending))
 	for _, att := range pending {
-		result, uploadErr := client.UploadIssueAttachment(ctx, att.data, att.path, "")
+		result, uploadErr := client.UploadAttachmentFile(ctx, att.path, "")
 		if uploadErr != nil {
 			return fmt.Errorf("upload attachment %s (no issue created): %w", att.path, uploadErr)
 		}
@@ -1938,7 +1961,7 @@ func runIssueUpdate(cmd *cobra.Command, args []string) error {
 	attachmentIDs := make([]string, 0, len(pending))
 	attachmentRefs := make([]cli.AttachmentResponse, 0, len(pending))
 	for _, att := range pending {
-		uploaded, uploadErr := client.UploadIssueAttachment(ctx, att.data, att.path, "")
+		uploaded, uploadErr := client.UploadAttachmentFile(ctx, att.path, "")
 		if uploadErr != nil {
 			return fmt.Errorf("upload attachment %s: %w; already uploaded IDs: %v", att.path, uploadErr, attachmentIDs)
 		}
@@ -2709,7 +2732,7 @@ func runIssueCommentAdd(cmd *cobra.Command, args []string) error {
 	uploaded := make([]cli.AttachmentResponse, 0, len(pending))
 	for _, att := range pending {
 		// Comment attachments are linked by the comment request; upload them unbound first.
-		result, uploadErr := client.UploadIssueAttachment(ctx, att.data, att.path, "")
+		result, uploadErr := client.UploadAttachmentFile(ctx, att.path, "")
 		if uploadErr != nil {
 			return fmt.Errorf("upload attachment %s: %w", att.path, uploadErr)
 		}
