@@ -163,8 +163,8 @@ time no longer tracks the upload. The **100 MiB** attachment limit is unchanged
 and is enforced on the declared size, on the stored object's size, and again
 after the copy.
 
-Configuring the bucket is all that is required; see
-[Environment variables](/environment-variables#direct-upload) for the
+Configure a reachable bucket and browser CORS; see
+[Environment variables](https://multica.ai/docs/environment-variables#direct-upload) for the
 permissions, the two storage preconditions, and the CORS rule browser callers
 need.
 
@@ -193,7 +193,7 @@ is final and is reported.
 The web and desktop apps use the same contract, which means the browser PUTs
 cross-origin to your bucket. Without a matching CORS rule the browser blocks
 that request and the upload never completes; see the CORS section in
-[Environment variables](/environment-variables#browser-cors). The PUT carries no
+[Environment variables](https://multica.ai/docs/environment-variables#browser-cors). The PUT carries no
 Multica credential — no `Authorization` header and no cookie — and sends the
 `File` as the body, letting the browser frame `Content-Length`. `Content-Length`
 and `Host` are never set by script.

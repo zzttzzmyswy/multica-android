@@ -182,9 +182,9 @@ Two storage behaviours are load-bearing and are not validated when the credentia
 | `CopyObject` honouring `x-amz-copy-source-if-match` | The staged object is copied to its permanent key under a precondition. Without it a client could PUT different bytes into the still-valid staging key between the server's inspection and the copy, and have them published as the validated file. | `complete-upload` |
 | `GetObject` honouring `If-Match` | The server reads the first bytes to detect the content type and image dimensions. The condition binds that read to the exact object version the copy is pinned to; without it the published bytes and the published metadata can describe different objects. | `complete-upload` |
 
-A bucket that ignores or rejects either one breaks the guarantee. Verify both once against your provider before enabling direct upload; a bucket that does not support them fails visibly at completion rather than silently.
+A provider that rejects either condition causes completion to fail. A provider that silently ignores a condition can publish inconsistent content without an error. Verify that both conditions are enforced before relying on direct upload.
 
-Amazon S3, MinIO, Cloudflare R2 and RustFS implement both. **Aliyun OSS compatibility is not verified by this project's tests**, which run against a local S3-compatible server; treat OSS as untested and check the two conditions above before relying on it.
+Local integration tests exercise RustFS. **Aliyun OSS compatibility is not verified by this project's tests**; treat OSS as untested and check the two conditions above before relying on it.
 
 #### Browser CORS [#browser-cors]
 

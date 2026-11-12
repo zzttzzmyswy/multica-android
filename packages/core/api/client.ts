@@ -4261,14 +4261,10 @@ export class ApiClient {
     }
 
     if (!res.ok) {
-      // The store's body names the rejection (signature mismatch, CORS, policy)
-      // and helps an operator far more than the status alone. It never contains
-      // the credential, so a bounded excerpt is safe to surface.
-      const detail = (await res.text().catch(() => "")).slice(0, 300).trim();
+      // Storage/proxy error bodies can echo the signed request URL. Report
+      // only the status so callers cannot put that credential into UI or logs.
       this.logger.error(`← ${res.status} PUT object storage`, { rid, duration: `${Date.now() - start}ms` });
-      throw new Error(
-        `Upload to storage failed: ${res.status}${detail ? ` (${detail})` : ""}`,
-      );
+      throw new Error(`Upload to storage failed: ${res.status}`);
     }
     this.logger.info(`← ${res.status} PUT object storage`, { rid, duration: `${Date.now() - start}ms` });
   }

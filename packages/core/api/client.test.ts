@@ -3868,7 +3868,7 @@ describe("ApiClient presigned direct upload", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("propagates a rejected PUT with the store's own explanation and no fallback", async () => {
+  it("propagates a rejected PUT status without its body or a fallback", async () => {
     const fetchMock = vi.fn().mockImplementation((url: string) => {
       if (String(url).endsWith("/api/attachments/presign-upload")) {
         return Promise.resolve(jsonResponse(presignResponse));
@@ -3885,7 +3885,7 @@ describe("ApiClient presigned direct upload", () => {
 
     await expect(
       client().uploadFile(new File(["hello"], "report.pdf", { type: "application/pdf" })),
-    ).rejects.toThrow(/SignatureDoesNotMatch/);
+    ).rejects.toThrow(/^Upload to storage failed: 403$/);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -4081,6 +4081,18 @@ describe("ApiClient presigned direct upload", () => {
     expect(logged).not.toContain("bucket.example.test");
     // The failure is still diagnosable: the field that failed is named.
     expect(logged).toContain("method");
+  });
+
+  it("does not expose a signed URL echoed in a storage error response", async () => {
+    const { fetchMock } = stubUploadRoutes({
+      presign: () => jsonResponse(presignResponse),
+      put: () => new Response(`<Error><Resource>${PRESIGN_URL}</Resource></Error>`, { status: 403 }),
+    });
+    await expect(
+      client().uploadFile(new File(["hello"], "report.pdf", { type: "application/pdf" })),
+    ).rejects.toThrow(/^Upload to storage failed: 403$/);
+    expect(fetchMock.mock.calls).toHaveLength(2);
+    expect(JSON.stringify(logger.error.mock.calls)).not.toContain("X-Amz-Signature");
   });
 
   it("keeps the presigned URL out of a failed PUT's error message", async () => {
