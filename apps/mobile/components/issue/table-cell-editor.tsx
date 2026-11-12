@@ -17,8 +17,30 @@
  * for scalar fields, `useAttachLabel`/`useDetachLabel` (+ `useCreateLabel`)
  * for labels, and the shared property editor's own mutations. They all patch
  * the list caches optimistically, so the cell flips on tap.
+ *
+ * ## The status cell is a handoff surface too (MYS-2743 follow-up)
+ *
+ * This sheet is permanently reachable from three screens (my-issues, the
+ * all-issues page, a project's issue surface), so a status tap here is one of
+ * the app's most likely ways to reassign an issue — and iteration 290's first
+ * cut left it writing straight through `useUpdateIssue`, bypassing the gate
+ * that the other four surfaces go through. Upstream keeps one dialog for every
+ * surface (`packages/views/issues/components/table-view.tsx` renders the same
+ * `StatusPicker` there); a half-wired app is worse than an unwired one because
+ * the surfaces that DO ask make this one look trustworthy.
+ *
+ * Two details are load-bearing:
+ *
+ *   - The status list is narrowed by the issue's OWN project
+ *     (`projectId={issue.project_id}`, which upstream passes here as well).
+ *     Without it the body falls back to the unlimited catalog and offers
+ *     columns the server refuses with `status_not_in_workflow`.
+ *   - The picker sheet CLOSES before the confirmation opens, and the gated
+ *     issue is held in `gateIssue` so the gate keeps a subject while `target`
+ *     is null. Two stacked RN `Modal`s are not reliably layered on Android, and
+ *     the hook's preview needs the issue id after the sheet is gone.
  */
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import type {
@@ -52,6 +74,8 @@ import {
 import { useCreateLabel } from "@/data/mutations/labels";
 import { projectListOptions } from "@/data/queries/projects";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { useHandoffGate } from "@/data/use-handoff-gate";
+import { HandoffConfirmDialog } from "./workflow-handoff-dialog";
 import {
   propertyIdFromTableColumn,
   type TableColumnKey,
@@ -101,16 +125,88 @@ export function IssueCellEditor({ target, onClose, title }: Props) {
   const { data: projects = [] } = useQuery(projectListOptions(wsId));
   const [query, setQuery] = useState("");
 
-  // A search typed into one cell's sheet must not pre-filter the next one.
+  /**
+   * The issue the pending handoff is about.
+   *
+   * Two sources, in this order, and both are needed:
+   *
+   *   - `target.issue` while the cell sheet is open — the gate must be given
+   *     the issue on the SAME render the pick happens, because `gate` runs
+   *     synchronously inside the tap handler and `setGateIssue` will not have
+   *     been applied yet. Reading state alone here made the first tap look like
+   *     "no issue" and refuse every ordinary status change.
+   *   - `gateIssue` after the sheet closes — the confirmation is a sibling
+   *     modal, so the hook has to keep a subject once `target` is gone, both
+   *     for its preview query and for the sentence it renders.
+   */
+  const [gateIssue, setGateIssue] = useState<Issue | null>(null);
+  const handoff = useHandoffGate(target?.issue ?? gateIssue, {
+    // The write itself carries the issue id in the closure handed to `gate`;
+    // all that is left is forgetting the subject so a later, unrelated pick
+    // cannot be gated against a stale issue.
+    onWritten: () => setGateIssue(null),
+  });
+
+  /**
+   * Dismissing the confirmation also forgets the subject.
+   *
+   * `handoff.cancel` abandons the held write (the tested decision), but this
+   * component owns the issue the preview was about. Leaving it set would let a
+   * later, unrelated re-render keep a dialog keyed on an old row — and the next
+   * pick would gate against the stale issue rather than the tapped one.
+   */
+  const { cancel: cancelPendingHandoff } = handoff;
+  const cancelHandoff = useCallback(() => {
+    cancelPendingHandoff();
+    setGateIssue(null);
+  }, [cancelPendingHandoff]);
+
   useEffect(() => {
+    // A search typed into one cell's sheet must not pre-filter the next one.
     setQuery("");
   }, [target?.issue.id, target?.column]);
 
-  if (!target) return null;
+  if (!target) {
+    // The sheet is closed, but a confirmation may still be up — it is a
+    // sibling modal, not a child of the sheet.
+    return (
+      <HandoffConfirmDialog
+        issue={handoff.pending && gateIssue
+          ? { id: gateIssue.id, identifier: gateIssue.identifier }
+          : null}
+        target={handoff.pending ?? { kind: "status", status: "" }}
+        preview={handoff.preview ?? null}
+        readState={handoff.readState}
+        onRetry={handoff.retry}
+        onCancel={cancelHandoff}
+        onConfirm={handoff.confirm}
+      />
+    );
+  }
 
   const commit = (patch: UpdateIssueRequest) => {
     onClose();
     updateIssue.mutate(patch);
+  };
+
+  /**
+   * A status pick from the inline cell.
+   *
+   * The sheet closes FIRST and the gate decides: if the move can hand off, the
+   * confirmation takes over; otherwise the write lands immediately (and the
+   * cell flips on the optimistic patch). Closing first is not cosmetic — the
+   * gate's own modal would otherwise sit under this one.
+   */
+  const commitStatus = (issue: Issue, status: string) => {
+    if (status === issue.status) {
+      onClose();
+      return;
+    }
+    setGateIssue(issue);
+    onClose();
+    handoff.gate({ kind: "status", status }, (control) => {
+      updateIssue.mutate({ status, ...control });
+    });
   };
 
   const propertyId = propertyIdFromTableColumn(target.column);
@@ -124,32 +220,46 @@ export function IssueCellEditor({ target, onClose, title }: Props) {
     target.column === "labels";
 
   return (
-    <PickerSheet title={title} visible onClose={onClose} fill={fill}>
-      {propertyId ? (
-        <PropertyValueEditor
-          issueId={target.issue.id}
-          propertyId={propertyId}
-          onClose={onClose}
-        />
-      ) : (
-        <CellBody
-          issue={target.issue}
-          column={target.column}
-          query={query}
-          onQueryChange={setQuery}
-          projects={projects}
-          onCommit={commit}
-          onAttachLabel={(label) => attachLabel.mutate({ label })}
-          onDetachLabel={(labelId) => detachLabel.mutate({ labelId })}
-          onCreateLabel={(name, color) =>
-            createLabel.mutate(
-              { name, color },
-              { onSuccess: (label: Label) => attachLabel.mutate({ label }) },
-            )
-          }
-        />
-      )}
-    </PickerSheet>
+    <>
+      <PickerSheet title={title} visible onClose={onClose} fill={fill}>
+        {propertyId ? (
+          <PropertyValueEditor
+            issueId={target.issue.id}
+            propertyId={propertyId}
+            onClose={onClose}
+          />
+        ) : (
+          <CellBody
+            issue={target.issue}
+            column={target.column}
+            query={query}
+            onQueryChange={setQuery}
+            projects={projects}
+            onCommit={commit}
+            onCommitStatus={commitStatus}
+            onAttachLabel={(label) => attachLabel.mutate({ label })}
+            onDetachLabel={(labelId) => detachLabel.mutate({ labelId })}
+            onCreateLabel={(name, color) =>
+              createLabel.mutate(
+                { name, color },
+                { onSuccess: (label: Label) => attachLabel.mutate({ label }) },
+              )
+            }
+          />
+        )}
+      </PickerSheet>
+      <HandoffConfirmDialog
+        issue={handoff.pending && gateIssue
+          ? { id: gateIssue.id, identifier: gateIssue.identifier }
+          : null}
+        target={handoff.pending ?? { kind: "status", status: "" }}
+        preview={handoff.preview ?? null}
+        readState={handoff.readState}
+        onRetry={handoff.retry}
+        onCancel={cancelHandoff}
+        onConfirm={handoff.confirm}
+      />
+    </>
   );
 }
 
@@ -160,6 +270,7 @@ function CellBody({
   onQueryChange,
   projects,
   onCommit,
+  onCommitStatus,
   onAttachLabel,
   onDetachLabel,
   onCreateLabel,
@@ -170,6 +281,8 @@ function CellBody({
   onQueryChange: (query: string) => void;
   projects: Project[];
   onCommit: (patch: UpdateIssueRequest) => void;
+  /** Status is gated (see `IssueCellEditor`), so it takes its own path. */
+  onCommitStatus: (issue: Issue, status: string) => void;
   onAttachLabel: (label: Label) => void;
   onDetachLabel: (labelId: string) => void;
   onCreateLabel: (name: string, color: string) => void;
@@ -181,7 +294,15 @@ function CellBody({
       return (
         <StatusPickerBody
           value={issue.status}
-          onChange={(status) => onCommit({ status })}
+          // The issue's OWN project decides which statuses exist. Passing
+          // `undefined` here (as this cell used to) is not a neutral default:
+          // it means "this surface spans projects", so the body offers the
+          // whole catalog — including columns this issue's workflow does not
+          // contain, which the server then refuses with
+          // `status_not_in_workflow`. Upstream passes the same prop to the
+          // table's `StatusPicker` (`table-view.tsx`, `case "status"`).
+          projectId={issue.project_id}
+          onChange={(status) => onCommitStatus(issue, status)}
         />
       );
     case "priority":

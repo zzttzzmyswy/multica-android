@@ -44,13 +44,18 @@
  * three times (iterations 251, 254, 256: folding "could not read" into "there
  * is nothing"). So `workflowState !== "ready"` short-circuits to `refuse`, and
  * the only path to `apply` is a loaded workflow that says so.
+ *
+ * The same rule covers the PROJECT LIST, which is what iteration 290's first
+ * cut got wrong: the status branch resolved the issue's workflow through the
+ * project list and mapped "project not in the list yet" to `apply`, while the
+ * project-move branch mapped the identical state to `refuse`. Both are now
+ * `refuse`, and `apply` on a project issue requires the list to have answered.
  */
 import type { IssueWorkflow, Project } from "@multica/core/types";
 import {
   projectMoveMayHandOff,
   resolveProjectWorkflow,
   stepHandsOff,
-  workflowAllowsStatus,
   workflowStep,
 } from "@/lib/workflow";
 import type { WorkflowReadState } from "@/lib/workflow-status-scope";
@@ -85,8 +90,19 @@ export function qualifiesForHandoffGate(input: HandoffGateInput): HandoffGateOut
   if (target.kind === "status") {
     // Same column: nothing moves, so nothing can hand off.
     if (target.status === issue.status) return "apply";
+    // An issue IN a project needs that project to be resolvable before any
+    // non-move answer is allowed. The project list is a SEPARATE read from the
+    // workflow list and has no staleTime, while `useIssueWorkflows` holds for
+    // five minutes — so "workflows ready, projects in flight" is the ordinary
+    // state of a page's first frames, not a corner. Reading that state as
+    // "no workflow → apply" silently reassigned on exactly the projects this
+    // iteration exists to protect. See the header's POSITIVE-answer rule.
+    if (issue.project_id && !projects) return "refuse";
     const workflow = issueStatusWorkflowFor(workflows, projects, issue);
-    if (!workflow) return "apply";
+    // A project id the LOADED list does not know: the server would reject this
+    // status (`status_not_in_workflow`) and the client cannot say whether the
+    // column hands off. Not a positive answer, so it does not apply.
+    if (!workflow) return "refuse";
     return stepHandsOff(workflowStep(workflow, target.status)) ? "confirm" : "apply";
   }
 
@@ -125,7 +141,3 @@ function issueStatusWorkflowFor(
   if (!project) return null;
   return resolveProjectWorkflow(workflows, project);
 }
-
-/** Re-exported so a caller can ask "does this column accept a handler at all"
- *  without importing two modules. */
-export { stepHandsOff, workflowAllowsStatus };

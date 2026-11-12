@@ -198,3 +198,73 @@ describe("the control fields never reach the optimistic cache", () => {
     expect(move.slice(0, 400)).toContain("stop_previous_assignee_runs");
   });
 });
+
+/**
+ * The FIFTH status-write surface (MYS-2743 follow-up).
+ *
+ * The four surfaces above were wired; the issue TABLE's inline status cell was
+ * not, and it is the one that sits permanently editable inside three screens
+ * (my-issues, the all-issues page, a project's issue surface). A half-wired app
+ * is worse than an unwired one: the surfaces that DO ask make the one that
+ * does not look trustworthy.
+ *
+ * Two separate faults are pinned here, because fixing only the first would
+ * leave the second: the cell wrote straight through the mutation (silent
+ * reassign), and it passed no `projectId` to the picker body (offering statuses
+ * the issue's own workflow does not contain).
+ */
+describe("the table's inline status cell is gated too", () => {
+  const file = "components/issue/table-cell-editor.tsx";
+
+  it("gates its status write through the shared gate", () => {
+    const src = code(file);
+    expect(src).toContain("useHandoffGate");
+    expect(src).toContain("handoff.gate(");
+    expect(src).toContain("HandoffConfirmDialog");
+    expect(src).toMatch(/\.\.\.control\b/);
+  });
+
+  it("gates the dialog's `issue` on the pending target", () => {
+    // Same contract as every other call site: an unconditionally-passed issue
+    // opened the sheet on mount with an empty target.
+    const src = code(file);
+    const at = src.indexOf("<HandoffConfirmDialog");
+    expect(at).toBeGreaterThan(-1);
+    const element = src.slice(at, src.indexOf("/>", at));
+    expect(element).toMatch(/issue=\{[^}]*pending/);
+  });
+
+  it("narrows the status list by the issue's own project", () => {
+    // Upstream passes `projectId={issue.project_id}` to the table's
+    // StatusPicker (`packages/views/issues/components/table-view.tsx`, the
+    // `case "status"` branch). Omitting it — as this cell used to — falls back
+    // to the unlimited catalog and offers columns the server refuses with
+    // `status_not_in_workflow`.
+    const src = code(file);
+    const at = src.indexOf("<StatusPickerBody");
+    expect(at).toBeGreaterThan(-1);
+    const element = src.slice(at, src.indexOf("/>", at));
+    expect(element).toContain("projectId={issue.project_id}");
+  });
+
+  it("gives the gate a subject on the tap render, not only after it", () => {
+    // `gate()` runs synchronously inside the tap handler, so an issue that only
+    // arrives via `setState` is not there yet — the first tap on any ordinary
+    // status would look like "no issue" and refuse. The subject must be the
+    // live target while the sheet is open, falling back to the remembered one
+    // once it closes.
+    const src = code(file);
+    const at = src.indexOf("useHandoffGate(");
+    expect(at).toBeGreaterThan(-1);
+    expect(src.slice(at, src.indexOf("\n  );", at))).toMatch(/target\?\.issue\s*\?\?/);
+  });
+
+  it("is not wired through the raw mutation any more", () => {
+    // A `case "status"` that commits directly is the defect itself: it bypasses
+    // every rule the gate carries (ask-on-handoff, refuse-when-unread).
+    const src = code(file);
+    const statusCase = src.slice(src.indexOf('case "status":'));
+    const body = statusCase.slice(0, statusCase.indexOf('case "priority":'));
+    expect(body).not.toMatch(/onCommit\(\s*\{\s*status\s*\}/);
+  });
+});

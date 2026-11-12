@@ -241,3 +241,63 @@ describe("project moves", () => {
     ).toBe("refuse");
   });
 });
+
+/**
+ * The project list is a SEPARATE read from the workflow list (MYS-2743
+ * follow-up, found reviewing iteration 290's own diff).
+ *
+ * `useIssueWorkflows` carries a 5-minute staleTime while `projectListOptions`
+ * has none, so "workflows loaded, projects still in flight" is not a corner —
+ * it is the ordinary state of a page's first frames. Both branches below must
+ * answer that state the same way: `refuse`, never `apply`.
+ */
+describe("an unread PROJECT LIST is not a positive answer", () => {
+  it("MUTATION GUARD: a project issue whose project list is unread refuses", () => {
+    // The defect this guards: `issueStatusWorkflowFor` returns null when the
+    // issue's project is not in the (unloaded) list, and the status branch
+    // used to read that null as "no workflow → nothing hands off → apply".
+    // That silently reassigned, on a cold start, on a project whose workflow
+    // DOES hand off — the exact defect iteration 290 exists to remove.
+    expect(
+      qualifiesForHandoffGate({
+        ...base,
+        projects: undefined,
+        issue: { status: "todo", project_id: "p-handoff" },
+        target: { kind: "status", status: "in_progress" },
+        workflows: [defaultWorkflow, handoffWorkflow],
+      }),
+    ).toBe("refuse");
+  });
+
+  it("still applies a project-LESS issue while the project list is unread", () => {
+    // A project-less issue is limited by Default, which needs no project list.
+    // Refusing here would put a "couldn't check" sheet in front of every status
+    // change in every workspace without projects — an over-refusal is its own
+    // defect, and this pins the boundary of the fix above.
+    expect(
+      qualifiesForHandoffGate({
+        ...base,
+        projects: undefined,
+        issue: { status: "todo", project_id: null },
+        target: { kind: "status", status: "in_progress" },
+        workflows: [defaultWorkflow, handoffWorkflow],
+      }),
+    ).toBe("apply");
+  });
+
+  it("refuses when the issue's project id is stale and not in a LOADED list", () => {
+    // `projects` present but the id absent is a different case from "unloaded":
+    // the list answered and does not know this project. The list is complete,
+    // so the issue's workflow cannot exist — upstream narrows such an issue to
+    // nothing, and the server would reject the status. Refuse rather than
+    // assert that no workflow has a handler.
+    expect(
+      qualifiesForHandoffGate({
+        ...base,
+        issue: { status: "todo", project_id: "p-vanished" },
+        target: { kind: "status", status: "in_progress" },
+        workflows: [defaultWorkflow, handoffWorkflow],
+      }),
+    ).toBe("refuse");
+  });
+});
