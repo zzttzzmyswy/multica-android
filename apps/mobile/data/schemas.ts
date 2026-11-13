@@ -48,6 +48,7 @@ import type {
   IssueTriggerPreview,
   IssueWorkflowHandlerType,
   IssueWorkflowDryRunResponse,
+  WorkflowHandoffPreview,
   Label,
   ListIssueStatusesResponse,
   ListIssueWorkflowsResponse,
@@ -495,6 +496,80 @@ export const IssueWorkflowDryRunResponseSchema = z
 export const EMPTY_ISSUE_WORKFLOW_DRY_RUN: IssueWorkflowDryRunResponse = {
   dry_run: true,
   plan: { required: [], unchanged: [], total_issues: 0, affected_issues: 0 },
+};
+
+/**
+ * `GET /api/issues/{id}/workflow-handoff` — what a status change or project
+ * move would do (MUL-7420, MYS-2743).
+ *
+ * Transcribed from the deployed server's real bodies, not from the idealised
+ * type. Two facts about that server shape the schema:
+ *
+ *  - `workflow_name`, `handler_type`, `handler_id` and `brief` are
+ *    `json:"...,omitempty"`, so a **no-handoff** answer omits all four
+ *    entirely. They therefore default rather than being required: a schema
+ *    that demanded them would fail on every ordinary status change, and the
+ *    fallback would then be indistinguishable from "no handoff" — the defect
+ *    this iteration removes.
+ *  - `handler_type` is an open string on the wire. An unknown value degrades to
+ *    null (the dialog then shows no reassignment sentence) instead of failing
+ *    the parse, which is the repo's standard enum-drift rule.
+ *
+ * `previous_runs` defaults to `[]` because the box it drives is "there are runs
+ * to stop"; a body that drifted must not conjure runs into existence.
+ */
+const HANDOFF_HANDLER_TYPES = new Set(["agent", "squad", "member"]);
+
+const WorkflowHandoffRunSchema = z
+  .object({
+    task_id: z.string(),
+    agent_id: z.string(),
+    status: z.string().default(""),
+    started_at: z.string().nullable().default(null),
+  })
+  .loose();
+
+export const WorkflowHandoffPreviewSchema = z
+  .object({
+    handoff: z.boolean().default(false),
+    workflow_name: z.string().default(""),
+    from_status: z.string().default(""),
+    to_status: z.string().default(""),
+    handler_type: z
+      .string()
+      .nullable()
+      .optional()
+      .transform((value): WorkflowHandoffPreview["handler_type"] =>
+        value && HANDOFF_HANDLER_TYPES.has(value)
+          ? (value as "agent" | "squad" | "member")
+          : null,
+      ),
+    handler_id: z
+      .string()
+      .nullable()
+      .optional()
+      .transform((value) => value || null),
+    previous_assignee_type: z.string().nullable().default(null),
+    previous_assignee_id: z.string().nullable().default(null),
+    previous_runs: z.array(WorkflowHandoffRunSchema).default([]),
+    brief: z.string().default(""),
+  })
+  .loose();
+
+/** A preview the client could not read says "no handoff, no handler". Only ever
+ *  the fallback for an UNPARSEABLE body — never a stand-in for a failed
+ *  request, which must stay distinguishable (see `lib/workflow-handoff.ts`). */
+export const EMPTY_WORKFLOW_HANDOFF_PREVIEW: WorkflowHandoffPreview = {
+  handoff: false,
+  workflow_name: "",
+  from_status: "",
+  to_status: "",
+  handler_type: null,
+  handler_id: null,
+  previous_assignee_type: null,
+  previous_assignee_id: null,
+  previous_runs: [],
+  brief: "",
 };
 
 export const ProjectSchema = z.object({
