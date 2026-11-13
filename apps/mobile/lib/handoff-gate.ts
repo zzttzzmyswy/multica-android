@@ -141,3 +141,39 @@ function issueStatusWorkflowFor(
   if (!project) return null;
   return resolveProjectWorkflow(workflows, project);
 }
+
+/**
+ * WHICH issue a gated write must be addressed to (MYS-2743 follow-up).
+ *
+ * The gate DEFERS writes: a pick that may hand off closes its sheet and holds
+ * the write until the user confirms (or until the preview says there is nothing
+ * to hand off). The sheet's `target` is gone for that whole interval — and it
+ * also disappears for reasons unrelated to the pick, because a table derives it
+ * from the live row list, so a realtime refresh that drops the row clears it
+ * mid-confirmation.
+ *
+ * A surface that binds its mutation to `target.issue.id` therefore
+ * re-renders with an EMPTY id at exactly the moment the deferred write fires.
+ * `useUpdateIssue` closes over that id in its `mutationFn`, and TanStack's
+ * `useMutation` pushes the fresh options into its observer from an effect after
+ * every render while `mutate` reads the observer's CURRENT options at call
+ * time — so the write goes to the collection URL with no id rather than to the
+ * issue. Measured, not inferred: driving a real `MutationObserver` through
+ * `setOptions("")` then `mutate()` issues `PUT /api/issues/`.
+ *
+ * The rule is therefore: address the write to the same SUBJECT the gate was
+ * given. Both call sites must read the id through this function so the two can
+ * never diverge again — the dialog's subject and the write's destination are
+ * one decision, and separating them is what created the empty-id window.
+ *
+ * `""` is a real answer (neither is known) and callers must not write on it;
+ * it is returned rather than null so the type stays a plain id.
+ */
+export function handoffSubjectIssueId(
+  targetIssueId: string | null | undefined,
+  rememberedIssueId: string | null | undefined,
+): string {
+  // The live target wins: it is the row the user actually tapped, and it is
+  // correct on the tap render, before any state update has been applied.
+  return targetIssueId || rememberedIssueId || "";
+}

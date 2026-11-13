@@ -268,3 +268,47 @@ describe("the table's inline status cell is gated too", () => {
     expect(body).not.toMatch(/onCommit\(\s*\{\s*status\s*\}/);
   });
 });
+
+/**
+ * The write's DESTINATION must survive the deferral the gate introduces
+ * (MYS-2743 follow-up, found reviewing the v0.6.131 commit).
+ *
+ * Everything above asserts the shape of a call site, and every one of those
+ * assertions stayed green while the confirmed write went to `PUT
+ * /api/issues/` — because the defect was in a VALUE, not in the wiring: the
+ * mutation was bound to `target?.issue.id`, and the gated path always closes
+ * the sheet (clearing `target`) before the write runs.
+ *
+ * So this ratchet checks the binding itself. The behavioural proof lives in
+ * `iter290c-deferred-write.test.ts`, which drives a real `MutationObserver`
+ * across those renders; this one makes an accidental revert fail here too, next
+ * to the call sites it protects.
+ */
+describe("a gated write still addresses the issue it was gated for", () => {
+  const file = "components/issue/table-cell-editor.tsx";
+
+  it("binds the update mutation to the shared subject rule, not to `target` alone", () => {
+    const src = code(file);
+    // The rule is shared with the dialog's subject on purpose: if the two can
+    // diverge, one of them will be reading a cleared `target`.
+    const at = src.indexOf("handoffSubjectIssueId(");
+    expect(at).toBeGreaterThan(-1);
+    const call = src.slice(at, src.indexOf(";", at));
+    expect(call).toMatch(/target\?\.issue\.id/);
+    expect(call).toMatch(/gateIssue\?\.id/);
+    // ...and the mutation must consume that value, not the raw target.
+    const updateAt = src.indexOf("useUpdateIssue(");
+    expect(updateAt).toBeGreaterThan(-1);
+    expect(src.slice(updateAt, src.indexOf(")", updateAt))).toContain("writeIssueId");
+  });
+
+  it("still lets the non-deferred surfaces bind straight to the target", () => {
+    // Label writes are issued from the open sheet and never deferred, so they
+    // keep the plain id. Narrowing this guard keeps it from being read as
+    // "every hook must go through the rule" and quietly inviting a rewrite.
+    const src = code(file);
+    const attachAt = src.indexOf("useAttachLabel(");
+    expect(attachAt).toBeGreaterThan(-1);
+    expect(src.slice(attachAt, src.indexOf(")", attachAt))).toContain("issueId");
+  });
+});

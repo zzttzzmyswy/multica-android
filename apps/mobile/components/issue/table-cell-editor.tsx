@@ -75,6 +75,7 @@ import { useCreateLabel } from "@/data/mutations/labels";
 import { projectListOptions } from "@/data/queries/projects";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useHandoffGate } from "@/data/use-handoff-gate";
+import { handoffSubjectIssueId } from "@/lib/handoff-gate";
 import { HandoffConfirmDialog } from "./workflow-handoff-dialog";
 import {
   propertyIdFromTableColumn,
@@ -113,11 +114,49 @@ interface Props {
 }
 
 export function IssueCellEditor({ target, onClose, title }: Props) {
+  /**
+   * The issue a pending handoff is about, remembered past the sheet's life.
+   *
+   * Two sources are needed, and the order matters:
+   *
+   *   - `target.issue` while the cell sheet is open — the gate must be given
+   *     the issue on the SAME render the pick happens, because `gate` runs
+   *     synchronously inside the tap handler and `setGateIssue` will not have
+   *     been applied yet. Reading state alone here made the first tap look like
+   *     "no issue" and refuse every ordinary status change.
+   *   - this state after the sheet closes — the confirmation is a sibling
+   *     modal, so the surface has to keep a subject once `target` is gone, both
+   *     for the preview query and for the sentence the dialog renders.
+   */
+  const [gateIssue, setGateIssue] = useState<Issue | null>(null);
+
+  /**
+   * The issue the WRITE binds to — not the same value as the sheet's target.
+   *
+   * A gated pick closes the sheet before the write happens (`commitStatus`
+   * below), so by the time the user confirms — or by the time the preview
+   * answers "no handoff" — `target` is null again. `useUpdateIssue` closes over
+   * this id in its `mutationFn`, and TanStack's `useMutation` refills its
+   * observer from an effect after every render while `mutate` reads the
+   * observer's CURRENT options at call time, so an id derived from `target`
+   * alone collapses to `""` during exactly the deferral the gate introduces and
+   * the confirmed write goes to `PUT /api/issues/` with no id at all.
+   *
+   * `target` also goes null for reasons other than the pick: the table derives
+   * it from the current row list (`table-view.tsx`, `editorTarget`), so a
+   * realtime refresh that drops the row does the same thing mid-confirmation.
+   *
+   * `handoffSubjectIssueId` is the shared rule — the dialog's subject and the
+   * write's destination must be one decision.
+   */
+  const writeIssueId = handoffSubjectIssueId(target?.issue.id, gateIssue?.id);
+  // The same per-issue hooks the detail page's picker routes use. Never called
+  // while `target` is null (the sheet is unmounted then), but hooks must run
+  // unconditionally.
+  const updateIssue = useUpdateIssue(writeIssueId);
+  // Label writes are only ever issued from the open sheet — they are never
+  // deferred behind the gate — so they keep the target's own id.
   const issueId = target?.issue.id ?? "";
-  // The same per-issue hooks the detail page's picker routes use. Bound to
-  // the open target; never called while `target` is null (the sheet is
-  // unmounted then), but hooks must run unconditionally.
-  const updateIssue = useUpdateIssue(issueId);
   const attachLabel = useAttachLabel(issueId);
   const detachLabel = useDetachLabel(issueId);
   const createLabel = useCreateLabel();
@@ -125,21 +164,6 @@ export function IssueCellEditor({ target, onClose, title }: Props) {
   const { data: projects = [] } = useQuery(projectListOptions(wsId));
   const [query, setQuery] = useState("");
 
-  /**
-   * The issue the pending handoff is about.
-   *
-   * Two sources, in this order, and both are needed:
-   *
-   *   - `target.issue` while the cell sheet is open — the gate must be given
-   *     the issue on the SAME render the pick happens, because `gate` runs
-   *     synchronously inside the tap handler and `setGateIssue` will not have
-   *     been applied yet. Reading state alone here made the first tap look like
-   *     "no issue" and refuse every ordinary status change.
-   *   - `gateIssue` after the sheet closes — the confirmation is a sibling
-   *     modal, so the hook has to keep a subject once `target` is gone, both
-   *     for its preview query and for the sentence it renders.
-   */
-  const [gateIssue, setGateIssue] = useState<Issue | null>(null);
   const handoff = useHandoffGate(target?.issue ?? gateIssue, {
     // The write itself carries the issue id in the closure handed to `gate`;
     // all that is left is forgetting the subject so a later, unrelated pick
