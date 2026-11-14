@@ -27,14 +27,34 @@
  * body says so (`unverified` line). That is deliberate: the alternative was to
  * present an un-corroborated list as the answer, which is the defect being
  * removed. The picker stays usable, it just stops claiming to be complete.
+ *
+ * ## The handoff hint (MYS-2874)
+ *
+ * Every row that REASSIGNS now says who it hands the issue to, on the right.
+ * Iteration 290 made the phone intercept a handoff; the desktop also warns
+ * before the tap (`StepHandoffHint`), and on the phone the only way to learn
+ * what a column does was to pick it and get stopped. `lib/handoff-hint.ts`
+ * decides, sharing `stepHandsOff` with the gate so the promise and the
+ * interception can never disagree.
+ *
+ * `projectId` alone is not enough to draw it: a `project_lead` handler resolves
+ * through the project's own lead, so the caller passes `projectLead` when it has
+ * the project row. Omitted means "not known", which degrades that one handler
+ * kind to the role noun rather than to a guessed name.
  */
 import { Pressable, ScrollView, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useColorScheme } from "nativewind";
-import type { IssueStatus } from "@multica/core/types";
+import type { IssueStatus, Project } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { StatusIcon } from "@/components/ui/status-icon";
-import { useIssueStatusOptions } from "@/lib/status-options";
+import {
+  HandoffHintRow,
+  useHandoffHintDisplay,
+} from "@/components/issue/handoff-hint";
+import { useIssueStatusOptions, type StatusOption } from "@/lib/status-options";
+import { statusHandoffHint } from "@/lib/handoff-hint";
+import type { StatusScope } from "@/lib/workflow-status-scope";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
@@ -58,9 +78,19 @@ interface Props {
    * null); omitting it there would silently restore the unlimited catalog.
    */
   projectId?: string | null;
+  /**
+   * The project row, for the one handler kind that resolves through it: a
+   * `project_lead` step hands the issue to THAT project's lead, and the id
+   * above cannot name a person (MYS-2874).
+   *
+   * Omitted means "not available here" and degrades that hint to the role noun
+   * — never to a guessed name. Only read for the hint; the option list comes
+   * from `projectId`.
+   */
+  projectLead?: Pick<Project, "lead_type" | "lead_id"> | null;
 }
 
-export function StatusPickerBody({ value, onChange, projectId }: Props) {
+export function StatusPickerBody({ value, onChange, projectId, projectLead }: Props) {
   const { colorScheme } = useColorScheme();
   const { t } = useTranslation();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
@@ -95,33 +125,82 @@ export function StatusPickerBody({ value, onChange, projectId }: Props) {
                   </Text>
                 </View>
               ) : null}
-              {group.options.map((option) => {
-                const selected = value !== null && option.key === value;
-                return (
-                  <Pressable
-                    key={option.key}
-                    onPress={() => onChange(option.key)}
-                    className="flex-row items-center gap-3 rounded-lg px-3 py-3 active:bg-secondary"
-                  >
-                    <StatusIcon
-                      status={option.key}
-                      category={option.category}
-                      color={option.color ?? undefined}
-                      size={18}
-                    />
-                    <Text className="flex-1 text-title-sm text-foreground">
-                      {option.label}
-                    </Text>
-                    {selected ? (
-                      <Ionicons name="checkmark" size={20} color={checkColor} />
-                    ) : null}
-                  </Pressable>
-                );
-              })}
+              {group.options.map((option) => (
+                <StatusPickerRow
+                  key={option.key}
+                  option={option}
+                  selected={value !== null && option.key === value}
+                  currentStatus={value}
+                  scope={scoped}
+                  projectLead={projectLead}
+                  checkColor={checkColor}
+                  onChange={onChange}
+                />
+              ))}
             </View>
           );
         })}
       </View>
     </ScrollView>
+  );
+}
+
+/**
+ * One row, as its own component so the hint's hooks run per row.
+ *
+ * A `.map()` cannot call `useHandoffHintDisplay` — the number of rows changes
+ * with the workflow's own data, so the hook count would change with it. Hoisting
+ * the row is the standard answer and costs nothing: the list is at most a
+ * workflow's columns plus a workspace's custom statuses, and every row was
+ * already re-rendered by the parent on each `value` change (the selection
+ * checkmark moves between them).
+ */
+function StatusPickerRow({
+  option,
+  selected,
+  currentStatus,
+  scope,
+  projectLead,
+  checkColor,
+  onChange,
+}: {
+  option: StatusOption;
+  selected: boolean;
+  currentStatus: IssueStatus | null;
+  scope: Pick<StatusScope, "workflow" | "defaultScope">;
+  projectLead: Props["projectLead"];
+  checkColor: string;
+  onChange: (next: IssueStatus) => void;
+}) {
+  const hint = statusHandoffHint({
+    scope,
+    project: projectLead,
+    statusKey: option.key,
+    // The row the issue is ALREADY on draws no hint: re-entering a column
+    // reassigns nothing, so 「交给 X」 there would describe a move that does not
+    // happen. Upstream's `option.key !== status` guard.
+    currentStatus,
+  });
+  const display = useHandoffHintDisplay(hint);
+
+  return (
+    <Pressable
+      onPress={() => onChange(option.key)}
+      className="flex-row items-center gap-3 rounded-lg px-3 py-3 active:bg-secondary"
+      // The hint is a visual affordance with no text of its own, so its
+      // sentence belongs here — a screen reader must hear 「交给 Ada」 with the
+      // row it describes, not a bare status name that silently reassigns.
+      accessibilityLabel={display ? `${option.label}, ${display.sentence}` : option.label}
+    >
+      <StatusIcon
+        status={option.key}
+        category={option.category}
+        color={option.color ?? undefined}
+        size={18}
+      />
+      <Text className="flex-1 text-title-sm text-foreground">{option.label}</Text>
+      <HandoffHintRow display={display} />
+      {selected ? <Ionicons name="checkmark" size={20} color={checkColor} /> : null}
+    </Pressable>
   );
 }

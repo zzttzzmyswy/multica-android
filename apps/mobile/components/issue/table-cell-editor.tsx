@@ -326,6 +326,11 @@ function CellBody({
           // `status_not_in_workflow`. Upstream passes the same prop to the
           // table's `StatusPicker` (`table-view.tsx`, `case "status"`).
           projectId={issue.project_id}
+          // …and the project ROW, for the handoff hint's one project-resolved
+          // handler kind: a `project_lead` step names that project's lead, which
+          // the id above cannot (MYS-2874). The list is already loaded here for
+          // the `project` column, so this costs no extra read.
+          projectLead={projects.find((p) => p.id === issue.project_id) ?? null}
           onChange={(status) => onCommitStatus(issue, status)}
         />
       );

@@ -117,6 +117,17 @@ export function useIssueStatusOptions(
   hasCustom: boolean;
   /** The workflow limiting this issue, or null when nothing does. */
   workflow: ReturnType<typeof resolveStatusScope>["workflow"];
+  /**
+   * Set only when Default stands in for an issue OUTSIDE any project.
+   *
+   * Deliberately separate from `workflow`, which still names the Default in
+   * that case: the server applies NO handoffs outside a project
+   * (`issueworkflow.OutsideProject` is nil), so a surface drawing handoff hints
+   * must consult THIS field to know it may (MUL-8121, MYS-2874). Folding the
+   * two would put 「交给 X」 on every row of every project-less issue while the
+   * gate correctly wrote straight through.
+   */
+  defaultScope: ReturnType<typeof resolveStatusScope>["defaultScope"];
   /** True when `options` is the verified set, false when it is a fallback. */
   authoritative: boolean;
   /** The read's state, for a caller that wants to offer a retry. */
@@ -170,6 +181,7 @@ export function useIssueStatusOptions(
     groups,
     hasCustom: catalog.hasCustom || options.length > ISSUE_STATUS_CATEGORIES.length,
     workflow: scope.workflow,
+    defaultScope: scope.defaultScope,
     authoritative: scope.authoritative,
     state: scope.state,
     retry: refetch,
