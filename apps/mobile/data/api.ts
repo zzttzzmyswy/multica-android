@@ -213,6 +213,7 @@ import type {
   CommentSubIssuePreview,
   CommentSubIssueManualIssue,
   CommentSubIssueQuickCreate,
+  WorkflowHandoffPreview,
 } from "@multica/core/types";
 import type {
   CloudRuntimeNode,
@@ -483,6 +484,10 @@ import {
   EMPTY_LIST_ISSUE_WORKFLOWS_RESPONSE,
   IssueWorkflowDryRunResponseSchema,
   EMPTY_ISSUE_WORKFLOW_DRY_RUN,
+  // Handoff confirmation (MUL-7420, MYS-2743) — what a status change or a
+  // project move would do, asked BEFORE writing.
+  WorkflowHandoffPreviewSchema,
+  EMPTY_WORKFLOW_HANDOFF_PREVIEW,
   CloudRuntimeNodeListSchema,
   CloudRuntimeNodeSchema,
   EMPTY_CLOUD_RUNTIME_NODE,
@@ -4389,6 +4394,58 @@ class ApiClient {
       IssueWorkflowDryRunResponseSchema,
       EMPTY_ISSUE_WORKFLOW_DRY_RUN,
       { endpoint: "POST /api/projects/{id}/workflow (dry run)" },
+    );
+  }
+
+  /**
+   * What moving an issue to `status` — or into project `projectId` — would do
+   * under its project's workflow (MUL-7420, MYS-2743).
+   *
+   * Writes nothing. An empty `status` is OMITTED rather than sent: the project
+   * -move form has no status to name, and the server reads a present-but-empty
+   * one as a real request. Upstream omits it the same way
+   * (`api.previewWorkflowHandoff`).
+   *
+   * Two DIFFERENT failures reach this method, and only one of them is caught
+   * here. Say which is which, because collapsing them re-opens the silent
+   * reassign this endpoint exists to end:
+   *
+   *   - The REQUEST fails (network error, 4xx/5xx): `this.fetch` rejects, no
+   *     fallback is involved, and the caller's query goes to `failed`. The
+   *     dialog refuses to confirm on that state, which is where the safety
+   *     lives — `data/queries/workflow-handoff.ts` keeps it distinct.
+   *   - The request SUCCEEDS but the body does not match the schema (field
+   *     drift): `parseWithFallback` below returns `EMPTY_WORKFLOW_HANDOFF_PREVIEW`,
+   *     i.e. "no handoff", and the caller applies the move without asking.
+   *
+   * The second case is NOT a divergence from web: upstream does the identical
+   * `parseWithFallback(raw, …, EMPTY_WORKFLOW_HANDOFF_PREVIEW)` at
+   * `packages/core/api/client.ts:4659`. It is recorded here because a reader
+   * who assumes "this endpoint never degrades" would build on a protection
+   * that is not there — this repo has mistaken "could not read" for "there is
+   * nothing" three times (iterations 251, 254, 256). The drift path is pinned
+   * by `data/api-workflow-handoff.test.ts` ("degrades a drifted body exactly
+   * as web does"), so the behaviour cannot change unnoticed in either
+   * direction.
+   */
+  async previewWorkflowHandoff(
+    issueId: string,
+    status: string,
+    projectId?: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<WorkflowHandoffPreview> {
+    const query = new URLSearchParams();
+    if (status) query.set("status", status);
+    if (projectId) query.set("project_id", projectId);
+    const raw = await this.fetch<unknown>(
+      `/api/issues/${issueId}/workflow-handoff?${query.toString()}`,
+      { signal: opts?.signal },
+    );
+    return parseWithFallback(
+      raw,
+      WorkflowHandoffPreviewSchema,
+      EMPTY_WORKFLOW_HANDOFF_PREVIEW,
+      { endpoint: "GET /api/issues/{id}/workflow-handoff" },
     );
   }
 

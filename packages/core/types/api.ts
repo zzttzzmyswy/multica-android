@@ -83,6 +83,18 @@ export interface UpdateIssueRequest {
    *  says to change the status instead, because leaving `cancelled` is what
    *  clears a mark (server/internal/handler/issue_duplicate.go). */
   duplicate_of_issue_id?: string;
+  /** When a status change hands the issue off to a workflow step's handler,
+   *  also stop the active runs of the agent it was taken from (MUL-7420).
+   *  Carried from the handoff confirmation's pre-checked "stop it" box.
+   *  Control field — strip from optimistic cache patches. Only meaningful
+   *  alongside a status change that actually hands off; the server ignores it
+   *  otherwise. */
+  stop_previous_assignee_runs?: boolean;
+  /** With a project move: enter the destination workflow's column the issue
+   *  lands on, handing it off like a status change (MUL-7420). Without it a
+   *  project move is administrative and starts nothing. Control field — strip
+   *  from optimistic cache patches. */
+  enter_workflow_step?: boolean;
 }
 
 /**
@@ -98,6 +110,7 @@ export interface MoveIssueRequest
     | "assignee_id"
     | "parent_issue_id"
     | "project_id"
+    | "stop_previous_assignee_runs"
   > {
   before_id: string | null;
   after_id: string | null;

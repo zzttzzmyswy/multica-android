@@ -84,6 +84,8 @@ import {
   useToggleCollapsed,
 } from "@/data/stores/issue-workbench-layout-store";
 import { useUpdateIssue } from "@/data/mutations/issues";
+import { useHandoffGate } from "@/data/use-handoff-gate";
+import { HandoffConfirmDialog } from "./workflow-handoff-dialog";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
 import { actorNameText } from "@/components/ui/actor-name";
@@ -797,6 +799,9 @@ const SwimlaneCard = memo(function SwimlaneCard({
   // rather than lifting the limit, so it must not be coalesced.
   const { options } = useIssueStatusOptions(wsId, issue.project_id, issue.status);
   const updateIssue = useUpdateIssue(issue.id);
+  // The long-press "move to status" menu is a write surface, so it asks about a
+  // handoff exactly like the picker and the board card do (MUL-7420, MYS-2743).
+  const handoff = useHandoffGate(issue);
 
   const move = useCallback(
     (patch: UpdateIssueRequest) => updateIssue.mutate(patch),
@@ -824,7 +829,11 @@ const SwimlaneCard = memo(function SwimlaneCard({
             },
             (statusIndex) => {
               if (statusIndex == null || statusIndex >= statusKeys.length) return;
-              updateIssue.mutate({ status: statusKeys[statusIndex] });
+              const next = statusKeys[statusIndex];
+              if (next === issue.status) return;
+              handoff.gate({ kind: "status", status: next }, (control) => {
+                updateIssue.mutate({ status: next, ...control });
+              });
             },
           );
           return;
@@ -832,15 +841,30 @@ const SwimlaneCard = memo(function SwimlaneCard({
         if (index === 1) onOpenLaneSheet(issue, move);
       },
     );
-  }, [issue, t, options, updateIssue, move, onOpenLaneSheet]);
+  }, [issue, t, options, updateIssue, move, onOpenLaneSheet, handoff]);
 
   return (
-    <BoardCard
-      issue={issue}
-      onPress={onOpen}
-      onLongPress={onLongPress}
-      cardProperties={cardProperties}
-      cardPropertyIds={cardPropertyIds}
-    />
+    <>
+      <BoardCard
+        issue={issue}
+        onPress={onOpen}
+        onLongPress={onLongPress}
+        cardProperties={cardProperties}
+        cardPropertyIds={cardPropertyIds}
+      />
+      {/* The card owns its own confirmation, so a lane never has to know which
+          card opened it — same reason as the board's card (see board-view). */}
+      <HandoffConfirmDialog
+        // Gated on `pending` — an unconditional issue opens the sheet on every
+        // card's first render with an empty target (see picker/status.tsx).
+        issue={handoff.pending ? { id: issue.id, identifier: issue.identifier } : null}
+        target={handoff.pending ?? { kind: "status", status: "" }}
+        preview={handoff.preview ?? null}
+        readState={handoff.readState}
+        onRetry={handoff.retry}
+        onCancel={handoff.cancel}
+        onConfirm={handoff.confirm}
+      />
+    </>
   );
 });
