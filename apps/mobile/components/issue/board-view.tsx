@@ -133,6 +133,8 @@ import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { StatusIcon } from "@/components/ui/status-icon";
 import { useIssueStatusOptions, useStatusLabel } from "@/lib/status-options";
+import { useStatusHandoffLabel } from "@/components/issue/handoff-hint";
+import { projectListOptions } from "@/data/queries/projects";
 import { translate } from "@/lib/i18n";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
@@ -146,6 +148,7 @@ import {
   useUnsetIssueProperty,
 } from "@/data/mutations/properties";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { useQuery } from "@tanstack/react-query";
 import type {
   CardProperties,
   IssueGrouping,
@@ -549,13 +552,36 @@ function IssueCardWithMenu({
   // offer columns the server will accept. `project_id` goes through verbatim —
   // `null` (no project) narrows to the Default workflow rather than lifting the
   // limit, while `undefined` would mean "spans projects" and offer everything.
-  const { options } = useIssueStatusOptions(wsId, issue.project_id, issue.status);
+  const { options, workflow, defaultScope } = useIssueStatusOptions(
+    wsId,
+    issue.project_id,
+    issue.status,
+  );
+  // …and the project row, for the one handler kind that resolves through it
+  // (`project_lead` → that project's lead). Reuses the list the board already
+  // loads for its project filter, so this is not a new read (MYS-2874).
+  const { data: projects } = useQuery(projectListOptions(wsId));
+  const projectLead = projects?.find((p) => p.id === issue.project_id) ?? null;
+  // The same hint the picker draws, as a line of text: an ActionSheet row
+  // cannot hold an avatar, so the destination's handler is appended to the
+  // status label (「进行中 · 交给 Ada」). Same decision, same gate — a member
+  // moving an issue from the board must not learn less than one moving it from
+  // the picker (MYS-2874).
+  const handoffLabel = useStatusHandoffLabel({
+    workflow,
+    defaultScope,
+    projectLead,
+    currentStatus: issue.status,
+  });
   // Both of the card's write paths — the status sheet and a drag-drop — can
   // hand the issue off, so both go through the one gate (MUL-7420, MYS-2743).
   const handoff = useHandoffGate(issue);
 
   const showStatusSheet = useCallback(() => {
-    const labels = options.map((o) => o.label);
+    const labels = options.map((o) => {
+      const hint = handoffLabel(o.key);
+      return hint ? `${o.label} · ${hint.label}` : o.label;
+    });
     const optionKeys = options.map((o) => o.key);
     const optionsWithCancel = [...labels, t("common.cancel")];
     ActionSheet.showActionSheetWithOptions(
@@ -573,7 +599,7 @@ function IssueCardWithMenu({
         });
       },
     );
-  }, [options, t, updateIssue, issue.status, handoff]);
+  }, [options, t, updateIssue, issue.status, handoff, handoffLabel]);
 
   // The board drives the drop but the mutation hook is bound to an issue id,
   // so the card lends its own mutate (and its sheet) to the board. Refs keep

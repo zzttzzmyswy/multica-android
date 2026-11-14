@@ -28,6 +28,7 @@ import { useQuery } from "@tanstack/react-query";
 import { StatusPickerBody } from "@/components/issue/pickers/status-picker-body";
 import { HandoffConfirmDialog } from "@/components/issue/workflow-handoff-dialog";
 import { issueDetailOptions } from "@/data/queries/issues";
+import { projectListOptions } from "@/data/queries/projects";
 import { useUpdateIssue } from "@/data/mutations/issues";
 import { useHandoffGate, type HandoffControl } from "@/data/use-handoff-gate";
 import { useWorkspaceStore } from "@/data/workspace-store";
@@ -36,6 +37,13 @@ export default function IssueStatusPickerRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { data: issue } = useQuery(issueDetailOptions(wsId, id));
+  // The project row, for the ONE handler kind that resolves through it: a
+  // `project_lead` step hands the issue to that project's lead, and the id in
+  // `projectId` below cannot name a person (MYS-2874). The `projectId` prop
+  // stays the narrowing input — this only feeds the hint. Cached already in
+  // practice: the issue detail screen this sheet opens from lists projects.
+  const { data: projects } = useQuery(projectListOptions(wsId));
+  const projectLead = projects?.find((p) => p.id === issue?.project_id);
   const updateIssue = useUpdateIssue(id);
   // `onWritten` closes this formSheet route AFTER the write has been issued.
   // Closing it eagerly in `onChange` (the pre-iteration-290 behaviour) unmounted
@@ -59,6 +67,7 @@ export default function IssueStatusPickerRoute() {
         // restore the defect. Left `undefined` only while the issue itself is
         // unknown, where there is nothing truthful to narrow by.
         projectId={issue ? issue.project_id : undefined}
+        projectLead={projectLead}
         onChange={(next) => {
           if (next === issue?.status) {
             // Nothing to write, so nothing will call `onWritten` — close here.

@@ -70,6 +70,7 @@ import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { StatusIcon } from "@/components/ui/status-icon";
 import { IssuesLoading } from "@/components/issue/issues-loading";
 import { useIssueStatusOptions, useStatusLabel } from "@/lib/status-options";
+import { useStatusHandoffLabel } from "@/components/issue/handoff-hint";
 import { translate } from "@/lib/i18n";
 import { useTranslation } from "@/lib/i18n/react";
 import { ActionSheet } from "@/lib/action-sheet";
@@ -797,7 +798,24 @@ const SwimlaneCard = memo(function SwimlaneCard({
   // the member pick a column the server refuses; `project_id` is passed through
   // verbatim — `null` means "outside any project", which narrows to Default
   // rather than lifting the limit, so it must not be coalesced.
-  const { options } = useIssueStatusOptions(wsId, issue.project_id, issue.status);
+  const { options, workflow, defaultScope } = useIssueStatusOptions(
+    wsId,
+    issue.project_id,
+    issue.status,
+  );
+  // The project row, for the one handler kind that resolves through it
+  // (`project_lead`), plus the same text-form hint the picker and the board card
+  // draw — this menu is an ActionSheet, so it can only carry a line of text
+  // (MYS-2874). The query key is the workspace list, so this is ONE read shared
+  // by every card, not one per card — the same per-row subscription
+  // `attribute-row.tsx` / `table-view.tsx` already use.
+  const { data: projects } = useQuery(projectListOptions(wsId));
+  const handoffLabel = useStatusHandoffLabel({
+    workflow,
+    defaultScope,
+    projectLead: projects?.find((p) => p.id === issue.project_id) ?? null,
+    currentStatus: issue.status,
+  });
   const updateIssue = useUpdateIssue(issue.id);
   // The long-press "move to status" menu is a write surface, so it asks about a
   // handoff exactly like the picker and the board card do (MUL-7420, MYS-2743).
@@ -818,7 +836,10 @@ const SwimlaneCard = memo(function SwimlaneCard({
       { title: issue.identifier, options: labels, cancelButtonIndex: 2 },
       (index) => {
         if (index === 0) {
-          const statusLabels = options.map((o) => o.label);
+          const statusLabels = options.map((o) => {
+            const hint = handoffLabel(o.key);
+            return hint ? `${o.label} · ${hint.label}` : o.label;
+          });
           const statusKeys = options.map((o) => o.key);
           const withCancel = [...statusLabels, t("common.cancel")];
           ActionSheet.showActionSheetWithOptions(
@@ -841,7 +862,7 @@ const SwimlaneCard = memo(function SwimlaneCard({
         if (index === 1) onOpenLaneSheet(issue, move);
       },
     );
-  }, [issue, t, options, updateIssue, move, onOpenLaneSheet, handoff]);
+  }, [issue, t, options, updateIssue, move, onOpenLaneSheet, handoff, handoffLabel]);
 
   return (
     <>
