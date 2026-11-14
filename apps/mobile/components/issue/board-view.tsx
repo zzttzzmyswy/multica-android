@@ -568,7 +568,8 @@ function IssueCardWithMenu({
   // moving an issue from the board must not learn less than one moving it from
   // the picker (MYS-2874).
   const handoffLabel = useStatusHandoffLabel({
-    scope: { workflow, defaultScope },
+    workflow,
+    defaultScope,
     projectLead,
     currentStatus: issue.status,
   });
@@ -598,7 +599,7 @@ function IssueCardWithMenu({
         });
       },
     );
-  }, [options, t, updateIssue, issue.status, handoff]);
+  }, [options, t, updateIssue, issue.status, handoff, handoffLabel]);
 
   // The board drives the drop but the mutation hook is bound to an issue id,
   // so the card lends its own mutate (and its sheet) to the board. Refs keep

@@ -142,24 +142,31 @@ function resolveHandoffDisplay(
  * Returns a resolver rather than a map so the caller pays only for the options
  * it actually renders, and returns null per status when there is nothing to
  * say — the caller then leaves the label untouched.
+ *
+ * The scope arrives FLAT (`workflow` + `defaultScope`) rather than as a
+ * `{workflow, defaultScope}` object, and that is not cosmetic: callers build
+ * that object inline, so an object-shaped parameter would be a fresh reference
+ * every render, make this callback's identity churn, and force every
+ * `useCallback` that depends on it (both sheets') to churn with it. Flat props
+ * let the deps compare by value, which is what they actually are.
  */
 export function useStatusHandoffLabel(input: {
-  scope: Pick<StatusScope, "workflow" | "defaultScope">;
+  workflow: StatusScope["workflow"];
+  defaultScope: StatusScope["defaultScope"];
   projectLead: Pick<Project, "lead_type" | "lead_id"> | null | undefined;
   currentStatus: string | null | undefined;
 }): (statusKey: string) => HandoffHintDisplay | null {
   const { t } = useTranslation();
   const { getName } = useActorLookup();
-  const { scope, projectLead, currentStatus } = input;
+  const { workflow, defaultScope, projectLead, currentStatus } = input;
 
-  // One callback, with the lookups in its body rather than a hook per status:
-  // the caller iterates statuses, so a hook there would break the rules of
-  // hooks exactly as the picker's `.map()` would have.
   return useCallback(
     (statusKey: string): HandoffHintDisplay | null =>
       resolveHandoffDisplay(
         statusHandoffHint({
-          scope,
+          // Rebuilt inside the callback, where a fresh object costs nothing —
+          // it is created once per call, not once per render of every card.
+          scope: { workflow, defaultScope },
           project: projectLead,
           statusKey,
           currentStatus,
@@ -167,7 +174,7 @@ export function useStatusHandoffLabel(input: {
         getName,
         t,
       ),
-    [scope, projectLead, currentStatus, getName, t],
+    [workflow, defaultScope, projectLead, currentStatus, getName, t],
   );
 }
 

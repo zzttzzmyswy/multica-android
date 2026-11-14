@@ -811,7 +811,8 @@ const SwimlaneCard = memo(function SwimlaneCard({
   // `attribute-row.tsx` / `table-view.tsx` already use.
   const { data: projects } = useQuery(projectListOptions(wsId));
   const handoffLabel = useStatusHandoffLabel({
-    scope: { workflow, defaultScope },
+    workflow,
+    defaultScope,
     projectLead: projects?.find((p) => p.id === issue.project_id) ?? null,
     currentStatus: issue.status,
   });
@@ -861,7 +862,7 @@ const SwimlaneCard = memo(function SwimlaneCard({
         if (index === 1) onOpenLaneSheet(issue, move);
       },
     );
-  }, [issue, t, options, updateIssue, move, onOpenLaneSheet, handoff]);
+  }, [issue, t, options, updateIssue, move, onOpenLaneSheet, handoff, handoffLabel]);
 
   return (
     <>

@@ -122,7 +122,8 @@ describe("the ActionSheet status surfaces carry the same hint as text", () => {
       const src = code(file);
       // `defaultScope` is what suppresses the hint outside any project; without
       // it the sheet would promise handoffs the server does not apply.
-      expect(src).toMatch(/scope:\s*\{\s*workflow,\s*defaultScope\s*\}/);
+      expect(src).toMatch(/^\s*defaultScope,$/m);
+      expect(src).toMatch(/^\s*workflow,$/m);
       expect(src).toContain("projectLead");
     });
   }
@@ -133,6 +134,26 @@ describe("the ActionSheet status surfaces carry the same hint as text", () => {
     const src = code(HINT_ROW);
     expect(src).toContain("export function useStatusHandoffLabel(");
     expect(src).toContain("useCallback(");
+  });
+
+  it("the resolver's scope is FLAT, so its identity does not churn", () => {
+    // Both call sites build the scope inline. An object-shaped parameter would
+    // be a fresh reference every render, churn the resolver, and force each
+    // sheet's `useCallback` to churn with it — which `expo lint` then reports
+    // as a missing dependency, because adding it would never help. Flat props
+    // are what the dependency array can actually compare by value.
+    const src = code(HINT_ROW);
+    expect(src).toMatch(/^\s*workflow:\s*StatusScope\["workflow"\];$/m);
+    expect(src).toMatch(/^\s*defaultScope:\s*StatusScope\["defaultScope"\];$/m);
+  });
+
+  it("both sheets list the resolver in their callback deps", () => {
+    // The mirror image of the churn above: once the identity IS stable, the
+    // dep must be listed, or the sheet's labels go stale after a workflow edit.
+    for (const { file } of SHEET_SURFACES) {
+      const src = code(file);
+      expect(src).toMatch(/handoff,\s*handoffLabel\s*\]/);
+    }
   });
 });
 
