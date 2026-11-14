@@ -4406,12 +4406,27 @@ class ApiClient {
    * one as a real request. Upstream omits it the same way
    * (`api.previewWorkflowHandoff`).
    *
-   * Deliberately NOT wrapped in a fallback-to-empty `catch`, unlike
-   * `listIssueStatuses`. The fallback here would say "no handoff", and the
-   * caller would then apply the move silently — which is precisely the
-   * behaviour this endpoint exists to end. The QUERY layer keeps a failed read
-   * distinct instead (`data/queries/workflow-handoff.ts`), and the dialog
-   * refuses to confirm on it.
+   * Two DIFFERENT failures reach this method, and only one of them is caught
+   * here. Say which is which, because collapsing them re-opens the silent
+   * reassign this endpoint exists to end:
+   *
+   *   - The REQUEST fails (network error, 4xx/5xx): `this.fetch` rejects, no
+   *     fallback is involved, and the caller's query goes to `failed`. The
+   *     dialog refuses to confirm on that state, which is where the safety
+   *     lives — `data/queries/workflow-handoff.ts` keeps it distinct.
+   *   - The request SUCCEEDS but the body does not match the schema (field
+   *     drift): `parseWithFallback` below returns `EMPTY_WORKFLOW_HANDOFF_PREVIEW`,
+   *     i.e. "no handoff", and the caller applies the move without asking.
+   *
+   * The second case is NOT a divergence from web: upstream does the identical
+   * `parseWithFallback(raw, …, EMPTY_WORKFLOW_HANDOFF_PREVIEW)` at
+   * `packages/core/api/client.ts:4659`. It is recorded here because a reader
+   * who assumes "this endpoint never degrades" would build on a protection
+   * that is not there — this repo has mistaken "could not read" for "there is
+   * nothing" three times (iterations 251, 254, 256). The drift path is pinned
+   * by `data/api-workflow-handoff.test.ts` ("degrades a drifted body exactly
+   * as web does"), so the behaviour cannot change unnoticed in either
+   * direction.
    */
   async previewWorkflowHandoff(
     issueId: string,

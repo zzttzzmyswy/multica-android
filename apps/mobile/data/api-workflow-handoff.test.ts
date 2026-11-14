@@ -175,4 +175,80 @@ describe("api.previewWorkflowHandoff — response", () => {
     const preview = await api.previewWorkflowHandoff("issue-1", "in_progress");
     expect(preview.previous_runs[0]?.started_at).toBeNull();
   });
+
+  /**
+   * The DEGRADED path, pinned — the one case this file was missing.
+   *
+   * Two different failures reach the caller, and only one of them is loud.
+   * A failed REQUEST rejects (covered by the query layer, which marks the read
+   * `failed` and makes the dialog refuse). A 200 whose body has drifted does
+   * NOT: `parseWithFallback` answers `EMPTY_WORKFLOW_HANDOFF_PREVIEW`, which
+   * says "no handoff", and the caller then applies the move without asking.
+   *
+   * This is the same trade web makes (`packages/core/api/client.ts:4659`), so
+   * the test asserts the behaviour RATHER THAN a stronger one — if someone
+   * later "fixes" mobile by rethrowing here, that is a one-way divergence from
+   * upstream and this test should stop them. What it must never do is silently
+   * change in either direction, which is why the assertion names all three
+   * consequences: the shape, the verdict the dialog will draw from it, and the
+   * fact that the rejection path is NOT what produced it.
+   */
+  it("degrades a drifted body exactly as web does — 200 with wrong types reads as no handoff", async () => {
+    // A body that WOULD say "handoff" if the types lined up. `handler_type: 42`
+    // is the cheapest realistic drift (a server that renames or retypes the
+    // handler discriminator), and it fails the schema.
+    fetchSpy().mockResolvedValue({
+      ...REAL_HANDOFF,
+      handler_type: 42,
+    });
+    const preview = await api.previewWorkflowHandoff("issue-1", "in_progress");
+    expect(preview).toMatchObject({
+      handoff: false,
+      workflow_name: "",
+      from_status: "",
+      to_status: "",
+      handler_type: null,
+      handler_id: null,
+      previous_runs: [],
+      brief: "",
+    });
+  });
+
+  it("reads an enveloped or empty body as no handoff — via the schema defaults, NOT the fallback", async () => {
+    // Worth pinning separately because the MECHANISM differs from the case
+    // above, even though the user-visible answer is the same `false`.
+    //
+    // Every field in `WorkflowHandoffPreviewSchema` defaults, and it is
+    // `.loose()` on top. So a body with none of the expected keys at the top
+    // level — the API's `{data: …}` envelope, or a bare `{}` — parses
+    // SUCCESSFULLY with all defaults rather than falling back. The fallback in
+    // `api.ts` is therefore only reachable through a PRESENT field of the
+    // wrong TYPE (the case above); this path never touches it.
+    //
+    // Both outcomes are "no handoff, apply silently", which is correct for a
+    // genuinely empty answer and is also why body drift on this endpoint is
+    // silent. Recorded so nobody "hardens" the schema by making a field
+    // required to catch envelopes: that would push them onto the fallback and
+    // change nothing user-visible, while breaking the server's real
+    // `handoff: false` bodies, which omit most fields by design.
+    fetchSpy().mockResolvedValue({ data: REAL_HANDOFF });
+    const enveloped = await api.previewWorkflowHandoff("issue-1", "in_progress");
+    expect(enveloped.handoff).toBe(false);
+    expect(enveloped.workflow_name).toBe("");
+
+    fetchSpy().mockResolvedValue({});
+    const empty = await api.previewWorkflowHandoff("issue-1", "in_progress");
+    expect(empty).toMatchObject({ handoff: false, previous_runs: [] });
+  });
+
+  it("rejects rather than degrading when the request itself fails", async () => {
+    // The distinction the comment in `api.ts` describes: an unreadable request
+    // must NOT arrive as "no handoff". It rejects, the query goes `failed`, and
+    // the dialog refuses to confirm — the behaviour that keeps a network blip
+    // from silently reassigning an issue.
+    fetchSpy().mockRejectedValue(new Error("network down"));
+    await expect(api.previewWorkflowHandoff("issue-1", "in_progress")).rejects.toThrow(
+      "network down",
+    );
+  });
 });
