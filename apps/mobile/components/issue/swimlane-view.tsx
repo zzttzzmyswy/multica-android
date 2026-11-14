@@ -806,7 +806,9 @@ const SwimlaneCard = memo(function SwimlaneCard({
   // The project row, for the one handler kind that resolves through it
   // (`project_lead`), plus the same text-form hint the picker and the board card
   // draw — this menu is an ActionSheet, so it can only carry a line of text
-  // (MYS-2874).
+  // (MYS-2874). The query key is the workspace list, so this is ONE read shared
+  // by every card, not one per card — the same per-row subscription
+  // `attribute-row.tsx` / `table-view.tsx` already use.
   const { data: projects } = useQuery(projectListOptions(wsId));
   const handoffLabel = useStatusHandoffLabel({
     scope: { workflow, defaultScope },
