@@ -580,7 +580,7 @@ function IssueCardWithMenu({
   const showStatusSheet = useCallback(() => {
     const labels = options.map((o) => {
       const hint = handoffLabel(o.key);
-      return hint ? `${o.label} · ${hint.sentence}` : o.label;
+      return hint ? `${o.label} · ${hint.label}` : o.label;
     });
     const optionKeys = options.map((o) => o.key);
     const optionsWithCancel = [...labels, t("common.cancel")];

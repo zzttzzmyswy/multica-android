@@ -194,11 +194,22 @@ const NOUN_KEY: Record<HandoffActorType | "project_lead" | "creator", HandoffNou
  * unread directory from a measured absence. Rendering `actorNameText`'s `""`
  * here would produce 「交给 」 — a sentence with its object missing, which reads
  * as a bug rather than as loading.
+ *
+ * ## Why the role is a separate piece and not a suffix
+ *
+ * The piece that separates a project-lead row from a plain-agent row is the
+ * role. Composed into the name as upstream's 「（项目负责人）」 suffix, it is the
+ * FIRST thing a narrow row cuts: measured on a Pixel 5, the project-lead row
+ * and the plain agent row above it BOTH rendered 「Multica安卓开发…」, so two
+ * different hints read identically exactly where the difference is the point.
+ * So the caller draws the role FIRST and the name second, and truncation eats
+ * the name instead of the qualifier. `named` keeps the same shape with an empty
+ * role, so every caller has one layout to render.
  */
 export type HandoffHintCopy =
-  | { kind: "named"; name: string }
-  | { kind: "noun"; nounKey: HandoffNounKey }
-  | { kind: "leadNamed"; name: string };
+  | { kind: "named"; name: string; role: "" }
+  | { kind: "noun"; nounKey: HandoffNounKey; role: "" }
+  | { kind: "leadNamed"; name: string; roleKey: "workflow.handler.project_lead" };
 
 /**
  * The copy for one hint. `actorName` is the resolved directory name for
@@ -208,17 +219,23 @@ export type HandoffHintCopy =
 export function handoffHintCopy(hint: HandoffHint, actorName: string | null): HandoffHintCopy {
   switch (hint.kind) {
     case "actor":
-      return actorName ? { kind: "named", name: actorName } : { kind: "noun", nounKey: NOUN_KEY[hint.actor.type] };
+      return actorName
+        ? { kind: "named", name: actorName, role: "" }
+        : { kind: "noun", nounKey: NOUN_KEY[hint.actor.type], role: "" };
     case "generic":
-      return { kind: "noun", nounKey: NOUN_KEY[hint.type] };
+      return { kind: "noun", nounKey: NOUN_KEY[hint.type], role: "" };
     case "projectLead":
       // A project lead with no lead row is `noun`; one with a row but no name
       // yet is also `noun` — the role is what is known in both cases.
       return hint.actor && actorName
-        ? { kind: "leadNamed", name: actorName }
-        : { kind: "noun", nounKey: NOUN_KEY.project_lead };
+        ? {
+            kind: "leadNamed",
+            name: actorName,
+            roleKey: "workflow.handler.project_lead",
+          }
+        : { kind: "noun", nounKey: NOUN_KEY.project_lead, role: "" };
     case "creator":
-      return { kind: "noun", nounKey: NOUN_KEY.creator };
+      return { kind: "noun", nounKey: NOUN_KEY.creator, role: "" };
   }
 }
 

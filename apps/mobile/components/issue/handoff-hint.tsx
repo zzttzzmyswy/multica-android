@@ -60,10 +60,17 @@ import type { StatusScope } from "@/lib/workflow-status-scope";
 export interface HandoffHintDisplay {
   /** The actor to draw an avatar for, when the hint names one. */
   actor: HandoffActor | null;
-  /** The name or the role noun — the visible text. */
+  /** The qualifier to draw BEFORE the name — 「项目负责人」 for a project lead,
+   *  empty for every other kind. See `handoffHintCopy` on why it goes first. */
+  role: string;
+  /** The name (or the role noun, when no name is known). */
   name: string;
-  /** The whole 「交给 X」 sentence, for the row's accessibility label. */
+  /** The whole 「交给 X」 sentence, for the row's accessibility label and for a
+   *  surface that can only carry text (an ActionSheet row). */
   sentence: string;
+  /** The same, but role-first and WITHOUT the 「交给」 verb — for a row that
+   *  draws the verb as a glyph. Empty role is elided. */
+  label: string;
 }
 
 /**
@@ -112,19 +119,29 @@ function resolveHandoffDisplay(
   const actor = handoffHintActor(hint);
   const rawName = actor ? getName(actor.type, actor.id) : "";
   const copy = handoffHintCopy(hint, isResolvedActorName(rawName) ? rawName : null);
-  if (!copy) return null;
 
-  // A project lead that resolved to a person is named WITH the role, because
+  // A project lead that resolved to a person carries the ROLE as its own piece.
   // 「Grace」 alone would not tell the reader why entering this column involves
-  // her. Every other shape names its actor plainly.
-  const name =
-    copy.kind === "noun"
-      ? t(copy.nounKey)
-      : copy.kind === "leadNamed"
-        ? t("workflow.handler.project_lead_named", { name: copy.name })
-        : copy.name;
+  // her — but the role cannot be a suffix either, because the row truncates
+  // from the right and would cut exactly that word first (measured on device;
+  // see `HandoffHintCopy`). So it is drawn ahead of the name.
+  const role = copy.kind === "leadNamed" ? t(copy.roleKey) : "";
+  const name = copy.kind === "noun" ? t(copy.nounKey) : copy.name;
+  // The sentence keeps upstream's single-string form: it is SPOKEN and, on an
+  // ActionSheet row, has a whole line to itself — neither truncates the role
+  // off the end the way the picker's fixed-width slot does.
+  const sentenceName =
+    copy.kind === "leadNamed"
+      ? t("workflow.handler.project_lead_named", { name })
+      : name;
 
-  return { actor, name, sentence: t("workflow.handsOffTo", { name }) };
+  return {
+    actor,
+    role,
+    name,
+    label: role ? `${role} · ${name}` : name,
+    sentence: t("workflow.handsOffTo", { name: sentenceName }),
+  };
 }
 
 /**
@@ -216,10 +233,10 @@ export function HandoffHintRow({ display }: { display: HandoffHintDisplay | null
         <ActorAvatar type={display.actor.type} id={display.actor.id} size={14} />
       ) : null}
       <Text
-        className="max-w-24 shrink text-caption text-muted-foreground"
+        className="max-w-36 shrink text-caption text-muted-foreground"
         numberOfLines={1}
       >
-        {display.name}
+        {display.label}
       </Text>
     </View>
   );

@@ -115,7 +115,10 @@ describe("the ActionSheet status surfaces carry the same hint as text", () => {
       // …and the answer has to reach the OPTION LABELS, or the resolver is
       // dead code and the sheet still reads 「进行中」 with no warning.
       expect(src).toMatch(/handoffLabel\(\w+\.key\)/);
-      expect(src).toContain("hint.sentence");
+      // The sheet row shows the role FIRST and without the 「交给」 verb — a
+      // whole ActionSheet line truncates too, and the verb is carried by the
+      // status label's own context there.
+      expect(src).toContain("hint.label");
     });
 
     it(`${file} passes the scope and the project through`, () => {

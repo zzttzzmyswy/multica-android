@@ -838,7 +838,7 @@ const SwimlaneCard = memo(function SwimlaneCard({
         if (index === 0) {
           const statusLabels = options.map((o) => {
             const hint = handoffLabel(o.key);
-            return hint ? `${o.label} · ${hint.sentence}` : o.label;
+            return hint ? `${o.label} · ${hint.label}` : o.label;
           });
           const statusKeys = options.map((o) => o.key);
           const withCancel = [...statusLabels, t("common.cancel")];

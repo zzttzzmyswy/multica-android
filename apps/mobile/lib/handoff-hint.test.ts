@@ -279,7 +279,7 @@ describe("handoffHintCopy — what the row can say right now", () => {
   it("prints the resolved name when the directory answered", () => {
     expect(
       handoffHintCopy({ kind: "actor", actor: { type: "agent", id: "a-1" } }, "Ada"),
-    ).toEqual({ kind: "named", name: "Ada" });
+    ).toEqual({ kind: "named", name: "Ada", role: "" });
   });
 
   it("degrades to the ROLE, never to a blank, while the directory is unread", () => {
@@ -288,21 +288,24 @@ describe("handoffHintCopy — what the row can say right now", () => {
     // so it is the part that may be printed early.
     expect(
       handoffHintCopy({ kind: "actor", actor: { type: "agent", id: "a-1" } }, null),
-    ).toEqual({ kind: "noun", nounKey: "workflow.handler.agent" });
+    ).toEqual({ kind: "noun", nounKey: "workflow.handler.agent", role: "" });
   });
 
   it("uses the type noun for every id-less handler kind", () => {
     expect(handoffHintCopy({ kind: "generic", type: "squad" }, null)).toEqual({
       kind: "noun",
       nounKey: "workflow.handler.squad",
+      role: "",
     });
     expect(handoffHintCopy({ kind: "generic", type: "member" }, "Ada")).toEqual({
       kind: "noun",
       nounKey: "workflow.handler.member",
+      role: "",
     });
     expect(handoffHintCopy({ kind: "creator" }, null)).toEqual({
       kind: "noun",
       nounKey: "workflow.handler.creator",
+      role: "",
     });
   });
 
@@ -310,16 +313,42 @@ describe("handoffHintCopy — what the row can say right now", () => {
     expect(handoffHintCopy({ kind: "projectLead", actor: null }, "Ada")).toEqual({
       kind: "noun",
       nounKey: "workflow.handler.project_lead",
+      role: "",
     });
     expect(
       handoffHintCopy({ kind: "projectLead", actor: { type: "member", id: "u-1" } }, null),
-    ).toEqual({ kind: "noun", nounKey: "workflow.handler.project_lead" });
+    ).toEqual({
+      kind: "noun",
+      nounKey: "workflow.handler.project_lead",
+      role: "",
+    });
   });
 
   it("names a resolved project lead", () => {
     expect(
       handoffHintCopy({ kind: "projectLead", actor: { type: "member", id: "u-1" } }, "Grace"),
-    ).toEqual({ kind: "leadNamed", name: "Grace" });
+    ).toEqual({
+      kind: "leadNamed",
+      name: "Grace",
+      roleKey: "workflow.handler.project_lead",
+    });
+  });
+
+  it("keeps the lead's ROLE in its own field, so truncation cannot eat it", () => {
+    // Found on a Pixel 5, not in review: with the role folded into the name as
+    // upstream's 「（项目负责人）」 suffix, the project-lead row and the plain
+    // agent row above it BOTH rendered 「Multica安卓开发…」 — the qualifier was the
+    // first thing the fixed-width slot cut. The role is therefore a separate
+    // piece the caller draws FIRST; this asserts it is not baked into `name`.
+    const lead = handoffHintCopy(
+      { kind: "projectLead", actor: { type: "agent", id: "a-1" } },
+      "Multica安卓开发agent",
+    );
+    expect(lead.kind).toBe("leadNamed");
+    if (lead.kind !== "leadNamed") throw new Error("unreachable");
+    expect(lead.name).toBe("Multica安卓开发agent");
+    expect(lead.name).not.toContain("项目负责人");
+    expect(lead.roleKey).toBe("workflow.handler.project_lead");
   });
 });
 
