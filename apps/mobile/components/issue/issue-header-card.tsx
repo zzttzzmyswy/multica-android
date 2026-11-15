@@ -18,6 +18,7 @@ import { AttributeRow } from "./attribute-row";
 import { AgentActivityRow } from "./agent-activity-row";
 import { CustomPropertyRow } from "./custom-property-row";
 import { HighlightOverlay } from "./highlight-overlay";
+import { IssueWorkflowCardRow } from "./workflow-card";
 
 export function IssueHeaderCard({
   issue,
@@ -47,6 +48,14 @@ export function IssueHeaderCard({
        *  Conditionally renders null when there are no tasks at all. */}
       <AgentActivityRow issueId={issue.id} />
       <AttributeRow issue={issue} />
+      {/* The workflow this issue travels, directly under the attribute chips —
+       *  web's `IssueWorkflowPropRow` sits under its Project property
+       *  (`issue-detail.tsx:3167`), and the project chip is in `AttributeRow`
+       *  above, so "under the project" is where the reader looks for it.
+       *  Renders null with no project, and with a settled read that resolved no
+       *  workflow; a FAILED read draws a retry row instead of vanishing —
+       *  see `components/issue/workflow-card.tsx`. (MYS-2889) */}
+      <IssueWorkflowCardRow issue={issue} />
       {/* Workspace custom-property values, resolved against the workspace
        *  definition catalog (MYS-334). Renders null when no values exist
        *  and nothing is addable. */}
