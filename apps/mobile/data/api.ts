@@ -118,7 +118,9 @@ import type {
   ListIssueWorkflowsResponse,
   IssueWorkflowDryRunResponse,
   IssueWorkflowMappingPlan,
+  IssueWorkflow,
   SetProjectWorkflowRequest,
+  SetWorkflowHandoffRequest,
   ListQuickActionsResponse,
   MemberWithUser,
   UpdateMemberRequest,
@@ -484,6 +486,11 @@ import {
   EMPTY_LIST_ISSUE_WORKFLOWS_RESPONSE,
   IssueWorkflowDryRunResponseSchema,
   EMPTY_ISSUE_WORKFLOW_DRY_RUN,
+  // Editing one column's handoff (MUL-7420, MYS-2889 follow-up) — the write
+  // whose answer names the row it landed on, and the unsaved-brief preview.
+  IssueWorkflowSchema,
+  EMPTY_ISSUE_WORKFLOW,
+  IssueWorkflowBriefPreviewSchema,
   // Handoff confirmation (MUL-7420, MYS-2743) — what a status change or a
   // project move would do, asked BEFORE writing.
   WorkflowHandoffPreviewSchema,
@@ -4471,6 +4478,71 @@ class ApiClient {
       method: "POST",
       body: JSON.stringify({ ...body, dry_run: false }),
     });
+  }
+
+  /**
+   * Saves one column's handoff — `PUT
+   * /api/issue-workflows/{id}/handoffs/{status}` (MUL-7420, MYS-2889
+   * follow-up).
+   *
+   * `handler: { type: "none" }` clears the handoff. With `copyForProjectId` the
+   * workflow is NOT touched: the change lands on a copy that this project then
+   * switches to, and the copy is what comes back. That is why the response is
+   * parsed and returned rather than discarded — it is the only way the caller
+   * learns whether it edited the workflow in place or created a row it has
+   * never seen. Upstream reads it for the same reason and patches the cached
+   * list with it (`packages/core/issue-workflows/mutations.ts:96`).
+   *
+   * `statusKey` is percent-encoded: a custom status key is a workspace-defined
+   * slug and is not guaranteed to be URL-safe. Upstream encodes it identically.
+   *
+   * Admin- or owner-only. A 403 reaches the caller as an `ApiError` and is
+   * reported through the shared write-failure channel — it is NOT folded into a
+   * fallback, because a refused write must not look like a saved one.
+   */
+  async setWorkflowHandoff(
+    workflowId: string,
+    statusKey: string,
+    body: SetWorkflowHandoffRequest,
+    copyForProjectId?: string,
+  ): Promise<IssueWorkflow> {
+    const payload = copyForProjectId
+      ? { ...body, copy_for_project_id: copyForProjectId }
+      : body;
+    const raw = await this.fetch<unknown>(
+      `/api/issue-workflows/${workflowId}/handoffs/${encodeURIComponent(statusKey)}`,
+      { method: "PUT", body: JSON.stringify(payload) },
+    );
+    return parseWithFallback(raw, IssueWorkflowSchema, EMPTY_ISSUE_WORKFLOW, {
+      endpoint: "PUT /api/issue-workflows/{id}/handoffs/{status}",
+    });
+  }
+
+  /**
+   * Renders the brief a column's handler would receive, from an UNSAVED handoff
+   * — `POST /api/issue-workflows/{id}/brief` (MUL-7420).
+   *
+   * Saves nothing: the editor can preview the instructions it has not committed.
+   * `project_id` names the project the preview is for, which is what resolves a
+   * `project_lead` handler to a concrete person.
+   *
+   * Raw `this.fetch`, no fallback: a preview that could not be rendered must say
+   * so. Substituting an empty brief would print "this handler is told nothing",
+   * which is a claim about the workflow rather than about the read — the failure
+   * mode this repo has fixed repeatedly (iterations 251/254/256).
+   */
+  async previewWorkflowBrief(
+    workflowId: string,
+    body: SetWorkflowHandoffRequest & { status_key: string; project_id?: string },
+    opts?: { signal?: AbortSignal },
+  ): Promise<string> {
+    const raw = await this.fetch<unknown>(
+      `/api/issue-workflows/${workflowId}/brief`,
+      { method: "POST", body: JSON.stringify(body), signal: opts?.signal },
+    );
+    return parseWithFallback(raw, IssueWorkflowBriefPreviewSchema, { brief: "" }, {
+      endpoint: "POST /api/issue-workflows/{id}/brief",
+    }).brief;
   }
 
   // Create a custom status. Raw this.fetch (same convention as createLabel):

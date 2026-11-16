@@ -25,6 +25,8 @@
 import { describe, expect, it } from "vitest";
 import type { IssueWorkflow, IssueWorkflowMappingPlan } from "@multica/core/types";
 import {
+  canCreateWorkflow,
+  canEditWorkflow,
   canManageProjectWorkflow,
   defaultStatusMapping,
   mappingAffectedIssues,
@@ -424,5 +426,52 @@ describe("workflowsProjectNames (mirrors project-workflow-row.tsx:104)", () => {
     expect(workflowsProjectNames({ workflow: contentWorkflow, projects: undefined })).toEqual(
       [],
     );
+  });
+});
+
+describe("canEditWorkflow / canCreateWorkflow (MUL-7420, upstream permissions.ts)", () => {
+  const owned = { owner_id: "user-1" };
+  const defaultWorkflow = { owner_id: null };
+
+  it("lets a workspace admin edit any workflow, owned or not", () => {
+    // The escape hatch when a workflow's owner has left the workspace — which
+    // is also the only way Default is ever editable, since it has no owner.
+    expect(canEditWorkflow({ workflow: owned, currentUserId: "user-9", currentRole: "admin" })).toBe(true);
+    expect(canEditWorkflow({ workflow: defaultWorkflow, currentUserId: "user-9", currentRole: "admin" })).toBe(true);
+    expect(canEditWorkflow({ workflow: defaultWorkflow, currentUserId: "user-9", currentRole: "owner" })).toBe(true);
+  });
+
+  it("lets the workflow's OWNER edit it", () => {
+    expect(canEditWorkflow({ workflow: owned, currentUserId: "user-1", currentRole: "member" })).toBe(true);
+  });
+
+  it("does NOT let a plain member edit someone else's workflow", () => {
+    // The half that is easy to drop: any member may CREATE a workflow, so a
+    // rule written as "any member" would look reasonable and be wrong.
+    expect(canEditWorkflow({ workflow: owned, currentUserId: "user-2", currentRole: "member" })).toBe(false);
+  });
+
+  it("lets nobody but an admin edit Default, which has no owner", () => {
+    // `owner_id === null` must not match a null user id either — that would
+    // hand Default to every signed-out or not-yet-loaded session.
+    expect(canEditWorkflow({ workflow: defaultWorkflow, currentUserId: "user-1", currentRole: "member" })).toBe(false);
+    expect(canEditWorkflow({ workflow: defaultWorkflow, currentUserId: null, currentRole: null })).toBe(false);
+    expect(canEditWorkflow({ workflow: owned, currentUserId: null, currentRole: null })).toBe(false);
+  });
+
+  it("fails closed while the role or the workflow is unknown", () => {
+    expect(canEditWorkflow({ workflow: null, currentUserId: "user-1", currentRole: "member" })).toBe(false);
+    expect(canEditWorkflow({ workflow: undefined, currentUserId: null, currentRole: "admin" })).toBe(true);
+  });
+
+  it("lets ANY role create a workflow, and no absent role", () => {
+    // Different question, different answer: a plain member creates but cannot
+    // edit. An unresolved role is not a role.
+    expect(canCreateWorkflow("member")).toBe(true);
+    expect(canCreateWorkflow("admin")).toBe(true);
+    expect(canCreateWorkflow("owner")).toBe(true);
+    expect(canCreateWorkflow(null)).toBe(false);
+    expect(canCreateWorkflow(undefined)).toBe(false);
+    expect(canCreateWorkflow("")).toBe(false);
   });
 });

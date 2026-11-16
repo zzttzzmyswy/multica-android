@@ -287,3 +287,56 @@ export function workflowsProjectNames({
     )
     .map((p) => p.title);
 }
+
+/**
+ * Whether this member may edit a workflow and its handoffs.
+ *
+ * Mirrors upstream's `canEditWorkflow` (`workflows/permissions.ts:33`):
+ * `isAdmin || workflow.owner_id === me`. Two halves, and the second is the one
+ * that is easy to drop:
+ *
+ *   - **Admins always may**, whatever the workflow's owner. That is the escape
+ *     hatch when the owner has left the workspace.
+ *   - **The owner may, and only the owner** — a plain member who did not create
+ *     the workflow cannot edit it, even though ANY member may create one
+ *     (`canCreateWorkflow: !!role`). So this is deliberately not "any member".
+ *
+ * Default has `owner_id: null`, which is how the server says "nobody owns this
+ * one" — it belongs to the workspace, so only admins edit it.
+ *
+ * ## The `!!workflow.owner_id` test is REDUNDANT, and stays anyway
+ *
+ * Mutation-tested this iteration: replacing the line with a bare
+ * `workflow.owner_id === currentUserId` changes no observable answer, because
+ * the `!currentUserId` guard above already rejects the only session that could
+ * match a null owner. So it is not load-bearing TODAY and this comment does not
+ * claim it is. It stays because it states the rule the function means ("a
+ * workflow with no owner has no owner to match") rather than relying on a guard
+ * three lines up, and because removing it would silently make the rule depend on
+ * that guard staying. Recorded here so a later reader does not mistake an
+ * equivalent mutant for a missing test.
+ */
+export function canEditWorkflow({
+  workflow,
+  currentUserId,
+  currentRole,
+}: {
+  workflow: Pick<IssueWorkflow, "owner_id"> | null | undefined;
+  currentUserId: string | null | undefined;
+  currentRole: string | null | undefined;
+}): boolean {
+  if (currentRole && ADMIN_ROLES.has(currentRole)) return true;
+  if (!workflow || !currentUserId) return false;
+  return !!workflow.owner_id && workflow.owner_id === currentUserId;
+}
+
+/**
+ * Whether this member may create a workflow at all: any role is enough.
+ *
+ * Separate from {@link canEditWorkflow} because the two questions have
+ * different answers for the same person — a plain member creates but does not
+ * edit. Upstream keeps them apart for the same reason (`permissions.ts:35`).
+ */
+export function canCreateWorkflow(currentRole: string | null | undefined): boolean {
+  return !!currentRole;
+}

@@ -47,6 +47,7 @@ import type {
   IssueSubscriber,
   IssueTriggerPreview,
   IssueWorkflowHandlerType,
+  IssueWorkflow,
   IssueWorkflowDryRunResponse,
   WorkflowHandoffPreview,
   Label,
@@ -442,6 +443,51 @@ export const ListIssueWorkflowsResponseSchema = z
 export const EMPTY_LIST_ISSUE_WORKFLOWS_RESPONSE: ListIssueWorkflowsResponse = {
   workflows: [],
   total: 0,
+};
+
+/**
+ * The "nothing was written" workflow — used only when a WRITE's response body
+ * drifted, and defined so the save path can recognise it rather than mistake it
+ * for a real row.
+ *
+ * It exists because `setWorkflowHandoff` (MYS-2889 follow-up) is the one
+ * workflow write whose answer the client READS: the project-only scope returns
+ * a NEW workflow row (the copy), so the caller has to know which row the change
+ * landed on to patch the cache. Reading a drifted body as success would patch
+ * nothing and leave the card showing the old handoff while claiming it saved,
+ * so `handoffSaveResultKind` treats an empty id as "no row to patch" and the
+ * mutation invalidates instead.
+ */
+/**
+ * `POST /api/issue-workflows/{id}/brief` — the text a column's handler would
+ * receive for an unsaved handoff (MUL-7420).
+ *
+ * Transcribed from upstream `IssueWorkflowBriefPreviewSchema`. The default is
+ * the EMPTY string rather than a required field, because the endpoint answers a
+ * member handler with `{"brief": ""}` legitimately — "a member is told nothing"
+ * is the real answer there, not a drift.
+ *
+ * A body that drifted to something else entirely also lands on `""`, and the
+ * caller must not present that as 「这位负责人不会收到说明」 unless the READ
+ * succeeded. The distinction is kept by `previewWorkflowBrief` using raw
+ * `this.fetch`: a failed request rejects, and only a *successful* one with an
+ * unreadable body degrades — the same contract `previewWorkflowHandoff` has.
+ */
+export const IssueWorkflowBriefPreviewSchema = z
+  .object({ brief: z.string().default("") })
+  .loose();
+
+export const EMPTY_ISSUE_WORKFLOW: IssueWorkflow = {
+  id: "",
+  workspace_id: "",
+  name: "",
+  description: "",
+  is_default: false,
+  owner_id: null,
+  steps: [],
+  project_ids: [],
+  created_at: "",
+  updated_at: "",
 };
 
 /**

@@ -70,6 +70,8 @@ import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { statusAcceptsHandoff } from "@/lib/workflow";
+import { WorkflowHandoffEditor } from "@/components/issue/workflow-handoff-editor";
 import {
   workflowCardState,
   type WorkflowCard,
@@ -205,36 +207,59 @@ export function WorkflowCardSheet({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
+  // Which column's editor is open, or null. Local to the sheet because the
+  // editor is a child of the card: closing the card closes it too.
+  const [editing, setEditing] = useState<string | null>(null);
+
   return (
-    <PickerSheet
-      title={card.workflowName}
-      visible={visible}
-      onClose={onClose}
-      // `fill` — the body is a scrolling LIST, and `PickerSheet`'s own doc says
-      // this mode exists for exactly that: a `flex-1` child inside a
-      // content-sized parent resolves to zero height. Both shapes were measured
-      // on device this iteration: without `fill` the sheet opened to a title bar
-      // and one clipped row; with it, the rows lay out and scroll.
-      fill
-    >
-      <ScrollView
-        className="flex-1"
-        contentContainerClassName="pb-6"
-        showsVerticalScrollIndicator={false}
+    <>
+      <PickerSheet
+        title={card.workflowName}
+        visible={visible}
+        onClose={onClose}
+        // `fill` — the body is a scrolling LIST, and `PickerSheet`'s own doc says
+        // this mode exists for exactly that: a `flex-1` child inside a
+        // content-sized parent resolves to zero height. Both shapes were measured
+        // on device this iteration: without `fill` the sheet opened to a title bar
+        // and one clipped row; with it, the rows lay out and scroll.
+        fill
       >
-        <Text className="px-4 pb-2 text-caption text-muted-foreground" numberOfLines={2}>
-          {t("workflow.detail.card_title", {
-            workflow: card.workflowName,
-            project: card.projectTitle,
-          })}
-        </Text>
-        <View className="px-2">
-          {card.steps.map((step) => (
-            <WorkflowCardStepRow key={step.statusKey} step={step} />
-          ))}
-        </View>
-      </ScrollView>
-    </PickerSheet>
+        <ScrollView
+          className="flex-1"
+          contentContainerClassName="pb-6"
+          showsVerticalScrollIndicator={false}
+        >
+          <Text className="px-4 pb-2 text-caption text-muted-foreground" numberOfLines={2}>
+            {t("workflow.detail.card_title", {
+              workflow: card.workflowName,
+              project: card.projectTitle,
+            })}
+          </Text>
+          <View className="px-2">
+            {card.steps.map((step) => (
+              <WorkflowCardStepRow
+                key={step.statusKey}
+                step={step}
+                onEdit={() => setEditing(step.statusKey)}
+              />
+            ))}
+          </View>
+        </ScrollView>
+      </PickerSheet>
+
+      {/* The editor, web's `ColumnHandoff` popover body (MUL-7420). Opened
+          from a row rather than from the board's column header, because the
+          card is where a phone user already looks at the pipeline. The row it
+          opens is the one whose handoff is being changed, so the row stays the
+          trigger — same relationship web has between its badge and its form. */}
+      <WorkflowHandoffEditor
+        workflow={card.workflow}
+        statusKey={editing ?? ""}
+        project={card.project}
+        visible={editing !== null}
+        onClose={() => setEditing(null)}
+      />
+    </>
   );
 }
 
@@ -254,8 +279,24 @@ export function WorkflowCardSheet({
  * number of columns follows the workflow's data — the same reason the status
  * picker hoists `StatusPickerRow`. It always calls every hook before deciding
  * anything, so a row whose hint is null does not change the hook count.
+ *
+ * ## Why the row is a press target (MYS-2889 follow-up)
+ *
+ * Web's board column header carries the handoff badge, and clicking it opens the
+ * editor — so on the desktop the pipeline view and the edit entry point are the
+ * same place. On a phone the pipeline lives here, in the card, which is where a
+ * user already goes to ask 「每列交给谁」. Making those rows the edit triggers
+ * keeps that equivalence; putting the editor behind a separate screen would
+ * split one question across two. Upstream's `ColumnHandoff` also gates the
+ * TRIGGER on the same facts: no handoff and no permission → nothing to tap.
  */
-function WorkflowCardStepRow({ step }: { step: WorkflowCardStep }) {
+function WorkflowCardStepRow({
+  step,
+  onEdit,
+}: {
+  step: WorkflowCardStep;
+  onEdit: () => void;
+}) {
   const { t } = useTranslation();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const statusLabel = useStatusLabel(wsId);
@@ -275,18 +316,8 @@ function WorkflowCardStepRow({ step }: { step: WorkflowCardStep }) {
     .filter(Boolean)
     .join(", ");
 
-  return (
-    <View
-      className={cn(
-        "flex-row items-center gap-2 rounded-md px-2 py-2",
-        step.current && "bg-accent",
-      )}
-      accessible
-      accessibilityLabel={rowLabel}
-      // Web's `aria-current="step"`. `selected` is the closest thing a phone
-      // exposes, and it is what a screen reader announces as "selected".
-      accessibilityState={step.current ? { selected: true } : undefined}
-    >
+  const body = (
+    <>
       <StatusIcon
         status={step.statusKey}
         category={entry?.category}
@@ -305,6 +336,51 @@ function WorkflowCardStepRow({ step }: { step: WorkflowCardStep }) {
         {statusLabel(step.statusKey)}
       </Text>
       <HandoffHintRow display={display} />
-    </View>
+    </>
+  );
+
+  // Parking and closing columns never hand off, so their editor is not reachable
+  // — the same predicate the board and the server use (`statusAcceptsHandoff`).
+  // Rendering a pressable row there would open a form whose only legal answer is
+  // 「不交接」, which is what it already says.
+  if (!statusAcceptsHandoff(step.statusKey)) {
+    return (
+      <View
+        className={cn(
+          "flex-row items-center gap-2 rounded-md px-2 py-2",
+          step.current && "bg-accent",
+        )}
+        accessible
+        accessibilityLabel={rowLabel}
+        accessibilityState={step.current ? { selected: true } : undefined}
+      >
+        {body}
+      </View>
+    );
+  }
+
+  return (
+    <Pressable
+      onPress={onEdit}
+      className={cn(
+        "flex-row items-center gap-2 rounded-md px-2 py-2 active:bg-secondary",
+        step.current && "bg-accent",
+      )}
+      accessible
+      // The edit verb is part of the label: an announcement that only reads the
+      // handoff does not tell a screen-reader user the row is actionable, and
+      // there is no chevron to hint at it.
+      accessibilityRole="button"
+      accessibilityLabel={[
+        rowLabel,
+        display
+          ? t("workflow.handoff.editAria", { name: display.label })
+          : t("workflow.handoff.noHandoffAria", { status: statusLabel(step.statusKey) }),
+      ].join(", ")}
+      accessibilityState={step.current ? { selected: true } : undefined}
+      hitSlop={2}
+    >
+      {body}
+    </Pressable>
   );
 }
