@@ -112,6 +112,12 @@ export default function SettingsPage() {
   // (iteration-100): Feedback submit + Docs/Changelog/Discord external links
   // + server version, mirroring the web help menu.
   const goFeedback = () => router.push(`/${currentSlug}/more/settings/feedback`);
+  // Settings → Workflows (iteration 294): the pipelines themselves — create,
+  // rename, add/remove/reorder columns, delete. Web renders this as a settings
+  // tab (`WorkflowsTab`); mobile's settings is a list of push screens, so it is
+  // one row above the status library it draws from.
+  const goWorkflows = () =>
+    router.push(`/${currentSlug}/more/settings/workflows`);
   const goIssueStatuses = () =>
     router.push(`/${currentSlug}/more/settings/issue-statuses`);
   const goProperties = () =>
@@ -263,6 +269,18 @@ export default function SettingsPage() {
             );
           })
         )}
+        <Separator />
+        <NavRow
+          onPress={goWorkflows}
+          chevronColor={mutedFg}
+          leading={
+            <View className="size-10 rounded-md bg-secondary items-center justify-center">
+              <Ionicons name="git-branch-outline" size={20} color={mutedFg} />
+            </View>
+          }
+          title={t("settings.workflowsTitle")}
+          subtitle={t("settings.workflowsSubtitle")}
+        />
         <Separator />
         <NavRow
           onPress={goIssueStatuses}

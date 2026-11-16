@@ -739,6 +739,17 @@ export default function WorkspaceLayout() {
           name="more/settings/tokens"
           options={{ title: t("screen.tokens"), headerBackTitle: t("screen.settings") }}
         />
+        {/* Workflows (iteration 294) — the pipelines, and one pipeline's
+            editor. Two entries because the editor is a push screen with its
+            own title, not a modal over the list. */}
+        <Stack.Screen
+          name="more/settings/workflows/index"
+          options={{ title: t("settings.workflowsTitle"), headerBackTitle: t("screen.settings") }}
+        />
+        <Stack.Screen
+          name="more/settings/workflows/[id]"
+          options={{ title: t("settings.workflowsTitle"), headerBackTitle: t("settings.workflowsTitle") }}
+        />
         <Stack.Screen
           name="new-issue"
           options={{

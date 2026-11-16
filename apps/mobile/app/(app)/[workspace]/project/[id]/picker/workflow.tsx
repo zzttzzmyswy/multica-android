@@ -204,8 +204,11 @@ export default function ProjectWorkflowPickerRoute() {
         pending={
           pending
             ? {
-                workflowName: pending.workflowName,
-                projectName: project?.title ?? "",
+                variant: {
+                  kind: "switch",
+                  workflowName: pending.workflowName,
+                  projectName: project?.title ?? "",
+                },
                 plan: pending.plan,
                 targetKeys: pending.targetKeys,
               }

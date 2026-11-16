@@ -131,6 +131,10 @@ describe("every screen that replaces the default carries the entry", () => {
       "more/properties.tsx",
       "more/runtimes.tsx",
       "more/settings/quick-actions.tsx",
+      // Iteration 294: the workflow list's 「新建」 and the editor's commit
+      // control. Both compose the entry rather than replacing it.
+      "more/settings/workflows/[id].tsx",
+      "more/settings/workflows/index.tsx",
       "more/skills.tsx",
       "more/squads.tsx",
       "more/squads/[id].tsx",

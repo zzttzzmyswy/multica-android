@@ -119,6 +119,7 @@ import type {
   IssueWorkflowDryRunResponse,
   IssueWorkflowMappingPlan,
   IssueWorkflow,
+  IssueWorkflowWriteRequest,
   SetProjectWorkflowRequest,
   SetWorkflowHandoffRequest,
   ListQuickActionsResponse,
@@ -4516,6 +4517,109 @@ class ApiClient {
     return parseWithFallback(raw, IssueWorkflowSchema, EMPTY_ISSUE_WORKFLOW, {
       endpoint: "PUT /api/issue-workflows/{id}/handoffs/{status}",
     });
+  }
+
+  // ── Managing workflows (iteration 294, MUL-7420) ──────────────────────────
+  //
+  // Create / update / dry-run / delete, mirroring upstream's
+  // `packages/core/api/client.ts:4627-4676`. Any member creates; only a
+  // workflow's owner and workspace admins update or delete — the server
+  // enforces both (`canEditIssueWorkflow`), so these methods never pre-judge
+  // and a 403 reaches the caller as an ApiError.
+
+  /**
+   * Creates a workflow — `POST /api/issue-workflows`.
+   *
+   * The body is parsed and RETURNED rather than discarded: the editor opens the
+   * created workflow straight afterwards (`onOpen({id: created.id})` upstream),
+   * so a drifted body has to be recognisable as one. `EMPTY_ISSUE_WORKFLOW`'s
+   * empty id is that signal, and the caller refuses to navigate on it — landing
+   * on `/workflows/` would render a not-found screen for a workflow that was in
+   * fact created.
+   *
+   * A 409 `workflow_name_taken` and a 403 `status_create_forbidden` both reach
+   * the caller unchanged: they are the two refusals the form has specific copy
+   * for, and a fallback would erase them.
+   */
+  async createIssueWorkflow(data: IssueWorkflowWriteRequest): Promise<IssueWorkflow> {
+    const raw = await this.fetch<unknown>("/api/issue-workflows", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return parseWithFallback(raw, IssueWorkflowSchema, EMPTY_ISSUE_WORKFLOW, {
+      endpoint: "POST /api/issue-workflows",
+    });
+  }
+
+  /**
+   * Saves a workflow edit — `PATCH /api/issue-workflows/{id}`.
+   *
+   * `dry_run: false` is sent explicitly: the same endpoint answers a dry run,
+   * and the server's `DryRun bool` defaults to false only because the field is
+   * absent — spelling it out keeps the two calls from looking interchangeable
+   * at a call site.
+   *
+   * When the edit removes statuses that issues of the workflow's projects still
+   * use, the server answers `409 workflow_status_mapping_required` with a plan;
+   * resend with `status_mapping`. {@link dryRunIssueWorkflowUpdate} fetches that
+   * plan up front so the user is asked before, not after.
+   */
+  async updateIssueWorkflow(
+    id: string,
+    data: IssueWorkflowWriteRequest,
+  ): Promise<IssueWorkflow> {
+    const raw = await this.fetch<unknown>(`/api/issue-workflows/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ ...data, dry_run: false }),
+    });
+    return parseWithFallback(raw, IssueWorkflowSchema, EMPTY_ISSUE_WORKFLOW, {
+      endpoint: "PATCH /api/issue-workflows/{id}",
+    });
+  }
+
+  /**
+   * What an edit WOULD move, without writing — `PATCH
+   * /api/issue-workflows/{id}` with `dry_run: true`.
+   *
+   * The plan's `required` rows are the statuses whose issues have nowhere to go
+   * under the edited workflow, each with a count and a suggested destination.
+   * The dialog built from them is the same shape as a project switch's
+   * (`components/project/workflow-mapping-dialog.tsx`), which is why the two
+   * share `lib/project-workflow.ts`'s mapping helpers.
+   *
+   * Never throws on a drifted body — it falls back to "nothing would move",
+   * and the write that follows either succeeds or is refused with the real
+   * plan. That direction is deliberate: a preview failure must not block the
+   * save, because the server's own refusal is strictly more informative than
+   * anything this client can invent.
+   */
+  async dryRunIssueWorkflowUpdate(
+    id: string,
+    data: IssueWorkflowWriteRequest,
+  ): Promise<IssueWorkflowDryRunResponse> {
+    const raw = await this.fetch<unknown>(`/api/issue-workflows/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ ...data, dry_run: true }),
+    });
+    return parseWithFallback(
+      raw,
+      IssueWorkflowDryRunResponseSchema,
+      EMPTY_ISSUE_WORKFLOW_DRY_RUN,
+      { endpoint: "PATCH /api/issue-workflows/{id} (dry run)" },
+    );
+  }
+
+  /**
+   * Deletes a workflow — `DELETE /api/issue-workflows/{id}`.
+   *
+   * Answers `204`, so there is no body to parse and no fallback to pick. Two
+   * refusals are expected rather than exceptional and both are predictable from
+   * the cached list, which is why the UI blocks them first
+   * (`lib/workflow-editor.ts:deleteBlocked`): `400 workflow_is_default` and
+   * `409 workflow_in_use` with `project_count`.
+   */
+  async deleteIssueWorkflow(id: string): Promise<void> {
+    await this.fetch<unknown>(`/api/issue-workflows/${id}`, { method: "DELETE" });
   }
 
   /**
