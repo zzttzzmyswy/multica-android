@@ -98,6 +98,20 @@ export interface WorkflowCard {
   /** The project's title, for the sheet's subtitle (`card_title`). */
   projectTitle: string;
   steps: WorkflowCardStep[];
+  /**
+   * The workflow ROW the card was built from, so a caller can hand it to the
+   * handoff editor (MYS-2889 follow-up) without resolving it a second time.
+   *
+   * Carried rather than re-resolved at the call site on purpose: the editor
+   * needs the row's `id`, `is_default`, `owner_id` and `project_ids`, and a
+   * second `resolveProjectWorkflow` call in the component could disagree with
+   * the one that produced these steps (a project row arriving between the two
+   * reads) — which would mean editing a workflow the sheet is not showing.
+   */
+  workflow: IssueWorkflow;
+  /** The project row, for the same reason — the editor's copy scope and brief
+   *  preview both name it. */
+  project: WorkflowCardProject;
 }
 
 /**
@@ -203,6 +217,12 @@ export function buildWorkflowCard(
       // one predicate, one vocabulary, two surfaces.
       hint: handoffHint(step, project),
     })),
+    workflow,
+    // `buildWorkflowCard` is only reached from a settled state with a resolved
+    // project row (`workflowCardState` guards both), so the fallback below is
+    // unreachable through the public path — it exists because the function is
+    // exported and a direct caller could pass null.
+    project: project ?? { id: "", title: "", lead_type: null, lead_id: null, workflow_id: null },
   };
 }
 

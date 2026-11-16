@@ -349,3 +349,32 @@ describe("buildWorkflowCard — each row's hint is the gate's decision (MYS-2889
     expect(currentStep(card)?.hint).not.toBeNull();
   });
 });
+
+describe("the card carries the rows the editor needs (MYS-2889 follow-up)", () => {
+  // The handoff editor needs the workflow's `id`, `owner_id`, `is_default` and
+  // `project_ids`, plus the project it was opened from. Carrying them on the
+  // card means one resolution produces both the display and the edit target; a
+  // second `resolveProjectWorkflow` in the component could disagree with this
+  // one if a project row landed between the two reads, and the editor would
+  // then be editing a workflow the sheet is not showing.
+  it("exposes the resolved workflow ROW, not just its name", () => {
+    const card = buildWorkflowCard(PIPELINE, project(), "todo");
+    expect(card.workflow).toBe(PIPELINE);
+    expect(card.workflow.id).toBe(PIPELINE.id);
+  });
+
+  it("exposes the project row the copy scope and the brief preview name", () => {
+    const p = project();
+    const card = buildWorkflowCard(PIPELINE, p, "todo");
+    expect(card.project).toBe(p);
+  });
+
+  it("still builds a card with no project row, using an empty stand-in", () => {
+    // Unreachable through `workflowCardState` (it guards a resolved project),
+    // but `buildWorkflowCard` is exported and must not throw for a direct
+    // caller. An empty id is the honest answer: there is no project to scope to.
+    const card = buildWorkflowCard(PIPELINE, null, "todo");
+    expect(card.project.id).toBe("");
+    expect(card.steps.length).toBe(PIPELINE.steps.length);
+  });
+});

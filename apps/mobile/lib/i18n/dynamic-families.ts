@@ -431,6 +431,16 @@ function prefixed(prefix: string, leaves: Iterable<string>): readonly string[] {
  * out, which is what makes a failure readable: the test names the family, and
  * the missing id says which branch broke.
  */
+/**
+ * The three 「交给」 modes, in the order the handoff editor renders them.
+ *
+ * A closed set on purpose: the editor builds `workflow.handoff.mode_${mode}` and
+ * `workflow.handoff.mode_${mode}_hint` from a `HandoffMode` union, so a mode
+ * added without its two leaves would render a raw id on screen. Listing the
+ * union here is what makes `dynamic-families.test.ts` catch that.
+ */
+export const HANDOFF_MODE_KEYS = ["none", "agent", "member"] as const;
+
 export const DYNAMIC_FAMILIES: Record<string, readonly string[]> = {
   "wakeups.ruleStates.<state>": prefixed(
     "wakeups.ruleStates.",
@@ -586,6 +596,9 @@ export const DYNAMIC_FAMILIES: Record<string, readonly string[]> = {
     ACTOR_ISSUES_EMPTY_KEYS,
   ).flatMap(({ title, description }) =>
     prefixed("actorIssues.empty.", [title, description]),
+  ),
+  "workflow.handoff.mode_<mode>": HANDOFF_MODE_KEYS.flatMap((mode) =>
+    prefixed("workflow.handoff.mode_", [mode, `${mode}_hint`]),
   ),
   "chat.onboardingCards.<card>.<leaf>": ONBOARDING_CARD_IDS.flatMap((id) =>
     prefixed(
