@@ -111,6 +111,7 @@ import type {
   ListIssuesParams,
   ListIssuesResponse,
   ListLabelsResponse,
+  ListProjectMembersResponse,
   ListProjectResourcesResponse,
   ListProjectsResponse,
   ListPropertiesResponse,
@@ -380,6 +381,7 @@ import {
   IssuePullRequestsResponseSchema,
   EMPTY_LIST_LABELS_RESPONSE,
   EMPTY_LIST_PROJECT_RESOURCES_RESPONSE,
+  EMPTY_LIST_PROJECT_MEMBERS_RESPONSE,
   EMPTY_LIST_PROJECTS_RESPONSE,
   EMPTY_MEMBER_LIST,
   EMPTY_NOTIFICATION_PREFERENCES,
@@ -401,6 +403,7 @@ import {
   ListLabelsResponseSchema,
   LabelSchema,
   ListProjectResourcesResponseSchema,
+  ListProjectMembersResponseSchema,
   ListProjectsResponseSchema,
   MemberListSchema,
   PersonalAccessTokenListSchema,
@@ -5006,6 +5009,47 @@ class ApiClient {
 
   async deleteProject(id: string): Promise<void> {
     await this.fetch<void>(`/api/projects/${id}`, { method: "DELETE" });
+  }
+
+  // --- Project members (MUL-8472, private projects) ---
+  //
+  // Three separate endpoints on purpose: visibility is a whole-list replace
+  // (`PUT /api/projects/{id}` with the complete `member_ids`), while add and
+  // remove touch one row each. Folding add/remove into the PUT would write a
+  // stale list over members another client added in between.
+  //
+  // Reads go through parseWithFallback like every other list read; writes do
+  // not (mirrors updateProject: a malformed write response must surface as an
+  // error so the caller can roll back rather than believe it succeeded).
+  async listProjectMembers(
+    projectId: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<ListProjectMembersResponse> {
+    const raw = await this.fetch<unknown>(`/api/projects/${projectId}/members`, {
+      signal: opts?.signal,
+    });
+    return parseWithFallback(
+      raw,
+      ListProjectMembersResponseSchema,
+      EMPTY_LIST_PROJECT_MEMBERS_RESPONSE,
+      { endpoint: "GET /api/projects/:id/members" },
+    );
+  }
+
+  async addProjectMembers(
+    projectId: string,
+    userIds: string[],
+  ): Promise<ListProjectMembersResponse> {
+    return this.fetch<ListProjectMembersResponse>(
+      `/api/projects/${projectId}/members`,
+      { method: "POST", body: JSON.stringify({ user_ids: userIds }) },
+    );
+  }
+
+  async removeProjectMember(projectId: string, userId: string): Promise<void> {
+    await this.fetch<void>(`/api/projects/${projectId}/members/${userId}`, {
+      method: "DELETE",
+    });
   }
 
   // --- Project resources ---

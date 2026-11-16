@@ -2,6 +2,16 @@ export type ProjectStatus = "planned" | "in_progress" | "paused" | "completed" |
 
 export type ProjectPriority = "urgent" | "high" | "medium" | "low" | "none";
 
+/**
+ * Who may see a project and everything under it (MUL-8472).
+ *
+ *  - `workspace` — every workspace member
+ *  - `private`   — the project's member rows, plus workspace owners/admins
+ *
+ * An issue's visibility is its project's: there is no per-issue switch.
+ */
+export type ProjectVisibility = "workspace" | "private";
+
 export interface Project {
   id: string;
   workspace_id: string;
@@ -28,6 +38,13 @@ export interface Project {
    * project's workflow at all. (MUL-7420)
    */
   workflow_id?: string | null;
+  /**
+   * Who may see this project (MUL-8472). The deployed server always sends it
+   * (`project.go` `ProjectResponse.Visibility`); optional here because an
+   * older response shape omits it. Read it through `resolveProjectVisibility`,
+   * which folds "absent" to `workspace` — never to `private`.
+   */
+  visibility?: ProjectVisibility;
 }
 
 export interface CreateProjectRequest {
@@ -43,6 +60,11 @@ export interface CreateProjectRequest {
   // Resources to attach in the same transaction as the project. Server returns
   // 4xx (and rolls back) if any one is invalid or duplicate.
   resources?: CreateProjectResourceRequest[];
+  // "private" creates a private project (MUL-8472); member_ids seeds its
+  // member list and the creator is always added. Omit for "workspace", which
+  // is what the server defaults to.
+  visibility?: ProjectVisibility;
+  member_ids?: string[];
 }
 
 export interface UpdateProjectRequest {
@@ -56,10 +78,38 @@ export interface UpdateProjectRequest {
   // Omit the key to leave the date untouched; send null (or "") to clear it.
   start_date?: string | null;
   due_date?: string | null;
+  // Switching visibility (MUL-8472). `member_ids` is the complete desired
+  // member list when moving to "private" — the server replaces the rows in
+  // that direction. Sending `member_ids` without `visibility` is meaningless
+  // and the server ignores it; add/remove a single member uses the dedicated
+  // `/members` endpoints instead (see data/mutations/project-access.ts).
+  visibility?: ProjectVisibility;
+  member_ids?: string[];
 }
 
 export interface ListProjectsResponse {
   projects: Project[];
+  total: number;
+}
+
+/**
+ * A project's member row (MUL-8472). Distinct from `MemberWithUser` — this is
+ * membership OF a project, not of the workspace, and the server adds
+ * `workspace_role` so the UI can label owners/admins without a second lookup.
+ */
+export interface ProjectMember {
+  project_id: string;
+  user_id: string;
+  name: string;
+  email: string;
+  avatar_url: string | null;
+  added_by: string | null;
+  created_at: string;
+  workspace_role?: string;
+}
+
+export interface ListProjectMembersResponse {
+  members: ProjectMember[];
   total: number;
 }
 

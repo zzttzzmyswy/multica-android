@@ -54,6 +54,7 @@ import type {
   ListIssueStatusesResponse,
   ListIssueWorkflowsResponse,
   ListLabelsResponse,
+  ListProjectMembersResponse,
   ListProjectResourcesResponse,
   ListProjectsResponse,
   MemberWithUser,
@@ -62,6 +63,7 @@ import type {
   PendingChatTasksResponse,
   PrioritizeQueuedChatTaskResponse,
   Project,
+  ProjectMember,
   ProjectResource,
   ResourceLabelsResponse,
   RuntimeDevice,
@@ -637,6 +639,11 @@ export const ProjectSchema = z.object({
   // older server omits the key; default(null) folds that into the same answer,
   // which is also how the server itself reads an absent reference.
   workflow_id: z.string().nullable().default(null),
+  // Who may see this project (MUL-8472). The deployed server always sends it;
+  // `.default("workspace")` only covers an older response shape. It must NOT
+  // default to "private": that would hide a public project from every
+  // non-member on the phone alone. Read it through resolveProjectVisibility.
+  visibility: z.string().default("workspace"),
   created_at: z.string(),
   updated_at: z.string(),
   issue_count: z.number().default(0),
@@ -651,6 +658,34 @@ export const ListProjectsResponseSchema = z.object({
 
 export const EMPTY_LIST_PROJECTS_RESPONSE: ListProjectsResponse = {
   projects: [],
+  total: 0,
+};
+
+/**
+ * A project's member row (MUL-8472). Distinct from the workspace `Member`
+ * schema: this is membership OF a project. `workspace_role` is optional on the
+ * wire (`omitempty` server-side) and defaults to "" so a response that omits it
+ * still parses — the UI then falls back to the member's role from the workspace
+ * directory rather than claiming the person is an ordinary member.
+ */
+export const ProjectMemberSchema = z.object({
+  project_id: z.string(),
+  user_id: z.string(),
+  name: z.string(),
+  email: z.string(),
+  avatar_url: z.string().nullable().default(null),
+  added_by: z.string().nullable().default(null),
+  created_at: z.string(),
+  workspace_role: z.string().default(""),
+}).loose();
+
+export const ListProjectMembersResponseSchema = z.object({
+  members: z.array(ProjectMemberSchema).default([]),
+  total: z.number().default(0),
+}).loose();
+
+export const EMPTY_LIST_PROJECT_MEMBERS_RESPONSE: ListProjectMembersResponse = {
+  members: [],
   total: 0,
 };
 
@@ -672,6 +707,9 @@ export const EMPTY_PROJECT: Project = {
   lead_id: null,
   start_date: null,
   due_date: null,
+  // Absent means public — see ProjectSchema's visibility note. Stated
+  // explicitly so a reader does not have to infer it from the optional type.
+  visibility: "workspace",
   created_at: "",
   updated_at: "",
   issue_count: 0,
