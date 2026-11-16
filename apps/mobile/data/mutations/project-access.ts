@@ -38,32 +38,64 @@ export type ProjectAccessChange =
   | { type: "add"; userId: string }
   | { type: "remove"; userId: string };
 
+/**
+ * The wire half, as a pure function of (api, projectId, change).
+ *
+ * Split out from the hook so the endpoint choice is testable without a
+ * renderer — this repo's vitest lane is Node-only (`vitest.config.ts`), and the
+ * one thing that must never drift here is WHICH endpoint each change goes to.
+ * A hook body can be read wrong; a recorded call cannot.
+ */
+export async function sendProjectAccessChange(
+  client: Pick<typeof api, "updateProject" | "addProjectMembers" | "removeProjectMember">,
+  projectId: string,
+  change: ProjectAccessChange,
+): Promise<void> {
+  if (change.type === "visibility") {
+    await client.updateProject(projectId, {
+      visibility: change.visibility,
+      member_ids: change.memberIds,
+    });
+    return;
+  }
+  if (change.type === "add") {
+    await client.addProjectMembers(projectId, [change.userId]);
+    return;
+  }
+  await client.removeProjectMember(projectId, change.userId);
+}
+
+/**
+ * Every cache family an access change can invalidate.
+ *
+ * Both halves are required. The project family covers the row's own
+ * `visibility` and the member list; the ISSUE family covers the fact that an
+ * issue's visibility is its project's, so a project turning private changes
+ * which issues the viewer's own lists (inbox, my-issues, project surfaces) may
+ * contain. Invalidating only the first leaves rows on screen that a refetch
+ * would drop.
+ */
+export function projectAccessInvalidationKeys(wsId: string | null) {
+  return [projectKeys.all(wsId), issueKeys.all(wsId)];
+}
+
 export function useProjectAccessMutation(projectId: string) {
   const qc = useQueryClient();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   return useMutation({
     mutationKey: ["projectAccess", projectId] as const,
-    mutationFn: async (change: ProjectAccessChange) => {
-      if (change.type === "visibility") {
-        await api.updateProject(projectId, {
-          visibility: change.visibility,
-          member_ids: change.memberIds,
-        });
-      } else if (change.type === "add") {
-        await api.addProjectMembers(projectId, [change.userId]);
-      } else {
-        await api.removeProjectMember(projectId, change.userId);
-      }
-    },
+    mutationFn: (change: ProjectAccessChange) =>
+      sendProjectAccessChange(api, projectId, change),
     onSettled: async () => {
       // Settled, not success: a rejected write can still have been applied
       // server-side (a timeout after the commit), and a cache that keeps
       // claiming the old visibility is the more dangerous of the two errors.
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: projectKeys.all(wsId) }),
-        qc.invalidateQueries({ queryKey: issueKeys.all(wsId) }),
-      ]);
+      await Promise.all(
+        projectAccessInvalidationKeys(wsId).map((queryKey) =>
+          qc.invalidateQueries({ queryKey }),
+        ),
+      );
     },
   });
 }

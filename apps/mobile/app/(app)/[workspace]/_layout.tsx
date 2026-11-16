@@ -369,6 +369,14 @@ export default function WorkspaceLayout() {
           name="project/[id]/picker/workflow"
           options={SHEET_OPTIONS}
         />
+        {/* Project access — visibility + member management (MUL-8472,
+            MYS-2915). A sheet with the detents every other property picker
+            uses; the member list needs the taller one, which the user reaches
+            by dragging the grabber. */}
+        <Stack.Screen
+          name="project/[id]/picker/access"
+          options={SHEET_OPTIONS}
+        />
         {/* Project start/due date calendar sheets (MYS-1021): same
             spinner + Done/Clear header as the issue date sheets, writing
             project.start_date / project.due_date. */}

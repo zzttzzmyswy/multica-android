@@ -2522,6 +2522,7 @@
   "projects.access.no_selected": "No project members",
   "projects.access.private": "Project members only",
   "projects.access.privateHint": "Only project members and workspace admins",
+  "projects.access.publish_confirm": "Make visible",
   "projects.access.publish_description": "All workspace members will be able to see this project and its issues, comments, and attachments.",
   "projects.access.publish_title": "Make this project visible to the workspace?",
   "projects.access.read_only": "Only workspace owners, admins, and the project lead can change who sees this project.",

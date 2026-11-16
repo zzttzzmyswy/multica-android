@@ -244,6 +244,13 @@ export default function ProjectDetail() {
                         params: { workspace: wsSlug, id },
                       });
                   }}
+                  onPressAccess={() => {
+                    if (wsSlug)
+                      router.push({
+                        pathname: "/[workspace]/project/[id]/picker/access",
+                        params: { workspace: wsSlug, id },
+                      });
+                  }}
                 />
                 <ProjectResourcesSection
                   projectId={id}

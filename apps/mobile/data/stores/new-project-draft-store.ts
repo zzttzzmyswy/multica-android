@@ -21,7 +21,11 @@
  */
 import { useEffect, useRef } from "react";
 import { create } from "zustand";
-import type { ProjectPriority, ProjectStatus } from "@multica/core/types";
+import type {
+  ProjectPriority,
+  ProjectStatus,
+  ProjectVisibility,
+} from "@multica/core/types";
 
 /**
  * Lead as a PAIR, never a bare id: the server distinguishes a member lead from
@@ -45,23 +49,37 @@ interface NewProjectDraftState {
   startDate: string | null;
   /** Calendar day "YYYY-MM-DD", or null when unset. */
   dueDate: string | null;
+  /**
+   * Who will see the project (MUL-8472). `workspace` is the server default and
+   * the form's default; only an explicit choice of `private` sends a
+   * `member_ids` list with the create.
+   */
+  visibility: ProjectVisibility;
+  /** Extra project members chosen while drafting a PRIVATE project. The
+   *  caller and the chosen lead are added by the server, so they are not
+   *  tracked here — the form says so rather than listing them. */
+  memberIds: string[];
   setStatus: (next: ProjectStatus) => void;
   setPriority: (next: ProjectPriority) => void;
   setLead: (next: ProjectLeadValue | null) => void;
   setStartDate: (next: string | null) => void;
   setDueDate: (next: string | null) => void;
+  setVisibility: (next: ProjectVisibility) => void;
+  setMemberIds: (next: string[]) => void;
   reset: () => void;
 }
 
 const INITIAL: Pick<
   NewProjectDraftState,
-  "status" | "priority" | "lead" | "startDate" | "dueDate"
+  "status" | "priority" | "lead" | "startDate" | "dueDate" | "visibility" | "memberIds"
 > = {
   status: "planned",
   priority: "none",
   lead: null,
   startDate: null,
   dueDate: null,
+  visibility: "workspace",
+  memberIds: [],
 };
 
 export const useNewProjectDraftStore = create<NewProjectDraftState>((set) => ({
@@ -71,6 +89,10 @@ export const useNewProjectDraftStore = create<NewProjectDraftState>((set) => ({
   setLead: (next) => set({ lead: next }),
   setStartDate: (next) => set({ startDate: next }),
   setDueDate: (next) => set({ dueDate: next }),
+  setVisibility: (next) => set({ visibility: next }),
+  // Narrowing to private with an empty list is meaningful — the server adds the
+  // caller and the lead — so an empty array is a real value, not "unset".
+  setMemberIds: (next) => set({ memberIds: next }),
   reset: () => set({ ...INITIAL }),
 }));
 

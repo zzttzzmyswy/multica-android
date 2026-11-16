@@ -2522,6 +2522,7 @@
   "projects.access.no_selected": "暂无项目成员",
   "projects.access.private": "仅项目成员",
   "projects.access.privateHint": "仅项目成员和工作区 admin 可见",
+  "projects.access.publish_confirm": "设为公开",
   "projects.access.publish_description": "工作区所有成员都将能查看这个项目及其中的任务、评论和附件。已经公开过的内容无法再收回。",
   "projects.access.publish_title": "把项目设为整个工作区可见？",
   "projects.access.read_only": "只有工作区 owner、admin 和项目负责人可以修改谁能看到这个项目。",
