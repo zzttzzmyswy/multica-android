@@ -370,12 +370,15 @@ export default function WorkspaceLayout() {
           options={SHEET_OPTIONS}
         />
         {/* Project access — visibility + member management (MUL-8472,
-            MYS-2915). A sheet with the detents every other property picker
-            uses; the member list needs the taller one, which the user reaches
-            by dragging the grabber. */}
+            MYS-2915). Opens at 0.9, unlike the other property pickers: this
+            sheet's footer carries the only way to commit a change (「保存」 /
+            「完成」), and at 0.6 the two visibility rows alone pushed it past
+            the fold — measured on the Pixel 5, the button sat below the
+            visible area and a drag was the only way to reach it. A confirm
+            control must not need discovering. */}
         <Stack.Screen
           name="project/[id]/picker/access"
-          options={SHEET_OPTIONS}
+          options={{ ...SHEET_OPTIONS, sheetAllowedDetents: [0.9, 0.95] }}
         />
         {/* Project start/due date calendar sheets (MYS-1021): same
             spinner + Done/Clear header as the issue date sheets, writing

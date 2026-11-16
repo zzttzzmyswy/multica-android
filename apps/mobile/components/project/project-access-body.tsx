@@ -186,7 +186,10 @@ export function ProjectAccessBody({
   return (
     <ScrollView
       className="flex-1"
-      contentContainerClassName="pb-8"
+      // Bottom padding clears the sheet's own footer: the last member row must
+      // not sit flush against the save button, or a tap meant for the row lands
+      // on 保存.
+      contentContainerClassName="pb-4"
       keyboardShouldPersistTaps="handled"
     >
       <View className="mx-4 mt-3 overflow-hidden rounded-xl border border-border">
