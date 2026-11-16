@@ -94,7 +94,14 @@ describe("the handoff editor reaches the surface", () => {
   it("renders the three handoff modes as a radio group", () => {
     // The a11y contract: a mode is a choice among three, and a screen reader
     // has to be told that rather than hearing three unrelated buttons.
-    const src = editor();
+    //
+    // The fields themselves were extracted to
+    // `components/workflow/handoff-fields.tsx` in iteration 294, so the
+    // workflow EDITOR can render the same block instead of a second copy.
+    // This assertion therefore reads BOTH files: the sheet still mounts the
+    // fields, and the modes are still a radio group wherever they are drawn.
+    const src = editor() + code("components/workflow/handoff-fields.tsx");
+    expect(src).toContain("<HandoffFields");
     expect(src).toContain('accessibilityRole="radiogroup"');
     expect(src).toContain('accessibilityRole="radio"');
     expect(src).toContain('"none"');

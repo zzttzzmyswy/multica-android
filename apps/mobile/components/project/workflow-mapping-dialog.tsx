@@ -63,12 +63,28 @@ import { useColorScheme } from "@/lib/use-color-scheme";
 import { useTranslation } from "@/lib/i18n/react";
 import { THEME } from "@/lib/theme";
 
+/**
+ * The two shapes this dialog confirms, mirroring upstream's
+ * `WorkflowMappingVariant` (`workflow-mapping-dialog.tsx:23`):
+ *
+ *   - `switch` — a project adopts another workflow, and issues on statuses the
+ *     target lacks move;
+ *   - `edit` — a workflow EDIT removes columns issues still sit on, and the
+ *     same mapping question applies to the same project set
+ *     (`UpdateIssueWorkflow` → `remapIssues`).
+ *
+ * One dialog for both because the answer is identical — "where does each
+ * stranded status go" — and a second copy is a second place to drift from
+ * `statusMappingComplete`.
+ */
+export type WorkflowMappingVariant =
+  | { kind: "switch"; workflowName: string; projectName: string }
+  | { kind: "edit"; workflowName: string };
+
 export interface WorkflowMappingDialogProps {
   /** null keeps the dialog closed; a plan opens it. */
   pending: {
-    /** The workflow being adopted, for the title and description. */
-    workflowName: string;
-    projectName: string;
+    variant: WorkflowMappingVariant;
     plan: IssueWorkflowMappingPlan;
     /** The target workflow's statuses, in its own order. The destination
      *  picker offers exactly these. */
@@ -130,15 +146,19 @@ export function WorkflowMappingDialog({
     .map((row) => labelOf(row.status_key))
     .join(separator);
 
+  // The `edit` variant confirms a SAVE, so its label never falls back to the
+  // switch wording ("nothing to update" would read as "your edit was dropped").
   const confirmLabel =
-    moving > 0
-      ? t(
-          moving === 1
-            ? "workflow.mapping.confirm_one"
-            : "workflow.mapping.confirm_other",
-          { count: moving },
-        )
-      : t("workflow.mapping.confirmPlain");
+    pending.variant.kind === "edit"
+      ? t("workflow.mapping.editConfirm", { count: moving })
+      : moving > 0
+        ? t(
+            moving === 1
+              ? "workflow.mapping.confirm_one"
+              : "workflow.mapping.confirm_other",
+            { count: moving },
+          )
+        : t("workflow.mapping.confirmPlain");
 
   return (
     <Modal
@@ -153,22 +173,28 @@ export function WorkflowMappingDialog({
         <View className="w-full max-w-[480px] overflow-hidden rounded-xl bg-background">
           <View className="px-5 pb-2 pt-5">
             <Text className="text-title-sm font-semibold text-foreground">
-              {t("workflow.mapping.title", {
-                project: pending.projectName,
-                workflow: pending.workflowName,
-              })}
+              {pending.variant.kind === "edit"
+                ? t("workflow.mapping.editTitle", { workflow: pending.variant.workflowName })
+                : t("workflow.mapping.title", {
+                    project: pending.variant.projectName,
+                    workflow: pending.variant.workflowName,
+                  })}
             </Text>
             <Text className="mt-1 text-body leading-5 text-muted-foreground">
-              {t(
-                (plan?.total_issues ?? 0) === 1
-                  ? "workflow.mapping.description_one"
-                  : "workflow.mapping.description_other",
-                {
-                  project: pending.projectName,
-                  workflow: pending.workflowName,
-                  count: plan?.total_issues ?? 0,
-                },
-              )}
+              {pending.variant.kind === "edit"
+                ? t("workflow.mapping.editDescription", {
+                    workflow: pending.variant.workflowName,
+                  })
+                : t(
+                    (plan?.total_issues ?? 0) === 1
+                      ? "workflow.mapping.description_one"
+                      : "workflow.mapping.description_other",
+                    {
+                      project: pending.variant.projectName,
+                      workflow: pending.variant.workflowName,
+                      count: plan?.total_issues ?? 0,
+                    },
+                  )}
             </Text>
           </View>
 
