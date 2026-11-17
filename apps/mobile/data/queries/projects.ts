@@ -34,7 +34,19 @@ export const projectKeys = {
     [...projectKeys.all(wsId), "detail", id] as const,
   resources: (wsId: string | null, id: string) =>
     [...projectKeys.all(wsId), "detail", id, "resources"] as const,
+  // The project's member rows (MUL-8472), separate from the workspace member
+  // directory: a private project's members are a strict subset of the
+  // workspace's, and the two are fetched from different endpoints.
+  members: (wsId: string | null, id: string) =>
+    [...projectKeys.all(wsId), "detail", id, "members"] as const,
 };
+
+export const projectMembersOptions = (wsId: string | null, id: string) =>
+  queryOptions({
+    queryKey: projectKeys.members(wsId, id),
+    queryFn: async ({ signal }) => api.listProjectMembers(id, { signal }),
+    enabled: !!wsId && !!id,
+  });
 
 export const projectListOptions = (wsId: string | null) =>
   queryOptions({

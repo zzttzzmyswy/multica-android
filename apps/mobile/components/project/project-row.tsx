@@ -25,6 +25,8 @@ import {
   type ProjectInlineEdit,
 } from "@/components/project/project-inline-cells";
 import { useTimeAgo } from "@/lib/time-ago";
+import { useTranslation } from "@/lib/i18n/react";
+import { projectVisibilityIsPrivate } from "@/lib/project-access";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -63,6 +65,7 @@ export function ProjectRow({
   inlineEdit,
 }: Props) {
   const timeAgo = useTimeAgo();
+  const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const muted = THEME[colorScheme].mutedForeground;
   const totalIssues = project.issue_count;
@@ -94,12 +97,29 @@ export function ProjectRow({
         ) : null}
         <ProjectIcon icon={project.icon} size="lg" />
         <View className="flex-1 gap-1">
-          <Text
-            className="text-title-sm text-foreground font-medium"
-            numberOfLines={2}
-          >
-            {project.title}
-          </Text>
+          <View className="flex-row items-start gap-1.5">
+            <Text
+              className="text-title-sm text-foreground font-medium flex-shrink"
+              numberOfLines={2}
+            >
+              {project.title}
+            </Text>
+            {/* Private marker (MUL-8472, MYS-2915). Web has no list-level lock,
+                but on a phone the list is the only surface a user browses, so a
+                private project that looks identical to a public one means the
+                reader cannot tell who else sees it without opening every
+                project. The glyph carries the fact; `accessibilityLabel` makes
+                it readable to a screen reader, which a bare icon is not. */}
+            {projectVisibilityIsPrivate(project) ? (
+              <Ionicons
+                name="lock-closed"
+                size={12}
+                color={muted}
+                style={{ marginTop: 4 }}
+                accessibilityLabel={t("projects.access.private")}
+              />
+            ) : null}
+          </View>
           {/* Secondary line: status, priority and lead, all three editable in
               place (web's card renders exactly these three as controls —
               `projects-page.tsx:597-679`). Each is its own tap target nested

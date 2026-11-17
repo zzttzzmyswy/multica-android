@@ -31,6 +31,8 @@ import {
 import { useActorLookup } from "@/data/use-actor-name";
 import { useIssueWorkflows } from "@/data/queries/workflows";
 import { useProjectWorkflowPermissions } from "@/data/use-project-workflow-permissions";
+import { useProjectAccessPermissions } from "@/data/use-project-access-permissions";
+import { projectVisibilityIsPrivate } from "@/lib/project-access";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { handoffStepCount, resolveProjectWorkflow } from "@/lib/workflow";
 import { isActorTypeResolved } from "@/lib/actor-name-state";
@@ -49,6 +51,9 @@ interface Props {
   /** Opens the workflow picker. Omitted by a caller with no such route (there
    *  is only one today); the row then renders read-only. */
   onPressWorkflow?: () => void;
+  /** Opens the access sheet (MUL-8472). Omitted by a caller with no such
+   *  route; the row then renders read-only. */
+  onPressAccess?: () => void;
 }
 
 export function ProjectPropertiesSection({
@@ -59,6 +64,7 @@ export function ProjectPropertiesSection({
   onPressStartDate,
   onPressDueDate,
   onPressWorkflow,
+  onPressAccess,
 }: Props) {
   const { t } = useTranslation();
   const intlLocale = useIntlLocale();
@@ -150,6 +156,7 @@ export function ProjectPropertiesSection({
       <Separator />
       <WorkflowRow project={project} onPress={onPressWorkflow} />
       <Separator />
+      <AccessRow project={project} onPress={onPressAccess} />
       <DateRow
         label={t("projects.detail.startDate")}
         value={project.start_date}
@@ -310,6 +317,94 @@ function WorkflowRow({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={t("workflow.project.pickerTitle")}
+      className="flex-row items-center gap-3 px-4 py-3 active:bg-secondary"
+    >
+      {body}
+      <Chevron />
+    </Pressable>
+  );
+}
+
+/**
+ * The project's Access property (MUL-8472, MYS-2915) — web's
+ * `ProjectAccessControl` trigger (`project-access.tsx:118-121`).
+ *
+ * Web renders this in the detail sidebar's property list, and so does mobile:
+ * "who can see this" is a property of the project in exactly the sense status
+ * and lead are, and it belongs beside them rather than behind the "…" menu.
+ *
+ * The row is a READ for everyone and a WRITE only for those the server would
+ * accept (`canManageProjectAccess`) — the row stays visible either way, because
+ * the fact that a project is private is not privileged, but a tap that can only
+ * end in a 403 must not be offered. That mirrors the workflow row above and
+ * web's own split (`canChangeScope` disables the radios without hiding them).
+ *
+ * Until the role read answers, the value still renders: the visibility itself
+ * comes from the project row and is always known.
+ */
+function AccessRow({
+  project,
+  onPress,
+}: {
+  project: Project;
+  onPress?: () => void;
+}) {
+  const { t } = useTranslation();
+  const { colorScheme } = useColorScheme();
+  const isPrivate = projectVisibilityIsPrivate(project);
+  const { canManageProject, roleResolved } = useProjectAccessPermissions(project);
+  const pressable = !!onPress;
+
+  const body = (
+    <>
+      <Text className="w-20 text-body text-muted-foreground">
+        {t("projects.access.label")}
+      </Text>
+      <Ionicons
+        name={isPrivate ? "lock-closed-outline" : "globe-outline"}
+        size={15}
+        color={THEME[colorScheme].mutedForeground}
+      />
+      <View className="min-w-0 flex-1">
+        <Text className="text-body text-foreground" numberOfLines={1}>
+          {isPrivate
+            ? t("projects.access.private")
+            : t("projects.access.workspace")}
+        </Text>
+        {/* A member who may not change it is told who can, for the same reason
+            the workflow row says it: the missing affordance is otherwise
+            indistinguishable from a rendering bug. */}
+        {pressable && roleResolved && !canManageProject ? (
+          <Text
+            className="mt-0.5 text-caption text-muted-foreground"
+            numberOfLines={2}
+          >
+            {t("projects.access.read_only")}
+          </Text>
+        ) : null}
+      </View>
+    </>
+  );
+
+  if (!pressable) {
+    return (
+      <View
+        className="flex-row items-center gap-3 px-4 py-3"
+        accessibilityRole="text"
+        accessibilityLabel={`${t("projects.access.label")}: ${
+          isPrivate ? t("projects.access.private") : t("projects.access.workspace")
+        }`}
+      >
+        {body}
+      </View>
+    );
+  }
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={t("projects.access.label")}
       className="flex-row items-center gap-3 px-4 py-3 active:bg-secondary"
     >
       {body}

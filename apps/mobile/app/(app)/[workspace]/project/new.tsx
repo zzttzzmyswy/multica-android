@@ -89,6 +89,9 @@ export default function NewProject() {
   const lead = useNewProjectDraftStore((s) => s.lead);
   const startDate = useNewProjectDraftStore((s) => s.startDate);
   const dueDate = useNewProjectDraftStore((s) => s.dueDate);
+  const visibility = useNewProjectDraftStore((s) => s.visibility);
+  const memberIds = useNewProjectDraftStore((s) => s.memberIds);
+  const setVisibility = useNewProjectDraftStore((s) => s.setVisibility);
   const resetDraft = useNewProjectDraftStore((s) => s.reset);
 
   const dirty =
@@ -99,7 +102,8 @@ export default function NewProject() {
     priority !== "none" ||
     lead !== null ||
     startDate !== null ||
-    dueDate !== null;
+    dueDate !== null ||
+    visibility !== "workspace";
 
   const canCreate = title.trim().length > 0 && !create.isPending;
 
@@ -152,6 +156,13 @@ export default function NewProject() {
         ...(lead ? { lead_type: lead.type, lead_id: lead.id } : {}),
         ...(startDate ? { start_date: startDate } : {}),
         ...(dueDate ? { due_date: dueDate } : {}),
+        // Omitted for "workspace": that is the server default, and sending an
+        // explicit value would be indistinguishable to it but noisier here.
+        // `member_ids` accompanies only the private direction, where the server
+        // replaces the rows wholesale (and adds the caller + lead itself).
+        ...(visibility === "private"
+          ? { visibility, member_ids: memberIds }
+          : {}),
       },
       {
         onSuccess: (project) => {
@@ -188,6 +199,8 @@ export default function NewProject() {
     lead,
     startDate,
     dueDate,
+    visibility,
+    memberIds,
     wsSlug,
     resetDraft,
     t,
@@ -258,6 +271,36 @@ export default function NewProject() {
               className="bg-secondary/50 rounded-md px-3 py-2"
               minHeight={MIN_BODY_INPUT_HEIGHT_PX}
             />
+          </Field>
+
+          {/* Access (MUL-8472, MYS-2915) — web's `ProjectAccessDraftPicker`
+              beside its pill row (`create-project.tsx:629-632`). A two-option
+              inline choice rather than a route: unlike the detail screen's
+              sheet there is no member list to assemble here on the common
+              path, and the server seeds the caller and the lead itself, so the
+              whole decision fits in two taps. Choosing 「仅项目成员」 says WHO
+              gets added, because a user who has just restricted a project
+              wants to know they did not lock themselves out of it. */}
+          <Field label={t("newProject.access")}>
+            <View className="flex-row gap-2">
+              <AccessChoice
+                selected={visibility === "workspace"}
+                icon="globe-outline"
+                label={t("newProject.visibilityWorkspace")}
+                onPress={() => setVisibility("workspace")}
+              />
+              <AccessChoice
+                selected={visibility === "private"}
+                icon="lock-closed-outline"
+                label={t("newProject.visibilityPrivate")}
+                onPress={() => setVisibility("private")}
+              />
+            </View>
+            {visibility === "private" ? (
+              <Text className="text-caption text-muted-foreground">
+                {t("newProject.accessSeeded")}
+              </Text>
+            ) : null}
           </Field>
 
           <View className="flex-row gap-2">
@@ -389,13 +432,53 @@ function Field({
 }: {
   label: string;
   children: React.ReactNode;
-}) {
-  return (
+}) {  return (
     <View className="gap-1.5">
       <Text className="text-caption uppercase tracking-wider text-muted-foreground">
         {label}
       </Text>
       {children}
     </View>
+  );
+}
+
+/**
+ * One of the two access choices on the create form. A segmented control would
+ * hide the icons and the second line; two cards keep each option's meaning
+ * visible at a glance, which matters because the wrong one makes a project
+ * invisible to most of the workspace.
+ */
+function AccessChoice({
+  selected,
+  icon,
+  label,
+  onPress,
+}: {
+  selected: boolean;
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityState={{ selected }}
+      accessibilityLabel={label}
+      className={
+        selected
+          ? "flex-1 flex-row items-center gap-2 rounded-md border border-brand bg-brand/10 px-3 py-2.5"
+          : "flex-1 flex-row items-center gap-2 rounded-md border border-border bg-secondary/50 px-3 py-2.5"
+      }
+    >
+      <Ionicons
+        name={icon}
+        size={15}
+        color={selected ? MOBILE_PLACEHOLDER_COLOR : undefined}
+      />
+      <Text className="text-body text-foreground flex-1" numberOfLines={1}>
+        {label}
+      </Text>
+    </Pressable>
   );
 }
