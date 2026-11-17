@@ -750,6 +750,16 @@ export default function WorkspaceLayout() {
           name="more/settings/tokens"
           options={{ title: t("screen.tokens"), headerBackTitle: t("screen.settings") }}
         />
+        {/* Appearance → text size and line spacing (iteration 296). Its own
+            push screen because a phone cannot show a segmented size control,
+            a leading control and a live sample at once. */}
+        <Stack.Screen
+          name="more/settings/appearance"
+          options={{
+            title: t("settings.appearance.typeTitle"),
+            headerBackTitle: t("screen.settings"),
+          }}
+        />
         {/* Workflows (iteration 294) — the pipelines, and one pipeline's
             editor. Two entries because the editor is a push screen with its
             own title, not a modal over the list. */}

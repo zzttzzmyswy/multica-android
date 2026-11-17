@@ -696,8 +696,13 @@ export function RunTimelineChart({ timeline }: { timeline: RunTimeline }) {
             ) : null}
           </View>
 
-          {/* Time axis */}
-          <View className="relative mt-1 h-4">
+          {/* Time axis. `min-h-4`, not `h-4`: the tick labels are text-micro,
+              whose fontSize and lineHeight both scale with the font size. At
+              the largest setting text-micro's line box (17.1dp) exceeds this
+              16dp band, so a fixed height would shave the digits. `min-h`
+              holds the 1.0x geometry and lets the band grow only when the
+              labels actually need it. */}
+          <View className="relative mt-1 min-h-4">
             {ticks.map((tick) => {
               const x = xPctAt(tick.t, plot);
               // The pointer's own time tag takes the axis where it stands.

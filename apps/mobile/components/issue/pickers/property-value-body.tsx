@@ -58,6 +58,8 @@ import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { scaledByChoice } from "@/lib/type-appearance";
+import { useFontScale } from "@/data/stores/type-appearance-store";
 import { useQuery } from "@tanstack/react-query";
 
 /** Types whose value can be written. Archived definitions and unknown types
@@ -120,6 +122,10 @@ export function PropertyValueBody({
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
   const [draft, setDraft] = useState(initialDraft);
+  // Text size (MYS-2931): inputs bypass the Tailwind `text-*` steps
+  // (lines above), so they read the scale directly or they would be the
+  // only controls that ignore the setting.
+  const fontScale = useFontScale();
   // Option search for select / multi_select (web parity — the field appears
   // only past `PROPERTY_OPTION_SEARCH_THRESHOLD`). Page-local and NOT reported
   // to the host: it narrows what is visible, it is not part of the value.
@@ -288,7 +294,11 @@ export function PropertyValueBody({
           }
           placeholderTextColor={theme.mutedForeground}
           className="border border-border rounded-md px-3 py-2.5 text-body text-foreground"
-          style={{ fontSize: 14, includeFontPadding: false, textAlignVertical: "center" }}
+          style={{
+            fontSize: scaledByChoice(14, fontScale),
+            includeFontPadding: false,
+            textAlignVertical: "center",
+          }}
         />
       </View>
     );
@@ -401,6 +411,9 @@ function ActorRefBody({
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
+  // Text size (MYS-2931): this body's search input sets fontSize inline, so it
+  // reads the scale directly rather than through the `text-*` steps.
+  const fontScale = useFontScale();
   const [query, setQuery] = useState("");
 
   const members = catalogRead(useQuery(memberListOptions(wsId)));
@@ -439,7 +452,11 @@ function ActorRefBody({
           placeholderTextColor={theme.mutedForeground}
           autoCorrect={false}
           className="border border-border rounded-md px-3 py-2 text-body text-foreground"
-          style={{ fontSize: 14, includeFontPadding: false, textAlignVertical: "center" }}
+          style={{
+            fontSize: scaledByChoice(14, fontScale),
+            includeFontPadding: false,
+            textAlignVertical: "center",
+          }}
         />
         {atCapacity ? (
           <Text className="mt-2 text-caption text-muted-foreground">

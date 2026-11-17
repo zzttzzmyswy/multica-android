@@ -22,6 +22,11 @@
 import { useMemo } from "react";
 import { THEME } from "@/lib/theme";
 import { useColorScheme } from "@/lib/use-color-scheme";
+import { leadingMultiplier, scaleTextMetrics } from "@/lib/type-appearance";
+import {
+  useFontScale,
+  useTypeAppearanceStore,
+} from "@/data/stores/type-appearance-store";
 
 /**
  * Typography scale — Apple HIG-calibrated, one tier below shadcn web.
@@ -96,259 +101,280 @@ const MD_GAP = {
 export function useMarkdownStyle() {
   const { isDarkColorScheme } = useColorScheme();
   const t = isDarkColorScheme ? THEME.dark : THEME.light;
+  // Appearance choices (MYS-2931). This renderer cannot consume className —
+  // enriched-markdown takes an imperative style object — so it never sees the
+  // `--font-scale` variable NativeWind resolves for `text-*` classes. Without
+  // these two lines the interface text would resize with the setting while
+  // every issue description, comment and chat message stayed put, which is the
+  // opposite of where a phone reader needs it.
+  const scale = useFontScale();
+  const contentLeading = useTypeAppearanceStore((s) => s.contentLeading);
 
   return useMemo(
-    () => ({
-      // Body / paragraph — text-body + leading-6 ≈ 1.71. Generous for CJK.
-      paragraph: {
-        fontSize: MD_FONT.body,
-        lineHeight: MD_LINE.body,
-        color: t.foreground,
-        marginBottom: MD_GAP.paragraph,
-      },
-      // Headings — Apple HIG-calibrated, one tier below shadcn web defaults.
-      h1: {
-        fontSize: MD_FONT.h1,
-        lineHeight: MD_LINE.h1,
-        fontWeight: "700" as const,
-        color: t.foreground,
-        marginTop: MD_GAP.headingTopLarge,
-        marginBottom: MD_GAP.headingBottomLarge,
-      },
-      h2: {
-        fontSize: MD_FONT.h2,
-        lineHeight: MD_LINE.h2,
-        fontWeight: "600" as const,
-        color: t.foreground,
-        marginTop: MD_GAP.headingTopLarge,
-        marginBottom: MD_GAP.headingBottomLarge,
-      },
-      h3: {
-        fontSize: MD_FONT.h3,
-        lineHeight: MD_LINE.h3,
-        fontWeight: "600" as const,
-        color: t.foreground,
-        marginTop: MD_GAP.headingTopSmall,
-        marginBottom: MD_GAP.headingBottomSmall,
-      },
-      h4: {
-        fontSize: MD_FONT.h4,
-        lineHeight: MD_LINE.h4,
-        fontWeight: "600" as const,
-        color: t.foreground,
-        marginTop: MD_GAP.headingTopSmall,
-        marginBottom: MD_GAP.headingBottomSmall,
-      },
-      h5: {
-        fontSize: MD_FONT.h5,
-        lineHeight: MD_LINE.h5,
-        fontWeight: "600" as const,
-        color: t.foreground,
-        marginTop: MD_GAP.headingTopSmall,
-        marginBottom: MD_GAP.headingBottomSmall,
-      },
-      h6: {
-        fontSize: MD_FONT.h6,
-        lineHeight: MD_LINE.h6,
-        fontWeight: "600" as const,
-        color: t.foreground,
-        marginTop: MD_GAP.headingTopSmall,
-        marginBottom: MD_GAP.headingBottomSmall,
-      },
-      strong: {
-        // md4c restricts inline `fontWeight` to "bold" | "normal" — it adds
-        // the bold trait on top of the inherited block font. We can't pin
-        // a 600 weight here the way we can on headings.
-        fontWeight: "bold" as const,
-        color: t.foreground,
-      },
-      em: {
-        // STYLES.md confirms enriched adds italic by default; we set it
-        // explicitly for parity with `strong` (which explicitly sets
-        // fontWeight: "bold").
-        fontStyle: "italic" as const,
-        color: t.foreground,
-      },
-      strikethrough: {
-        color: t.mutedForeground,
-      },
-      underline: {
-        color: t.foreground,
-      },
-      link: {
-        color: t.brand,
-        underline: true,
-      },
-      // Inline code — monospace + muted-foreground tint, NO background chip.
-      //
-      // Why no background: on iOS, NSAttributedString draws
-      // NSBackgroundColorAttributeName as a rectangle spanning the full
-      // line-box height (24pt for our CJK-tuned body leading). PingFang
-      // SC places the baseline at ~75-80% of the line-box, so monospaced
-      // glyphs sit low inside that rectangle, leaving ~11pt empty at the
-      // top vs ~6pt at the bottom — a visible 2:1 asymmetry in CJK
-      // paragraphs. This is a platform-level constraint, not a library
-      // bug: the library's STYLES.md exposes only fontFamily / fontSize /
-      // color / backgroundColor / borderColor for inline code — no
-      // padding, lineHeight, or baselineOffset knob. Confirmed 2026-05-21
-      // (researcher brief): zero open PRs / forks / prereleases touching
-      // inline-code vertical geometry; upstream issue #255 has no
-      // maintainer response since 2026-04-20. The only real fixes are at
-      // the native layer (custom NSLayoutManager.drawBackground override
-      // or TextKit 2 NSTextLayoutManager.enumerateTextSegments(.highlight))
-      // which would require forking the library — not worth the perpetual
-      // patch-rebase cost for a polish issue.
-      //
-      // Visual identification stays strong without the chip: monospace
-      // font + muted-foreground tint matches Apple Notes / iA Writer.
-      //
-      // Color choice — mutedForeground (NOT brand):
-      //   - mutedForeground is a neutral gray, reads as "subdued prose".
-      //   - brand is reserved for links; tinting code blue confused users
-      //     into tapping it as if it were a link (tried 2026-05-19, then
-      //     reverted same day for this reason).
-      //
-      // fontFamily intentionally NOT set: enriched-markdown's default is
-      // the platform system monospace (SF Mono on iOS, monospace on
-      // Android), which has a larger visual x-height than the previously-
-      // explicit "Menlo" override.
-      //
-      // Revisit when:
-      //   - upstream #255 ships a paddingVertical / lineHeight knob, OR
-      //   - we contribute the TextKit 2 fix upstream (the right hook is
-      //     NSTextLayoutManager.enumerateTextSegments(in:type:.highlight:))
-      // Either way, switch back to a tinted-chip style for cross-platform
-      // visual parity with web/desktop.
-      code: {
-        color: t.mutedForeground,
-        backgroundColor: "transparent",
-        borderColor: "transparent",
-        // Match body (14) and codeBlock (14) — inline code MUST NOT be
-        // larger than block code, otherwise the hierarchy inverts and
-        // the inline token "jumps" out of any paragraph that contains
-        // one. The earlier +1pt was meant to compensate for SF Mono's
-        // smaller cap-height vs PingFang in pure-CJK paragraphs, but
-        // in English-heavy text (variable names, error strings) the
-        // +1 made mono glyphs visibly larger than surrounding Latin
-        // body, which is the opposite of the intent. Visual id stays
-        // strong via monospace family + mutedForeground tint — same
-        // approach as GitHub Mobile / Linear iOS / Notion.
-        fontSize: MD_FONT.body,
-      },
-      // Block code — bigger box, surface-2 background (one tonal tier
-       // above secondary so the box stays visible when the markdown
-       // renders inside a bg-secondary parent like a comment bubble),
-       // mono font. (When the splitter detects a fenced code block it
-       // routes to the in-house `CodeBlock` component instead — this
-       // style is the fallback for any code that stays inside the
-       // enriched prose stream, e.g. code nested in a list item.)
-       // `borderColor` REQUIRED: enriched defaults to `#374151` which
-       // clashes with our background.
-      codeBlock: {
-        fontSize: MD_FONT.codeBlock,
-        color: t.foreground,
-        backgroundColor: t.surface2,
-        borderColor: t.border,
-        padding: 12,
-        borderRadius: 8,
-        marginBottom: MD_GAP.paragraph,
-      },
-      // Blockquote — `color` is REQUIRED: enriched's default is a hardcoded
-      // #4B5563 mid-gray that disappears on dark backgrounds.
-      //
-      // borderWidth: 3 (was 2) — iOS quote bars in Apple Notes / Linear /
-      // Things are 3-4pt thick. 2pt was too thin to register as a visual
-      // accent. Whether enriched draws this as a 3pt left bar or as a 3pt
-      // full-frame border depends on the library schema (STYLES.md doesn't
-      // distinguish); needs simulator verification — see TODO below.
-      blockquote: {
-        color: t.mutedForeground,
-        fontSize: MD_FONT.body,
-        lineHeight: MD_LINE.body,
-        borderColor: t.border,
-        borderWidth: 3,
-        backgroundColor: "transparent",
-        marginBottom: MD_GAP.paragraph,
-      },
-      // List — bullets in muted-foreground so they don't compete with content.
-      // `color` is REQUIRED: enriched's default text color does NOT track
-      // dark mode, so list items render in hardcoded near-black and are
-      // invisible on dark backgrounds. This was the visible bug in #MUL-2395
-      // dark-mode screenshot (2026-05-19).
-      list: {
-        color: t.foreground,
-        fontSize: MD_FONT.body,
-        lineHeight: MD_LINE.body,
-        bulletColor: t.mutedForeground,
-        bulletSize: 4,
-        markerColor: t.mutedForeground,
-        gapWidth: 8,
-        marginLeft: 16,
-      },
-      image: {
-        borderRadius: 8,
-        marginBottom: MD_GAP.paragraph,
-      },
-      // Task lists. `checkedTextColor` REQUIRED: enriched default is `#000000`,
-      // making completed items invisible in dark mode.
-      taskList: {
-        checkedColor: t.brand,
-        borderColor: t.border,
-        checkmarkColor: t.brandForeground,
-        checkedTextColor: t.mutedForeground,
-        checkboxSize: 16,
-      },
-      // GFM tables. Every color field below is required — enriched defaults
-      // are all hardcoded light values (#FFFFFF row even, #F9FAFB row odd,
-      // #111827 header text), all invisible / clashing in dark mode.
-      // headerBackgroundColor uses `surface-2` (one tier above secondary)
-      // so the header stays distinct when the table renders inside a
-      // bg-secondary parent like a comment bubble.
-      table: {
-        color: t.foreground,
-        fontSize: MD_FONT.body,
-        lineHeight: MD_LINE.body,
-        borderColor: t.border,
-        // borderRadius: 8 (was 6) — aligns with codeBlock and image (both 8).
-        // No reason for table to be the odd one out.
-        borderRadius: 8,
-        headerBackgroundColor: t.surface2,
-        headerTextColor: t.foreground,
-        // Transparent rows let the page background show through — works in
-        // both light (white page) and dark (near-black page) without a
-        // jarring inner panel.
-        rowEvenBackgroundColor: "transparent",
-        rowOddBackgroundColor: "transparent",
-        cellPaddingHorizontal: 10,
-        cellPaddingVertical: 6,
-        // Was missing — every other block-level element sets marginBottom
-        // (paragraph/codeBlock/blockquote/image/math all 12). Without this
-        // the table sits flush against the following paragraph.
-        marginBottom: MD_GAP.paragraph,
-      },
-      // Horizontal rule. `color` alone is not enough — without explicit
-      // vertical margin the divider sits flush against neighbouring blocks
-      // and reads as a sub-pixel line rather than a section separator.
-      // marginTop/marginBottom = 16 matches MD_GAP.headingTopLarge so the
-      // rule feels like a paragraph-level boundary.
-      thematicBreak: {
-        color: t.border,
-        marginTop: 16,
-        marginBottom: 16,
-      },
-      // LaTeX math (free with this engine — was V3 deferred under the walker).
-      math: {
-        fontSize: 16,
-        color: t.foreground,
-        backgroundColor: t.muted,
-        padding: 12,
-        marginBottom: MD_GAP.paragraph,
-        textAlign: "center" as const,
-      },
-      inlineMath: {
-        color: t.foreground,
-      },
-    }),
-    [t],
+    // Scaling is applied to the FINISHED table, not to each literal below: one
+    // pass over the nested tree cannot miss a block, whereas a per-key edit is
+    // exactly how a new block type ends up the only one that never scales.
+    () => scaleTextMetrics(baseMarkdownStyle(t), scale, leadingMultiplier(contentLeading)),
+    [t, scale, contentLeading],
   );
 }
+
+/**
+ * The unscaled style table for one colour scheme. Separate from the hook so
+ * the appearance pass is one visible step at the end rather than a concern
+ * threaded through every entry.
+ */
+function baseMarkdownStyle(t: (typeof THEME)["light"]) {
+  return {
+    // Body / paragraph — text-body + leading-6 ≈ 1.71. Generous for CJK.
+    paragraph: {
+      fontSize: MD_FONT.body,
+      lineHeight: MD_LINE.body,
+      color: t.foreground,
+      marginBottom: MD_GAP.paragraph,
+    },
+    // Headings — Apple HIG-calibrated, one tier below shadcn web defaults.
+    h1: {
+      fontSize: MD_FONT.h1,
+      lineHeight: MD_LINE.h1,
+      fontWeight: "700" as const,
+      color: t.foreground,
+      marginTop: MD_GAP.headingTopLarge,
+      marginBottom: MD_GAP.headingBottomLarge,
+    },
+    h2: {
+      fontSize: MD_FONT.h2,
+      lineHeight: MD_LINE.h2,
+      fontWeight: "600" as const,
+      color: t.foreground,
+      marginTop: MD_GAP.headingTopLarge,
+      marginBottom: MD_GAP.headingBottomLarge,
+    },
+    h3: {
+      fontSize: MD_FONT.h3,
+      lineHeight: MD_LINE.h3,
+      fontWeight: "600" as const,
+      color: t.foreground,
+      marginTop: MD_GAP.headingTopSmall,
+      marginBottom: MD_GAP.headingBottomSmall,
+    },
+    h4: {
+      fontSize: MD_FONT.h4,
+      lineHeight: MD_LINE.h4,
+      fontWeight: "600" as const,
+      color: t.foreground,
+      marginTop: MD_GAP.headingTopSmall,
+      marginBottom: MD_GAP.headingBottomSmall,
+    },
+    h5: {
+      fontSize: MD_FONT.h5,
+      lineHeight: MD_LINE.h5,
+      fontWeight: "600" as const,
+      color: t.foreground,
+      marginTop: MD_GAP.headingTopSmall,
+      marginBottom: MD_GAP.headingBottomSmall,
+    },
+    h6: {
+      fontSize: MD_FONT.h6,
+      lineHeight: MD_LINE.h6,
+      fontWeight: "600" as const,
+      color: t.foreground,
+      marginTop: MD_GAP.headingTopSmall,
+      marginBottom: MD_GAP.headingBottomSmall,
+    },
+    strong: {
+      // md4c restricts inline `fontWeight` to "bold" | "normal" — it adds
+      // the bold trait on top of the inherited block font. We can't pin
+      // a 600 weight here the way we can on headings.
+      fontWeight: "bold" as const,
+      color: t.foreground,
+    },
+    em: {
+      // STYLES.md confirms enriched adds italic by default; we set it
+      // explicitly for parity with `strong` (which explicitly sets
+      // fontWeight: "bold").
+      fontStyle: "italic" as const,
+      color: t.foreground,
+    },
+    strikethrough: {
+      color: t.mutedForeground,
+    },
+    underline: {
+      color: t.foreground,
+    },
+    link: {
+      color: t.brand,
+      underline: true,
+    },
+    // Inline code — monospace + muted-foreground tint, NO background chip.
+    //
+    // Why no background: on iOS, NSAttributedString draws
+    // NSBackgroundColorAttributeName as a rectangle spanning the full
+    // line-box height (24pt for our CJK-tuned body leading). PingFang
+    // SC places the baseline at ~75-80% of the line-box, so monospaced
+    // glyphs sit low inside that rectangle, leaving ~11pt empty at the
+    // top vs ~6pt at the bottom — a visible 2:1 asymmetry in CJK
+    // paragraphs. This is a platform-level constraint, not a library
+    // bug: the library's STYLES.md exposes only fontFamily / fontSize /
+    // color / backgroundColor / borderColor for inline code — no
+    // padding, lineHeight, or baselineOffset knob. Confirmed 2026-05-21
+    // (researcher brief): zero open PRs / forks / prereleases touching
+    // inline-code vertical geometry; upstream issue #255 has no
+    // maintainer response since 2026-04-20. The only real fixes are at
+    // the native layer (custom NSLayoutManager.drawBackground override
+    // or TextKit 2 NSTextLayoutManager.enumerateTextSegments(.highlight))
+    // which would require forking the library — not worth the perpetual
+    // patch-rebase cost for a polish issue.
+    //
+    // Visual identification stays strong without the chip: monospace
+    // font + muted-foreground tint matches Apple Notes / iA Writer.
+    //
+    // Color choice — mutedForeground (NOT brand):
+    //   - mutedForeground is a neutral gray, reads as "subdued prose".
+    //   - brand is reserved for links; tinting code blue confused users
+    //     into tapping it as if it were a link (tried 2026-05-19, then
+    //     reverted same day for this reason).
+    //
+    // fontFamily intentionally NOT set: enriched-markdown's default is
+    // the platform system monospace (SF Mono on iOS, monospace on
+    // Android), which has a larger visual x-height than the previously-
+    // explicit "Menlo" override.
+    //
+    // Revisit when:
+    //   - upstream #255 ships a paddingVertical / lineHeight knob, OR
+    //   - we contribute the TextKit 2 fix upstream (the right hook is
+    //     NSTextLayoutManager.enumerateTextSegments(in:type:.highlight:))
+    // Either way, switch back to a tinted-chip style for cross-platform
+    // visual parity with web/desktop.
+    code: {
+      color: t.mutedForeground,
+      backgroundColor: "transparent",
+      borderColor: "transparent",
+      // Match body (14) and codeBlock (14) — inline code MUST NOT be
+      // larger than block code, otherwise the hierarchy inverts and
+      // the inline token "jumps" out of any paragraph that contains
+      // one. The earlier +1pt was meant to compensate for SF Mono's
+      // smaller cap-height vs PingFang in pure-CJK paragraphs, but
+      // in English-heavy text (variable names, error strings) the
+      // +1 made mono glyphs visibly larger than surrounding Latin
+      // body, which is the opposite of the intent. Visual id stays
+      // strong via monospace family + mutedForeground tint — same
+      // approach as GitHub Mobile / Linear iOS / Notion.
+      fontSize: MD_FONT.body,
+    },
+    // Block code — bigger box, surface-2 background (one tonal tier
+     // above secondary so the box stays visible when the markdown
+     // renders inside a bg-secondary parent like a comment bubble),
+     // mono font. (When the splitter detects a fenced code block it
+     // routes to the in-house `CodeBlock` component instead — this
+     // style is the fallback for any code that stays inside the
+     // enriched prose stream, e.g. code nested in a list item.)
+     // `borderColor` REQUIRED: enriched defaults to `#374151` which
+     // clashes with our background.
+    codeBlock: {
+      fontSize: MD_FONT.codeBlock,
+      color: t.foreground,
+      backgroundColor: t.surface2,
+      borderColor: t.border,
+      padding: 12,
+      borderRadius: 8,
+      marginBottom: MD_GAP.paragraph,
+    },
+    // Blockquote — `color` is REQUIRED: enriched's default is a hardcoded
+    // #4B5563 mid-gray that disappears on dark backgrounds.
+    //
+    // borderWidth: 3 (was 2) — iOS quote bars in Apple Notes / Linear /
+    // Things are 3-4pt thick. 2pt was too thin to register as a visual
+    // accent. Whether enriched draws this as a 3pt left bar or as a 3pt
+    // full-frame border depends on the library schema (STYLES.md doesn't
+    // distinguish); needs simulator verification — see TODO below.
+    blockquote: {
+      color: t.mutedForeground,
+      fontSize: MD_FONT.body,
+      lineHeight: MD_LINE.body,
+      borderColor: t.border,
+      borderWidth: 3,
+      backgroundColor: "transparent",
+      marginBottom: MD_GAP.paragraph,
+    },
+    // List — bullets in muted-foreground so they don't compete with content.
+    // `color` is REQUIRED: enriched's default text color does NOT track
+    // dark mode, so list items render in hardcoded near-black and are
+    // invisible on dark backgrounds. This was the visible bug in #MUL-2395
+    // dark-mode screenshot (2026-05-19).
+    list: {
+      color: t.foreground,
+      fontSize: MD_FONT.body,
+      lineHeight: MD_LINE.body,
+      bulletColor: t.mutedForeground,
+      bulletSize: 4,
+      markerColor: t.mutedForeground,
+      gapWidth: 8,
+      marginLeft: 16,
+    },
+    image: {
+      borderRadius: 8,
+      marginBottom: MD_GAP.paragraph,
+    },
+    // Task lists. `checkedTextColor` REQUIRED: enriched default is `#000000`,
+    // making completed items invisible in dark mode.
+    taskList: {
+      checkedColor: t.brand,
+      borderColor: t.border,
+      checkmarkColor: t.brandForeground,
+      checkedTextColor: t.mutedForeground,
+      checkboxSize: 16,
+    },
+    // GFM tables. Every color field below is required — enriched defaults
+    // are all hardcoded light values (#FFFFFF row even, #F9FAFB row odd,
+    // #111827 header text), all invisible / clashing in dark mode.
+    // headerBackgroundColor uses `surface-2` (one tier above secondary)
+    // so the header stays distinct when the table renders inside a
+    // bg-secondary parent like a comment bubble.
+    table: {
+      color: t.foreground,
+      fontSize: MD_FONT.body,
+      lineHeight: MD_LINE.body,
+      borderColor: t.border,
+      // borderRadius: 8 (was 6) — aligns with codeBlock and image (both 8).
+      // No reason for table to be the odd one out.
+      borderRadius: 8,
+      headerBackgroundColor: t.surface2,
+      headerTextColor: t.foreground,
+      // Transparent rows let the page background show through — works in
+      // both light (white page) and dark (near-black page) without a
+      // jarring inner panel.
+      rowEvenBackgroundColor: "transparent",
+      rowOddBackgroundColor: "transparent",
+      cellPaddingHorizontal: 10,
+      cellPaddingVertical: 6,
+      // Was missing — every other block-level element sets marginBottom
+      // (paragraph/codeBlock/blockquote/image/math all 12). Without this
+      // the table sits flush against the following paragraph.
+      marginBottom: MD_GAP.paragraph,
+    },
+    // Horizontal rule. `color` alone is not enough — without explicit
+    // vertical margin the divider sits flush against neighbouring blocks
+    // and reads as a sub-pixel line rather than a section separator.
+    // marginTop/marginBottom = 16 matches MD_GAP.headingTopLarge so the
+    // rule feels like a paragraph-level boundary.
+    thematicBreak: {
+      color: t.border,
+      marginTop: 16,
+      marginBottom: 16,
+    },
+    // LaTeX math (free with this engine — was V3 deferred under the walker).
+    math: {
+      fontSize: 16,
+      color: t.foreground,
+      backgroundColor: t.muted,
+      padding: 12,
+      marginBottom: MD_GAP.paragraph,
+      textAlign: "center" as const,
+    },
+    inlineMath: {
+      color: t.foreground,
+    },
+  };
+}
+

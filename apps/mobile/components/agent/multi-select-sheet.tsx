@@ -37,6 +37,8 @@ import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { scaledByChoice } from "@/lib/type-appearance";
+import { useFontScale } from "@/data/stores/type-appearance-store";
 
 export interface MultiSelectRow {
   key: string;
@@ -102,6 +104,9 @@ export function MultiSelectSheet({
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
+  // Text size (MYS-2931): this sheet's search box sets fontSize inline (a
+  // TextInput cannot use the `text-*` steps), so it reads the scale directly.
+  const fontScale = useFontScale();
   const [query, setQuery] = useState("");
 
   const effectiveQuery = query.trim().toLowerCase();
@@ -210,7 +215,7 @@ export function MultiSelectSheet({
                       autoCorrect={false}
                       autoCapitalize="none"
                       style={{
-                        fontSize: 14,
+                        fontSize: scaledByChoice(14, fontScale),
                         includeFontPadding: false,
                         textAlignVertical: "center",
                       }}

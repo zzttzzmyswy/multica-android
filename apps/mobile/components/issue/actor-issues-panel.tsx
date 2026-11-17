@@ -41,6 +41,8 @@ import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { scaledByChoice } from "@/lib/type-appearance";
+import { useFontScale } from "@/data/stores/type-appearance-store";
 
 const RELATIONS: { value: ActorIssuesRelation; labelKey: string }[] = [
   { value: "assigned", labelKey: "actorIssues.scopeAssigned" },
@@ -63,6 +65,10 @@ export function ActorIssuesPanel({
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme];
+  // Text size (MYS-2931): inputs bypass the Tailwind `text-*` steps
+  // (lines above), so they read the scale directly or they would be the
+  // only controls that ignore the setting.
+  const fontScale = useFontScale();
   const [relation, setRelation] = useState<ActorIssuesRelation>("assigned");
   const [search, setSearch] = useState("");
 
@@ -96,7 +102,11 @@ export function ActorIssuesPanel({
             onChangeText={setSearch}
             placeholder={t("actorIssues.searchPlaceholder")}
             placeholderTextColor={theme.mutedForeground}
-            style={{ fontSize: 14, includeFontPadding: false, textAlignVertical: "center" }}
+            style={{
+              fontSize: scaledByChoice(14, fontScale),
+              includeFontPadding: false,
+              textAlignVertical: "center",
+            }}
             className="flex-1 min-w-0 py-0 text-foreground"
             accessibilityLabel={t("actorIssues.searchPlaceholder")}
           />
