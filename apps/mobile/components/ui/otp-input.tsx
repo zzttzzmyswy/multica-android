@@ -56,6 +56,12 @@ function Slot({ slot }: { slot: SlotProps }) {
       {slot.char ? (
         <Text
           className="text-foreground font-semibold"
+          // Fixed 22pt on purpose (MYS-2931): this glyph sits inside a fixed
+          // 48x56 dp slot whose size is the grid, not the text inside it.
+          // Scaling it with the text-size setting would overflow the box at
+          // 16/14 — the glyph is already the largest thing that fits, so
+          // there is no room to grow without rebuilding the layout. The
+          // surrounding labels and the error line DO scale.
           style={{ fontSize: 22, includeFontPadding: false }}
         >
           {slot.char}

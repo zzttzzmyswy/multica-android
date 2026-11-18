@@ -17,6 +17,8 @@
 import { useState } from "react";
 import { TextInput, type TextInputProps } from "react-native";
 import { cn } from "@/lib/utils";
+import { scaledByChoice } from "@/lib/type-appearance";
+import { useFontScale } from "@/data/stores/type-appearance-store";
 import { MOBILE_PLACEHOLDER_COLOR } from "./input-tokens";
 
 export interface TextFieldProps extends TextInputProps {
@@ -33,12 +35,23 @@ export function TextField({
   ...rest
 }: TextFieldProps) {
   const [focused, setFocused] = useState(false);
+  // Inputs cannot use the Tailwind `text-*` steps (see the header: NativeWind
+  // maps them to fontSize + lineHeight, and lineHeight clips descenders in a
+  // TextInput), so they bypass the `--font-scale` variable that every other
+  // text surface resolves. Without this the surrounding chrome would grow with
+  // the text-size setting while the field the user types into stayed at 14 —
+  // the one control where a mismatch is most obvious.
+  const scale = useFontScale();
 
   return (
     <TextInput
       placeholderTextColor={MOBILE_PLACEHOLDER_COLOR}
       style={[
-        { fontSize: 14, includeFontPadding: false, textAlignVertical: "center" },
+        {
+          fontSize: scaledByChoice(14, scale),
+          includeFontPadding: false,
+          textAlignVertical: "center",
+        },
         style,
       ]}
       onFocus={(e) => {

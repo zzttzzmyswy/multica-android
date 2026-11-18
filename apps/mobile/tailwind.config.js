@@ -8,6 +8,22 @@
  */
 const { hairlineWidth } = require("nativewind/theme");
 
+/**
+ * One rung of the type scale, expressed as a multiple of the runtime
+ * `--font-scale` variable (MYS-2931).
+ *
+ * The variable is set on the app root from the Appearance font-size choice
+ * (`data/stores/type-appearance-store.ts`) and read by NativeWind's runtime,
+ * so every `text-*` class that uses one of these steps resizes together.
+ * The `1` fallback is what makes the un-customised app render exactly as it
+ * did before the setting existed.
+ *
+ * Kept as a function rather than inlined so the two values of a step cannot
+ * drift apart — a step whose font-size scales but whose line-height does not
+ * is the MYS-2558 clipping defect.
+ */
+const scaleStep = (px) => `calc(${px}px * var(--font-scale, 1))`;
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   darkMode: "class",
@@ -102,16 +118,33 @@ module.exports = {
         //
         // Steps are read off tokens.css, not chosen here. Keep the two in sync;
         // `lib/type-scale.test.ts` fails if a step drifts from its web source.
-        micro: ["11px", "15px"],
-        caption: ["12px", "16px"],
-        label: ["13px", "18px"],
-        body: ["14px", "20px"],
-        "body-lg": ["15px", "22px"],
-        "title-sm": ["16px", "24px"],
-        title: ["18px", "28px"],
-        "title-lg": ["20px", "28px"],
-        "display-sm": ["24px", "32px"],
-        display: ["36px", "40px"],
+        //
+        // SIZES AND LINE-HEIGHTS ARE MULTIPLIED BY `--font-scale` (MYS-2931),
+        // exactly as the deployed web build does it: there, every step is
+        // `calc(Npx * var(--font-scale, 1))` and the variable is set once on
+        // <html> from the Appearance font-size choice. NativeWind compiles a
+        // calc-with-var into a runtime descriptor, so the SAME class honours a
+        // variable set at runtime — which is what makes one setting move all
+        // ~7000 text call sites without touching any of them.
+        //
+        // The `1` fallback is load-bearing: with no variable set (the
+        // follow-system state) every step emits its base size and the app
+        // renders byte-identically to before this existed.
+        //
+        // Do NOT "simplify" a step back to a bare `"11px"`. A plain px step
+        // keeps working but silently stops following the font size, and the
+        // only visible trace is one block that will not grow — the defect
+        // class of MYS-2558.
+        micro: [scaleStep(11), scaleStep(15)],
+        caption: [scaleStep(12), scaleStep(16)],
+        label: [scaleStep(13), scaleStep(18)],
+        body: [scaleStep(14), scaleStep(20)],
+        "body-lg": [scaleStep(15), scaleStep(22)],
+        "title-sm": [scaleStep(16), scaleStep(24)],
+        title: [scaleStep(18), scaleStep(28)],
+        "title-lg": [scaleStep(20), scaleStep(28)],
+        "display-sm": [scaleStep(24), scaleStep(32)],
+        display: [scaleStep(36), scaleStep(40)],
       },
       keyframes: {
         "accordion-down": {

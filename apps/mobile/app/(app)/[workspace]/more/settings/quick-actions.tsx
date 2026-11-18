@@ -49,6 +49,8 @@ import { quickActionTargetState } from "@/lib/quick-action-target";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { scaledByChoice } from "@/lib/type-appearance";
+import { useFontScale } from "@/data/stores/type-appearance-store";
 
 function VisibilityBadge({ action }: { action: QuickAction }) {
   const { t } = useTranslation();
@@ -126,6 +128,11 @@ function TargetLine({ action }: { action: QuickAction }) {
 }
 
 export default function QuickActionsPage() {
+  // Text size (MYS-2931): the search input bypasses the Tailwind `text-*`
+  // steps (it sets fontSize inline to avoid TextInput lineHeight clipping), so
+  // it reads the scale directly — otherwise it would be the one control on
+  // this screen that ignores the setting.
+  const fontScale = useFontScale();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const user = useAuthStore((s) => s.user);
@@ -239,7 +246,7 @@ export default function QuickActionsPage() {
               placeholder={t("quickActions.searchPlaceholder")}
               placeholderTextColor={theme.mutedForeground}
               style={{
-                fontSize: 14,
+                fontSize: scaledByChoice(14, fontScale),
                 includeFontPadding: false,
                 textAlignVertical: "center",
               }}

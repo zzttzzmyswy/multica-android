@@ -51,6 +51,7 @@ import type {
 } from "@multica/core/types";
 
 import type { ActorProfileType } from "../../data/stores/actor-profile-store";
+import { CONTENT_LEADINGS } from "../type-appearance";
 import type { ActorIssuesRelation } from "../actor-issues";
 import type { AutopilotTemplateId } from "../autopilot-templates";
 import type { RunNowBlockedKey } from "../autopilot-run-toast";
@@ -441,7 +442,22 @@ function prefixed(prefix: string, leaves: Iterable<string>): readonly string[] {
  */
 export const HANDOFF_MODE_KEYS = ["none", "agent", "member"] as const;
 
+/**
+ * The three line-spacing steps (MYS-2931). The appearance screen builds
+ * `settings.appearance.leading.${id}` from `CONTENT_LEADINGS`, so a step
+ * added there without its two leaves would render a raw id on the phone.
+ *
+ * Typed as a value import of a PURE module (`lib/type-appearance.ts` has no
+ * React Native or store imports), which is why it is safe in this Node-only
+ * lane — unlike the store, whose `expo-file-system` import must not load here.
+ */
+const CONTENT_LEADING_KEYS = CONTENT_LEADINGS;
+
 export const DYNAMIC_FAMILIES: Record<string, readonly string[]> = {
+  "settings.appearance.leading.<step>": prefixed(
+    "settings.appearance.leading.",
+    CONTENT_LEADING_KEYS,
+  ),
   "wakeups.ruleStates.<state>": prefixed(
     "wakeups.ruleStates.",
     Object.values(WAKEUP_STATE_KEYS),

@@ -56,6 +56,8 @@ import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/react";
 import { NO_VALUE_KEY } from "@/lib/issue-facet-counts";
 import { useColorScheme as useSystemColorScheme } from "@/lib/use-color-scheme";
+import { scaledByChoice } from "@/lib/type-appearance";
+import { useFontScale } from "@/data/stores/type-appearance-store";
 
 /** One row rendered by `FilterPropertyPickerBody` — a filterable property
  *  option (or the true/false pseudo-options of a checkbox definition). */
@@ -714,6 +716,9 @@ function ScalarPropertyFilterBody({
   const { t } = useTranslation();
   const { colorScheme } = useSystemColorScheme();
   const theme = THEME[colorScheme];
+  // Text size (MYS-2931): this body's numeric input sets fontSize inline (a
+  // TextInput cannot use the `text-*` steps), so it reads the scale directly.
+  const fontScale = useFontScale();
 
   // A value member is any selection that is not the sentinel.
   const committed = selected.find((v) => v !== NO_VALUE_KEY);
@@ -781,7 +786,11 @@ function ScalarPropertyFilterBody({
             }
             placeholderTextColor={theme.mutedForeground}
             className="flex-1 text-body text-foreground"
-            style={{ fontSize: 14, includeFontPadding: false, textAlignVertical: "center" }}
+            style={{
+              fontSize: scaledByChoice(14, fontScale),
+              includeFontPadding: false,
+              textAlignVertical: "center",
+            }}
           />
         </View>
       </View>

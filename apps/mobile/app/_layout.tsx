@@ -1,7 +1,7 @@
 import "../global.css";
 
-import { useEffect, useRef } from "react";
-import { AppState, Platform } from "react-native";
+import { useEffect, useMemo, useRef } from "react";
+import { AppState, Platform, View } from "react-native";
 import Constants from "expo-constants";
 import { Stack, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -10,6 +10,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { ThemeProvider } from "@react-navigation/native";
+import { vars } from "nativewind";
 import { PortalHost } from "@rn-primitives/portal";
 import { api } from "@/data/api";
 import { queryClient } from "@/data/query-client";
@@ -23,6 +24,7 @@ import { SessionActivityBoundary } from "@/components/auth/session-activity-boun
 import { maybeRenewSession, renewSessionNow } from "@/lib/session-renewal";
 import { NAV_THEME } from "@/lib/theme";
 import { useColorScheme } from "@/lib/use-color-scheme";
+import { useFontScale } from "@/data/stores/type-appearance-store";
 import { markBootComplete, markBootStep } from "@/lib/boot-diagnostics";
 import { FatalErrorBoundary } from "@/components/fatal-error-boundary";
 
@@ -122,6 +124,23 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
 
 export default function RootLayout() {
   const { colorScheme, isDarkColorScheme } = useColorScheme();
+  // Appearance font size (MYS-2931). NativeWind's `vars()` turns this object
+  // into the VariableContext value that every descendant's `var(--font-scale)`
+  // resolves against — which is how ONE setting moves the ~7000 `text-*` call
+  // sites without touching any of them (the whole type ladder is defined as
+  // `calc(Npx * var(--font-scale, 1))` in tailwind.config.js).
+  //
+  // `null` = follow the device: the key is omitted entirely so the CSS
+  // fallback (`1`) applies and the un-customised app renders exactly as it did
+  // before this setting existed. Writing the number 1 instead would be
+  // arithmetically identical but would make "following the system" and "chose
+  // the default size" indistinguishable — the distinction the settings screen
+  // has to render, and the one that lets a user get back to following.
+  const fontScale = useFontScale();
+  const appearanceVars = useMemo(
+    () => (fontScale === null ? undefined : vars({ "--font-scale": fontScale })),
+    [fontScale],
+  );
   // Reaching the first render means module eval + provider construction all
   // succeeded, so the marker can be cleared: the next cold start will not
   // report this boot as a failure.
@@ -130,8 +149,23 @@ export default function RootLayout() {
   }, []);
   return (
     <FatalErrorBoundary>
+      {/* The variable has to sit ABOVE every screen, so it is set here rather
+          than in a layout deeper down: anything below would leave sibling
+          routes on the base size.
+
+          It must be a plain RN `View`, NOT `GestureHandlerRootView`. `vars()`
+          does not carry the value in the object it returns — it is an empty
+          marker registered in a WeakMap, resolved only by components that
+          react-native-css-interop has been told about (its `components.js`
+          wraps View, Text, Pressable, ScrollView, TextInput, the safe-area
+          provider... and nothing from react-native-gesture-handler). Handing
+          the marker to an unregistered component passes `{}` straight to the
+          native view: no error, no warning, and no variable — the setting
+          looked wired and did nothing, which is exactly what the device
+          showed before this View was added. */}
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <SafeAreaProvider>
+        <View style={[{ flex: 1 }, appearanceVars]}>
+          <SafeAreaProvider>
           <KeyboardProvider>
             <QueryClientProvider client={queryClient}>
               <ThemeProvider value={NAV_THEME[colorScheme]}>
@@ -156,7 +190,8 @@ export default function RootLayout() {
               </ThemeProvider>
             </QueryClientProvider>
           </KeyboardProvider>
-        </SafeAreaProvider>
+          </SafeAreaProvider>
+        </View>
       </GestureHandlerRootView>
     </FatalErrorBoundary>
   );

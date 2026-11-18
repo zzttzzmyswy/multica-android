@@ -118,6 +118,9 @@ export default function SettingsPage() {
   // one row above the status library it draws from.
   const goWorkflows = () =>
     router.push(`/${currentSlug}/more/settings/workflows`);
+  // Settings → Appearance → text size and line spacing (iteration 296).
+  const goTextAppearance = () =>
+    router.push(`/${currentSlug}/more/settings/appearance`);
   const goIssueStatuses = () =>
     router.push(`/${currentSlug}/more/settings/issue-statuses`);
   const goProperties = () =>
@@ -373,6 +376,24 @@ export default function SettingsPage() {
             );
           })}
         </RadioGroup>
+        {/* Text size and line spacing (MYS-2931). Web has these as two rows
+            inside its single Appearance tab; mobile's settings is a list of
+            push screens, so they get one row that opens a sub-screen — the
+            same shape iteration 294 used for Workflows. Kept inside the
+            Appearance section because they ARE appearance, and a reader
+            looking for "make the text bigger" looks here first. */}
+        <Separator />
+        <NavRow
+          onPress={goTextAppearance}
+          chevronColor={mutedFg}
+          leading={
+            <View className="size-10 rounded-md bg-secondary items-center justify-center">
+              <Ionicons name="text-outline" size={20} color={mutedFg} />
+            </View>
+          }
+          title={t("settings.appearance.typeTitle")}
+          subtitle={t("settings.appearance.typeSubtitle")}
+        />
       </SectionGroup>
 
       <SectionGroup title={t("settings.language")}>

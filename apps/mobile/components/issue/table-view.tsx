@@ -773,7 +773,12 @@ export function IssueTableView({
   // the query is still in the server window.
   const searchBar = onSearchChange ? (
     <View className="px-3 pt-1.5">
-      <View className="flex-row items-center gap-2 rounded-lg border border-border bg-secondary/30 px-2.5 h-9">
+      {/* `min-h-9`, not `h-9`: this row wraps a TextInput whose fontSize scales
+          with the font scale, while a fixed dp height does not. At 1.3x the
+          glyphs outgrew the 36dp box and were sheared — the MYS-2559 defect,
+          and MYS-2931's text-size setting can now reach it at 1.0x system
+          scale too. `min-h` keeps the 1.0x rhythm and lets the row grow. */}
+      <View className="flex-row items-center gap-2 rounded-lg border border-border bg-secondary/30 px-2.5 min-h-9">
         <Ionicons
           name="search"
           size={14}
