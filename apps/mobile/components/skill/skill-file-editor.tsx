@@ -45,9 +45,8 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { useQueryClient } from "@tanstack/react-query";
 import { SKILL_MD, type SkillFileDraft } from "@/lib/skill-file-paths";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { Markdown } from "@/lib/markdown";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export function isSkillMdPath(path: string): boolean {
@@ -91,8 +90,7 @@ export function SkillFileEditor({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const insets = useSafeAreaInsets();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const qc = useQueryClient();

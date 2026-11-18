@@ -16,6 +16,7 @@ import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/react";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 interface Props {
   visible: boolean;
@@ -40,6 +41,7 @@ export function ProjectPickerSheet({
   onPick,
   onClose,
 }: Props) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
   const checkColor =
@@ -81,7 +83,7 @@ export function ProjectPickerSheet({
                     <Ionicons
                       name="close-circle-outline"
                       size={18}
-                      color={THEME[colorScheme].mutedForeground}
+                      color={palette.mutedForeground}
                     />
                   </View>
                   <Text className="flex-1 text-body text-foreground" numberOfLines={1}>

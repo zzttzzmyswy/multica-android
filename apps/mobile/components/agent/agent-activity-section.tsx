@@ -45,7 +45,6 @@ import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { useAgentActivityMap } from "@/data/queries/agent-activity";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { formatDateTime } from "@/lib/autopilot-format";
 import { cn } from "@/lib/utils";
@@ -65,6 +64,7 @@ import { isTranscriptViewable } from "@/lib/task-transcript";
 import { RunTranscriptDialog } from "./run-transcript-dialog";
 import { AttributionBadge } from "./attribution-badge";
 import { attributionShouldRender } from "@/lib/task-attribution";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 // Task status → text color, sharing `enum.taskStatus` vocabulary with the
 // rest of the app.
@@ -91,8 +91,7 @@ export function AgentActivitySection({
 }) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const queryClient = useQueryClient();
 
   // Both directories this panel is built from, read through `catalogRead` so a

@@ -42,8 +42,6 @@ import {
   useSetAgentMcpServerEnabled,
 } from "@/data/mutations/mcp";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { ActionSheet } from "@/lib/action-sheet";
 import {
   listManagedMcpServers,
@@ -53,6 +51,7 @@ import {
   upsertManagedMcpServer,
   type ManagedMcpServer,
 } from "@/lib/mcp-config";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export function AgentMcpSection({
   agent,
@@ -64,8 +63,7 @@ export function AgentMcpSection({
 }) {
   const wsId = agent.workspace_id || "";
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const muted = theme.mutedForeground;
 
   // Both directory reads go through `catalogRead` so the section can name the

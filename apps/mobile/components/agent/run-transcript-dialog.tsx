@@ -51,9 +51,8 @@ import {
   type TranscriptSortDirection,
 } from "@/lib/task-transcript";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export function RunTranscriptDialog({
   taskId,
@@ -76,8 +75,7 @@ export function RunTranscriptDialog({
 }) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const { resolveActorName } = useActorLookup();
   const live = taskStatus === "running";
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);

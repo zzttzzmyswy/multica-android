@@ -64,7 +64,6 @@ import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useTranslation } from "@/lib/i18n/react";
 import { THEME } from "@/lib/theme";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import {
   handoffConfirmRead,
   handoffDurationKey,
@@ -78,6 +77,7 @@ import {
   type HandoffPreviewLike,
 } from "@/lib/workflow-handoff";
 import type { WorkflowReadState } from "@/lib/workflow-status-scope";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /** What the caller is moving: a status change, or a move into another project. */
 export type HandoffTarget =
@@ -115,8 +115,7 @@ export function HandoffConfirmDialog({
   now,
 }: HandoffConfirmDialogProps) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const catalog = useIssueStatuses(wsId);
   const { resolveActorName } = useActorLookup();

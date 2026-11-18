@@ -33,9 +33,9 @@ import { usableRuntimes } from "@/lib/agent-create";
 import { getMikaOnboarding, pickMikaContentLang } from "@/lib/mika-onboarding";
 import { MIKA_PLACEHOLDER_EMOJI } from "@/lib/mika";
 import { useTranslation, useAppLocale } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 interface Props {
   runtimes: RuntimeDevice[];
@@ -53,8 +53,7 @@ export function MikaSetupCard({
   onStart,
 }: Props) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const [open, setOpen] = useState(false);
 
   return (

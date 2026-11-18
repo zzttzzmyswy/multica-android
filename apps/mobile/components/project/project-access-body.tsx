@@ -52,9 +52,8 @@ import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { matchesNameOrPinyin } from "@/lib/name-search";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import { useTranslation } from "@/lib/i18n/react";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export interface ProjectAccessBodyProps {
   /** The value currently selected in the form (not necessarily saved). */
@@ -118,8 +117,7 @@ export function ProjectAccessBody({
   canRemove,
 }: ProjectAccessBodyProps) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState("");
 
@@ -383,8 +381,7 @@ function VisibilityOption({
   disabled: boolean;
   onChange: (next: ProjectVisibility) => void;
 }) {
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const selected = current === value;
   return (
     <Pressable
@@ -428,13 +425,13 @@ function Notice({
   icon: React.ComponentProps<typeof Ionicons>["name"];
   text: string;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   return (
     <View className="flex-row items-start gap-2">
       <Ionicons
         name={icon}
         size={14}
-        color={THEME[colorScheme].mutedForeground}
+        color={palette.mutedForeground}
         style={{ marginTop: 2 }}
       />
       <Text className="flex-1 text-caption text-muted-foreground">{text}</Text>
@@ -454,13 +451,13 @@ function TextInputInline({
   onChangeText: (t: string) => void;
   placeholder: string;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   return (
     <TextInput
       value={value}
       onChangeText={onChangeText}
       placeholder={placeholder}
-      placeholderTextColor={THEME[colorScheme].mutedForeground}
+      placeholderTextColor={palette.mutedForeground}
       autoCapitalize="none"
       autoCorrect={false}
       returnKeyType="search"

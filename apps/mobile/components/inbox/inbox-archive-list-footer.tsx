@@ -31,8 +31,7 @@
 import { ActivityIndicator, Pressable, View } from "react-native";
 import { Text } from "@/components/ui/text";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export function InboxArchiveListFooter({
   hasMore,
@@ -51,8 +50,7 @@ export function InboxArchiveListFooter({
   onRetry: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   // Failure first: a failed page and "there is more" are both true at once,
   // and offering "load more" over a failure would look like the press did

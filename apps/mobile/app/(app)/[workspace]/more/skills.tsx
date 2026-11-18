@@ -77,8 +77,6 @@ import {
 import { useSkillRole } from "@/lib/use-skill-role";
 import { useTimeAgo } from "@/lib/time-ago";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { ActionSheet } from "@/lib/action-sheet";
 import { catalogRead, retryCatalogs } from "@/lib/catalog-read";
 import { aggregateCatalogState } from "@/lib/catalog-state";
@@ -88,6 +86,7 @@ import {
   supportingDataWarningVisible,
   usedByCell,
 } from "@/lib/skill-supporting-data";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 const SORT_LABEL_KEY: Record<SkillSortField, string> = {
   name: "skills.list.sortField.name",
@@ -128,11 +127,11 @@ export const useSkillMobileViewStore = create<SkillMobileViewState>()((set) => (
 }));
 
 export default function SkillsPage() {
+  const palette = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
   const role = useSkillRole(wsId);
   const userId = useAuthStore((s) => s.user?.id);
 
@@ -541,9 +540,9 @@ function SkillFilterChip({
   activeCount: number;
   onPress: () => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
   const active = activeCount > 0;
 
   return (
@@ -560,12 +559,12 @@ function SkillFilterChip({
       <Ionicons
         name="filter"
         size={14}
-        color={active ? THEME[colorScheme].primaryForeground : muted}
+        color={active ? palette.primaryForeground : muted}
       />
       {active ? (
         <Text
           className="text-caption font-medium tabular-nums"
-          style={{ color: THEME[colorScheme].primaryForeground }}
+          style={{ color: palette.primaryForeground }}
         >
           {activeCount}
         </Text>
@@ -585,9 +584,9 @@ function SkillSortChip({
   sortDirection: SkillSortDirection;
   onChange: (field: SkillSortField, direction: SkillSortDirection) => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
 
   const options: {
     field: SkillSortField;
@@ -827,9 +826,8 @@ function SkillRowItem({
   onDelete: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
+  const muted = theme.mutedForeground;
   const timeAgo = useTimeAgo();
   const { skill, agents, creator, canEdit, agentsResolved, membersResolved } = row;
   const lockVerdict = skillLockCell(canEdit, membersResolved);

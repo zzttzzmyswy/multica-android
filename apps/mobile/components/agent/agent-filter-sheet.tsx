@@ -31,9 +31,8 @@ import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { PickerSheet } from "@/components/issue/pickers/picker-sheet";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /** Availability → its dot colour, web's `availabilityConfig` (`agent-list-toolbar.tsx`
  *  imports it from `packages/views/agents/components/availability.ts`). The
@@ -77,8 +76,7 @@ export function AgentFilterSheet({
   onClear,
 }: Props) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   const section = (title: string) => (
     <View className="bg-muted/40 px-4 py-1.5">

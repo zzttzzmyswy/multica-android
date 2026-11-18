@@ -69,13 +69,12 @@ import { useAuthStore } from "@/data/auth-store";
 import { useWorkspacePresenceMap } from "@/lib/use-agent-presence";
 import { useTimeAgo } from "@/lib/time-ago";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { deriveRuntimePermissions } from "@/lib/runtime-management";
 import { catalogRead } from "@/lib/catalog-read";
 import { CatalogStatus } from "@/components/catalog/catalog-status";
 import type { CatalogState } from "@/lib/catalog-state";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 const MODE_ICON: Record<AgentRuntime["runtime_mode"], keyof typeof Ionicons.glyphMap> = {
   local: "hardware-chip",
@@ -132,8 +131,8 @@ function MetaRow({
   label: string;
   value: string;
 }) {
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const palette = useThemePalette();
+  const muted = palette.mutedForeground;
   return (
     <View className="flex-row items-start gap-2 py-1.5">
       <Ionicons name={icon} size={14} color={muted} style={{ marginTop: 1 }} />
@@ -172,9 +171,9 @@ function ServingAgentsCard({
   state?: CatalogState;
   onRetry?: () => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
 
   return (
     <View className="mt-4 rounded-lg border border-border">
@@ -279,8 +278,7 @@ export default function RuntimeDetailPage() {
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const user = useAuthStore((s) => s.user);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const timeAgo = useTimeAgo();
 
   // 30s health re-derivation tick (web's HEALTH_TICK_MS).

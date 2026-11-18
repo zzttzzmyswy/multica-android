@@ -51,12 +51,11 @@ import { useWorkspaceWakeupsController } from "@/lib/use-workspace-wakeups";
 import { useIssueWakeupToggles } from "@/lib/use-issue-wakeup-toggles";
 import { useDebouncedTableSearch } from "@/lib/use-debounced-table-search";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import {
   clampWorkspaceWakeupSearch,
   workspaceWakeupBatchMessage,
 } from "@/lib/workspace-wakeups";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /** Ionicons per trigger kind, matching the autopilots list's own vocabulary. */
 /** The scope chip row's height. Fixed rather than intrinsic: see the note at
@@ -98,8 +97,7 @@ function WakeupTableRow({
   onToggleEnabled: (enabled: boolean) => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const detail = text.triggerDetail(row);
   const runState = text.runState(row);
   const blockKey = text.blockKey(row);
@@ -258,8 +256,7 @@ function ScopeChips({
   disabled: boolean;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const scopes = ["active", "paused", "disabled", "ended", "all"] as const;
   return (
     <ScrollView
@@ -326,8 +323,7 @@ function ChoiceSheet<T extends string>({
   onChange: (value: T) => void;
   testID?: string;
 }) {
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   return (
     <PickerSheet title={title} visible={visible} onClose={onClose}>
       <ScrollView testID={testID}>
@@ -373,8 +369,7 @@ export function WorkspaceWakeupsTable({
   onCreateClose: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const c = useWorkspaceWakeupsController();
   const toggles = useIssueWakeupToggles();
   const [searchText, setSearchText] = useState(c.filters.search);

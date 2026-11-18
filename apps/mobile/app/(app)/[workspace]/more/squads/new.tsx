@@ -28,14 +28,13 @@ import { useCreateSquad } from "@/data/mutations/squads";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { keyboardBehavior } from "@/lib/keyboard";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export default function NewSquadPage() {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   const [name, setName] = useState("");
@@ -233,13 +232,13 @@ function FieldLabel({
   icon: React.ComponentProps<typeof Ionicons>["name"];
   text: string;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   return (
     <View className="flex-row items-center gap-1.5">
       <Ionicons
         name={icon}
         size={13}
-        color={THEME[colorScheme].mutedForeground}
+        color={palette.mutedForeground}
       />
       <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
         {text}

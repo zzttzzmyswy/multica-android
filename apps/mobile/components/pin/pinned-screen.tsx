@@ -63,10 +63,9 @@ import {
 } from "@/data/stores/active-issue-view-store";
 import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { dragTargetIndex, reorderByMove } from "@/lib/pin-reorder";
 import { useTranslation } from "@/lib/i18n/react";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /**
  * Whether a drag handle currently owns the gesture.
@@ -287,7 +286,7 @@ function DraggablePinRow({
   onDragTo: (to: number) => void;
   onDrop: () => void;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   const { t } = useTranslation();
   const [dy, setDy] = useState(0);
 
@@ -374,7 +373,7 @@ function DraggablePinRow({
         <Ionicons
           name="reorder-two"
           size={18}
-          color={THEME[colorScheme].mutedForeground}
+          color={palette.mutedForeground}
         />
       </View>
     </View>
@@ -482,7 +481,7 @@ function ViewPinRow({
   wsId: string | null;
   wsSlug: string | null;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   const { t } = useTranslation();
   const { data, isLoading } = useQuery(
     issueViewDetailOptions(wsId, pin.item_id),
@@ -522,7 +521,7 @@ function ViewPinRow({
       <Ionicons
         name="layers-outline"
         size={18}
-        color={THEME[colorScheme].mutedForeground}
+        color={palette.mutedForeground}
       />
       <Text className="flex-1 text-body text-foreground" numberOfLines={1}>
         {view.name || t("screen.view")}
@@ -531,7 +530,7 @@ function ViewPinRow({
         <Ionicons
           name="people"
           size={13}
-          color={THEME[colorScheme].mutedForeground}
+          color={palette.mutedForeground}
         />
       ) : null}
     </Pressable>
@@ -564,7 +563,7 @@ function MissingPinRow({
   itemType: "issue" | "project" | "view" | null;
   itemId: string;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   const { t } = useTranslation();
   const deletePin = useDeletePin();
 
@@ -609,7 +608,7 @@ function MissingPinRow({
       <Ionicons
         name="alert-circle-outline"
         size={18}
-        color={THEME[colorScheme].mutedForeground}
+        color={palette.mutedForeground}
       />
       <Text className="flex-1 text-body text-muted-foreground" numberOfLines={1}>
         {t("pins.unavailable", { itemType: typeLabel })}

@@ -26,13 +26,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { View } from "react-native";
 import type { TriggerRef } from "@rn-primitives/dropdown-menu";
 import { useWorkspaceStore } from "@/data/workspace-store";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
 import {
   useInboxUnreadCount,
   useChatUnreadMessageCount,
 } from "@/lib/unread-counts";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 import { MoreTabDropdownAnchor } from "@/components/nav/more-tab-dropdown";
 
 // Only override backgroundColor — @react-navigation/elements Badge internally
@@ -45,8 +45,7 @@ const BADGE_STYLE = {
 };
 
 export default function TabsLayout() {
-  const { colorScheme } = useColorScheme();
-  const t = THEME[colorScheme];
+  const t = useThemePalette();
   const { t: translate } = useTranslation();
 
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);

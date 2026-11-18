@@ -50,9 +50,9 @@ import {
 import { FullscreenPreview } from "@/lib/rich-content/fullscreen-preview";
 import { downloadAttachmentAndOpen } from "@/lib/download-attachment";
 import type { DownloadSource } from "@/lib/download-store";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import { useTranslation } from "@/lib/i18n/react";
 import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /** Caps a long body so one attachment cannot push the rest of the comment
  *  thread off screen. The body scrolls inside the cap, and the fullscreen row
@@ -80,8 +80,7 @@ export function TextAttachmentPreview({
   kind,
   source,
 }: Props) {
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const { t } = useTranslation();
   const { state, retry } = useAttachmentText(attachmentId);
   const [fullscreen, setFullscreen] = useState(false);

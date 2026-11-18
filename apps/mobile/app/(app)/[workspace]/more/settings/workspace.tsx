@@ -58,9 +58,8 @@ import {
   workspaceNameValidationError,
 } from "@/lib/workspace-guards";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
@@ -69,8 +68,7 @@ export default function WorkspaceSettingsScreen() {
   const currentUserId = useAuthStore((s) => s.user?.id);
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const clearWorkspace = useWorkspaceStore((s) => s.clear);
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   const workspacesQ = useQuery(workspaceListOptions());
   const workspaces = workspacesQ.data;
@@ -698,8 +696,7 @@ function ManageNavRow({
   title: string;
   onPress: () => void;
 }) {
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   return (
     <Pressable
       onPress={onPress}

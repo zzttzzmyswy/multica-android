@@ -35,20 +35,19 @@ import {
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { countLabelKey } from "@/lib/actor-profile";
 import { summarizeIssueWork } from "@/lib/issue-work-state";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 interface Props {
   issueId: string;
 }
 
 export function AgentActivityRow({ issueId }: Props) {
+  const palette = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
-  const { colorScheme } = useColorScheme();
   const { t } = useTranslation();
-  const mutedFg = THEME[colorScheme].mutedForeground;
+  const mutedFg = palette.mutedForeground;
 
   const { data: activeTasks = [] } = useQuery(
     issueActiveTasksOptions(wsId, issueId),

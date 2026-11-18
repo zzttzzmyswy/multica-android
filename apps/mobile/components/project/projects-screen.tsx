@@ -58,9 +58,6 @@ import {
   useBatchPinToggle,
 } from "@/data/mutations/project-batch";
 import { useTranslation } from "@/lib/i18n/react";
-
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { ActionSheet } from "@/lib/action-sheet";
 import { catalogRead } from "@/lib/catalog-read";
 import {
@@ -90,6 +87,7 @@ import {
   PROJECT_CELL_TITLE_KEY,
   type ProjectCellColumn,
 } from "@/lib/project-inline-edit";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 // Sort + filter dimensions persist for the session; web persists these in
 // its view store but a session-scoped store keeps the phone honest when a
@@ -150,8 +148,7 @@ export function ProjectsScreen({
   onCreate: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
@@ -717,8 +714,8 @@ function FilterChip({
   icon: React.ComponentProps<typeof Ionicons>["name"];
   onPress: () => void;
 }) {
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const palette = useThemePalette();
+  const muted = palette.mutedForeground;
   return (
     <Pressable
       onPress={onPress}
@@ -732,7 +729,7 @@ function FilterChip({
       <Ionicons
         name={icon}
         size={14}
-        color={active ? THEME[colorScheme].brand : muted}
+        color={active ? palette.brand : muted}
       />
       <Text
         className={cn(
@@ -764,9 +761,9 @@ function SortPicker({
   sortDirection: "asc" | "desc";
   onChange: (field: ProjectSortField, direction: "asc" | "desc") => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
 
   const options: {
     field: ProjectSortField;

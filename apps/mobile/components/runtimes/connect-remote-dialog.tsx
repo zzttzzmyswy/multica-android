@@ -34,8 +34,7 @@ import { useWSSubscriptions } from "@/lib/use-ws-subscriptions";
 import { runtimeListOptions } from "@/data/queries/runtimes";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 import { getApiBaseUrl, getWebBaseUrl } from "@/data/server-config";
 
 const INSTALL_CMD =
@@ -125,8 +124,7 @@ function CommandBlock({
   cmd: string;
   copyLabel: string;
 }) {
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -174,8 +172,7 @@ function CommandBlock({
 export function ConnectRemoteDialog({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const qc = useQueryClient();
@@ -308,8 +305,7 @@ export function ConnectRemoteDialog({ onClose }: { onClose: () => void }) {
 
 function Troubleshooting({ tokenCmd }: { tokenCmd: string }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const [open, setOpen] = useState(false);
 
   return (
@@ -374,8 +370,7 @@ function SuccessStep({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   return (
     <>
       <ScrollView

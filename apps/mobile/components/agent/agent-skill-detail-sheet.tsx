@@ -26,14 +26,13 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import type { SkillSummary } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
 import {
   skillDetailTitle,
   skillDetailView,
   type SelectedAgentSkill,
 } from "@/lib/agent-skill-detail";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export function AgentSkillDetailSheet({
   selection,
@@ -53,9 +52,9 @@ export function AgentSkillDetailSheet({
   onRetry: () => void;
   onClose: () => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
 
   const view = skillDetailView(
     selection,

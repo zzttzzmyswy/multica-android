@@ -39,9 +39,8 @@ import {
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { formatCloudRuntimeNodeCreatedAt } from "@/lib/cloud-runtime-format";
 import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 import { ApiError } from "@/data/api";
 
 const INSTANCE_TYPES = ["t4g.medium", "t4g.large"] as const;
@@ -55,8 +54,7 @@ function valueOrUndefined(value: string): string | undefined {
 export function CloudRuntimeDialog({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   const [name, setName] = useState("");
@@ -355,8 +353,7 @@ function NodeRow({
 }) {
   const { t } = useTranslation();
   const intlLocale = useIntlLocale();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const title =
     node.name.trim() ||
     node.instance_id.trim() ||

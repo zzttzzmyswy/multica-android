@@ -30,8 +30,7 @@ import { Text } from "@/components/ui/text";
 import { IconButton } from "@/components/ui/icon-button";
 import { ActionSheet } from "@/lib/action-sheet";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /** Recursive leaf count under a directory node. */
 function countFiles(node: SkillFileTreeNode): number {
@@ -61,8 +60,7 @@ export function SkillFileTree({
   actions?: SkillFileTreeActions;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const tree = useMemoTree(paths);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 

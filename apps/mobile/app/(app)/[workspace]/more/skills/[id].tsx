@@ -99,6 +99,7 @@ import {
   usedByCount,
   usedBySection,
 } from "@/lib/skill-supporting-data";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 function isMarkdownPath(path: string): boolean {
@@ -187,8 +188,8 @@ function SectionTitle({
   icon: React.ComponentProps<typeof Ionicons>["name"];
   title: string;
 }) {
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const palette = useThemePalette();
+  const muted = palette.mutedForeground;
   return (
     <View className="flex-row items-center gap-1.5">
       <Ionicons name={icon} size={14} color={muted} />
@@ -208,8 +209,8 @@ function MetaRow({
   label: string;
   value: string;
 }) {
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const palette = useThemePalette();
+  const muted = palette.mutedForeground;
   return (
     <View className="flex-row items-start gap-2 py-1.5">
       <Ionicons name={icon} size={14} color={muted} style={{ marginTop: 1 }} />
@@ -244,8 +245,7 @@ export default function SkillDetailPage() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const userId = useAuthStore((s) => s.user?.id);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const insets = useSafeAreaInsets();
   const role = useSkillRole(wsId);
   const timeAgo = useTimeAgo();

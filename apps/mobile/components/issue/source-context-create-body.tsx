@@ -50,14 +50,13 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
 import { ActorNameText } from "@/components/ui/actor-name";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import {
   commentSubIssueModes,
   formatCaptureBytes,
   previewIsUsable,
   previewThreadSize,
 } from "@/lib/source-context";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export function SourceContextCreateBody({
   commentId,
@@ -72,8 +71,7 @@ export function SourceContextCreateBody({
   sourceIssueIdentifier?: string;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const create = useCreateCommentSubIssue();
   const { resolveActorName } = useActorLookup();

@@ -55,8 +55,6 @@ import {
   isSortableProperty,
 } from "@/lib/property-catalog";
 import { useStatusOptions } from "@/lib/status-options";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/react";
 import { buildIssueWindow } from "@/data/stores/issue-filter-slice";
@@ -76,6 +74,7 @@ import {
   facetValuesFor,
   propertyFacetable,
 } from "@/lib/issue-facet-counts";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 // Mirrors PRIORITY_ORDER in packages/core/issues/config/priority.ts.
 const PRIORITY_ORDER: IssuePriority[] = [
@@ -143,6 +142,7 @@ const CARD_PROPERTY_TOGGLES: {
 ];
 
 export default function IssuesFilterRoute() {
+  const palette = useThemePalette();
   const {
     scope,
     workspace: workspaceSlug,
@@ -157,8 +157,7 @@ export default function IssuesFilterRoute() {
   }>();
   const resolvedScope: Scope = parseFilterScope(scope);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const tint = THEME[colorScheme].primary;
+  const tint = palette.primary;
 
   // Subscribe the matching store (one unconditional hook — the scope param
   // is fixed for a route instance). All three state shapes extend
@@ -585,7 +584,7 @@ export default function IssuesFilterRoute() {
               <Ionicons
                 name={selected ? "radio-button-on" : "radio-button-off"}
                 size={18}
-                color={selected ? tint : THEME[colorScheme].mutedForeground}
+                color={selected ? tint : palette.mutedForeground}
               />
               <Text className="flex-1 text-body text-foreground">
                 {t(option === "created_at" ? "filter.dateCreated" : "filter.dateUpdated")}
@@ -609,7 +608,7 @@ export default function IssuesFilterRoute() {
             <Ionicons
               name="calendar-outline"
               size={18}
-              color={THEME[colorScheme].mutedForeground}
+              color={palette.mutedForeground}
             />
             <Text className="flex-1 text-body text-foreground">
               {t(preset.labelKey)}
@@ -629,7 +628,7 @@ export default function IssuesFilterRoute() {
           <Ionicons
             name="calendar-outline"
             size={18}
-            color={THEME[colorScheme].mutedForeground}
+            color={palette.mutedForeground}
           />
           <Text className="flex-1 text-body text-foreground">
             {t("filter.dateCustomRange")}
@@ -649,7 +648,7 @@ export default function IssuesFilterRoute() {
           <Ionicons
             name="chevron-forward"
             size={16}
-            color={THEME[colorScheme].mutedForeground}
+            color={palette.mutedForeground}
           />
         </Pressable>
         {dateFilter ? (
@@ -660,7 +659,7 @@ export default function IssuesFilterRoute() {
             <Ionicons
               name="close-circle-outline"
               size={18}
-              color={THEME[colorScheme].mutedForeground}
+              color={palette.mutedForeground}
             />
             <Text className="flex-1 text-body text-destructive">
               {t("filter.dateClear")}
@@ -684,7 +683,7 @@ export default function IssuesFilterRoute() {
               <Ionicons
                 name={selected ? "radio-button-on" : "radio-button-off"}
                 size={18}
-                color={selected ? tint : THEME[colorScheme].mutedForeground}
+                color={selected ? tint : palette.mutedForeground}
               />
               <Text numberOfLines={1} className="flex-1 text-body text-foreground">
                 {opt.label}
@@ -696,7 +695,7 @@ export default function IssuesFilterRoute() {
           <Ionicons
             name="swap-vertical"
             size={18}
-            color={THEME[colorScheme].mutedForeground}
+            color={palette.mutedForeground}
           />
           <Pressable
             onPress={() => act().setSortDirection("asc")}
@@ -746,7 +745,7 @@ export default function IssuesFilterRoute() {
               <Ionicons
                 name={selected ? "radio-button-on" : "radio-button-off"}
                 size={18}
-                color={selected ? tint : THEME[colorScheme].mutedForeground}
+                color={selected ? tint : palette.mutedForeground}
               />
               <Text numberOfLines={1} className="flex-1 text-body text-foreground">
                 {opt.label}
@@ -893,7 +892,7 @@ function FilterDimensionRow({
   onPress: () => void;
   t: (id: string, params?: Record<string, string | number>) => string;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   return (
     <Pressable
       onPress={onPress}
@@ -902,7 +901,7 @@ function FilterDimensionRow({
       <Ionicons
         name={count > 0 ? "funnel" : "funnel-outline"}
         size={18}
-        color={count > 0 ? tint : THEME[colorScheme].mutedForeground}
+        color={count > 0 ? tint : palette.mutedForeground}
       />
       <Text className="flex-1 text-body text-foreground">{label}</Text>
       {summary ? (
@@ -912,7 +911,7 @@ function FilterDimensionRow({
       <Ionicons
         name="chevron-forward"
         size={16}
-        color={THEME[colorScheme].mutedForeground}
+        color={palette.mutedForeground}
       />
     </Pressable>
   );
@@ -945,8 +944,8 @@ function BoolRow({
   fixed?: boolean;
   t: (id: string, params?: Record<string, string | number>) => string;
 }) {
-  const { colorScheme } = useColorScheme();
-  const tint = THEME[colorScheme].primary;
+  const palette = useThemePalette();
+  const tint = palette.primary;
   return (
     <Pressable
       onPress={onToggle}
@@ -971,7 +970,7 @@ function BoolRow({
       <Ionicons
         name={checked ? "checkbox" : "square-outline"}
         size={20}
-        color={checked ? tint : THEME[colorScheme].mutedForeground}
+        color={checked ? tint : palette.mutedForeground}
       />
     </Pressable>
   );

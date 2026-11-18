@@ -123,9 +123,8 @@ import {
   type WorkflowDraft,
 } from "@/lib/workflow-editor";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export default function WorkflowEditorScreen() {
   const { t } = useTranslation();
@@ -172,8 +171,7 @@ function WorkflowEditor({
   loaded: boolean;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const permissions = useWorkflowManagePermissions();
   const create = useCreateIssueWorkflow();
@@ -698,8 +696,7 @@ function ColumnRow({
   onRemove: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { categoryOf } = useIssueStatuses(wsId);
   const statusLabel = useStatusLabel(wsId);

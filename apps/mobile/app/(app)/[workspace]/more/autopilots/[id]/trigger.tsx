@@ -54,9 +54,8 @@ import type { ScheduleConfig } from "@/lib/schedule-editor-model";
 import { serializeEventFilters } from "@/lib/autopilot-event-filter";
 import { keyboardBehavior } from "@/lib/keyboard";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export default function TriggerFormPage() {
   const params = useLocalSearchParams<{
@@ -382,13 +381,13 @@ function FieldLabel({
   icon: React.ComponentProps<typeof Ionicons>["name"];
   text: string;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   return (
     <View className="flex-row items-center gap-1.5">
       <Ionicons
         name={icon}
         size={13}
-        color={THEME[colorScheme].mutedForeground}
+        color={palette.mutedForeground}
       />
       <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
         {text}

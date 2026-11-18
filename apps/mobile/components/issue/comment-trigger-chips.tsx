@@ -27,8 +27,6 @@ import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { useTranslation } from "@/lib/i18n/react";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useWorkspacePresenceMap } from "@/lib/use-agent-presence";
-import { THEME } from "@/lib/theme";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import { cn } from "@/lib/utils";
 import {
   blockedShortReasonLabel,
@@ -39,6 +37,7 @@ import {
   sourceReason,
   type TriggerLabelT,
 } from "@/lib/comment-trigger-preview";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 const AVATAR_SIZE = 16;
 const MAX_STACK_HEADS = 4;
@@ -119,8 +118,7 @@ function BlockedTriggerChip({
   label?: string;
   t: TriggerLabelT;
 }) {
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const shortReason = blockedShortReasonLabel(outcome.reason_code, t);
   return (
     <View
@@ -192,8 +190,7 @@ function MultiTriggerChip({
   onToggle: (agentId: string) => void;
   t: TriggerLabelT;
 }) {
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const [open, setOpen] = useState(false);
   const activeCount = countWillTrigger(agents, suppressedAgentIds);
   const heads = agents.slice(0, MAX_STACK_HEADS);

@@ -42,10 +42,9 @@ import { StatusIcon } from "@/components/ui/status-icon";
 import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { useScrollToTopOnChange } from "@/lib/use-scroll-to-top-on-change";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { api } from "@/data/api";
 import { keyboardBehavior } from "@/lib/keyboard";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 const DEBOUNCE_MS = 300;
 const ISSUE_LIMIT = 20;
@@ -96,8 +95,7 @@ export function IssuePickerBody({
   suggestions,
   isSelectable,
 }: Props) {
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Issue[]>([]);

@@ -34,18 +34,17 @@ import { PriorityIcon } from "@/components/ui/priority-icon";
 import { StatusIcon } from "@/components/ui/status-icon";
 import { ProgressRing } from "@/components/ui/progress-ring";
 import { useIssueStatuses } from "@/data/queries/issue-statuses";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
 import { useActorLookup } from "@/data/use-actor-name";
 import { actorNameText } from "@/components/ui/actor-name";
 import { useActorProfileStore } from "@/data/stores/actor-profile-store";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import type { CardProperties } from "@/data/stores/issue-filter-slice";
 import {
   issueRowProjectChip,
   type RowProject,
 } from "@/lib/issue-row-project";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 import { ProjectIcon } from "@/components/ui/project-icon";
 import { CustomStatusChip } from "./custom-status-chip";
 import { IssueDuplicateOfMarker } from "./issue-duplicates";
@@ -119,7 +118,7 @@ export function IssueRow({
   project,
   cardProperties,
 }: Props) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   // Subscribes, so a language switch re-renders the due-date chip below.
   const intlLocale = useIntlLocale();
   const statusEntry = useIssueStatuses().entryOf(issue.status);
@@ -134,7 +133,7 @@ export function IssueRow({
     id: string,
   ): (() => void) | undefined =>
     type ? () => openProfile(type, id) : undefined;
-  const checkColor = THEME[colorScheme].primary;
+  const checkColor = palette.primary;
   const showChildProgress = childProgress && childProgress.total > 0;
   const dueLabel = formatIssueDate(dueDate ?? null, ISSUE_DATE_SHORT, intlLocale);
   // Web's `showProject` slot (`list-row.tsx:60`、`:151-156`): icon + title,
@@ -153,7 +152,7 @@ export function IssueRow({
           <Ionicons
             name={selected ? "checkmark-circle" : "ellipse-outline"}
             size={22}
-            color={selected ? checkColor : THEME[colorScheme].mutedForeground}
+            color={selected ? checkColor : palette.mutedForeground}
           />
         ) : null}
         {showStatus ? (
@@ -231,7 +230,7 @@ export function IssueRow({
             <Ionicons
               name="calendar-outline"
               size={12}
-              color={THEME[colorScheme].mutedForeground}
+              color={palette.mutedForeground}
             />
             <Text
               className={cn(
@@ -295,7 +294,7 @@ export function IssueRow({
             <Ionicons
               name="person-add-outline"
               size={11}
-              color={THEME[colorScheme].mutedForeground}
+              color={palette.mutedForeground}
             />
           </Pressable>
         ) : null}

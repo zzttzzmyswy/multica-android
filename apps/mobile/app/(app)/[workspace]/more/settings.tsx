@@ -31,12 +31,12 @@ import { useAuthStore } from "@/data/auth-store";
 import { api } from "@/data/api";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useColorScheme, type ThemePreference } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
 import { getSavedLocaleOverride, resetLocale, setLocale } from "@/lib/i18n";
 import { LANGUAGE_OPTIONS, languageOptionForSaved, serverLanguageFor, type LanguageOptionId } from "@/lib/settings-language";
 import { resolveViewingTimezone, timezoneLabel } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 const THEME_OPTIONS: { value: ThemePreference; labelKey: string }[] = [
   { value: "light", labelKey: "settings.themeLight" },
@@ -56,6 +56,7 @@ function initialsOf(name: string | undefined): string {
 }
 
 export default function SettingsPage() {
+  const palette = useThemePalette();
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
   const logout = useAuthStore((s) => s.logout);
@@ -63,8 +64,8 @@ export default function SettingsPage() {
   const setCurrentWorkspace = useWorkspaceStore((s) => s.setCurrentWorkspace);
   const clearWorkspace = useWorkspaceStore((s) => s.clear);
   const { data, isLoading, error } = useQuery(workspaceListOptions());
-  const { preference, setPreference, colorScheme } = useColorScheme();
-  const mutedFg = THEME[colorScheme].mutedForeground;
+  const { preference, setPreference } = useColorScheme();
+  const mutedFg = palette.mutedForeground;
   const { t } = useTranslation();
   // The language picker's value is derived from the i18n override store, so a
   // switch to "Follow system" that leaves the effective locale unchanged (e.g.

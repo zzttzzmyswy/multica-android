@@ -67,13 +67,12 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { useAuthStore } from "@/data/auth-store";
 import { useTimeAgo } from "@/lib/time-ago";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import {
   customRuntimeRegistrationFailure,
   pendingRuntimeCommandName,
 } from "@/lib/pending-runtime";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 const MACHINE_ICON: Record<RuntimeMachine["section"], keyof typeof Ionicons.glyphMap> = {
   local: "hardware-chip",
@@ -109,8 +108,7 @@ export default function MachineDetailPage() {
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const user = useAuthStore((s) => s.user);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const timeAgo = useTimeAgo();
 
   // 30s health re-derivation tick (web's HEALTH_TICK_MS).
@@ -550,9 +548,9 @@ function MachineRuntimeRow({
   refetchAgents: () => void;
   onPress: () => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
   const timeAgo = useTimeAgo();
   const health = deriveRuntimeHealth(runtime, now);
   const displayName = runtimeRowLabel(runtime, machineTitle);
@@ -613,7 +611,7 @@ function MachineRuntimeRow({
               <Ionicons
                 name="alert-circle"
                 size={12}
-                color={THEME[colorScheme].destructive}
+                color={palette.destructive}
               />
             ) : (
               <View className={cn("size-1.5 rounded-full", HEALTH_DOT[health])} />

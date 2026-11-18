@@ -32,10 +32,9 @@ import { Pressable, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Text } from "@/components/ui/text";
 import { TextField } from "@/components/ui/text-field";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
 import type { FindCounter } from "@/lib/issue-find";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 interface Props {
   value: string;
@@ -61,8 +60,7 @@ export function FindBar({
   onClose,
 }: Props) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   return (
     <View

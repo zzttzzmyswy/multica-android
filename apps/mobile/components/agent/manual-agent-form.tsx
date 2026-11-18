@@ -114,9 +114,8 @@ import { skillListOptions } from "@/data/queries/skills";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useAuthStore } from "@/data/auth-store";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 type PermissionScope = AgentDraft["permissionScope"];
 
@@ -155,8 +154,7 @@ export function ManualAgentForm({
   onFocusStartersLayout?: (offsetY: number) => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
@@ -1055,11 +1053,11 @@ function SectionLabel({
   title: string;
   hint: string;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   return (
     <View className="gap-1">
       <View className="flex-row items-center gap-1.5">
-        <Ionicons name={icon} size={15} color={THEME[colorScheme].mutedForeground} />
+        <Ionicons name={icon} size={15} color={palette.mutedForeground} />
         <Text className="text-body font-semibold text-foreground">{title}</Text>
       </View>
       <Text className="text-caption text-muted-foreground/80">{hint}</Text>

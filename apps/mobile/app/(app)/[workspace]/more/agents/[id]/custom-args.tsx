@@ -35,15 +35,14 @@ import type { ArgEntry } from "@/lib/custom-args";
 import { recordRead } from "@/lib/catalog-read";
 import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 const NEW_ENTRY_ID = "__new__";
 
 export default function AgentCustomArgsPage() {
+  const palette = useThemePalette();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   const agents = useQuery(agentListAllOptions(wsId));
@@ -180,7 +179,7 @@ export default function AgentCustomArgsPage() {
           onPress={startAdding}
           disabled={editor !== null || saveAgent.isPending}
         >
-          <Ionicons name="add" size={14} color={THEME[colorScheme].mutedForeground} />
+          <Ionicons name="add" size={14} color={palette.mutedForeground} />
           <Text>{t("agents.customArgs.addArgumentAction")}</Text>
         </Button>
         {editor?.id === NEW_ENTRY_ID ? (
@@ -196,7 +195,7 @@ export default function AgentCustomArgsPage() {
               editable={!saveAgent.isPending}
               onSubmitEditing={commitEditor}
               className="flex-1 font-mono"
-              style={{ borderColor: THEME[colorScheme].border }}
+              style={{ borderColor: palette.border }}
             />
             <Button size="sm" onPress={commitEditor} disabled={!editorValue.trim()}>
               <Text>{t("agents.customArgs.addAction")}</Text>
@@ -256,7 +255,7 @@ export default function AgentCustomArgsPage() {
                   })}
                   className="p-1.5"
                 >
-                  <Ionicons name="pencil" size={15} color={THEME[colorScheme].mutedForeground} />
+                  <Ionicons name="pencil" size={15} color={palette.mutedForeground} />
                 </Pressable>
                 <Pressable
                   onPress={() => removeEntry(entry.id)}
@@ -266,7 +265,7 @@ export default function AgentCustomArgsPage() {
                   })}
                   className="p-1.5"
                 >
-                  <Ionicons name="trash-outline" size={16} color={THEME[colorScheme].mutedForeground} />
+                  <Ionicons name="trash-outline" size={16} color={palette.mutedForeground} />
                 </Pressable>
               </View>
             ),

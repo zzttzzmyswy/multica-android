@@ -37,8 +37,7 @@ import {
   larkPollOutcome,
 } from "@/lib/integration-bind";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export type LarkRegion = "feishu" | "lark";
 
@@ -60,8 +59,7 @@ export function LarkInstallDialog({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
 

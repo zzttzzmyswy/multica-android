@@ -39,9 +39,9 @@ import type {
 import type { AgentAvailability } from "@multica/core/agents";
 import { Text } from "@/components/ui/text";
 import { formatElapsedSecs } from "@/lib/format-elapsed";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import { useTranslation } from "@/lib/i18n/react";
-import { THEME } from "@/lib/theme";
+import { motionDuration, useAppearanceA11y } from "@/lib/appearance-a11y-runtime";
+import { shouldRepeatMotion } from "@/lib/appearance-a11y";
 
 interface Props {
   pendingTask: ChatPendingTask | null | undefined;
@@ -227,18 +227,29 @@ function useTick(enabled: boolean, intervalMs: number) {
 // setTimeout (150ms / 300ms) so the wave reads as motion rather than
 // flicker.
 function BreathingDots() {
-  const { colorScheme } = useColorScheme();
-  const tint = THEME[colorScheme].mutedForeground;
+  const { theme, reduceMotion } = useAppearanceA11y();
+  const tint = theme.mutedForeground;
   const d1 = useSharedValue(0.3);
   const d2 = useSharedValue(0.3);
   const d3 = useSharedValue(0.3);
 
   useEffect(() => {
+    if (!shouldRepeatMotion(reduceMotion)) {
+      // Reduced motion (MYS-2950): no wave, no stagger timers — the three dots
+      // park at full opacity and read as a static "…", which still says the
+      // agent is working. Starting the repeat with a 0 duration would schedule
+      // a frame forever; see `shouldRepeatMotion`.
+      d1.value = 1;
+      d2.value = 1;
+      d3.value = 1;
+      return;
+    }
+    const duration = motionDuration(400, reduceMotion);
     const start = (v: SharedValue<number>) => {
       v.value = withRepeat(
         withSequence(
-          withTiming(1, { duration: 400 }),
-          withTiming(0.3, { duration: 400 }),
+          withTiming(1, { duration }),
+          withTiming(0.3, { duration }),
         ),
         -1,
       );
@@ -253,7 +264,7 @@ function BreathingDots() {
       cancelAnimation(d2);
       cancelAnimation(d3);
     };
-  }, [d1, d2, d3]);
+  }, [d1, d2, d3, reduceMotion]);
 
   const s1 = useAnimatedStyle(() => ({ opacity: d1.value }));
   const s2 = useAnimatedStyle(() => ({ opacity: d2.value }));

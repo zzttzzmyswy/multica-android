@@ -51,8 +51,6 @@ import {
 import { useDeleteIssueView } from "@/data/mutations/issue-views";
 import { useActiveIssueViewStore } from "@/data/stores/active-issue-view-store";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { catalogRead } from "@/lib/catalog-read";
 import {
   ALL_VIEWS_SCOPES,
@@ -67,6 +65,7 @@ import {
   scopeOfView,
 } from "@/lib/all-views-target";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /**
  * The four views every workspace has without saving anything — web's
@@ -172,8 +171,7 @@ export default function AllViewsPage() {
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const user = useAuthStore((s) => s.user);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   const viewsQuery = useQuery(issueViewEverywhereOptions(wsId));
   const viewsRead = catalogRead(viewsQuery);

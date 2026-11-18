@@ -39,11 +39,9 @@
 import { useCallback } from "react";
 import { View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { useColorScheme } from "nativewind";
 import type { Project } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
-import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
 import { useActorLookup } from "@/data/use-actor-name";
 import { isResolvedActorName } from "@/lib/actor-name-state";
@@ -55,6 +53,7 @@ import {
   type HandoffHint,
 } from "@/lib/handoff-hint";
 import type { StatusScope } from "@/lib/workflow-status-scope";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /** What one row's hint resolves to, ready to draw and to announce. */
 export interface HandoffHintDisplay {
@@ -206,7 +205,7 @@ export function useStatusHandoffLabel(input: {
  * same call.
  */
 export function HandoffHintRow({ display }: { display: HandoffHintDisplay | null }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   if (!display) return null;
 
   return (
@@ -226,7 +225,7 @@ export function HandoffHintRow({ display }: { display: HandoffHintDisplay | null
         name="return-down-forward"
         size={12}
         color={
-          colorScheme === "dark" ? THEME.dark.mutedForeground : THEME.light.mutedForeground
+          palette.mutedForeground
         }
       />
       {display.actor ? (

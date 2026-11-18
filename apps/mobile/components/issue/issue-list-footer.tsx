@@ -15,9 +15,8 @@
 import { ActivityIndicator, Pressable, View } from "react-native";
 import { Text } from "@/components/ui/text";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { PAGINATED_THRESHOLD } from "@/lib/issue-pagination";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export function IssueListFooter({
   hasMore,
@@ -33,8 +32,7 @@ export function IssueListFooter({
   onRetry: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   if (isError) {
     return (

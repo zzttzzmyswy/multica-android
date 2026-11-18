@@ -14,14 +14,13 @@ import { QuickActionForm } from "@/components/quick-action/quick-action-form";
 import { quickActionListOptions } from "@/data/queries/quick-actions";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export default function EditQuickActionPage() {
+  const palette = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { data, isLoading, error, refetch } = useQuery(

@@ -29,8 +29,7 @@ import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { autopilotBatchActions } from "@/lib/autopilot-list-actions";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export function AutopilotBatchBar({
   /** The selection, already intersected with the rows the list shows now. */
@@ -54,8 +53,7 @@ export function AutopilotBatchBar({
 }) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   const count = selectedRows.length;
   const actions = autopilotBatchActions(selectedRows);

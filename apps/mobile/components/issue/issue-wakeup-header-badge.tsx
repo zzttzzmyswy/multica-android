@@ -28,8 +28,6 @@ import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useStatusLabel } from "@/lib/status-options";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import {
   issueWakeupsOptions,
   issueSystemWakeupsOptions,
@@ -39,6 +37,7 @@ import {
   wakeupHeadlineText,
   type WakeupTextDeps,
 } from "@/lib/wakeup-presentation";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 interface Props {
   issueId: string;
@@ -66,8 +65,7 @@ export function useIssueWakeupBadgePresent(issueId: string): boolean {
 export function IssueWakeupHeaderBadge({ issueId }: Props) {
   const { t } = useTranslation();
   const intlLocale = useIntlLocale();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const statusLabel = useStatusLabel();

@@ -83,8 +83,7 @@ import {
   viewQueryFromSnapshot,
 } from "@/data/stores/issue-view-codec";
 import type { IssueViewMode } from "@/data/stores/issue-filter-slice";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 interface IssueViewBarProps {
   wsId: string | null;
@@ -113,8 +112,8 @@ export function IssueViewBar({
   onApplyView,
   onExitView,
 }: IssueViewBarProps) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
   const user = useAuthStore((s) => s.user);
   const { data: members = [] } = useQuery(memberListOptions(wsId));
   const currentRole =
@@ -461,8 +460,8 @@ export function IssueViewBar({
     );
   };
 
-  const fg = THEME[colorScheme].foreground;
-  const dim = THEME[colorScheme].mutedForeground;
+  const fg = palette.foreground;
+  const dim = palette.mutedForeground;
 
   return (
     <>
@@ -638,9 +637,9 @@ function ViewBarManageModal({
   onMove: (viewId: string, direction: "up" | "down") => void;
   onClose: () => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const dim = THEME[colorScheme].mutedForeground;
+  const dim = palette.mutedForeground;
   const ordered = applyViewBarPrefs(items, prefs).ordered;
 
   return (
@@ -680,7 +679,7 @@ function ViewBarManageModal({
                         <Ionicons
                           name={hidden ? "eye-off-outline" : "eye-outline"}
                           size={17}
-                          color={hidden ? dim : THEME[colorScheme].foreground}
+                          color={hidden ? dim : palette.foreground}
                         />
                       </Pressable>
                       <Text

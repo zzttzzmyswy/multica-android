@@ -23,7 +23,6 @@ import { useMemo } from "react";
 import { FlatList, Pressable, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { useColorScheme } from "nativewind";
 import type {
   Agent,
   IssueAssigneeType,
@@ -47,12 +46,12 @@ import {
 } from "@/lib/assignee-frequency";
 import { matchesNameOrPinyin } from "@/lib/name-search";
 import { useScrollToTopOnChange } from "@/lib/use-scroll-to-top-on-change";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { isAgentRuntimeBound } from "@/lib/is-agent-runtime-bound";
 import { isRestrictedAgent } from "@/lib/agent-list-access";
 import { assigneeRowBlock } from "@/lib/assignee-row-gate";
 import { useTranslation } from "@/lib/i18n/react";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 const AVATAR_SIZE = 36;
 
@@ -149,17 +148,15 @@ export function AssigneePickerBody({
     [agents],
   );
   const listRef = useScrollToTopOnChange(query);
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   // Tint color for the checkmark accessory. Project uses a monochrome
   // shadcn palette where `primary` is the canonical tint (near-black light /
   // near-white dark); matches Apple HIG's "tintColor" semantics for
   // selection accessories.
   const checkColor =
-    colorScheme === "dark" ? THEME.dark.primary : THEME.light.primary;
+    palette.primary;
   const mutedColor =
-    colorScheme === "dark"
-      ? THEME.dark.mutedForeground
-      : THEME.light.mutedForeground;
+    palette.mutedForeground;
 
   const rows = useMemo<Row[]>(() => {
     const q = query.trim().toLowerCase();

@@ -52,12 +52,11 @@ import { canManageRole } from "@/lib/member-guards";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorProfileStore } from "@/data/stores/actor-profile-store";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import { useTimeAgo } from "@/lib/time-ago";
 import { formatDateTime } from "@/lib/autopilot-format";
 import { isValidInviteEmail } from "@/lib/invite-validation";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 const ROLE_ORDER: Record<MemberRole, number> = { owner: 0, admin: 1, member: 2 };
 
@@ -72,8 +71,7 @@ export default function MembersPage() {
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const user = useAuthStore((s) => s.user);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   const { data: rawMembers, isLoading, error, refetch, isRefetching } =
     useQuery(memberListOptions(wsId));
@@ -337,8 +335,7 @@ export default function MembersPage() {
 
 function InviteEntry({ onPress }: { onPress: () => void }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   return (
     <Pressable
       onPress={onPress}
@@ -375,10 +372,10 @@ function MemberRow({
   onRoleChange: (row: MemberWithUser, role: MemberRole) => void;
   onRemove: (row: MemberWithUser) => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
   const timeAgo = useTimeAgo();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
   const joined = member.created_at ? timeAgo(member.created_at) : null;
   const openProfile = useActorProfileStore((s) => s.open);
 
@@ -447,8 +444,7 @@ function InvitationRow({
   onRevoke: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const expiresMs = invitation.expires_at
     ? new Date(invitation.expires_at).getTime()
     : null;

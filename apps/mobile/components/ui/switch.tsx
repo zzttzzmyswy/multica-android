@@ -1,8 +1,7 @@
 import { cn } from '@/lib/utils';
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 import * as SwitchPrimitives from '@rn-primitives/switch';
 import { Platform } from 'react-native';
-import { useColorScheme } from '@/lib/use-color-scheme';
-import { THEME } from '@/lib/theme';
 
 /**
  * The switch's box, as NUMBERS rather than utility classes.
@@ -34,8 +33,7 @@ function Switch({
   // it — the spread types it that way, and silently dropping it would ignore a
   // caller's sizing.
   const resolved = typeof style === 'function' ? style({ pressed: false }) : style;
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   return (
     <SwitchPrimitives.Root
       style={[

@@ -20,16 +20,15 @@ import {
   propertyTypeLabelKey,
 } from "@/lib/issue-properties";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export default function IssuePropertyAddRoute() {
+  const palette = useThemePalette();
   const { id } = useLocalSearchParams<{ id: string }>();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
 
   const { data: issue } = useQuery(issueDetailOptions(wsId, id));
   // Four-state read (MYS-1892): `isLoading` alone could not tell a failed

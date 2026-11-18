@@ -38,10 +38,9 @@ import {
 } from "@/lib/actor-issues";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { scaledByChoice } from "@/lib/type-appearance";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 import { useFontScale } from "@/data/stores/type-appearance-store";
 
 const RELATIONS: { value: ActorIssuesRelation; labelKey: string }[] = [
@@ -63,8 +62,7 @@ export function ActorIssuesPanel({
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   // Text size (MYS-2931): inputs bypass the Tailwind `text-*` steps
   // (lines above), so they read the scale directly or they would be the
   // only controls that ignore the setting.

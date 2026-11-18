@@ -82,9 +82,8 @@ import {
 } from "@/lib/agent-list-access";
 import type { AccessScope } from "@/lib/agent-access";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 // Server-driven enum: unknown statuses degrade to the neutral pill (a future
 // value must not collapse the list — backend is the gate).
@@ -154,11 +153,11 @@ export const useAgentMobileViewStore = create<AgentMobileViewState>()((set) => (
 }));
 
 export default function AgentsPage() {
+  const palette = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
   const qc = useQueryClient();
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
 
@@ -539,7 +538,7 @@ export default function AgentsPage() {
                   <Text>{t("agents.goChat")}</Text>
                 </Button>
                 <Button onPress={() => router.push(`/${wsSlug}/more/agents/new`)}>
-                  <Ionicons name="add" size={15} color={THEME[colorScheme].primaryForeground} />
+                  <Ionicons name="add" size={15} color={palette.primaryForeground} />
                   <Text>{t("agents.createButton")}</Text>
                 </Button>
               </View>
@@ -689,9 +688,9 @@ function AgentSortPicker({
   sortDirection: AgentSortDirection;
   onChange: (field: AgentSortField, direction: AgentSortDirection) => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
 
   const options: {
     field: AgentSortField;
@@ -774,8 +773,7 @@ function AgentFilterButton({
   onPress: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const active = activeCount > 0;
 
   return (
@@ -945,8 +943,7 @@ function BatchBar({
   onSetAccess: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   return (
     <View className="absolute bottom-4 left-0 right-0 px-4">
       <View className="flex-row items-center gap-2 rounded-xl border border-border bg-background px-3 py-2.5 shadow-lg">
@@ -1000,9 +997,9 @@ function AgentRow({
   canManage: boolean;
   onPress: () => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
   const archived = isArchivedAgent(agent);
   const pill = STATUS_PILL[archived ? "archived" : "active"];
   // Archived wins over runtime health — mirrors deriveAgentPresenceDetail.
@@ -1102,9 +1099,8 @@ function SelectableAgentRow({
   onToggle: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
+  const muted = theme.mutedForeground;
   const archived = isArchivedAgent(agent);
   const availability = archived
     ? "archived"

@@ -31,14 +31,13 @@ import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { Text } from "@/components/ui/text";
 import { ActionSheet } from "@/lib/action-sheet";
 import { useTranslation } from "@/lib/i18n/react";
-import { THEME } from "@/lib/theme";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import { cn } from "@/lib/utils";
 import {
   attributionShouldRender,
   attributionSourceLabelKey,
   isAttributionUncertain,
 } from "@/lib/task-attribution";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /**
  * The resolution source as display text. An unknown level (the server owns
@@ -72,8 +71,7 @@ export function AttributionBadge({
   className?: string;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const initiatorName = useInitiatorName();
   const sourceLabel = useAttributionSourceLabel();
 

@@ -24,9 +24,8 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { Text } from "@/components/ui/text";
 import { QUICK_EMOJIS } from "@/lib/quick-emojis";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 interface ReactionItem {
   id: string;
@@ -79,9 +78,9 @@ export function ReactionBar({
   onOpenFullPicker,
   className,
 }: Props) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
   const [quickOpen, setQuickOpen] = useState(false);
   const grouped = groupReactions(reactions, currentUserId);
 

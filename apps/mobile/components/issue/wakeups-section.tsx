@@ -49,8 +49,6 @@ import { WakeupCreateSheet } from "@/components/issue/wakeup-create-sheet";
 import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useWakeupText } from "@/lib/use-wakeup-text";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { issueTasksOptions } from "@/data/queries/issues";
 import {
   issueWakeupsOptions,
@@ -77,6 +75,7 @@ import {
   wakeupTrigger,
   type WakeupTextDeps,
 } from "@/lib/wakeup-presentation";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 interface Props {
   issueId: string;
@@ -99,8 +98,7 @@ interface Props {
 
 export function WakeupsSection({ issueId, closed = false, defaultAgentId }: Props) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const text = useWakeupText();
   const [open, setOpen] = useState(true);
@@ -273,8 +271,7 @@ function WakeupRow({
 }) {
   const { t } = useTranslation();
   const intlLocale = useIntlLocale();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const [sheetOpen, setSheetOpen] = useState(false);
   const enable = useEnableIssueWakeup(wakeup.issue_id);
   const disable = useDisableIssueWakeup(wakeup.issue_id);
@@ -483,8 +480,7 @@ function SystemWakeupRow({
   text: WakeupTextDeps;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const [sheetOpen, setSheetOpen] = useState(false);
   const update = useUpdateIssueSystemWakeup(rule.rule);
   const title =
@@ -584,6 +580,7 @@ function SystemWakeupDetail({
   onSaved: () => void;
 }) {
   const { t } = useTranslation();
+  const palette = useThemePalette();
   const [editing, setEditing] = useState(false);
   const paused = rule.paused_reason
     ? t("wakeups.system.paused", {
@@ -652,7 +649,7 @@ function SystemWakeupDetail({
           accessibilityLabel={t("wakeups.system.instructionEdit")}
           className="active:opacity-70"
         >
-          <Ionicons name="pencil" size={14} color={THEME.light.mutedForeground} />
+          <Ionicons name="pencil" size={14} color={palette.mutedForeground} />
         </Pressable>
       </View>
       {rule.instruction ? (

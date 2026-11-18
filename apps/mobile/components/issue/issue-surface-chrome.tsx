@@ -50,10 +50,9 @@ import type {
   IssueViewMode,
 } from "@/data/stores/issue-filter-slice";
 import type { RowProject } from "@/lib/issue-row-project";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
 import { translate } from "@/lib/i18n";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /** One SectionList section — shared by all three surfaces (status grouping
  *  sets `status`; assignee grouping sets the actor lane identity). */
@@ -128,7 +127,7 @@ export function FilterTriggerButton({
   onPress: () => void;
   hasActiveFilters: boolean;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   const { t } = useTranslation();
   return (
     <View style={{ position: "relative" }} className="ml-2">
@@ -142,7 +141,7 @@ export function FilterTriggerButton({
         <Ionicons
           name="options-outline"
           size={16}
-          color={THEME[colorScheme].mutedForeground}
+          color={palette.mutedForeground}
         />
       </Button>
       {hasActiveFilters ? (
@@ -601,7 +600,7 @@ export function useFilterChipBaseline(
 }
 
 function Chip({ label, onClear }: { label: string; onClear: () => void }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   return (
     <Pressable
       onPress={onClear}
@@ -611,7 +610,7 @@ function Chip({ label, onClear }: { label: string; onClear: () => void }) {
       <Ionicons
         name="close"
         size={12}
-        color={THEME[colorScheme].mutedForeground}
+        color={palette.mutedForeground}
       />
     </Pressable>
   );
@@ -640,17 +639,17 @@ export function IssueSectionHeader({
   collapsed?: boolean;
   onToggle?: () => void;
 }) {
+  const palette = useThemePalette();
   const { resolveActorName } = useActorLookup();
   const statusLabel = useStatusLabel();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
   const count = section.count ?? section.data.length;
 
   const chevron = onToggle ? (
     <Ionicons
       name={collapsed ? "chevron-forward" : "chevron-down"}
       size={13}
-      color={THEME[colorScheme].mutedForeground}
+      color={palette.mutedForeground}
     />
   ) : null;
 

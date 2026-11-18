@@ -37,8 +37,7 @@ import { useActorLookup } from "@/data/use-actor-name";
 import { joinedActorNames } from "@/lib/actor-name-state";
 import { formatPropertyValue, propertyTypeIcon } from "@/lib/issue-properties";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 import {
   PROPERTY_COMMIT_TYPES,
   propertyBodyHasDone,
@@ -57,8 +56,7 @@ interface Props {
 export function PropertyValueEditor({ issueId, propertyId, onClose }: Props) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   // Names an actor reference for the read-only label (an archived definition,
   // or a single `actor` this build cannot parse). Without it that path prints
   // the stored `member:<uuid>` — the same defect the editable path fixes.

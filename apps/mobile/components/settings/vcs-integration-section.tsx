@@ -27,9 +27,8 @@ import { api } from "@/data/api";
 import { vcsConnectionsOptions, vcsKeys, vcsViewState } from "@/data/queries/vcs";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 const PROVIDERS: { value: VCSProvider; label: string }[] = [
   { value: "forgejo", label: "Forgejo" },
@@ -44,8 +43,7 @@ function providerLabel(value: string): string {
 export function VCSIntegrationSection() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const muted = theme.mutedForeground;
   const qc = useQueryClient();
 
@@ -364,8 +362,7 @@ export function VCSIntegrationSection() {
 
 function CopyRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const muted = theme.mutedForeground;
   const [copied, setCopied] = useState(false);
 

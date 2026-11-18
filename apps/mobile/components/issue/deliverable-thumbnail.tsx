@@ -26,9 +26,8 @@ import type { Attachment } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { resolveAttachmentUrl } from "@/lib/attachment-url";
 import { deliverableCategory, deliverableIconName, deliverableTypeLabel } from "@/lib/deliverables";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 interface Props {
   attachment: Attachment;
@@ -88,8 +87,7 @@ function FileFace({
   showTypeLabel: boolean;
   className?: string;
 }) {
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const label = deliverableTypeLabel(attachment.filename);
   return (
     <View

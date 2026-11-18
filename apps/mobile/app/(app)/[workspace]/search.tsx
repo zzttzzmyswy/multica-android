@@ -84,7 +84,7 @@ import { filterMemberMatches } from "@/lib/member-search";
 import { keyboardBehavior } from "@/lib/keyboard";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 const DEBOUNCE_MS = 300;
 const ISSUE_LIMIT = 20;
@@ -204,13 +204,13 @@ interface SearchIssueRowProps {
 }
 
 function SearchIssueRow({ item, query, slug }: SearchIssueRowProps) {
+  const palette = useThemePalette();
   // One line per snippet kind, in web's order (description then comment);
   // a result can carry both. Reading the canonical fields rather than
   // `match_source` + `matched_snippet` is what makes a description-only hit
   // visible at all — see lib/search-snippets.ts for the server field semantics.
   const snippets = searchIssueSnippets(item);
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
   const statusEntry = useIssueStatuses().entryOf(item.status);
   return (
     <Pressable
@@ -479,12 +479,8 @@ export default function SearchModal() {
   // pathname the way web's portal does — see `lib/search-route.ts`.
   const { issueId } = useLocalSearchParams<{ issueId?: string }>();
   const queryClient = useQueryClient();
-  const {
-    colorScheme,
-    preference: themePreference,
-    setPreference,
-  } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const { preference: themePreference, setPreference } = useColorScheme();
+  const theme = useThemePalette();
   const { t } = useTranslation();
 
   const [query, setQuery] = useState("");

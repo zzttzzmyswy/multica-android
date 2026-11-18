@@ -37,16 +37,14 @@ import { WorkspaceAvatar } from "@/components/workspace/workspace-avatar";
 import { inboxUnreadSummaryOptions } from "@/data/queries/inbox";
 import { workspaceListOptions } from "@/data/queries/workspaces";
 import { useWorkspaceStore } from "@/data/workspace-store";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
 import { workspaceUnreadBadge } from "@/lib/workspace-unread-badge";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export default function SwitchWorkspaceRoute() {
   const activeSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
-  const { colorScheme } = useColorScheme();
-  const t = THEME[colorScheme];
+  const t = useThemePalette();
   const tr = useTranslation();
   const { data, isLoading } = useQuery(workspaceListOptions());
 

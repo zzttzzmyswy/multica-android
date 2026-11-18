@@ -36,16 +36,15 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { useAuthStore } from "@/data/auth-store";
 import { transportLabel } from "@/lib/mcp-config";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export default function McpServersPage() {
+  const palette = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const user = useAuthStore((s) => s.user);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
 
   const { data, isLoading, error, refetch, isRefetching } = useQuery(
     workspaceMcpServersOptions(wsId),
@@ -178,9 +177,9 @@ function McpServerRow({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
   // HTTP-style summary maps to "http" (transportLabel renders it "HTTP");
   // anything unknown (sse/…) shows its raw transport and opens in the JSON
   // editor — see the editor's own mode seeding.

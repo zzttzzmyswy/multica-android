@@ -70,12 +70,11 @@ import {
   type ChatSkillInput,
   type SlashCommandItem,
 } from "@/lib/slash-command";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import { composerCanSubmit, composerSubmitMode } from "@/lib/composer-submit";
 import { stripMarkdown } from "@/lib/strip-markdown";
-import { THEME } from "@/lib/theme";
 import { Text } from "@/components/ui/text";
 import { useTranslation } from "@/lib/i18n/react";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 import { IconButton } from "@/components/ui/icon-button";
 import {
   ComposerAttachmentRow,
@@ -267,8 +266,7 @@ export function MessageComposer({
   onRestoreApplied,
 }: Props) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const insets = useSafeAreaInsets();
   const inputRef = useRef<TextInput>(null);
   const [expanded, setExpanded] = useState(false);

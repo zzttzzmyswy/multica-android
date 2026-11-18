@@ -46,9 +46,8 @@ import { HtmlAttachmentPreview } from "@/components/rich-content/html-attachment
 import { TextAttachmentPreview } from "@/components/rich-content/text-attachment";
 import { FileCard } from "@/components/issue/attachment-file-card";
 import { MarkdownImage } from "@/lib/markdown/markdown-image";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import type { DownloadSource } from "@/lib/download-store";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 interface Props {
   attachments?: Attachment[];
@@ -65,8 +64,7 @@ interface Props {
 }
 
 export function CommentAttachmentList({ attachments, content, source }: Props) {
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   // Only render attachments not already referenced inline in the body. The
   // dedup lives in a pure helper (lib/attachment-dedup) so it can be unit

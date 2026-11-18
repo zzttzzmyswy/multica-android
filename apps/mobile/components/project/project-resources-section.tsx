@@ -44,8 +44,6 @@ import {
   useUpdateProjectResource,
 } from "@/data/mutations/projects";
 import { useWorkspaceStore } from "@/data/workspace-store";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
 import { ActionSheet } from "@/lib/action-sheet";
 import {
@@ -56,6 +54,7 @@ import {
   worktreeUnsupportedInfo,
   type WorktreeUnsupportedInfo,
 } from "@/lib/project-resources";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 interface Props {
   projectId: string;
@@ -184,8 +183,8 @@ function ResourceRow({
   onPress: () => void;
   onLongPress: () => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
   const local = localDirectoryRef(resource);
   const subtitle = resourceSubtitle(resource);
   return (
@@ -200,7 +199,7 @@ function ResourceRow({
       <Ionicons
         name={iconFor(resource.resource_type)}
         size={16}
-        color={THEME[colorScheme].mutedForeground}
+        color={palette.mutedForeground}
       />
       <View className="flex-1 min-w-0">
         <Text className="text-body text-foreground" numberOfLines={1}>

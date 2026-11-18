@@ -26,8 +26,8 @@ import Animated, {
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { motionDuration, useAppearanceA11y } from "@/lib/appearance-a11y-runtime";
+import { shouldRepeatMotion } from "@/lib/appearance-a11y";
 
 interface Props {
   /** Diameter in pt. Default 8 (matches the in-card row). */
@@ -35,15 +35,25 @@ interface Props {
 }
 
 export function PulseDot({ size = 8 }: Props) {
-  const { colorScheme } = useColorScheme();
-  const opacity = useSharedValue(0.3);
+  const { theme, reduceMotion } = useAppearanceA11y();
+  // Resting opacity when motion is reduced: the dot stays visible and keeps
+  // meaning "live", it just stops breathing (MYS-2950). 1 rather than 0.3 so
+  // the indicator is at its most legible when it is the only cue left.
+  const opacity = useSharedValue(reduceMotion ? 1 : 0.3);
   useEffect(() => {
+    if (!shouldRepeatMotion(reduceMotion)) {
+      // NOT `withRepeat(withTiming(..., {duration: 0}))`: an infinite repeat of
+      // a zero-length timing never ends — it re-schedules every frame forever.
+      // Park at the resting value instead. See `shouldRepeatMotion`.
+      opacity.value = 1;
+      return;
+    }
     opacity.value = withRepeat(
-      withTiming(1, { duration: 1000 }),
+      withTiming(1, { duration: motionDuration(1000, reduceMotion) }),
       -1, // infinite
       true, // reverse — yields 0.3 ↔ 1.0 oscillation over 2s
     );
-  }, [opacity]);
+  }, [opacity, reduceMotion]);
 
   const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
 
@@ -54,7 +64,7 @@ export function PulseDot({ size = 8 }: Props) {
           width: size,
           height: size,
           borderRadius: size / 2,
-          backgroundColor: THEME[colorScheme].brand,
+          backgroundColor: theme.brand,
         },
         style,
       ]}

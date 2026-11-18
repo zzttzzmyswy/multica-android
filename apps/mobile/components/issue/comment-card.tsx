@@ -50,8 +50,6 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { issueAttachmentsOptions } from "@/data/queries/issues";
 import { useFailedCommentsStore } from "@/data/stores/failed-comments-store";
 import { useActorProfileStore } from "@/data/stores/actor-profile-store";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { ReactionBar } from "./reaction-bar";
 import { RerunButton } from "./rerun-button";
@@ -83,6 +81,7 @@ import {
   deriveThreadResolution,
   foldThreadReplies,
 } from "@/lib/thread-resolution";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 interface Props {
   entry: TimelineEntry;
@@ -348,10 +347,10 @@ function ResolvedThreadBar({
   replies: TimelineEntry[];
   onExpand: () => void;
 }) {
+  const palette = useThemePalette();
   const { resolveActorName } = useActorLookup();
-  const { colorScheme } = useColorScheme();
   const { t } = useTranslation();
-  const mutedFg = THEME[colorScheme].mutedForeground;
+  const mutedFg = palette.mutedForeground;
 
   // Unique participant set across root + replies, preserving chronological
   // order of first appearance. Up to two authors are named; the rest are
@@ -431,10 +430,10 @@ function CommentsFoldBar({
   replies: TimelineEntry[];
   onExpand: () => void;
 }) {
+  const palette = useThemePalette();
   const { resolveActorName } = useActorLookup();
-  const { colorScheme } = useColorScheme();
   const { t } = useTranslation();
-  const mutedFg = THEME[colorScheme].mutedForeground;
+  const mutedFg = palette.mutedForeground;
 
   const authorsLabel = useMemo(() => {
     const authors: { type: string | null; id: string | null }[] = [];
@@ -512,11 +511,11 @@ function ResolvedIndicator({
   entry: TimelineEntry;
   onCollapse: () => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
   const { resolveActorName } = useActorLookup();
   const timeAgo = useTimeAgo();
-  const { colorScheme } = useColorScheme();
-  const mutedFg = THEME[colorScheme].mutedForeground;
+  const mutedFg = palette.mutedForeground;
   // `resolved_by` is a workspace actor like any other, so the sentence naming
   // it is subject to the same rule as the two bars above: no directory answer
   // yet → say nothing about WHO, keep saying WHEN. `actorNameText` is empty for
@@ -599,6 +598,7 @@ function CommentBody({
    *  never renders one (`comment-card.tsx:849`). */
   onToggleCollapse?: () => void;
 }) {
+  const palette = useThemePalette();
   // When this comment is the active selection target, drop the long-press
   // wrapper AND make the markdown selectable — so the next long-press
   // routes to UIKit's native text-selection magnifier instead of our
@@ -608,7 +608,6 @@ function CommentBody({
     (s) => s.selectingId === entry.id,
   );
   const { resolveActorName } = useActorLookup();
-  const { colorScheme } = useColorScheme();
   const userId = useAuthStore((s) => s.user?.id);
   const { role } = useCurrentMemberRole();
   // Comment authors are the highest-value "who is this?" surface on the
@@ -895,7 +894,7 @@ function CommentBody({
             <Ionicons
               name={isFolded ? "chevron-forward" : "chevron-down"}
               size={13}
-              color={THEME[colorScheme].mutedForeground}
+              color={palette.mutedForeground}
             />
           </Pressable>
         ) : null}
@@ -1122,9 +1121,9 @@ function FailedActions({
   onRetry: () => void;
   onDiscard: () => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const destructive = THEME[colorScheme].destructive;
+  const destructive = palette.destructive;
   return (
     <View className="flex-row items-center gap-2 mt-0.5">
       <Ionicons name="alert-circle" size={14} color={destructive} />

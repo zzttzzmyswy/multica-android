@@ -55,10 +55,9 @@ import {
 import { matchesNameOrPinyin } from "@/lib/name-search";
 import { toDateOnly, dateOnlyToLocalDate } from "@multica/core/issues/date";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { scaledByChoice } from "@/lib/type-appearance";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 import { useFontScale } from "@/data/stores/type-appearance-store";
 import { useQuery } from "@tanstack/react-query";
 
@@ -119,8 +118,7 @@ export function PropertyValueBody({
   onDraftChange,
 }: PropertyValueBodyProps) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const [draft, setDraft] = useState(initialDraft);
   // Text size (MYS-2931): inputs bypass the Tailwind `text-*` steps
   // (lines above), so they read the scale directly or they would be the
@@ -337,8 +335,7 @@ function CheckRow({
   selected: boolean;
   onPress: () => void;
 }) {
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   return (
     <Pressable onPress={onPress} className="flex-row items-center gap-3 px-4 py-3 active:bg-secondary">
       <Text className="flex-1 text-title-sm text-foreground">{label}</Text>
@@ -409,8 +406,7 @@ function ActorRefBody({
 }) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   // Text size (MYS-2931): this body's search input sets fontSize inline, so it
   // reads the scale directly rather than through the `text-*` steps.
   const fontScale = useFontScale();

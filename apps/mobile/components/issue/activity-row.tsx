@@ -37,9 +37,8 @@ import { useStatusLabel } from "@/lib/status-options";
 import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { useTimeAgo } from "@/lib/time-ago";
 import { useActorLookup } from "@/data/use-actor-name";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import { HighlightOverlay } from "./highlight-overlay";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 function CalendarGlyph({
   size = 14,
@@ -134,10 +133,10 @@ export function ActivityRow({
    *  takes the same bit `CommentCard` does. */
   highlighted?: boolean;
 }) {
+  const palette = useThemePalette();
   const { resolveActorName } = useActorLookup();
-  const { colorScheme } = useColorScheme();
   const timeAgo = useTimeAgo();
-  const mutedFg = THEME[colorScheme].mutedForeground;
+  const mutedFg = palette.mutedForeground;
   const statusLabel = useStatusLabel();
   // The text comes from `lib/activity-search.ts` — the SAME call in-page find's
   // index makes. Rendering and searching must not be able to drift: if this row

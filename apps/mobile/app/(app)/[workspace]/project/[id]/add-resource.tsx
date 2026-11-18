@@ -59,9 +59,8 @@ import {
 import { buildRuntimeMachines } from "@/lib/runtime-machines";
 import type { RuntimeHealth } from "@multica/core/runtimes";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 type ResourceKind = "github_repo" | "local_directory";
 
@@ -70,8 +69,7 @@ export default function AddResourceRoute() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const createResource = useCreateProjectResource(id);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   const { data: workspaces } = useQuery(workspaceListOptions());
   const { data: resources = [] } = useQuery(projectResourcesOptions(wsId, id));
@@ -469,8 +467,7 @@ function RepoOptionRow({
   onPress: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const disabled = attached || busy;
 
   return (
@@ -544,8 +541,7 @@ function MachineOptionRow({
   onPress: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const disabled = attached || busy;
 
   return (

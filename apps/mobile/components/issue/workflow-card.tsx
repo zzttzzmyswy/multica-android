@@ -67,8 +67,6 @@ import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { useStatusLabel } from "@/lib/status-options";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { statusAcceptsHandoff } from "@/lib/workflow";
 import { WorkflowHandoffEditor } from "@/components/issue/workflow-handoff-editor";
@@ -78,6 +76,7 @@ import {
   type WorkflowCardProject,
   type WorkflowCardStep,
 } from "@/lib/workflow-card";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /**
  * The card's own state, resolved once for both the row and the sheet, so the
@@ -124,8 +123,8 @@ export function useIssueWorkflowCard(issue: {
  * Project property.
  */
 export function IssueWorkflowCardRow({ issue }: { issue: { project_id: string | null; status: string } }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
   const { state, refetch } = useIssueWorkflowCard(issue);
 
   if (state.kind === "hidden" || state.kind === "pending") return null;
@@ -145,7 +144,7 @@ export function IssueWorkflowCardRow({ issue }: { issue: { project_id: string | 
         <Ionicons
           name="git-branch-outline"
           size={14}
-          color={THEME[colorScheme].mutedForeground}
+          color={palette.mutedForeground}
         />
         <Text className="text-caption text-muted-foreground">
           {t("workflow.project.label")}
@@ -162,9 +161,9 @@ export function IssueWorkflowCardRow({ issue }: { issue: { project_id: string | 
 
 /** The trigger chip and the sheet it opens, sharing one piece of open state. */
 function WorkflowCardTrigger({ card }: { card: WorkflowCard }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  const { colorScheme } = useColorScheme();
 
   return (
     <>
@@ -173,7 +172,7 @@ function WorkflowCardTrigger({ card }: { card: WorkflowCard }) {
           <Ionicons
             name="git-branch-outline"
             size={14}
-            color={THEME[colorScheme].mutedForeground}
+            color={palette.mutedForeground}
           />
         }
         label={card.workflowName}

@@ -16,10 +16,9 @@ import {
   timezoneOptions,
   tzOffset,
 } from "@/lib/timezone";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 type Row =
   | { key: string; kind: "system" }
@@ -40,8 +39,7 @@ export function SettingsTimezonePicker({
   onClose,
 }: Props) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const [query, setQuery] = useState("");
 
   const deviceTz = browserTimezone() ?? "UTC";

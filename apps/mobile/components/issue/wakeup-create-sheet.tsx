@@ -75,8 +75,6 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
 import { selectedActorLabel } from "@/lib/actor-name-state";
 import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { formatIssueDate } from "@/lib/format-date";
 import { browserTimezone } from "@/lib/timezone";
 import {
@@ -107,6 +105,7 @@ import { wakeupEventName, type WakeupTextDeps } from "@/lib/wakeup-presentation"
 import { useStatusLabel } from "@/lib/status-options";
 import { isAgentRuntimeBound } from "@/lib/is-agent-runtime-bound";
 import { matchesNameOrPinyin } from "@/lib/name-search";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /** `custom` is rendered alone below a hairline, as web renders it: it is the
  *  escape hatch, not a member of any of the four families. */
@@ -457,8 +456,7 @@ function Pill({
   placeholder?: boolean;
   leading?: React.ReactNode;
 }) {
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   return (
     <Pressable
       onPress={onPress}
@@ -1273,8 +1271,7 @@ function Row({
   leading?: React.ReactNode;
   onPress: () => void;
 }) {
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   return (
     <Pressable
       onPress={onPress}
@@ -1512,9 +1509,8 @@ function TimeField({
   accessibilityLabel: string;
   onChange: (next: Date) => void;
 }) {
-  const { colorScheme } = useColorScheme();
   const { t } = useTranslation();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const intlLocale = useIntlLocale();
   const [open, setOpen] = useState(false);
   const label =

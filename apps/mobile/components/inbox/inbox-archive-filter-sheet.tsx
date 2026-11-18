@@ -51,8 +51,6 @@ import { PickerSheet } from "@/components/issue/pickers/picker-sheet";
 import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useStatusOptions } from "@/lib/status-options";
 import {
@@ -62,6 +60,7 @@ import {
   type InboxPriorityFilterSupport,
 } from "@/lib/inbox-filters";
 import { archivedActorFilterRows } from "@/lib/inbox-archive-view";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 interface Props {
   visible: boolean;
@@ -136,8 +135,7 @@ export function InboxArchiveFilterSheet({
   onClear,
 }: Props) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const { options: statusOptions } = useStatusOptions(wsId);
   const statusCatalog = useIssueStatuses(wsId);
   const { getName, resolvedBy } = useActorLookup();

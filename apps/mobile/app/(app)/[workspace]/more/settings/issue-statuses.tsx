@@ -51,8 +51,7 @@ import { LABEL_COLOR_PRESETS } from "@/components/label/label-form";
 import { useTranslation } from "@/lib/i18n/react";
 import { canManageRole } from "@/lib/member-guards";
 import { cn } from "@/lib/utils";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 type EditorState =
   | {
@@ -420,9 +419,9 @@ function RowAction({
   disabled?: boolean;
   onPress: () => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const color = THEME[colorScheme].mutedForeground;
+  const color = palette.mutedForeground;
   return (
     <Pressable
       onPress={onPress}

@@ -46,9 +46,9 @@ import {
 } from "@/lib/mcp-config";
 import { keyboardBehavior } from "@/lib/keyboard";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 function FieldError({ text }: { text: string }) {
   return <Text className="text-caption text-destructive">{text}</Text>;
@@ -72,8 +72,7 @@ export function AgentManagedMcpForm({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   const [name, setName] = useState("");
   const [mode, setMode] = useState<McpEditorMode>("form");

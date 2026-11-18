@@ -37,9 +37,8 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { handoffStepCount, resolveProjectWorkflow } from "@/lib/workflow";
 import { isActorTypeResolved } from "@/lib/actor-name-state";
 import { projectLeadCell } from "@/lib/project-inline-edit";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 interface Props {
   project: Project;
@@ -212,8 +211,8 @@ function WorkflowRow({
   project: Project;
   onPress?: () => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
   const { workflows, state } = useIssueWorkflows(useWorkspaceStore((s) => s.currentWorkspaceId));
   const { canManageProject, roleResolved } = useProjectWorkflowPermissions(project);
   const current = resolveProjectWorkflow(workflows, project);
@@ -254,7 +253,7 @@ function WorkflowRow({
       <Ionicons
         name="git-branch-outline"
         size={15}
-        color={THEME[colorScheme].mutedForeground}
+        color={palette.mutedForeground}
       />
       <View className="min-w-0 flex-1">
         {pending ? (
@@ -349,8 +348,8 @@ function AccessRow({
   project: Project;
   onPress?: () => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
   const isPrivate = projectVisibilityIsPrivate(project);
   const { canManageProject, roleResolved } = useProjectAccessPermissions(project);
   const pressable = !!onPress;
@@ -363,7 +362,7 @@ function AccessRow({
       <Ionicons
         name={isPrivate ? "lock-closed-outline" : "globe-outline"}
         size={15}
-        color={THEME[colorScheme].mutedForeground}
+        color={palette.mutedForeground}
       />
       <View className="min-w-0 flex-1">
         <Text className="text-body text-foreground" numberOfLines={1}>
@@ -426,7 +425,7 @@ function DateRow({
   highlightOverdue?: boolean;
   onPress: () => void;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   const intlLocale = useIntlLocale();
   const overdue = highlightOverdue && !!value && isPastDateOnly(value);
   const display = value
@@ -444,7 +443,7 @@ function DateRow({
         <Ionicons
           name="calendar-outline"
           size={15}
-          color={THEME[colorScheme].mutedForeground}
+          color={palette.mutedForeground}
         />
       }
       right={
@@ -495,12 +494,12 @@ function Separator() {
 }
 
 function Chevron() {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   return (
     <Ionicons
       name="chevron-forward"
       size={14}
-      color={THEME[colorScheme].mutedForeground}
+      color={palette.mutedForeground}
     />
   );
 }

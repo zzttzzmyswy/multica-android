@@ -25,8 +25,7 @@ import { Pressable, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Text } from "@/components/ui/text";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export function AgentNoAccess({
   onBackToAgents,
@@ -35,8 +34,8 @@ export function AgentNoAccess({
    *  workspace slug; this component stays unaware of routing. */
   onBackToAgents: () => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
 
   return (
     <View className="flex-1 items-center justify-center gap-3 bg-background px-8">
@@ -48,7 +47,7 @@ export function AgentNoAccess({
       <Ionicons
         name="lock-closed-outline"
         size={42}
-        color={THEME[colorScheme].mutedForeground}
+        color={palette.mutedForeground}
       />
       <Text className="text-title-sm font-medium text-foreground text-center">
         {t("agents.detail.noAccessTitle")}

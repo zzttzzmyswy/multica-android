@@ -45,9 +45,8 @@ import {
   type SkillImportOutcomeRow,
 } from "@/lib/skill-import";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /**
  * In-flight imports. Matches web's IMPORT_CONCURRENCY, which is pinned to the
@@ -64,8 +63,7 @@ export function RuntimeSkillImportPanel({
   onImported: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const queryClient = useQueryClient();

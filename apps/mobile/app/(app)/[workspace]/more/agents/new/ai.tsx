@@ -38,14 +38,12 @@ import { usableRuntimes } from "@/lib/agent-create";
 import { runtimeAccessScope } from "@/lib/runtime-access";
 import { useTranslation } from "@/lib/i18n/react";
 import { useTimeAgo } from "@/lib/time-ago";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export default function AiBuilderSetupPage() {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const timeAgo = useTimeAgo();
   const qc = useQueryClient();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);

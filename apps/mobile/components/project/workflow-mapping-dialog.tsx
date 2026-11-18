@@ -59,9 +59,8 @@ import {
   mappingUnchangedIssues,
   statusMappingComplete,
 } from "@/lib/project-workflow";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import { useTranslation } from "@/lib/i18n/react";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /**
  * The two shapes this dialog confirms, mirroring upstream's
@@ -105,8 +104,7 @@ export function WorkflowMappingDialog({
   onConfirm,
 }: WorkflowMappingDialogProps) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   // Passing `undefined` lets the hooks resolve the store's current workspace —
   // the same call the pickers make. Both the catalog and the label resolver
   // are workspace-scoped, and the dialog is only ever mounted inside one.

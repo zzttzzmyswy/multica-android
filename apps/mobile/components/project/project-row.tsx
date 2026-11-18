@@ -27,9 +27,8 @@ import {
 import { useTimeAgo } from "@/lib/time-ago";
 import { useTranslation } from "@/lib/i18n/react";
 import { projectVisibilityIsPrivate } from "@/lib/project-access";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /** Card cells render at the card's own scale — the same 12pt glyphs and
  *  `text-caption` the static cells used before this round. */
@@ -64,10 +63,10 @@ export function ProjectRow({
   menu,
   inlineEdit,
 }: Props) {
+  const palette = useThemePalette();
   const timeAgo = useTimeAgo();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
   const totalIssues = project.issue_count;
   const showCount = totalIssues > 0;
 
@@ -91,7 +90,7 @@ export function ProjectRow({
             <Ionicons
               name={selected ? "checkmark-circle" : "ellipse-outline"}
               size={20}
-              color={selected ? THEME[colorScheme].brand : muted}
+              color={selected ? palette.brand : muted}
             />
           </View>
         ) : null}

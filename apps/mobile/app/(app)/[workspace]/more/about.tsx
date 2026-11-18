@@ -22,8 +22,6 @@ import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useLatestRelease } from "@/lib/use-latest-release";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
 import {
   GITHUB_REPO,
@@ -45,6 +43,7 @@ import { resolveAppVersion, resolveBuildNumber } from "@/lib/app-identity";
 import { readPreviousBootFailure } from "@/lib/boot-diagnostics";
 import { checkUpdateInstallTarget } from "@/lib/release-identity";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 type CheckPhase =
   | "idle"
@@ -58,8 +57,7 @@ const GITHUB_URL = `https://github.com/${GITHUB_REPO}`;
 
 export default function AboutPage() {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const muted = theme.mutedForeground;
 
   const appVersion = resolveAppVersion(Constants);
@@ -252,8 +250,7 @@ function UpdateCard({
   onDownload: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   const busy = phase === "checking" || phase === "downloading";
   // The message is chosen by a pure resolver so the branch that says "you're

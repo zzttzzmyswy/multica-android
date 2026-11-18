@@ -26,9 +26,8 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { isAgentRuntimeBound } from "@/lib/is-agent-runtime-bound";
 import { matchesNameOrPinyin } from "@/lib/name-search";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /**
  * A concrete binding, or `null` for "no target".
@@ -63,8 +62,7 @@ export function AgentSquadPickerModal({
 }) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const [query, setQuery] = useState("");
 
   const { data: agents = [] } = useQuery(agentListOptions(wsId));

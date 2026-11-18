@@ -36,8 +36,6 @@ import { useActorLookup } from "@/data/use-actor-name";
 import { useRunWakeup } from "@/data/queries/run-wakeup";
 import { useTimeAgo } from "@/lib/time-ago";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { summarizeTaskUsage } from "@/lib/task-usage";
 import { useCustomPricingStore } from "@/lib/custom-pricing-store";
 import { canRerunRun } from "@/lib/run-retry";
@@ -49,6 +47,7 @@ import {
   runOutcomeLabel,
 } from "@/lib/task-outcome";
 import { useWakeupText } from "@/lib/use-wakeup-text";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 interface Props {
   task: AgentTask;
@@ -331,8 +330,7 @@ function StatusBadge({ task }: { task: AgentTask }) {
  */
 function TranscriptButton({ onPress }: { onPress: () => void }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   return (
     <Pressable
       onPress={onPress}

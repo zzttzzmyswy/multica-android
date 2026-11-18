@@ -63,8 +63,6 @@ import type { ActorNameState } from "@/lib/actor-name-state";
 import { ActorNameText } from "@/components/ui/actor-name";
 import { useSquadsView, useSquadsViewStore } from "@/data/stores/squads-view-store";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { ActionSheet } from "@/lib/action-sheet";
 import { catalogRead, retryCatalogs } from "@/lib/catalog-read";
@@ -90,6 +88,7 @@ import {
   type SquadSortField,
   type SquadsScope,
 } from "@/lib/filter-squads";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 const SORT_LABEL_KEY: Record<SquadSortField, string> = {
   name: "squads.list.sortField.name",
@@ -98,12 +97,12 @@ const SORT_LABEL_KEY: Record<SquadSortField, string> = {
 };
 
 export default function SquadsPage() {
+  const palette = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const user = useAuthStore((s) => s.user);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
   const { resolveActorName } = useActorLookup();
 
   const { data, isLoading, error, refetch, isRefetching } = useQuery(
@@ -496,8 +495,7 @@ function SquadFilterChip({
   onClear: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const active = activeCount > 0;
 
   return (
@@ -556,9 +554,9 @@ function SquadSortChip({
   sortDirection: SquadSortDirection;
   onChange: (field: SquadSortField, direction: SquadSortDirection) => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
 
   const options: {
     field: SquadSortField;
@@ -749,9 +747,9 @@ function SquadRow({
   onPress: () => void;
   onArchive: () => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
   const archived = isSquadArchived(squad);
   const count = squadMemberCount(squad);
   const openProfile = useActorProfileStore((s) => s.open);

@@ -55,6 +55,7 @@ import { CodeBlock } from "@/lib/markdown/code-block";
 import { FullscreenPreview } from "@/lib/rich-content/fullscreen-preview";
 import { buildHtmlPreviewDocument } from "@/lib/rich-content/html-preview-doc";
 import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 const PREVIEW_HEIGHT_PX = 300;
 const ERROR_HEIGHT_PX = 80;
@@ -276,7 +277,7 @@ function IconButton({
   accessibilityLabel: string;
   onPress: () => void;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   return (
     <Pressable
       onPress={onPress}
@@ -285,7 +286,7 @@ function IconButton({
       accessibilityLabel={accessibilityLabel}
       className="rounded p-0.5 active:opacity-70"
     >
-      <Ionicons name={icon} size={15} color={THEME[colorScheme].mutedForeground} />
+      <Ionicons name={icon} size={15} color={palette.mutedForeground} />
     </Pressable>
   );
 }
@@ -299,7 +300,7 @@ function ActionButton({
   label: string;
   onPress: () => void;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   return (
     <Pressable
       onPress={onPress}
@@ -308,7 +309,7 @@ function ActionButton({
       accessibilityLabel={label}
       className="flex-row items-center gap-1 rounded-md border border-border px-2 py-1 active:opacity-80"
     >
-      <Ionicons name={icon} size={14} color={THEME[colorScheme].foreground} />
+      <Ionicons name={icon} size={14} color={palette.foreground} />
       <Text className="text-caption text-foreground">{label}</Text>
     </Pressable>
   );

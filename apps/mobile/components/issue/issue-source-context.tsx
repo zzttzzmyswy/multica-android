@@ -35,8 +35,6 @@ import type { Issue } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { countLabelKey } from "@/lib/actor-profile";
 import {
   changeReasonLabelKey,
@@ -44,11 +42,11 @@ import {
   sourceContextIdentifier,
   sourceContextTarget,
 } from "@/lib/source-context";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export function IssueSourceContextBanner({ issue }: { issue: Issue }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
 
   // Same test the tests and the author side use. A local `if
