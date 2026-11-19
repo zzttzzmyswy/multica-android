@@ -54,7 +54,6 @@ import { useTranslation } from "@/lib/i18n/react";
 import { CodeBlock } from "@/lib/markdown/code-block";
 import { FullscreenPreview } from "@/lib/rich-content/fullscreen-preview";
 import { buildHtmlPreviewDocument } from "@/lib/rich-content/html-preview-doc";
-import { THEME } from "@/lib/theme";
 import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 const PREVIEW_HEIGHT_PX = 300;
@@ -82,6 +81,12 @@ export function HtmlAttachmentPreview({
   source,
 }: Props) {
   const { isDarkColorScheme } = useColorScheme();
+  // Inline colours must go through the palette, not `THEME[scheme]`: the
+  // high-contrast switch only reaches `className` through the stylesheet, so an
+  // inline read here would leave this icon dim while the text beside it
+  // darkened. That is the "half the screen changed" symptom the rest of this
+  // file already avoids (`IconButton` below does the same).
+  const palette = useThemePalette();
   const { t } = useTranslation();
   const [mode, setMode] = useState<"preview" | "source">("preview");
   const [fullscreen, setFullscreen] = useState(false);
@@ -115,7 +120,7 @@ export function HtmlAttachmentPreview({
     return (
       <View className="bg-card border border-border rounded-lg px-3 py-2" style={{ minHeight: ERROR_HEIGHT_PX }}>
         <View className="flex-row items-center gap-2">
-          <Ionicons name="document-outline" size={18} color={THEME[isDarkColorScheme ? "dark" : "light"].mutedForeground} />
+          <Ionicons name="document-outline" size={18} color={palette.mutedForeground} />
           <Text className="flex-1 text-body text-muted-foreground" numberOfLines={1}>
             {filename}
           </Text>

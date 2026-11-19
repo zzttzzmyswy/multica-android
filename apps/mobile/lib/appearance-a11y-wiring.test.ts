@@ -249,3 +249,34 @@ describe("the setting is reachable and persisted", () => {
     }
   });
 });
+
+describe("no surface reads a base token inline past the palette", () => {
+  it("routes every inline colour through useThemePalette", () => {
+    // Symptom if missing: the high-contrast switch recolours `className` text
+    // (via `.contrast-more`) and every inline colour that goes through
+    // `useThemePalette`, but an inline `THEME[scheme].mutedForeground` keeps
+    // its base value — so one icon in a darkened row stays dim. On a phone
+    // that reads as a rendering bug, not as a preference.
+    //
+    // `THEME` may still be referenced for its TYPE (`typeof THEME["light"]`)
+    // and inside `lib/theme.ts` itself; what is banned is reading a COLOUR
+    // out of it.
+    //
+    // The match must catch BOTH shapes the defect took: a direct
+    // `THEME[scheme].token` read, and the aliased `const theme = THEME[...]`
+    // followed by `theme.token`. Anchoring on the bracket expression rather
+    // than on a `.token` suffix covers the second — which is how one of the
+    // two real bypasses was written, and a `.`-suffixed pattern missed it.
+    // The two lookbehinds drop the type-only form and `NAV_THEME[`.
+    const readsBaseToken = /(?<!typeof\s)(?<![A-Za-z0-9_$])THEME\s*\[/;
+    const offenders = sources()
+      .filter((entry) => entry.rel !== "lib/theme.ts")
+      .filter((entry) => !entry.rel.startsWith("lib/appearance-a11y"))
+      .filter((entry) => readsBaseToken.test(entry.body))
+      .map((entry) => entry.rel);
+    expect(
+      offenders,
+      "these files read a colour out of THEME[] inline, bypassing high contrast",
+    ).toEqual([]);
+  });
+});

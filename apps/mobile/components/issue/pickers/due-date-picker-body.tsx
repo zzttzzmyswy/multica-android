@@ -29,14 +29,13 @@ import DateTimePicker, {
   DateTimePickerAndroid,
 } from "@react-native-community/datetimepicker";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { useColorScheme } from "nativewind";
 import { Text } from "@/components/ui/text";
 import {
   toDateOnly,
   dateOnlyToLocalDate,
 } from "@multica/core/issues/date";
 import { formatIssueDate } from "@/lib/format-date";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
 
 interface Props {
@@ -101,7 +100,10 @@ function AndroidDateRow({
 }) {
   const { t } = useTranslation();
   const intlLocale = useIntlLocale();
-  const theme = THEME[useColorScheme().colorScheme ?? "light"];
+  // Palette, not `THEME[scheme]`: this icon sits in a row whose border and
+  // text gain contrast from the high-contrast class, so an inline base-token
+  // read would leave the calendar glyph dimmer than everything around it.
+  const theme = useThemePalette();
   const iso = toDateOnly(draft);
 
   return (
