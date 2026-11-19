@@ -33,9 +33,8 @@ import { useIssueStatuses } from "@/data/queries/issue-statuses";
 import { issueDuplicatesOptions } from "@/data/queries/issues";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { isDuplicateIssue } from "@/lib/issue-duplicates";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /**
  * Banner above a duplicate's title.
@@ -62,8 +61,7 @@ export function IssueDuplicateBanner({
   unmarking?: boolean;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const statuses = useIssueStatuses();
   // Same test the section and the marker use. A local `if (!issue.duplicate_of)`
@@ -226,8 +224,7 @@ export function IssueDuplicateOfMarker({
   className?: string;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   // Read from the store rather than taken as a prop: this marker is mounted by
   // four list surfaces and only one of them threads a slug through, so a prop
   // would mean widening three signatures that have nothing to do with the

@@ -45,8 +45,7 @@ import { useNewIssueDraftStore } from "@/data/stores/new-issue-draft-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { formatPropertyValue, propertyTypeIcon } from "@/lib/issue-properties";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /** Short, single-line echo of a property value for a chip. */
 function chipValueLabel(
@@ -84,8 +83,7 @@ export function CreateFormPropertyRow() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const catalog = useActivePropertyCatalog(wsId);
   const values = useNewIssueDraftStore((s) => s.propertyValues);
 
@@ -195,8 +193,7 @@ function AttributeRowButton({
   onPress: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   return (
     <AttributeChip
       icon={

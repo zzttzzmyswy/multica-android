@@ -25,6 +25,11 @@ import { maybeRenewSession, renewSessionNow } from "@/lib/session-renewal";
 import { NAV_THEME } from "@/lib/theme";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { useFontScale } from "@/data/stores/type-appearance-store";
+import { useAppearanceA11yStore } from "@/data/stores/appearance-a11y-store";
+import {
+  useSystemHighContrast,
+  useSystemMotionWatch,
+} from "@/lib/appearance-a11y-runtime";
 import { markBootComplete, markBootStep } from "@/lib/boot-diagnostics";
 import { FatalErrorBoundary } from "@/components/fatal-error-boundary";
 
@@ -122,6 +127,22 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/**
+ * The root's `contrast-more` class name (MYS-2950).
+ *
+ * A hook rather than an inline expression so the two inputs (the app switch
+ * and the device setting) are read in one place, with the same union rule
+ * `useAppearanceA11y` applies to the inline palette. Returns `undefined`
+ * rather than `""` when off: NativeWind treats an empty className as a lookup
+ * that matches nothing, which is harmless but shows up as an unknown-class
+ * warning in development.
+ */
+function useHighContrastClass(): string | undefined {
+  const user = useAppearanceA11yStore((s) => s.highContrast);
+  const system = useSystemHighContrast();
+  return user || system === true ? "contrast-more" : undefined;
+}
+
 export default function RootLayout() {
   const { colorScheme, isDarkColorScheme } = useColorScheme();
   // Appearance font size (MYS-2931). NativeWind's `vars()` turns this object
@@ -141,6 +162,18 @@ export default function RootLayout() {
     () => (fontScale === null ? undefined : vars({ "--font-scale": fontScale })),
     [fontScale],
   );
+  // Reduce motion / high contrast (MYS-2950).
+  //
+  // The device watch is started here rather than in each animation: it is one
+  // set of native listeners for the whole process, reading
+  // `AccessibilityInfo` once and following its change events, so every
+  // consumer sees the same answer at the same moment.
+  useSystemMotionWatch();
+  // The high-contrast answer is the union of the app switch and Android's
+  // "high contrast text", exactly as reduce-motion is — an app switch that is
+  // merely off must not override an OS-level accessibility setting. The hook
+  // below reads both halves and returns the class name.
+  const highContrastClass = useHighContrastClass();
   // Reaching the first render means module eval + provider construction all
   // succeeded, so the marker can be cleared: the next cold start will not
   // report this boot as a failure.
@@ -164,7 +197,14 @@ export default function RootLayout() {
           looked wired and did nothing, which is exactly what the device
           showed before this View was added. */}
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <View style={[{ flex: 1 }, appearanceVars]}>
+        {/* `contrast-more` is the stylesheet half of MYS-2950: `global.css`
+            carries `.contrast-more:root` and `.contrast-more.dark:root` with
+            the raised `--muted-foreground` / `--border` / `--input` values, so
+            the ~2200 className call sites follow the setting with no change to
+            any of them. The inline-style half cannot be reached by a CSS
+            variable and reads `applyHighContrast()` instead. Both are driven
+            by the same store field, so they cannot disagree. */}
+        <View style={[{ flex: 1 }, appearanceVars]} className={highContrastClass}>
           <SafeAreaProvider>
           <KeyboardProvider>
             <QueryClientProvider client={queryClient}>

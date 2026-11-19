@@ -40,8 +40,7 @@ import {
 } from "@/lib/integration-bind";
 import { keyboardBehavior } from "@/lib/keyboard";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 interface FieldSpec {
   name: string;
@@ -132,8 +131,7 @@ export function ChannelByoDialog({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const insets = useSafeAreaInsets();
 
   const [values, setValues] = useState<ByoFormValues>({});

@@ -99,14 +99,13 @@ import {
   type AutopilotSortField,
 } from "@/lib/filter-autopilots";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { ActionSheet } from "@/lib/action-sheet";
 import { catalogRead, retryCatalogs } from "@/lib/catalog-read";
 import { pauseStatusLabelKey } from "@/lib/autopilot-pause";
 import { aggregateCatalogState } from "@/lib/catalog-state";
 import type { CatalogState } from "@/lib/catalog-state";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 // Server-driven enum: unknown statuses degrade to the neutral pill (the
 // backend is the gate; a future value must not collapse the list).
@@ -232,11 +231,11 @@ export const useAutopilotMobileViewStore = create<AutopilotMobileViewState>()(
 );
 
 export default function AutopilotsPage() {
+  const palette = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
 
   const { data, isLoading, error, refetch, isRefetching } = useQuery(
     autopilotListOptions(wsId),
@@ -678,9 +677,9 @@ function AutopilotFilterChip({
   activeCount: number;
   onPress: () => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
   const active = activeCount > 0;
 
   return (
@@ -697,12 +696,12 @@ function AutopilotFilterChip({
       <Ionicons
         name="filter"
         size={14}
-        color={active ? THEME[colorScheme].primaryForeground : muted}
+        color={active ? palette.primaryForeground : muted}
       />
       {active ? (
         <Text
           className="text-caption font-medium tabular-nums"
-          style={{ color: THEME[colorScheme].primaryForeground }}
+          style={{ color: palette.primaryForeground }}
         >
           {activeCount}
         </Text>
@@ -722,9 +721,9 @@ function AutopilotSortChip({
   sortDirection: AutopilotSortDirection;
   onChange: (field: AutopilotSortField, direction: AutopilotSortDirection) => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
 
   const options: {
     field: AutopilotSortField;
@@ -975,8 +974,7 @@ function AutopilotRow({
   canWrite: boolean;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const muted = theme.mutedForeground;
   const timeAgo = useTimeAgo();
   const pill = rowStatusPill(autopilot);
@@ -1140,9 +1138,9 @@ function TemplateCard({
   tpl: AutopilotTemplate;
   onPress: () => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
   const icon = TEMPLATE_ICONS[tpl.id];
 
   return (

@@ -63,9 +63,8 @@ import {
 } from "@/lib/squad-guards";
 import { catalogRead, recordRead } from "@/lib/catalog-read";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 // Server-driven member status buckets — unknown/null (human members) render
 // a neutral dot; a future server value can't collapse the roster.
@@ -91,8 +90,7 @@ export default function SquadDetailPage() {
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const user = useAuthStore((s) => s.user);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   const detail = useQuery(squadDetailOptions(wsId, id));
   const membersQ = useQuery(squadMemberListOptions(wsId, id));
@@ -687,8 +685,7 @@ function MemberRow({
   onPress: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const openProfile = useActorProfileStore((s) => s.open);
   const statusValue = member.member_type === "agent" ? status?.status ?? null : null;
   const statusLabel = statusValue ? STATUS_LABEL[statusValue] ?? null : null;

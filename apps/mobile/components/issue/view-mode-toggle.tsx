@@ -18,9 +18,8 @@ import { Pressable, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import type { IssueViewMode } from "@/data/stores/issue-filter-slice";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 const OPTIONS: {
   value: IssueViewMode;
@@ -62,8 +61,8 @@ export function ViewModeToggle({
   view: IssueViewMode;
   onChange: (view: IssueViewMode) => void;
 }) {
-  const { colorScheme } = useColorScheme();
   const { t } = useTranslation();
+  const palette = useThemePalette();
   return (
     <View
       className="flex-row items-center rounded-lg border border-border bg-secondary/40 p-0.5"
@@ -72,8 +71,8 @@ export function ViewModeToggle({
       {OPTIONS.map((opt) => {
         const active = view === opt.value;
         const color = active
-          ? THEME[colorScheme].foreground
-          : THEME[colorScheme].mutedForeground;
+          ? palette.foreground
+          : palette.mutedForeground;
         return (
           <Pressable
             key={opt.value}

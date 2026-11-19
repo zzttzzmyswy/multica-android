@@ -36,9 +36,8 @@ import { CatalogEmptySlot, CatalogStatus } from "@/components/catalog/catalog-st
 import { handoffStepCount } from "@/lib/workflow";
 import { workflowsProjectNames } from "@/lib/project-workflow";
 import type { WorkflowReadState } from "@/lib/workflow-status-scope";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import { useTranslation } from "@/lib/i18n/react";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export interface WorkflowPickerBodyProps {
   workflows: readonly IssueWorkflow[] | undefined;
@@ -63,8 +62,7 @@ export function WorkflowPickerBody({
   onRetry,
 }: WorkflowPickerBodyProps) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const separator = t("workflow.listSeparator");
 
   // `state` decides, never `workflows.length`: an empty list from a FAILED read

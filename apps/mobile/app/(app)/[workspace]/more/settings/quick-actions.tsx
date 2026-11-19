@@ -46,16 +46,14 @@ import { formatDateTime } from "@/lib/autopilot-format";
 import { filterQuickActions, isStaleQuickAction } from "@/lib/quick-actions";
 import { useTranslation } from "@/lib/i18n/react";
 import { quickActionTargetState } from "@/lib/quick-action-target";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { scaledByChoice } from "@/lib/type-appearance";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 import { useFontScale } from "@/data/stores/type-appearance-store";
 
 function VisibilityBadge({ action }: { action: QuickAction }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   if (action.visibility === "public") {
     return (
@@ -86,8 +84,7 @@ function VisibilityBadge({ action }: { action: QuickAction }) {
 
 function TargetLine({ action }: { action: QuickAction }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   // The order matters and lives in `quickActionTargetState`: an empty
   // `assignee_type` means "mention nobody", which the server reports as a
@@ -137,8 +134,7 @@ export default function QuickActionsPage() {
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const user = useAuthStore((s) => s.user);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   const { data: members = [] } = useQuery(memberListOptions(wsId));
   const currentMember = members.find((m) => m.user_id === user?.id) ?? null;
@@ -365,8 +361,7 @@ function QuickActionRow({
   onDelete: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const muted = theme.mutedForeground;
   const stale = isStaleQuickAction(action);
   const archived = action.status !== "active";

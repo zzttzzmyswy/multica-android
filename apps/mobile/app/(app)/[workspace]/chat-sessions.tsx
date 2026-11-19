@@ -44,18 +44,17 @@ import {
   unreadBadgeText,
 } from "@/lib/chat-thread-display";
 import { cn } from "@/lib/utils";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
 import { catalogRead } from "@/lib/catalog-read";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 import { CatalogStatus } from "@/components/catalog/catalog-status";
 
 export default function ChatSessionsRoute() {
+  const palette = useThemePalette();
   const { t } = useTranslation();
   // Subscribes, so a language switch re-renders the row timestamps below.
   const intlLocale = useIntlLocale();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const sessionsRead = catalogRead(useQuery(chatSessionsOptions(wsId)));
   const sessions = sessionsRead.items;

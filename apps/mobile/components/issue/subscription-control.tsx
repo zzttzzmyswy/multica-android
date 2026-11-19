@@ -41,10 +41,9 @@ import {
 import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { ActionSheet } from "@/lib/action-sheet";
 import { deriveSubscription } from "@/lib/subscription";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 import { SubscriberPickerSheet } from "./subscriber-picker-sheet";
 
 const AVATAR_OVERFLOW = 4;
@@ -61,8 +60,7 @@ export function SubscriptionControl({ issueId, childCount }: Props) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const subscribersQuery = useQuery(issueSubscribersOptions(wsId, issueId));

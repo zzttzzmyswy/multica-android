@@ -72,9 +72,8 @@ import {
   workflowListState,
 } from "@/lib/workflow-editor";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export default function WorkflowsScreen() {
   const { t } = useTranslation();
@@ -90,8 +89,7 @@ export default function WorkflowsScreen() {
 
 function WorkflowsList({ wsSlug }: { wsSlug: string | undefined }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   const { workflows, state, refetch } = useIssueWorkflows(wsId);
@@ -280,8 +278,7 @@ function WorkflowRow({
   deleting: boolean;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const blocked = deleteBlocked({ workflow });
   const usage = usageProjectIds(workflow, projects);
   const handoffs = handoffStepCount(workflow);

@@ -55,8 +55,8 @@ import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/react";
 import { NO_VALUE_KEY } from "@/lib/issue-facet-counts";
-import { useColorScheme as useSystemColorScheme } from "@/lib/use-color-scheme";
 import { scaledByChoice } from "@/lib/type-appearance";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 import { useFontScale } from "@/data/stores/type-appearance-store";
 
 /** One row rendered by `FilterPropertyPickerBody` — a filterable property
@@ -111,7 +111,7 @@ function SearchBox({
   onChange: (text: string) => void;
   placeholder: string;
 }) {
-  const { colorScheme } = useSystemColorScheme();
+  const palette = useThemePalette();
   return (
     <View className="px-4 pt-2 pb-1">
       <View
@@ -120,13 +120,13 @@ function SearchBox({
         <Ionicons
           name="search"
           size={16}
-          color={THEME[colorScheme].mutedForeground}
+          color={palette.mutedForeground}
         />
         <TextInput
           value={value}
           onChangeText={onChange}
           placeholder={placeholder}
-          placeholderTextColor={THEME[colorScheme].mutedForeground}
+          placeholderTextColor={palette.mutedForeground}
           autoCapitalize="none"
           autoCorrect={false}
           className="flex-1 text-body text-foreground py-0"
@@ -137,7 +137,7 @@ function SearchBox({
             <Ionicons
               name="close-circle"
               size={16}
-              color={THEME[colorScheme].mutedForeground}
+              color={palette.mutedForeground}
             />
           </Pressable>
         ) : null}
@@ -714,8 +714,7 @@ function ScalarPropertyFilterBody({
   fixedIds?: ReadonlySet<string>;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useSystemColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   // Text size (MYS-2931): this body's numeric input sets fontSize inline (a
   // TextInput cannot use the `text-*` steps), so it reads the scale directly.
   const fontScale = useFontScale();

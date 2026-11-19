@@ -23,8 +23,6 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import type { RuntimeDevice } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { runtimeRowLabel } from "@/lib/runtime-machines";
 import { runtimeAccessScope } from "@/lib/runtime-access";
@@ -38,6 +36,7 @@ import {
   pickerMachines,
   type RuntimeFilter,
 } from "@/lib/runtime-picker";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 interface Props {
   visible: boolean;
@@ -76,8 +75,7 @@ export function RuntimePickerSheet({
   onClose,
 }: Props) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const muted = theme.mutedForeground;
 
   const [search, setSearch] = useState("");

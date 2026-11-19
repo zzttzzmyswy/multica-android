@@ -51,8 +51,6 @@ import {
   useEditWakeupInstruction,
   useTriggerIssueWakeup,
 } from "@/data/mutations/issue-wakeups";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
 import {
   isFutureWakeupTime,
@@ -60,6 +58,7 @@ import {
   wakeupInstructionErrorKey,
   type WakeupControlState,
 } from "@/lib/wakeup-controls";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /**
  * Wakeup failures are reported by the QueryClient's MutationCache, from the
@@ -346,8 +345,7 @@ function SheetAction({
   disabled?: boolean;
   destructive?: boolean;
 }) {
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   return (
     <Pressable
       onPress={onPress}
@@ -695,9 +693,8 @@ function TimeField({
   accessibilityLabel: string;
   onChange: (next: Date) => void;
 }) {
-  const { colorScheme } = useColorScheme();
   const { t } = useTranslation();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const intlLocale = useIntlLocale();
   const [open, setOpen] = useState(false);
   const label =

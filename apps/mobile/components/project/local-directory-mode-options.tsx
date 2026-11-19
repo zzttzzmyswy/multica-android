@@ -11,10 +11,9 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import type { LocalDirectoryExecutionMode } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import type { WorktreeUnsupportedInfo } from "@/lib/project-resources";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export function LocalDirectoryModeOptions({
   value,
@@ -61,8 +60,7 @@ export function LocalDirectoryModeOptions({
 
 export function ModeErrorNotice({ error }: { error: WorktreeUnsupportedInfo }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   return (
     <View className="flex-row items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2">
       <Ionicons name="warning-outline" size={13} color={theme.destructive} />
@@ -108,8 +106,7 @@ function ModeOption({
   selected: boolean;
   onPress: () => void;
 }) {
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   return (
     <Pressable
       onPress={onPress}

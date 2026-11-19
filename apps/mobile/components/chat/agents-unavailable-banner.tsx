@@ -21,13 +21,11 @@ import { Pressable, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Text } from "@/components/ui/text";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export function AgentsUnavailableBanner({ onRetry }: { onRetry: () => void }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   return (
     <View className="mx-3 mt-2 mb-1 rounded-xl border border-border bg-secondary/50 px-3 py-2">

@@ -28,6 +28,7 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
+import { motionDuration, useReducedMotion } from "@/lib/appearance-a11y-runtime";
 
 export function HighlightOverlay({
   active,
@@ -41,15 +42,26 @@ export function HighlightOverlay({
   /** Extra layout, e.g. the rounded corners a card-shaped surface needs. */
   style?: StyleProp<ViewStyle>;
 }) {
+  const reduceMotion = useReducedMotion();
   const progress = useSharedValue(0);
 
   useEffect(() => {
     if (!active) return;
+    // Reduced motion (MYS-2950): keep the flash, drop the fade. A zero-length
+    // `withTiming` still runs its completion, so the sequence settles at 0 the
+    // same way it does with the fades — the reader still sees WHERE the find
+    // landed (the overlay is on screen for the whole hold), they just do not
+    // get a 700ms fade in and out. The hold is kept at full length on purpose:
+    // removing the fade must not also shorten how long the highlight is there,
+    // which is the part carrying the information.
     progress.value = withSequence(
-      withTiming(1, { duration: 700 }),
-      withDelay(1800, withTiming(0, { duration: 700 })),
+      withTiming(1, { duration: motionDuration(700, reduceMotion) }),
+      withDelay(
+        motionDuration(1800, reduceMotion),
+        withTiming(0, { duration: motionDuration(700, reduceMotion) }),
+      ),
     );
-  }, [active, progress]);
+  }, [active, progress, reduceMotion]);
 
   const animated = useAnimatedStyle(() => ({ opacity: progress.value }));
 

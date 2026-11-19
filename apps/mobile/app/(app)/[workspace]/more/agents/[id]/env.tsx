@@ -45,8 +45,7 @@ import { CatalogStatus } from "@/components/catalog/catalog-status";
 import type { EnvParseError } from "@/lib/env-file";
 import { formatEnvFile, parseEnvFileResult } from "@/lib/env-file";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 let nextEnvId = 0;
 function freshId() {
@@ -76,8 +75,7 @@ export default function AgentEnvPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const qc = useQueryClient();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   const agents = useQuery(agentListAllOptions(wsId));

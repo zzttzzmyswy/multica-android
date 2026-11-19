@@ -36,15 +36,13 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { propertyTypeIcon } from "@/lib/issue-properties";
 import { keyboardBehavior } from "@/lib/keyboard";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export default function NewIssuePropertyRoute() {
   const { propertyId } = useLocalSearchParams<{ propertyId: string }>();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   const catalog = useActivePropertyCatalog(wsId);
   const property = catalog.definitions.find((p) => p.id === propertyId);

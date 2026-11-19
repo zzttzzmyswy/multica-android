@@ -137,8 +137,6 @@ import { useStatusHandoffLabel } from "@/components/issue/handoff-hint";
 import { projectListOptions } from "@/data/queries/projects";
 import { translate } from "@/lib/i18n";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { ActionSheet } from "@/lib/action-sheet";
 import { useUpdateIssue } from "@/data/mutations/issues";
 import { useHandoffGate } from "@/data/use-handoff-gate";
@@ -171,6 +169,7 @@ import {
   type LaneFrame,
   type RowFrame,
 } from "@/lib/board-drag";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 import { BoardCard, BOARD_COLUMN_WIDTH } from "./board-card";
 
 /** Card row wrapper's horizontal padding (`px-2`) — one side. */
@@ -330,9 +329,9 @@ function ColumnHeader({
    *  (web board-column.tsx:119-122). */
   statusFixedByView?: boolean;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
   const { resolveActorName } = useActorLookup();
-  const { colorScheme } = useColorScheme();
   const statusLabel = useStatusLabel();
   let leading: React.ReactNode = null;
   let label = "";
@@ -399,7 +398,7 @@ function ColumnHeader({
           <Ionicons
             name="add"
             size={15}
-            color={THEME[colorScheme].mutedForeground}
+            color={palette.mutedForeground}
           />
         </Pressable>
       ) : null}
@@ -420,7 +419,7 @@ function ColumnHeader({
           <Ionicons
             name="eye-off-outline"
             size={15}
-            color={THEME[colorScheme].mutedForeground}
+            color={palette.mutedForeground}
           />
         </Pressable>
       ) : null}
@@ -445,10 +444,10 @@ function HiddenColumnsLane({
   statuses: IssueStatus[];
   onShowStatus: (status: IssueStatus) => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
   const statusLabel = useStatusLabel();
-  const dim = THEME[colorScheme].mutedForeground;
+  const dim = palette.mutedForeground;
 
   return (
     <View

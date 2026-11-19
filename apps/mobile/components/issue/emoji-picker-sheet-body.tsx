@@ -14,8 +14,7 @@ import { View } from "react-native";
 import { router } from "expo-router";
 import { EmojiKeyboard, type EmojiType } from "rn-emoji-keyboard";
 import { Text } from "@/components/ui/text";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /**
  * The fields the toggle decision reads. `Reaction` (comments) and
@@ -45,7 +44,6 @@ export function EmojiPickerSheetBody<T extends ReactionLike>({
   currentUserId,
   onSelect,
 }: Props<T>) {
-  const { colorScheme } = useColorScheme();
 
   const handleSelect = useCallback(
     (picked: EmojiType) => {
@@ -61,7 +59,7 @@ export function EmojiPickerSheetBody<T extends ReactionLike>({
     [reactions, currentUserId, onSelect],
   );
 
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   return (
     <View className="flex-1">

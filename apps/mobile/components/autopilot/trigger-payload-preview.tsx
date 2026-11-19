@@ -18,13 +18,12 @@ import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Text } from "@/components/ui/text";
-import { THEME } from "@/lib/theme";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import { useTranslation } from "@/lib/i18n/react";
 import {
   parseTriggerPayload,
   type TriggerPayloadView,
 } from "@/lib/trigger-payload";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 interface TriggerPayloadPreviewProps {
   /** The run's trigger_payload (a WebhookEnvelope on the happy path). */
@@ -38,8 +37,7 @@ export function TriggerPayloadPreview({
   defaultOpen = false,
 }: TriggerPayloadPreviewProps) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const [open, setOpen] = useState(defaultOpen);
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -136,8 +134,7 @@ export function TriggerPayloadPreview({
 
 /** Loading skeleton for the lazily-fetched run payload. */
 export function TriggerPayloadSkeleton() {
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   return (
     <View className="rounded-lg border border-border bg-background px-3 py-3">
       <ActivityIndicator size="small" color={theme.mutedForeground} />

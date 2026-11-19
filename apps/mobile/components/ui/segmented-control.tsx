@@ -12,9 +12,8 @@
 import { Pressable, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Text } from "@/components/ui/text";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export interface SegmentedOption<T extends string> {
   value: T;
@@ -41,8 +40,7 @@ export function SegmentedControl<T extends string>({
   onChange: (value: T) => void;
   className?: string;
 }) {
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   return (
     <View
       className={cn(

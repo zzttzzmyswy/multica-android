@@ -19,16 +19,30 @@
  *     picker would offer families the device does not have and every choice
  *     would render as the system face.
  *   - **Code font / ligatures.** Same: no bundled mono faces.
- *   - **Density and reduced motion.** RN has no density token, and motion is
- *     already governed by the OS setting.
+ *   - **Density.** RN has no density token; row height is layout, so a ported
+ *     control would move nothing.
  *
- * The two that DO have a real mobile meaning are here: size (glyphs are
- * small on a phone and the reader cannot lean in) and line spacing (CJK
- * prose at 1.71 leading reads tight on a narrow column).
+ * Four have a real mobile meaning and are here: size (glyphs are small on a
+ * phone and the reader cannot lean in), line spacing (CJK prose at 1.71
+ * leading reads tight on a narrow column), **reduce motion** and **high
+ * contrast** (MYS-2950).
  *
- * Both are device-scoped and apply at once — the screen is its own preview,
- * which is how web's page works too ("Every change applies at once, so the
- * page itself is the preview").
+ * The last two were refused by iteration 296 under the same heading as the
+ * theme gallery — "motion is already governed by the OS setting". That was
+ * wrong in a way worth recording, because it is the difference between a
+ * courtesy and an accommodation: the OS setting is the *floor*, not the whole
+ * answer. Web ANDs its own switch with the system preference
+ * (`store.reduceMotion || systemReducedMotion()`) precisely so a person can
+ * ask for less motion on a phone that has not been configured globally, and
+ * so a phone-level choice is never silently overridden by an app toggle. Both
+ * directions are implemented here, plus the third state neither the switch nor
+ * the OS could express on its own — "the system is holding this down, so this
+ * control cannot turn it off" — which is what stops the row from reading
+ * "off" while nothing animates.
+ *
+ * All four are device-scoped and apply at once — the screen is its own
+ * preview, which is how web's page works too ("Every change applies at once,
+ * so the page itself is the preview").
  */
 import { Pressable, ScrollView, View } from "react-native";
 import { Stack } from "expo-router";
@@ -36,8 +50,6 @@ import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { SegmentedControl } from "@/components/ui/segmented-control";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
 import {
   CONTENT_LEADINGS,
@@ -48,6 +60,8 @@ import {
   type FontSizeChoice,
 } from "@/lib/type-appearance";
 import { useTypeAppearanceStore } from "@/data/stores/type-appearance-store";
+import { useAppearanceA11yStore } from "@/data/stores/appearance-a11y-store";
+import { useAppearanceA11y, useReducedMotionRow, useSystemHighContrast, useSystemReduceMotion, useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /**
  * The rungs as the segmented control sees them.
@@ -62,8 +76,7 @@ const SIZE_VALUES: { value: string; choice: FontSizeChoice }[] = FONT_SIZES.map(
 );
 
 export default function TextAppearanceScreen() {
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const { t } = useTranslation();
   const fontSize = useTypeAppearanceStore((s) => s.fontSize);
   const contentLeading = useTypeAppearanceStore((s) => s.contentLeading);
@@ -71,6 +84,24 @@ export default function TextAppearanceScreen() {
   const setContentLeading = useTypeAppearanceStore((s) => s.setContentLeading);
   const reset = useTypeAppearanceStore((s) => s.reset);
   const followSystem = fontSize === FOLLOW_SYSTEM;
+
+  // Reduce motion / high contrast (MYS-2950). The row state comes from the
+  // pure rules, not from the store directly, so "the system is on" renders as
+  // checked-and-locked rather than as whatever the app switch happens to say.
+  const motionRow = useReducedMotionRow();
+  const systemReduceMotion = useSystemReduceMotion();
+  const setReduceMotion = useAppearanceA11yStore((s) => s.setReduceMotion);
+  const setHighContrast = useAppearanceA11yStore((s) => s.setHighContrast);
+  const resetA11y = useAppearanceA11yStore((s) => s.reset);
+  const userHighContrast = useAppearanceA11yStore((s) => s.highContrast);
+  const systemHighContrast = useSystemHighContrast();
+  // Same union as motion: an OS-level contrast setting is not overridable by
+  // an app switch that is merely off.
+  const highContrastChecked = userHighContrast || systemHighContrast === true;
+  const highContrastLocked = systemHighContrast === true;
+  // The palette the preview below paints with, so turning the switch on shows
+  // its effect immediately on the sample text rather than after a navigation.
+  const { theme: liveTheme } = useAppearanceA11y();
 
   const sizeLabel = (size: FontSizeChoice): string =>
     size === FOLLOW_SYSTEM
@@ -89,11 +120,20 @@ export default function TextAppearanceScreen() {
           cannot both fit otherwise. The sample is the app's own body text
           rather than lorem ipsum: a reader judges the size against the text
           they actually read. */}
-      <View className="rounded-md border border-border bg-card px-4 py-3 gap-1.5">
+      <View
+        className="rounded-md border border-border bg-card px-4 py-3 gap-1.5"
+        // The inline muted colour is what the high-contrast switch changes, so
+        // the sample below it has to read from the same palette or the switch
+        // would only take effect after leaving this screen.
+        style={{ borderColor: liveTheme.border }}
+      >
         <Text className="text-body text-foreground">
           {t("settings.appearance.typeSample")}
         </Text>
-        <Text className="text-label text-muted-foreground">
+        <Text
+          className="text-label text-muted-foreground"
+          style={{ color: liveTheme.mutedForeground }}
+        >
           {t("settings.appearance.typeSampleMeta", {
             size: fontSize === FOLLOW_SYSTEM ? t("settings.appearance.fontSizeSystemShort") : fontSize,
           })}
@@ -184,11 +224,73 @@ export default function TextAppearanceScreen() {
         </View>
       </Section>
 
+      {/* ── Reduce motion (MYS-2950) ───────────────────────────────────────
+          Three states, not two. `motionRow.checked` is the UNION of the switch
+          and the phone's setting, and `locked` means the phone is holding it
+          on — so the row shows "已由系统开启" instead of a switch that reads
+          off while nothing animates. A switch that lies about its effect is
+          worse than no switch: the person taps it twice, sees nothing change,
+          and stops trusting the screen. */}
+      <Section
+        title={t("settings.appearance.motionTitle")}
+        description={t("settings.appearance.motionDescription")}
+      >
+        <ToggleRow
+          checked={motionRow.checked}
+          locked={motionRow.locked}
+          onPress={() => setReduceMotion(!motionRow.checked)}
+          title={t("settings.appearance.motionTitle")}
+          stateLabel={
+            motionRow.source === "system"
+              ? t("settings.appearance.motionSystemOn")
+              : motionRow.checked
+                ? t("settings.appearance.motionOn")
+                : t("settings.appearance.motionOff")
+          }
+          hint={
+            systemReduceMotion
+              ? t("settings.appearance.motionSystemHint")
+              : undefined
+          }
+        />
+      </Section>
+
+      {/* ── High contrast (MYS-2950) ─────────────────────────────────────── */}
+      <Section
+        title={t("settings.appearance.contrastTitle")}
+        description={t("settings.appearance.contrastDescription")}
+      >
+        <ToggleRow
+          checked={highContrastChecked}
+          locked={highContrastLocked}
+          onPress={() => setHighContrast(!highContrastChecked)}
+          title={t("settings.appearance.contrastTitle")}
+          stateLabel={
+            highContrastLocked
+              ? t("settings.appearance.contrastSystemOn")
+              : highContrastChecked
+                ? t("settings.appearance.contrastOn")
+                : t("settings.appearance.contrastOff")
+          }
+          hint={
+            highContrastLocked
+              ? t("settings.appearance.contrastSystemHint")
+              : undefined
+          }
+        />
+      </Section>
+
       <View className="rounded-md border border-border bg-card overflow-hidden">
         <Separator />
         <ResetRow
           label={t("settings.appearance.typeReset")}
           onPress={reset}
+          color={theme.mutedForeground}
+        />
+        <Separator />
+        <ResetRow
+          label={t("settings.appearance.a11yReset")}
+          onPress={resetA11y}
           color={theme.mutedForeground}
         />
       </View>
@@ -217,6 +319,91 @@ function Section({
         {children}
       </View>
     </View>
+  );
+}
+
+/**
+ * A settings switch row (MYS-2950).
+ *
+ * Written here rather than reusing `components/ui/switch` because of the third
+ * state: a LOCKED row must not look tappable and must say why. The primitive
+ * has no such state, and faking it by leaving the switch interactive while
+ * ignoring the tap is exactly the "control that does nothing" defect this
+ * iteration exists to remove.
+ *
+ * The track is drawn with plain Views (the same approach `components/ui/switch`
+ * documents) rather than utility classes on an RN primitive: that file records
+ * a release build where `bg-*` classes on the switch primitive painted nothing
+ * and every switch in the app was invisible. Sizes are numbers for the same
+ * reason.
+ */
+function ToggleRow({
+  checked,
+  locked,
+  onPress,
+  title,
+  stateLabel,
+  hint,
+}: {
+  checked: boolean;
+  locked: boolean;
+  onPress: () => void;
+  title: string;
+  stateLabel: string;
+  hint?: string;
+}) {
+  const { theme } = useAppearanceA11y();
+  const trackWidth = 51;
+  const trackHeight = 31;
+  const thumbSize = 27;
+  const inset = 2;
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={locked}
+      accessibilityRole="switch"
+      accessibilityState={{ checked, disabled: locked }}
+      accessibilityLabel={title}
+      accessibilityHint={hint}
+      className={cn(
+        "flex-row items-center justify-between gap-3 px-4 py-3.5",
+        !locked && "active:bg-secondary",
+      )}
+    >
+      <View className="flex-1">
+        <Text className="text-title-sm text-foreground">{title}</Text>
+        <Text className="text-caption text-muted-foreground mt-0.5">
+          {stateLabel}
+        </Text>
+        {hint ? (
+          <Text className="text-caption text-muted-foreground mt-1">{hint}</Text>
+        ) : null}
+      </View>
+      <View
+        style={{
+          width: trackWidth,
+          height: trackHeight,
+          borderRadius: trackHeight / 2,
+          backgroundColor: checked ? theme.primary : theme.input,
+          paddingHorizontal: inset,
+          justifyContent: "center",
+          // A locked row is dimmed rather than hidden: the person still needs
+          // to see that the setting is ON, they just cannot be the one to turn
+          // it off.
+          opacity: locked ? 0.6 : 1,
+        }}
+      >
+        <View
+          style={{
+            width: thumbSize,
+            height: thumbSize,
+            borderRadius: thumbSize / 2,
+            backgroundColor: theme.background,
+            alignSelf: checked ? "flex-end" : "flex-start",
+          }}
+        />
+      </View>
+    </Pressable>
   );
 }
 

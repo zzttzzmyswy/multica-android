@@ -22,8 +22,7 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Pressable, View } from "react-native";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { motionDuration, useAppearanceA11y } from "@/lib/appearance-a11y-runtime";
 
 interface Props {
   /** Hide the up (jump to top) button. When false the button renders nothing
@@ -58,8 +57,8 @@ export function ScrollJumpControl({
   bottom = 16,
   right = 16,
 }: Props) {
-  const { colorScheme } = useColorScheme();
-  const { primary, primaryForeground } = THEME[colorScheme];
+  const { theme, reduceMotion } = useAppearanceA11y();
+  const { primary, primaryForeground } = theme;
 
   if (!showJumpToTop && !showJumpToBottom) return null;
 
@@ -78,7 +77,7 @@ export function ScrollJumpControl({
       }}
     >
       {showJumpToTop ? (
-        <Animated.View entering={FadeInUp.duration(150)}>
+        <Animated.View entering={FadeInUp.duration(motionDuration(150, reduceMotion))}>
           <Pressable
             onPress={onJumpToTop}
             accessibilityRole="button"
@@ -91,7 +90,7 @@ export function ScrollJumpControl({
         </Animated.View>
       ) : null}
       {showJumpToBottom ? (
-        <Animated.View entering={FadeInDown.duration(150)}>
+        <Animated.View entering={FadeInDown.duration(motionDuration(150, reduceMotion))}>
           <Pressable
             onPress={onJumpToBottom}
             accessibilityRole="button"

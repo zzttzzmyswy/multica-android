@@ -28,22 +28,21 @@ import {
   type IssueFilterScope,
 } from "@/data/stores/issue-filter-store-registry";
 import type { IssueDateFilterValue } from "@/data/stores/issue-filter-slice";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/react";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 type Scope = IssueFilterScope;
 type DateField = IssueDateFilterValue["field"];
 
 export default function IssuesFilterDateRoute() {
+  const palette = useThemePalette();
   const { scope: scopeParam } = useLocalSearchParams<{ scope?: string }>();
   const resolvedScope: Scope = parseFilterScope(scopeParam);
   const { t } = useTranslation();
   const navigation = useNavigation();
-  const { colorScheme } = useColorScheme();
-  const tint = THEME[colorScheme].primary;
-  const muted = THEME[colorScheme].mutedForeground;
+  const tint = palette.primary;
+  const muted = palette.mutedForeground;
 
   const live = issueFilterStoreForScope(resolvedScope).getState();
   const initialFilter = live.dateFilter;

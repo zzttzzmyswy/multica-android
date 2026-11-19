@@ -48,9 +48,8 @@ import { VCSIntegrationSection } from "@/components/settings/vcs-integration-sec
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { getWebBaseUrl } from "@/data/server-config";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 type ChannelKey = "lark" | "slack" | "dingtalk" | "wecom";
 
@@ -68,8 +67,7 @@ export default function IntegrationsPage() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const muted = theme.mutedForeground;
   const [openError, setOpenError] = useState<string | null>(null);
 

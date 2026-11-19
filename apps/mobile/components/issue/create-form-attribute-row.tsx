@@ -52,13 +52,12 @@ import {
   QUICK_CREATE_FIELDS,
 } from "@/data/issue-create-settings-store";
 import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { ActionSheet } from "@/lib/action-sheet";
 import {
   overflowFields,
   visibleFields,
 } from "@/lib/issue-create-field-visibility";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /** Picker fields the new-issue draft form can open. Bound to a typed map
  *  of Expo Router pathnames so typos become compile errors (previously
@@ -132,13 +131,13 @@ export function CreateFormAttributeRow({
   mode,
   parentIssueId,
 }: Props) {
+  const palette = useThemePalette();
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const settings = useIssueCreateSettings(mode ? wsId : null);
   const { t } = useTranslation();
   const intlLocale = useIntlLocale();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
   const statusLabel = useStatusLabel(wsId);
   const status = useNewIssueDraftStore((s) => s.status);
   const statusEntry = useIssueStatuses(wsId).entryOf(status);

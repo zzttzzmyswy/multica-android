@@ -37,9 +37,8 @@ import {
   selectRecentDeliverables,
 } from "@/lib/deliverables";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import type { DownloadSource } from "@/lib/download-store";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 interface Props {
   files: readonly DeliverableFile[];
@@ -58,8 +57,7 @@ export function DeliverablesSection({
   source,
 }: Props) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const [open, setOpen] = useState(true);
   const [overviewOpen, setOverviewOpen] = useState(false);
   const openFile = useOpenDeliverable(source);
@@ -191,8 +189,7 @@ function DeliverableRow({
   onPress: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const { latest } = file;
   const size = deliverableSize(latest);
   // The extension stands in when it is more specific than the glyph — a `.csv`

@@ -30,11 +30,10 @@ import { Alert, ActivityIndicator, Pressable, ScrollView, View } from "react-nat
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { resolveAttachmentUrl } from "@/lib/attachment-url";
 import { useLightbox } from "@/lib/markdown/lightbox-provider";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { Text } from "@/components/ui/text";
 import { useTranslation } from "@/lib/i18n/react";
 import { downloadAttachmentAndOpen } from "@/lib/download-attachment";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /** Mention chip data — composer-local state. No store, no cross-route
  *  sharing. The composer owns the array and passes it in. */
@@ -133,9 +132,8 @@ function MentionChipView({
   mention: MentionChip;
   onRemove: (type: MentionChipType, id: string) => void;
 }) {
-  const { colorScheme } = useColorScheme();
   const { t } = useTranslation();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   // Icon picks: @all → people; issue → git-branch (matches web's status icon
   // styling for issue mentions); else single-person glyph.
@@ -178,8 +176,7 @@ interface AttachmentChipProps {
 }
 
 function AttachmentChipView({ item, onRemove, onRetry }: AttachmentChipProps) {
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const { open } = useLightbox();
   const { t } = useTranslation();
 

@@ -119,8 +119,6 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import type { ImageSequenceBlock } from "@multica/core/attachments/image-sequence";
 import { collectDeliverableFiles } from "@multica/core/attachments/deliverables";
 import type { DownloadSource } from "@/lib/download-store";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { useCommentSelectStore } from "@/data/comment-select-store";
 import { useTranslation } from "@/lib/i18n/react";
 import {
@@ -136,6 +134,7 @@ import {
   nextFabVisibility,
   nextJumpTopFabVisibility,
 } from "@/lib/scroll-bottom";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 import { ScrollJumpControl } from "@/components/ui/scroll-jump-control";
 
 interface Props {
@@ -1102,9 +1101,9 @@ function NewCommentChip({
   count: number;
   onPress: () => void;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const fg = THEME[colorScheme].primaryForeground;
+  const fg = palette.primaryForeground;
   const messages = t(count === 1 ? "comment.message" : "comment.messages");
   return (
     <Pressable

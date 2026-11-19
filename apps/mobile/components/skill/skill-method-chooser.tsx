@@ -12,9 +12,8 @@ import { Pressable, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Text } from "@/components/ui/text";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import type { SkillCreateMethod } from "@/lib/skill-import";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 type ChooserMethod = Exclude<SkillCreateMethod, "chooser">;
 
@@ -50,8 +49,7 @@ export function SkillMethodChooser({
   onChoose: (method: ChooserMethod) => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   return (
     <View className="px-4 pt-4 gap-2">

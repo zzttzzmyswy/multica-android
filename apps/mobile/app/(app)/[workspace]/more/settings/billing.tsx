@@ -58,14 +58,13 @@ import {
   billingScreenState,
 } from "@/lib/billing-capability";
 import { useFeatureEnabled } from "@/data/queries/config";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import {
   formatStripeMinorAmount,
   planBadgeClass,
   statusBadgeClass,
 } from "@/lib/billing-format";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 const CHECKOUT_SYNC_TIMEOUT_MS = 30_000;
 
@@ -123,8 +122,7 @@ export default function BillingScreen() {
   const { t, locale } = useTranslation();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const user = useAuthStore((s) => s.user);
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   const { data: members = [], isFetched: membersFetched } = useQuery(
     memberListOptions(wsId),

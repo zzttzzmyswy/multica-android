@@ -188,8 +188,16 @@ describe("in-page find wiring", () => {
     // implementation, so their timing cannot drift apart.
     const overlay = code("components/issue/highlight-overlay.tsx");
     expect(overlay).toContain("withSequence");
-    expect(overlay).toMatch(/withTiming\(1, \{ duration: 700 \}\)/);
-    expect(overlay).toMatch(/withDelay\(1800/);
+    // The three constants (700 in, 1800 hold, 700 out) are still the shared
+    // timing; since MYS-2950 they are routed through `motionDuration`, which
+    // collapses them to 0 when reduced motion is on but keeps the SEQUENCE —
+    // so the hold still happens and the flash still ends. Asserting the wrap
+    // rather than the old literal is what keeps this guard meaningful: it now
+    // also fails if a call site goes back to a hard-coded duration, which is
+    // the way a reduced-motion setting silently stops working.
+    expect(overlay).toMatch(/withTiming\(1, \{ duration: motionDuration\(700,/);
+    expect(overlay).toMatch(/withDelay\(\s*motionDuration\(1800,/);
+    expect(overlay).toMatch(/withTiming\(0, \{ duration: motionDuration\(700,/);
     for (const rel of [TIMELINE, "components/issue/comment-card.tsx"]) {
       expect(code(rel)).toContain("HighlightOverlay");
     }

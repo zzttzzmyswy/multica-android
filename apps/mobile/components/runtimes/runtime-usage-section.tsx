@@ -35,7 +35,6 @@ import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { agentListOptions } from "@/data/queries/agents";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { formatTokens } from "@/lib/usage-format";
@@ -60,6 +59,7 @@ import {
   useCustomPricingStore,
   type CustomModelPricing,
 } from "@/lib/custom-pricing-store";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 type Dim = "daily" | "weekly";
 type Metric = "cost" | "tokens";
@@ -313,8 +313,7 @@ function KpiCard({
   accent?: boolean;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   return (
     <View className="flex-1 rounded-xl border border-border bg-card px-2.5 py-2.5">
       <View className="flex-row items-center gap-1.5">
@@ -368,8 +367,7 @@ function KpiCard({
 function CustomPricingBar({ usage }: { usage: RuntimeUsage[] }) {
   const { t } = useTranslation();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const hasOverrides = useCustomPricingStore((s) => Object.keys(s.pricings).length > 0);
   // Computed at render-time so saving a rate drops the model out of this list
   // immediately (web CustomPricingBar parity).
@@ -466,8 +464,7 @@ function CustomPricingDialog({
   unmappedModels: readonly string[];
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const insets = useSafeAreaInsets();
   const pricings = useCustomPricingStore((s) => s.pricings);
   const [drafts, setDrafts] = useState<Record<string, DraftRow>>({});
@@ -772,8 +769,7 @@ function WhenChartCard({
 
 function ChartLegendDot({ kind }: { kind: keyof typeof SEGMENT_COLORS }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const labelKey: Record<keyof typeof SEGMENT_COLORS, string> = {
     input: "runtimes.usage.legend_input",
     output: "runtimes.usage.legend_output",
@@ -818,8 +814,7 @@ function MetricChart({
 }
 
 function StackedBars({ rows }: { rows: ChartRow[] }) {
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const CHART_HEIGHT = 96;
   const maxTotal = Math.max(...rows.map((r) => r.total), 0);
   const labelEvery = rows.length > 8 ? 2 : 1;
@@ -875,8 +870,7 @@ function StackedBars({ rows }: { rows: ChartRow[] }) {
 
 function EmptyChartState({ usage }: { usage: RuntimeUsage[] }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const hasTokens = usage.some(
     (u) =>
       u.input_tokens + u.output_tokens + u.cache_read_tokens + u.cache_write_tokens > 0,
@@ -935,8 +929,7 @@ function HeatmapView({ heatmap }: { heatmap: HeatmapData }) {
   // `locale === "zh" ? "zh-CN" : "en"` here was a second copy of that mapping,
   // and the two label sets drifted apart exactly once already.
   const intlLocale = useIntlLocale();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   const weekdayLabels = useMemo(() => {
     const anchor = Date.UTC(2026, 0, 5); // Monday
@@ -1201,8 +1194,7 @@ function CostByList({
   renderKey: (key: string) => React.ReactNode;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   if (rows.length === 0) {
     return (
       <Text className="py-5 text-center text-caption text-muted-foreground">
@@ -1240,8 +1232,7 @@ function CostByList({
 
 function FoldedRow({ usage }: { usage: RuntimeUsage[] }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const [open, setOpen] = useState(false);
   return (
     <View className="border-t border-border pt-2.5">
@@ -1327,8 +1318,7 @@ function UsageSkeleton() {
 
 function UsageEmpty() {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   return (
     <View className="mt-4 items-center gap-1.5 rounded-lg border border-dashed border-border px-4 py-8">
       <Ionicons name="bar-chart-outline" size={20} color={theme.mutedForeground} />

@@ -36,9 +36,7 @@ import {
 } from "@/data/mutations/inbox";
 import { useIssueActivityIssueIds as useActivityIssueIds } from "@/data/queries/agent-task-snapshot";
 import { useWorkspaceStore } from "@/data/workspace-store";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import { ActionSheet } from "@/lib/action-sheet";
-import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
 import {
   deduplicateArchivedInboxItems,
@@ -68,6 +66,7 @@ import {
   useInboxFilterStore,
   useInboxFilters,
 } from "@/lib/inbox-filters";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 // Both inbox lists (main + archived) share one row-separator shape: a hairline
 // under each row aligned to the avatar gutter (avatar starts at px-4 → 36pt →
@@ -79,9 +78,9 @@ function InboxSeparator() {
 }
 
 export default function Inbox() {
+  const palette = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
-  const { colorScheme } = useColorScheme();
   const { t } = useTranslation();
   const { data: rawItems, isLoading, error, refetch, isRefetching } = useQuery(
     inboxListOptions(wsId),
@@ -589,8 +588,8 @@ export default function Inbox() {
               size={18}
               color={
                 archivedActiveFilterCount > 0
-                  ? THEME[colorScheme].primary
-                  : THEME[colorScheme].mutedForeground
+                  ? palette.primary
+                  : palette.mutedForeground
               }
             />
             {/* The count beside the glyph, so an active filter is visible
@@ -643,7 +642,7 @@ export default function Inbox() {
           // the (non-loading, non-error, unfiltered) archive is confirmed
           // empty.
           <InboxEmpty
-            iconColor={THEME[colorScheme].mutedForeground}
+            iconColor={palette.mutedForeground}
             titleText={t("inbox.archivedEmpty")}
           />
         ) : emptyReason === "filtered" ? (
@@ -654,7 +653,7 @@ export default function Inbox() {
             <Ionicons
               name="filter-outline"
               size={42}
-              color={THEME[colorScheme].mutedForeground}
+              color={palette.mutedForeground}
             />
             <Text className="text-title-sm font-medium text-foreground text-center">
               {t("inbox.archivedFilterEmpty")}
@@ -738,8 +737,8 @@ export default function Inbox() {
                 size={20}
                 color={
                   mainActiveFilterCount > 0
-                    ? THEME[colorScheme].primary
-                    : THEME[colorScheme].foreground
+                    ? palette.primary
+                    : palette.foreground
                 }
               />
               {mainActiveFilterCount > 0 ? (
@@ -806,7 +805,7 @@ export default function Inbox() {
               <Ionicons
                 name="filter-outline"
                 size={42}
-                color={THEME[colorScheme].mutedForeground}
+                color={palette.mutedForeground}
               />
               <Text className="text-title-sm font-medium text-foreground text-center">
                 {t("inbox.filterEmpty")}
@@ -817,7 +816,7 @@ export default function Inbox() {
             </View>
           ) : (
             <InboxEmpty
-              iconColor={THEME[colorScheme].mutedForeground}
+              iconColor={palette.mutedForeground}
               titleText={t("inbox.zero")}
               subtitleText={t("inbox.emptySubtitle")}
             />

@@ -59,9 +59,8 @@ import { RuntimeProfilesDialog } from "@/components/runtimes/runtime-profiles-di
 import { ActionSheet } from "@/lib/action-sheet";
 import { useTimeAgo } from "@/lib/time-ago";
 import { useTranslation, useAppLocale } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 const MODE_ICON: Record<AgentRuntime["runtime_mode"], keyof typeof Ionicons.glyphMap> = {
   local: "hardware-chip",
@@ -93,13 +92,13 @@ const HEALTH_TONE: Record<RuntimeHealth, string> = {
 };
 
 export default function RuntimesPage() {
+  const palette = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const user = useAuthStore((s) => s.user);
   const { t } = useTranslation();
   const locale = useAppLocale();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
   const requestSelect = useChatSessionPickerStore((s) => s.requestSelect);
 
   // Runtime-supply entrypoints (iteration-82, A2): connect-remote / cloud
@@ -425,9 +424,9 @@ function MachineHeader({
   machine: RuntimeMachine;
   onPress: () => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
   const timeAgo = useTimeAgo();
 
   const stats = useMemo(() => {
@@ -524,10 +523,10 @@ function RuntimeRow({
   machineTitle: string;
   onPress: () => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
-  const destructive = THEME[colorScheme].destructive;
+  const muted = palette.mutedForeground;
+  const destructive = palette.destructive;
   const timeAgo = useTimeAgo();
   const health = deriveRuntimeHealth(runtime, Date.now());
   const pending = isPendingCustomRuntime(runtime);

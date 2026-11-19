@@ -91,9 +91,9 @@ import {
   runtimeBindingHref,
 } from "@/lib/autopilot-pause";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 // Run status visual — mirrors web RUN_VISUAL. `running` rows spin their
 // icon. Unknown statuses (server enum drift) fall through to a neutral
@@ -110,10 +110,15 @@ const RUN_VISUAL: Record<
   failed: { className: "text-destructive", color: "#ef4444", icon: "close-circle" },
 };
 
-function runVisual(status: string | undefined) {
+/**
+ * The visual for a run status. `fallbackColor` is passed in rather than read
+ * here because this is a plain helper, not a hook — a `useThemePalette()` call
+ * inside it would be illegal anywhere but a component body (MYS-2950).
+ */
+function runVisual(status: string | undefined, fallbackColor: string) {
   return (status && RUN_VISUAL[status]) || {
     className: "text-muted-foreground",
-    color: THEME.light.mutedForeground as string,
+    color: fallbackColor,
     icon: "ellipse" as const,
   };
 }
@@ -140,8 +145,7 @@ export default function AutopilotDetailPage() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   const detail = useQuery(autopilotDetailOptions(wsId, id));
   // The runs endpoint clamps `limit` to 100 and reports `total` as the PAGE
@@ -854,13 +858,13 @@ function PropertyRow({
   icon: React.ComponentProps<typeof Ionicons>["name"];
   children: React.ReactNode;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   return (
     <View className="flex-row items-center gap-2">
       <Ionicons
         name={icon}
         size={15}
-        color={THEME[colorScheme].mutedForeground}
+        color={palette.mutedForeground}
       />
       <Text className="w-20 text-caption text-muted-foreground">{label}</Text>
       <View className="flex-1">{children}</View>
@@ -974,10 +978,10 @@ function TriggerAction({
   destructive?: boolean;
   onPress: () => void;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   const color = destructive
-    ? THEME[colorScheme].destructive
-    : (THEME[colorScheme].mutedForeground as string);
+    ? palette.destructive
+    : (palette.mutedForeground as string);
   return (
     <Pressable
       onPress={onPress}
@@ -1028,7 +1032,7 @@ function RunRow({
   const transcriptTaskId = runTranscriptTaskId(run);
   const [transcriptOpen, setTranscriptOpen] = useState(false);
 
-  const visual = runVisual(run.status);
+  const visual = runVisual(run.status, theme.mutedForeground);
   // Through the shared table, not by interpolation: `issue_created` is stored
   // under `issueCreated`, so building the id from the wire value printed
   // `autopilots.runStatus.issue_created` on screen (MYS-2433). `knownRunStatus`

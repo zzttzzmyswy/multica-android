@@ -47,9 +47,8 @@ import {
   sharedWithMembers,
 } from "@/lib/runtime-access";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /**
  * Below this many candidates the sheet's search field would only add noise —
@@ -66,8 +65,7 @@ const SCOPE_ICON: Record<RuntimeAccessScope, keyof typeof Ionicons.glyphMap> = {
 
 export function RuntimeAccessEditor({ runtime }: { runtime: AgentRuntime }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   // The member directory read keeps its load state: a grant list resolved
   // against a directory that has not arrived renders as zero recipients, and
@@ -284,8 +282,7 @@ export function RuntimeAccessEditor({ runtime }: { runtime: AgentRuntime }) {
 /** Static three-way readout for viewers who may not edit access. */
 export function RuntimeAccessReadout({ runtime }: { runtime: AgentRuntime }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const scope = runtimeAccessScope(runtime);
   return (
     <View className="gap-1.5">
@@ -314,8 +311,7 @@ function ScopeButton({
   onPress: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   return (
     <Pressable
       onPress={onPress}
@@ -377,8 +373,7 @@ function MemberGrantSheet({
   onSave: (ids: string[]) => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const [draft, setDraft] = useState<string[]>(() => [...persisted]);
   const [query, setQuery] = useState("");
 
@@ -507,8 +502,7 @@ function RevokeAccessDialog({
   onConfirm: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   /**
    * Re-armed on every new plan. This dialog unbinds other people's agents and
    * cancels their running work, so a tap that lands on the wrong button must

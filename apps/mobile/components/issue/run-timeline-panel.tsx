@@ -40,7 +40,6 @@ import { useTranslation, useIntlLocale } from "@/lib/i18n/react";
 import { useRunWakeup } from "@/data/queries/run-wakeup";
 import { wakeupRunLabel } from "@/lib/run-trigger-label";
 import { useWakeupText } from "@/lib/use-wakeup-text";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { formatDuration } from "@/lib/usage-time";
 import { formatUsd } from "@/lib/task-usage";
@@ -63,6 +62,7 @@ import {
   xPctAt,
   type ScrubPlot,
 } from "@/lib/run-timeline-scrub";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /** Below one second `formatDuration` falls back to its caller's label. */
 const UNDER_A_SECOND = "0s";
@@ -176,8 +176,7 @@ export function RunSpendStrip({
 }) {
   const { t } = useTranslation();
   const locale = useIntlLocale();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const [width, setWidth] = useState(0);
 
   if (timeline.pricedCount === 0) return null;
@@ -384,8 +383,7 @@ export function RunTimelineChart({ timeline }: { timeline: RunTimeline }) {
   const { t } = useTranslation();
   const locale = useIntlLocale();
   const { resolveActorName } = useActorLookup();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   const [plotWidth, setPlotWidth] = useState(0);
   const [readoutX, setReadoutX] = useState<number | null>(null);

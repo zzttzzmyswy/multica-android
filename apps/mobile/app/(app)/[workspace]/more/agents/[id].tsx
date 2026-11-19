@@ -52,13 +52,12 @@ import { useAuthStore } from "@/data/auth-store";
 import { useActorLookup } from "@/data/use-actor-name";
 import { useWorkspacePresenceMap } from "@/lib/use-agent-presence";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { formatDateTime } from "@/lib/autopilot-format";
 import { isArchivedAgent as isArchived } from "@/lib/filter-agents";
 import { openclawRoutingAvailability } from "@/lib/openclaw-routing-availability";
 import { hasSystemPromptLayer, systemPromptLayer } from "@/lib/agent-system-prompt";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 // availability enum → i18n key + text color for the detail presence line.
 const AVAILABILITY: Record<
@@ -93,8 +92,7 @@ export default function AgentDetailPage() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const { resolveActorName } = useActorLookup();
   const queryClient = useQueryClient();
 
@@ -512,13 +510,13 @@ function PropertyRow({
   icon: React.ComponentProps<typeof Ionicons>["name"];
   children: React.ReactNode;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   return (
     <View className="flex-row items-center gap-2">
       <Ionicons
         name={icon}
         size={15}
-        color={THEME[colorScheme].mutedForeground}
+        color={palette.mutedForeground}
       />
       <Text className="w-20 text-caption text-muted-foreground">{label}</Text>
       <View className="flex-1 flex-row items-center">{children}</View>

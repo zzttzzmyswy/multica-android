@@ -9,8 +9,7 @@
  * automatically.
  */
 import Svg, { Circle } from "react-native-svg";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export function ProgressRing({
   done,
@@ -21,14 +20,14 @@ export function ProgressRing({
   total: number;
   size?: number;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   const stroke = 1.5;
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
   const ratio = total > 0 ? Math.min(done / total, 1) : 0;
   const offset = circumference * (1 - ratio);
   const isComplete = total > 0 && done >= total;
-  const color = isComplete ? THEME[colorScheme].info : THEME[colorScheme].primary;
+  const color = isComplete ? palette.info : palette.primary;
 
   return (
     <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>

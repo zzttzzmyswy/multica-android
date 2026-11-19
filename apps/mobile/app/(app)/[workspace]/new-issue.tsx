@@ -68,8 +68,6 @@ import {
 } from "@/data/stores/new-issue-stage-pick-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useActorLookup } from "@/data/use-actor-name";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { selectedActorLabel } from "@/lib/actor-name-state";
 import { useMentionInput, type UseMentionInputReturn } from "@/lib/use-mention-input";
 import {
@@ -81,6 +79,7 @@ import type { SubIssueRouteParams } from "@/lib/sub-issue-route";
 import { keyboardBehavior } from "@/lib/keyboard";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/react";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 type CreateMode = "manual" | "agent";
 
@@ -154,6 +153,7 @@ function useDraftBodySync(
 }
 
 export default function NewIssueModal() {
+  const palette = useThemePalette();
   const { t } = useTranslation();
   // Quick-create recovery seed (inbox detail → "Edit as advanced form"): the
   // original prompt + agent hint ride the URL and reseed the manual form so
@@ -298,7 +298,6 @@ export default function NewIssueModal() {
   // The duplicate prompt's "View issue" button builds `/[workspace]/issue/[id]`
   // from the SLUG, not the id — see `lib/duplicate-issue-error.ts`.
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
-  const { colorScheme } = useColorScheme();
   const { data: parentProject } = useQuery(
     projectDetailOptions(wsId, parentProjectIdValue ?? ""),
   );
@@ -757,7 +756,7 @@ export default function NewIssueModal() {
               size={18}
               color={
                 keepOpen
-                  ? THEME[colorScheme].primary
+                  ? palette.primary
                   : MOBILE_PLACEHOLDER_COLOR
               }
             />

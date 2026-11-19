@@ -46,16 +46,14 @@ import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { repositorySource } from "@/lib/repositories";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export default function RepositoriesPage() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const user = useAuthStore((s) => s.user);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   const {
     data: workspaces,
@@ -243,9 +241,9 @@ function RepoRow({
   onRemove: () => void;
   onEdit: () => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
 
   const body = (
     <View className="flex-1 min-w-0 gap-0.5">

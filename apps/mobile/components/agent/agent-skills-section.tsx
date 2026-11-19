@@ -49,8 +49,7 @@ import {
   useSetAgentSkillEnabled,
 } from "@/data/mutations/agents";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export function AgentSkillsSection({
   agent,
@@ -59,10 +58,10 @@ export function AgentSkillsSection({
   agent: Agent;
   runtime: AgentRuntime | null;
 }) {
+  const palette = useThemePalette();
   const wsId = agent.workspace_id || "";
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
 
   const skillsRead = catalogRead(useQuery(skillListOptions(wsId)));
   const workspaceSkills = skillsRead.items;
@@ -249,7 +248,7 @@ export function AgentSkillsSection({
                     <Ionicons
                       name="extension-puzzle-outline"
                       size={16}
-                      color={enabled ? muted : THEME[colorScheme].mutedForeground}
+                      color={enabled ? muted : palette.mutedForeground}
                     />
                     <View className="flex-1 min-w-0 gap-0.5">
                       <Text

@@ -9,11 +9,10 @@
  */
 import { Pressable, ScrollView, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { useColorScheme } from "nativewind";
 import { Text } from "@/components/ui/text";
-import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
 import { stageOptions } from "@/lib/issue-stage";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 interface Props {
   /** Current stage; null means unstaged. */
@@ -24,13 +23,11 @@ interface Props {
 }
 
 export function StagePickerBody({ value, maxStage = 0, onChange }: Props) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   const { t } = useTranslation();
   const checkColor =
-    colorScheme === "dark" ? THEME.dark.primary : THEME.light.primary;
-  const dim = colorScheme === "dark"
-    ? THEME.dark.mutedForeground
-    : THEME.light.mutedForeground;
+    palette.primary;
+  const dim = palette.mutedForeground;
 
   return (
     <ScrollView showsVerticalScrollIndicator={false}>

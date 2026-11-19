@@ -28,7 +28,6 @@ import {
 import { getToolSummary } from "@/lib/task-log";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import {
   Collapsible,
@@ -44,11 +43,11 @@ import {
   type TranscriptDiffDetail,
   type TranscriptDiffLine,
 } from "@/lib/task-transcript";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export function TranscriptEntryRow({ entry }: { entry: TaskMessagePayload }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);

@@ -41,13 +41,12 @@ import { useAuthStore } from "@/data/auth-store";
 import { workspaceListOptions } from "@/data/queries/workspaces";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import { formatDateTime } from "@/lib/autopilot-format";
 import { ActionSheet } from "@/lib/action-sheet";
 import { memberManageGuards, roleChangeOptions } from "@/lib/member-guards";
 import { recordRead } from "@/lib/catalog-read";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 const ROLE_BADGE: Record<MemberRole, string> = {
   owner: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
@@ -61,8 +60,7 @@ export default function MemberDetailPage() {
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const user = useAuthStore((s) => s.user);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const queryClient = useQueryClient();
 
   const membersQ = useQuery(memberListOptions(wsId));
@@ -304,13 +302,13 @@ function PropertyRow({
   icon: React.ComponentProps<typeof Ionicons>["name"];
   children: React.ReactNode;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   return (
     <View className="flex-row items-center gap-2">
       <Ionicons
         name={icon}
         size={15}
-        color={THEME[colorScheme].mutedForeground}
+        color={palette.mutedForeground}
       />
       <Text className="w-20 text-caption text-muted-foreground">{label}</Text>
       <View className="flex-1 flex-row items-center">{children}</View>
@@ -329,7 +327,7 @@ function ManageRow({
   tint: string;
   onPress: () => void;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   return (
     <Pressable
       onPress={onPress}
@@ -342,7 +340,7 @@ function ManageRow({
       <Ionicons
         name="chevron-forward"
         size={14}
-        color={THEME[colorScheme].mutedForeground}
+        color={palette.mutedForeground}
       />
     </Pressable>
   );

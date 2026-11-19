@@ -41,9 +41,8 @@ import {
 } from "@/lib/schedule-editor-cron";
 import { describeSchedule } from "@/lib/schedule-editor-describe";
 import { countdownDiff, formatInTimeZone } from "@/lib/schedule-editor-format";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export interface ScheduleEditorProps {
   value: ScheduleConfig;
@@ -293,11 +292,11 @@ function TimeField({
   onPick: (value: string) => void;
   ariaLabel: string;
 }) {
+  const palette = useThemePalette();
   const { hour, minute } = timeParts(value);
   const [open, setOpen] = useState(false);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
   const date = useMemo(() => {
     const d = new Date();
     d.setHours(hour, minute, 0, 0);
@@ -359,9 +358,9 @@ export function ScheduleEditor({
   disabled,
   onValidityChange,
 }: ScheduleEditorProps) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
   const now = useNowTicker();
   const advanced = value.raw !== null;
   const locked = disabled === true;

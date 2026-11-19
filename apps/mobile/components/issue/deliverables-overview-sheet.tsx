@@ -45,9 +45,8 @@ import { useTranslation } from "@/lib/i18n/react";
 import { useActorLookup } from "@/data/use-actor-name";
 import { actorNameText } from "@/lib/actor-name-state";
 import { useTimeAgo } from "@/lib/time-ago";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import type { DownloadSource } from "@/lib/download-store";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 type Filter = "all" | DeliverableCategory;
 
@@ -76,8 +75,7 @@ export function DeliverablesOverviewSheet({
   source,
 }: Props) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const { resolveActorName } = useActorLookup();
   const timeAgo = useTimeAgo();
   const openFile = useOpenDeliverable(source);
@@ -315,8 +313,7 @@ function FileTile({
   onPickVersion: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const { latest } = file;
   const size = deliverableSize(latest);
   const kindLabel = deliverableTypeLabel(latest.filename);
@@ -388,8 +385,7 @@ function VersionPickerSheet({
   onOpen: (attachment: Attachment) => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const timeAgo = useTimeAgo();
   const visible = file !== null;
   const versions = file ? [...file.versions].reverse() : [];

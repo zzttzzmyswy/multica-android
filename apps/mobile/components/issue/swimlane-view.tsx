@@ -74,8 +74,6 @@ import { useStatusHandoffLabel } from "@/components/issue/handoff-hint";
 import { translate } from "@/lib/i18n";
 import { useTranslation } from "@/lib/i18n/react";
 import { ActionSheet } from "@/lib/action-sheet";
-import { THEME } from "@/lib/theme";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import { dragTargetIndex, reorderByMove } from "@/lib/pin-reorder";
 import {
   swimlaneBucket,
@@ -100,6 +98,7 @@ import {
   type SwimlaneGrouping,
   type SwimlaneLane,
 } from "@/lib/swimlane";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 import { BoardCard } from "./board-card";
 import type { CardProperties } from "@/data/stores/issue-filter-slice";
 
@@ -180,8 +179,8 @@ export function SwimlaneView({
    *  `cardProperties` above. */
   cardPropertyIds?: readonly string[];
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
   const statusLabel = useStatusLabel();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
@@ -448,7 +447,7 @@ export function SwimlaneView({
               <Ionicons
                 name={isCollapsed ? "chevron-forward" : "chevron-down"}
                 size={13}
-                color={THEME[colorScheme].mutedForeground}
+                color={palette.mutedForeground}
               />
               <LaneGlyph lane={lane} />
               <Text
@@ -501,7 +500,11 @@ export function SwimlaneView({
       collapsed,
       toggleLane,
       laneLabel,
-      colorScheme,
+      // `palette` stands in for the old `colorScheme` dependency: the lane
+      // renderer now reads colours from the resolved palette (MYS-2950), so a
+      // contrast change has to invalidate it too — a bare `colorScheme` dep
+      // would leave every lane painted at the old contrast.
+      palette,
       onOpenIssue,
       openLaneSheet,
       onLaneLayout,
@@ -560,7 +563,7 @@ export function SwimlaneView({
           <Ionicons
             name="chevron-down"
             size={12}
-            color={THEME[colorScheme].mutedForeground}
+            color={palette.mutedForeground}
           />
         </Pressable>
         {/* Restore entry for hidden status cells. The board carries the same
@@ -592,7 +595,7 @@ export function SwimlaneView({
             <Ionicons
               name="eye-off-outline"
               size={13}
-              color={THEME[colorScheme].mutedForeground}
+              color={palette.mutedForeground}
             />
             <Text className="text-caption font-medium text-muted-foreground">
               {hiddenStatuses.length}
@@ -650,8 +653,8 @@ function LaneDragHandle({
   onDragTo: (delta: number) => void;
   onDrop: () => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
   const indexRef = useRef(index);
   indexRef.current = index;
 
@@ -689,7 +692,7 @@ function LaneDragHandle({
       <Ionicons
         name="reorder-two"
         size={15}
-        color={THEME[colorScheme].mutedForeground}
+        color={palette.mutedForeground}
       />
     </View>
   );

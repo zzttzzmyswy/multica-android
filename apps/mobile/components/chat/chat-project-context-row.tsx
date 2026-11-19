@@ -31,10 +31,9 @@ import {
   chatProjectPillAccessibilityLabel,
   resolveChatProjectContext,
 } from "@/lib/chat-project-context";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 interface Props {
   /** Active session the project is bound to (PATCH target). */
@@ -57,8 +56,7 @@ export function ChatProjectContextRow({
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const setProject = useSetChatSessionProject();
   const { data: projects = [] } = useQuery({
     ...projectListOptions(wsId),

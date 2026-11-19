@@ -139,4 +139,41 @@
     --surface-1: 0 0% 8%;
     --surface-2: 0 0% 19%;
   }
+
+  /*
+   * High contrast (MYS-2950) — the className half.
+   *
+   * Mirrors `lib/appearance-a11y.ts`'s `HIGH_CONTRAST_PALETTE` token for token
+   * and value for value; `lib/appearance-a11y.test.ts` reads both and fails if
+   * they drift. Two carriers are needed because the app paints colour two
+   * ways and neither can reach the other's sites:
+   *
+   *   - `text-muted-foreground` / `border-border` / `border-input` resolve
+   *     through these variables (tailwind.config.js → global.css), so the
+   *     ~2200 className call sites only move if a block like this exists.
+   *   - Inline `style={{ color: THEME[scheme].mutedForeground }}` (Ionicons
+   *     `color=`, TextInput borders, Switch tracks — ~560 sites) bypasses
+   *     NativeWind entirely and reads `lib/theme.ts` through
+   *     `applyHighContrast()`. No CSS variable can reach those.
+   *
+   * Values are derived, not chosen: see the block comment above
+   * `HIGH_CONTRAST_PALETTE` for the WCAG floors each one is solved against.
+   * The `.contrast-more` class is set on the app root by `app/_layout.tsx`
+   * from the same store field, so the two halves can only ever disagree if
+   * this file is edited without the module (which the test catches).
+   *
+   * ONLY colours are restated here. Restating a size would stack a second
+   * scale on iteration 296's `--font-scale` — the MYS-2559 clipping class.
+   */
+  .contrast-more:root {
+    --muted-foreground: 0 0% 34.6%;
+    --border: 0 0% 71.5%;
+    --input: 0 0% 58%;
+  }
+
+  .contrast-more.dark:root {
+    --muted-foreground: 0 0% 70.1%;
+    --border: 0 0% 33.1%;
+    --input: 0 0% 36.7%;
+  }
 }

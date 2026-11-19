@@ -34,10 +34,9 @@ import { Text } from "@/components/ui/text";
 import { CatalogStatus } from "@/components/catalog/catalog-status";
 import type { CatalogState } from "@/lib/catalog-state";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { scaledByChoice } from "@/lib/type-appearance";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 import { useFontScale } from "@/data/stores/type-appearance-store";
 
 export interface MultiSelectRow {
@@ -102,8 +101,7 @@ export function MultiSelectSheet({
   onClose,
 }: Props) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   // Text size (MYS-2931): this sheet's search box sets fontSize inline (a
   // TextInput cannot use the `text-*` steps), so it reads the scale directly.
   const fontScale = useFontScale();

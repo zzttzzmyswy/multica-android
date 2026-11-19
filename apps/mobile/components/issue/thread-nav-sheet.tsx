@@ -47,9 +47,8 @@ import {
 import type { CatalogState } from "@/lib/catalog-state";
 import { getIntlLocale } from "@/lib/i18n";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /** The actor union `ActorAvatar` accepts — core's timeline types are `string`. */
 type ActorType =
@@ -88,8 +87,7 @@ export function ThreadNavSheet({
   onJump,
 }: Props) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const { resolveActorName } = useActorLookup();
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
   const [query, setQuery] = useState("");
@@ -376,8 +374,8 @@ function SearchField({
   onChange: (text: string) => void;
   placeholder: string;
 }) {
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const palette = useThemePalette();
+  const muted = palette.mutedForeground;
   return (
     <View className="px-4 pt-2 pb-1">
       <View className="flex-row items-center gap-2 rounded-xl border border-border bg-secondary/40 px-3 py-2">

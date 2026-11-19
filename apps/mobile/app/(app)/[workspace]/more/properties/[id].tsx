@@ -14,15 +14,14 @@ import { usePropertyCatalog } from "@/data/queries/properties";
 import { PropertyCatalogStatus } from "@/components/property/property-catalog-status";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export default function EditPropertyPage() {
+  const palette = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
 
   // Four-state read (MYS-1892): a failed catalog previously fell through to
   // the not-found branch, so a request that timed out was reported as 「未找到

@@ -41,10 +41,10 @@ import {
   loadFeedbackDraft,
   saveFeedbackDraft,
 } from "@/lib/feedback-draft";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 const MAX_MESSAGE_LEN = 10000;
 
@@ -66,8 +66,7 @@ function makeLocalId(): string {
 
 export default function FeedbackPage() {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const pathname = usePathname();
   const mutation = useCreateFeedback();
@@ -454,8 +453,7 @@ function ExternalLinkRow({
   label: string;
   url: string;
 }) {
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   return (
     <Pressable
       onPress={() => void Linking.openURL(url)}

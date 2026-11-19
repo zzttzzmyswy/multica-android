@@ -132,8 +132,8 @@ import { resolveViewingTimezone } from "@/lib/timezone";
 import { useAuthStore } from "@/data/auth-store";
 import { useTranslation } from "@/lib/i18n/react";
 import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 type Range = 1 | 7 | 30 | 90 | 180;
 type ViewMode = "trend" | "leaderboard" | "errors";
@@ -151,10 +151,11 @@ const CHART_HEIGHT = 112;
 const TOP_OFFENDER_LIMIT = 8;
 
 export default function UsagePage() {
+  const palette = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
 
   const [range, setRange] = useState<Range>(30);
   const [mode, setMode] = useState<ViewMode>("trend");
@@ -709,9 +710,9 @@ function RangePickerModal({
   onPick: (next: Range) => void;
   onClose: () => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const primary = THEME[colorScheme].primary;
+  const primary = palette.primary;
   return (
     <Modal
       visible={visible}
@@ -772,10 +773,10 @@ function ProjectPickerModal({
   onPick: (id: string | null) => void;
   onClose: () => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const primary = THEME[colorScheme].primary;
-  const muted = THEME[colorScheme].mutedForeground;
+  const primary = palette.primary;
+  const muted = palette.mutedForeground;
   const rows: ({ kind: "all" } | { kind: "project"; project: Project })[] = [
     { kind: "all" },
     ...[...projects]
@@ -885,8 +886,7 @@ function KpiCard({
   value: string;
   hint?: string;
 }) {
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   return (
     // min-h keeps the four tiles the same height whether their hint wraps to
     // one line or two, so the row below never shifts between tabs.
@@ -975,7 +975,7 @@ function TrendSection({
   colorScheme: "light" | "dark";
 }) {
   const { t } = useTranslation();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const muted = theme.mutedForeground;
   const brand = theme.brand;
 
@@ -1234,7 +1234,7 @@ function ChartLegendDot({
   colorScheme: "light" | "dark";
 }) {
   const { t } = useTranslation();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const color = theme[`chart${segment.chartToken}` as keyof typeof theme] as string;
   return (
     <View className="flex-row items-center gap-1">
@@ -1272,7 +1272,7 @@ function StackedTrendBars({
   colorScheme: "light" | "dark";
   noDataLabel: string;
 }) {
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   if (rows.length === 0) {
     return <Text className="text-caption text-muted-foreground">{noDataLabel}</Text>;
   }
@@ -1546,7 +1546,7 @@ function LeaderboardSection({
   colorScheme: "light" | "dark";
 }) {
   const { t } = useTranslation();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const brand = theme.brand;
   const muted = theme.mutedForeground;
   const less = t("usage.lessThanMinute");
@@ -1755,8 +1755,9 @@ function ErrorsSection({
   agentName: (agentId: string) => string;
   colorScheme: "light" | "dark";
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
 
   // Affected-agent count is the offender-row count so the tile and the list
   // can never disagree (web parity).
@@ -1847,8 +1848,9 @@ function ErrorTrendSection({
   onDimChange: (d: Dim) => void;
   colorScheme: "light" | "dark";
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const destructive = THEME[colorScheme].destructive;
+  const destructive = palette.destructive;
   const weekly = dim === "weekly";
   const rows: { date: string; label: string; failed: number }[] = weekly
     ? weeklyRows.map((r) => ({ date: r.weekStart, label: r.label, failed: r.failed }))
@@ -1914,9 +1916,10 @@ function ErrorMixCard({
   reasonRows: FailureReasonRow[];
   colorScheme: "light" | "dark";
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
   const [showReasons, setShowReasons] = useState(false);
-  const colors = failureClassColors(THEME[colorScheme].destructive, THEME[colorScheme].card);
+  const colors = failureClassColors(palette.destructive, palette.card);
   const classLabel = (c: FailureClass) => t(FAILURE_CLASS_KEY[c]);
 
   return (
@@ -2169,9 +2172,10 @@ function OffenderRow({
   sortBy: OffenderSort;
   colorScheme: "light" | "dark";
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
-  const colors = failureClassColors(THEME[colorScheme].destructive, THEME[colorScheme].card);
+  const colors = failureClassColors(palette.destructive, palette.card);
   const unresolved = row.agentId === UNRESOLVED_AGENTS_ROW_ID;
 
   const segments = FAILURE_CLASSES.filter((c) => row.classes[c] > 0);
@@ -2187,7 +2191,7 @@ function OffenderRow({
       <View className="flex-row items-center gap-2">
         <View className="w-5">
           {unresolved ? (
-            <Ionicons name="archive-outline" size={16} color={THEME[colorScheme].mutedForeground} />
+            <Ionicons name="archive-outline" size={16} color={palette.mutedForeground} />
           ) : (
             <ActorAvatar type="agent" id={row.agentId} size={20} />
           )}

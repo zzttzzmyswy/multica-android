@@ -39,9 +39,8 @@ import { MessageComposer } from "@/components/composer/message-composer";
 import type { RestoreRequest } from "@/components/composer/message-composer";
 import { ChatProjectContextRow } from "@/components/chat/chat-project-context-row";
 import { useWorkspaceStore } from "@/data/workspace-store";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
+import { motionDuration, useAppearanceA11y } from "@/lib/appearance-a11y-runtime";
 
 interface Props {
   /** Current draft text (controlled). Empty string = no draft. */
@@ -191,14 +190,13 @@ export function ChatComposer({
 }
 
 function StopButton({ onPress }: { onPress: () => void }) {
-  const { colorScheme } = useColorScheme();
+  const { theme, reduceMotion } = useAppearanceA11y();
   const { t } = useTranslation();
-  const theme = THEME[colorScheme];
   return (
     <Animated.View
       key="stop"
-      entering={FadeIn.duration(120)}
-      exiting={FadeOut.duration(120)}
+      entering={FadeIn.duration(motionDuration(120, reduceMotion))}
+      exiting={FadeOut.duration(motionDuration(120, reduceMotion))}
     >
       <Pressable
         onPress={onPress}

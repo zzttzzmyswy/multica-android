@@ -28,8 +28,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import type { IssueMetadata } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 interface Props {
   /** The issue's `metadata` bag. `undefined`/`null`/`{}` all hide the row. */
@@ -38,8 +37,7 @@ interface Props {
 
 export function IssueMetadataSection({ metadata }: Props) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const [open, setOpen] = useState(false);
 
   const count = Object.keys(metadata ?? {}).length;

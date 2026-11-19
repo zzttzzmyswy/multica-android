@@ -15,10 +15,9 @@ import { ActivityIndicator, Alert, Pressable, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Text } from "@/components/ui/text";
 import { useRerunIssue } from "@/data/mutations/issues";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { isInvocationBlocked } from "@/lib/run-retry";
 import { useTranslation } from "@/lib/i18n/react";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 interface Props {
   issueId: string;
@@ -31,8 +30,8 @@ interface Props {
 }
 
 export function RerunButton({ issueId, taskId, variant = "chip" }: Props) {
+  const palette = useThemePalette();
   const mutation = useRerunIssue(issueId);
-  const { colorScheme } = useColorScheme();
   const { t } = useTranslation();
 
   const onPress = () => {
@@ -67,7 +66,7 @@ export function RerunButton({ issueId, taskId, variant = "chip" }: Props) {
       {mutation.isPending ? (
         <ActivityIndicator
           size="small"
-          color={THEME[colorScheme].mutedForeground}
+          color={palette.mutedForeground}
         />
       ) : (
         <View className="flex-row items-center gap-1">

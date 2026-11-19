@@ -134,9 +134,8 @@ import {
   buildIssueTableExportQuerySpec,
   collectIssueTableExportRows,
 } from "@/lib/issue-table-export-server";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /** Fixed row height — the dual-list scroll sync assumes uniform rows. */
 const ROW_HEIGHT = 48;
@@ -262,6 +261,7 @@ export function IssueTableView({
   onSearchChange,
   hierarchy,
 }: Props) {
+  const palette = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const statusLabel = useStatusLabel(wsId);
   const { activeStatuses } = useIssueStatuses(wsId);
@@ -272,7 +272,6 @@ export function IssueTableView({
   const { data: projects = [] } = useQuery(projectListOptions(wsId));
   const { getName, resolveActorName } = useActorLookup();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
   const selectionMode = useIssueBatchSelectionStore((s) => s.selectionMode);
   const selectedIds = useIssueBatchSelectionStore((s) => s.selectedIds);
   const enterSelection = useIssueBatchSelectionStore((s) => s.enterSelection);
@@ -561,7 +560,7 @@ export function IssueTableView({
       <Ionicons
         name={sortDirection === "asc" ? "arrow-up" : "arrow-down"}
         size={11}
-        color={THEME[colorScheme].primary}
+        color={palette.primary}
       />
     ) : null;
 
@@ -782,13 +781,13 @@ export function IssueTableView({
         <Ionicons
           name="search"
           size={14}
-          color={THEME[colorScheme].mutedForeground}
+          color={palette.mutedForeground}
         />
         <TextInput
           value={search ?? ""}
           onChangeText={onSearchChange}
           placeholder={t("table.searchPlaceholder")}
-          placeholderTextColor={THEME[colorScheme].mutedForeground}
+          placeholderTextColor={palette.mutedForeground}
           returnKeyType="search"
           autoCorrect={false}
           autoCapitalize="none"
@@ -806,7 +805,7 @@ export function IssueTableView({
             <Ionicons
               name="close-circle"
               size={16}
-              color={THEME[colorScheme].mutedForeground}
+              color={palette.mutedForeground}
             />
           </Pressable>
         ) : null}
@@ -877,8 +876,8 @@ export function IssueTableView({
                 size={16}
                 color={
                   allVisibleSelected || anyVisibleSelected
-                    ? THEME[colorScheme].primary
-                    : THEME[colorScheme].mutedForeground
+                    ? palette.primary
+                    : palette.mutedForeground
                 }
               />
             </Pressable>
@@ -1165,7 +1164,7 @@ function ToolbarButton({
   onPress: () => void;
   busy?: boolean;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   return (
     <Pressable
       onPress={onPress}
@@ -1177,7 +1176,7 @@ function ToolbarButton({
       <Ionicons
         name={icon}
         size={14}
-        color={THEME[colorScheme].mutedForeground}
+        color={palette.mutedForeground}
       />
       <Text className="text-caption font-medium text-muted-foreground" numberOfLines={1}>
         {label}
@@ -1204,8 +1203,7 @@ function PinnedGroupHeader({
   onToggle: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   return (
     <Pressable
       onPress={onToggle}
@@ -1291,9 +1289,9 @@ function PinnedRow({
   onRename: () => void;
   onCreateSubIssue: () => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const checkColor = THEME[colorScheme].primary;
+  const checkColor = palette.primary;
   const issue = row.issue;
   const lastTap = useRef(0);
 
@@ -1334,7 +1332,7 @@ function PinnedRow({
           <Ionicons
             name={row.collapsed ? "chevron-forward" : "chevron-down"}
             size={13}
-            color={THEME[colorScheme].mutedForeground}
+            color={palette.mutedForeground}
           />
         </Pressable>
       ) : (
@@ -1353,7 +1351,7 @@ function PinnedRow({
         <Ionicons
           name={selected ? "checkmark-circle" : "ellipse-outline"}
           size={18}
-          color={selected ? checkColor : THEME[colorScheme].mutedForeground}
+          color={selected ? checkColor : palette.mutedForeground}
         />
       </Pressable>
       <Pressable
@@ -1389,7 +1387,7 @@ function PinnedRow({
           <Ionicons
             name="add"
             size={16}
-            color={THEME[colorScheme].mutedForeground}
+            color={palette.mutedForeground}
           />
         </Pressable>
       )}
@@ -1666,7 +1664,7 @@ function DataCell({
 
 /** Calendar-day cell ("YYYY-MM-DD" → short day, blank when unset). */
 function DateCell({ value }: { value: string | null }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   const intlLocale = useIntlLocale();
   if (!value) return <Text className="text-caption text-muted-foreground/60">—</Text>;
   const text = formatIssueDate(value, ISSUE_DATE_SHORT, intlLocale) || value;
@@ -1675,7 +1673,7 @@ function DateCell({ value }: { value: string | null }) {
       <Ionicons
         name="calendar-outline"
         size={12}
-        color={THEME[colorScheme].mutedForeground}
+        color={palette.mutedForeground}
       />
       <Text className="text-caption text-muted-foreground" numberOfLines={1}>
         {text}
@@ -1716,7 +1714,7 @@ function PropertyCell({
   ) => ActorNameState;
   t: Translate;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   if (!property) return <Text className="text-caption text-muted-foreground/60">—</Text>;
   const raw = (issue.properties ?? {})[property.id];
   const display = formatPropertyValue(property, raw);
@@ -1797,7 +1795,7 @@ function PropertyCell({
           <Ionicons
             name="calendar-outline"
             size={12}
-            color={THEME[colorScheme].mutedForeground}
+            color={palette.mutedForeground}
           />
           <Text className="text-caption text-muted-foreground" numberOfLines={1}>
             {display.text}
@@ -1827,8 +1825,8 @@ function RenameIssueDialog({
   issue: Issue | null;
   onClose: () => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
   const updateIssue = useUpdateIssue(issue?.id ?? "");
   const [draft, setDraft] = useState("");
 
@@ -1870,7 +1868,7 @@ function RenameIssueDialog({
               returnKeyType="done"
               onSubmitEditing={commit}
               placeholder={t("table.renamePlaceholder")}
-              placeholderTextColor={THEME[colorScheme].mutedForeground}
+              placeholderTextColor={palette.mutedForeground}
               className="border border-border rounded-lg px-3 py-2.5 text-body text-foreground"
               style={{ includeFontPadding: false }}
             />
@@ -1924,8 +1922,8 @@ function ColumnMenu({
   onReorderColumn: (column: TableColumnKey, delta: -1 | 1) => void;
   onResetColumns: () => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
   // Web's picker carries a search box (`table-view.tsx:491-506`) because a
   // workspace with many properties makes the flat list a scroll hunt. The
   // query lives here, not in the store: it is a view of the list, not a
@@ -2015,7 +2013,7 @@ function ColumnMenu({
                 value={search}
                 onChangeText={setSearch}
                 placeholder={t("table.columnsSearch")}
-                placeholderTextColor={THEME[colorScheme].mutedForeground}
+                placeholderTextColor={palette.mutedForeground}
                 className="h-8 rounded-md border border-border bg-background px-2 text-body text-foreground"
                 autoCorrect={false}
                 autoCapitalize="none"
@@ -2147,7 +2145,7 @@ function MoveRow({
   label: string;
   onPress: () => void;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   return (
     <View>
       <Pressable
@@ -2163,7 +2161,7 @@ function MoveRow({
         <Ionicons
           name={direction === "left" ? "arrow-back" : "arrow-forward"}
           size={15}
-          color={THEME[colorScheme].mutedForeground}
+          color={palette.mutedForeground}
         />
       </Pressable>
     </View>
@@ -2186,7 +2184,7 @@ function MenuRow({
   order?: MenuRowOrder;
   onPress: () => void;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   return (
     <View>
       {order ? <MenuRowMove {...order} /> : null}
@@ -2209,7 +2207,7 @@ function MenuRow({
           <Ionicons
             name="lock-closed-outline"
             size={14}
-            color={THEME[colorScheme].mutedForeground}
+            color={palette.mutedForeground}
           />
         ) : (
           <Ionicons
@@ -2225,8 +2223,8 @@ function MenuRow({
             size={17}
             color={
               active
-                ? THEME[colorScheme].primary
-                : THEME[colorScheme].mutedForeground
+                ? palette.primary
+                : palette.mutedForeground
             }
           />
         )}

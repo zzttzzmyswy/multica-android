@@ -35,17 +35,15 @@ import { repositoryIdentity } from "@/lib/repositories";
 import { resolveCatalogState } from "@/lib/catalog-state";
 import { CatalogStatus } from "@/components/catalog/catalog-status";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 const PER_PAGE = 100;
 
 export default function GitHubPickerPage() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   const installationsQuery = useQuery(githubInstallationsOptions(wsId));
   const githubData = installationsQuery.data;

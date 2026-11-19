@@ -41,9 +41,8 @@ import {
 } from "@/data/mutations/skills";
 import { keyboardBehavior } from "@/lib/keyboard";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import type { SkillCreateMethod } from "@/lib/skill-import";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 function FieldError({ text }: { text: string }) {
   return <Text className="text-caption text-destructive">{text}</Text>;
@@ -55,8 +54,8 @@ function FieldError({ text }: { text: string }) {
  * needs this to get back without losing the screen.
  */
 function BackToMethods({ onPress }: { onPress: () => void }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
   return (
     <Pressable
       accessibilityRole="button"
@@ -66,7 +65,7 @@ function BackToMethods({ onPress }: { onPress: () => void }) {
       <Ionicons
         name="chevron-back"
         size={16}
-        color={THEME[colorScheme].mutedForeground}
+        color={palette.mutedForeground}
       />
       <Text className="text-caption text-muted-foreground">
         {t("skills.create.back")}
@@ -89,9 +88,9 @@ export function SkillForm({
    *  create route falls back to router.back(). */
   onDone?: () => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const destructive = THEME[colorScheme].destructive;
+  const destructive = palette.destructive;
   const editing = !!skill;
 
   const [name, setName] = useState(skill?.name ?? "");

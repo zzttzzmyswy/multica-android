@@ -68,10 +68,9 @@ import {
   type ProjectSortField,
 } from "@/lib/filter-projects";
 import { useTimeAgo } from "@/lib/time-ago";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/react";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /** Pinned pane width. Fits a project icon, a legible title and the row's "⋯"
  *  (MYS-2197) at the phone's 393dp width while leaving the majority of the row
@@ -153,8 +152,7 @@ export function ProjectTableView({
   onRefresh,
 }: Props) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const timeAgo = useTimeAgo();
 
   /** In-flight resize drag: which column, and its provisional width. */
@@ -612,9 +610,9 @@ function ProjectColumnMenu({
   onReorderColumn: (column: ProjectTableColumnKey, delta: -1 | 1) => void;
   onResetColumns: () => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
 
   return (
     <Modal
@@ -678,7 +676,7 @@ function ProjectColumnMenu({
                       <Ionicons
                         name={position >= 0 ? "checkbox" : "square-outline"}
                         size={17}
-                        color={position >= 0 ? THEME[colorScheme].primary : muted}
+                        color={position >= 0 ? palette.primary : muted}
                       />
                       <Text className="flex-1 text-body text-foreground">
                         {t(def.labelKey)}
@@ -731,7 +729,7 @@ function MoveRow({
   label: string;
   onPress: () => void;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   return (
     <Pressable
       onPress={disabled ? undefined : onPress}
@@ -747,7 +745,7 @@ function MoveRow({
       <Ionicons
         name={direction === "left" ? "arrow-back" : "arrow-forward"}
         size={15}
-        color={THEME[colorScheme].mutedForeground}
+        color={palette.mutedForeground}
       />
     </Pressable>
   );

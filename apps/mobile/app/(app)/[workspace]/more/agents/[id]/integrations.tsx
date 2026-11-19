@@ -64,10 +64,9 @@ import { useAuthStore } from "@/data/auth-store";
 import { useActorLookup } from "@/data/use-actor-name";
 import { getWebBaseUrl } from "@/data/server-config";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { formatDateTime } from "@/lib/autopilot-format";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -375,8 +374,7 @@ function ChannelSection({
   ) => ActorNameState;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const name = t(CHANNEL_NAME_KEY[channel.key]);
 
   let body: React.ReactNode;
@@ -452,8 +450,7 @@ function ConnectedCard({
   onDisconnect: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const active = install.status === "active";
   // Decided ONCE, read by both the text and the pending flag — two separate
   // calls could disagree within a render if the directory settles between
@@ -540,7 +537,7 @@ function InfoRow({
    *  claim this installation has no installer. */
   pending?: boolean;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   return (
     <View className="flex-row items-center">
       <Text className="w-20 text-caption text-muted-foreground">{label}</Text>
@@ -557,7 +554,7 @@ function InfoRow({
             mono && "font-mono",
           )}
           numberOfLines={1}
-          style={mono ? { color: THEME[colorScheme].mutedForeground } : undefined}
+          style={mono ? { color: palette.mutedForeground } : undefined}
         >
           {value || "—"}
         </Text>

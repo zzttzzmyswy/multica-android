@@ -61,9 +61,8 @@ import {
 } from "@/lib/actor-profile";
 import { useAgentPresence } from "@/lib/use-agent-presence";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /** Avatar diameter for the card header — web's `size="xl"` (40px). */
 const HEADER_AVATAR = 40;
@@ -129,11 +128,11 @@ function Badge({
 }
 
 export function ActorProfileSheet() {
+  const palette = useThemePalette();
   const target = useActorProfileStore((s) => s.target);
   const close = useActorProfileStore((s) => s.close);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
 
   return (
     <Modal
@@ -215,7 +214,7 @@ function NavigableRow({
   accessibilityLabel: string;
   children: React.ReactNode;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   return (
     <Pressable
       onPress={onPress}
@@ -227,7 +226,7 @@ function NavigableRow({
       <Ionicons
         name="chevron-forward"
         size={12}
-        color={THEME[colorScheme].mutedForeground}
+        color={palette.mutedForeground}
       />
     </Pressable>
   );
@@ -477,8 +476,7 @@ function AgentAvailabilityLine({ agentId }: { agentId: string }) {
 
 /** Wifi-style runtime health glyph, mirroring web's `HealthIcon`. */
 function RuntimeHealthGlyph({ health }: { health: RuntimeHealth }) {
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const tone =
     health === "online"
       ? theme.success

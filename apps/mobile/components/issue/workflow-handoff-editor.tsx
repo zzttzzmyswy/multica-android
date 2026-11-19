@@ -63,8 +63,6 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { api } from "@/data/api";
 import { useStatusLabel } from "@/lib/status-options";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import {
   handoffAsksSaveScope,
@@ -78,6 +76,7 @@ import {
   type HandoffDraft,
   type HandoffSaveScope,
 } from "@/lib/workflow-handoff-edit";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export interface WorkflowHandoffEditorProps {
   /** The workflow being edited; the sheet is closed when null. */
@@ -98,8 +97,7 @@ export function WorkflowHandoffEditor({
   onClose,
 }: WorkflowHandoffEditorProps) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const statusLabel = useStatusLabel(wsId);
   const { canEdit, roleResolved } = useWorkflowEditPermissions(workflow);
@@ -425,8 +423,7 @@ function BriefPreviewSheet({
   draft: HandoffDraft;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const query = useQuery({
     // The draft is part of the key: two different drafts for one column are two

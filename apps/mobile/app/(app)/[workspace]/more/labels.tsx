@@ -45,21 +45,20 @@ import { labelScopeOptions } from "@/data/queries/labels";
 import { useDeleteLabel } from "@/data/mutations/labels";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import {
   filterLabels,
   labelScopeOf,
   LABEL_SCOPES,
   type LabelScope,
 } from "@/lib/labels-display";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export default function LabelsPage() {
+  const palette = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
 
   const [scope, setScope] = useState<LabelScope>("issue");
   const [query, setQuery] = useState("");
@@ -273,8 +272,8 @@ function LabelRow({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const palette = useThemePalette();
+  const muted = palette.mutedForeground;
   const usage = label.usage_count ?? 0;
 
   return (

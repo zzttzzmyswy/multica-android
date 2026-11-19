@@ -14,9 +14,8 @@
 import { Pressable, TextInput, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Text } from "@/components/ui/text";
-import { THEME } from "@/lib/theme";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import type { PickerSearch } from "@/lib/use-picker-search";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export function PickerBodyShell({
   search,
@@ -69,8 +68,8 @@ function SearchField({
   placeholder: string;
   autoFocus?: boolean;
 }) {
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const palette = useThemePalette();
+  const muted = palette.mutedForeground;
 
   return (
     <View className="px-4 pt-2 pb-1">

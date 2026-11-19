@@ -48,9 +48,8 @@ import {
   type RuntimeCatalogEntry,
 } from "@/lib/runtime-profile-catalog";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 type DialogState =
   | { surface: "browse" }
@@ -79,6 +78,7 @@ export function RuntimeProfilesDialog({
   onClose,
   onProfileCreated,
 }: Props) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { data: profiles = [], isLoading } = useQuery(
@@ -143,8 +143,7 @@ export function RuntimeProfilesDialog({
         : t("runtimes.profiles.form.editTitle")
       : t("runtimes.profiles.dialogTitle");
 
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
@@ -211,9 +210,9 @@ function BrowseView({
   onAddNew: () => void;
   onEdit: (profile: RuntimeProfile) => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
   const [builtinsOpen, setBuiltinsOpen] = useState(false);
   const hasCustom = catalog.customs.length > 0;
 
@@ -327,8 +326,7 @@ function CustomCard({
   onEdit: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const muted = theme.mutedForeground;
   const profile = entry.profile;
   const commandLine = formatCommandLine(

@@ -27,7 +27,6 @@ import { PriorityIcon } from "@/components/ui/priority-icon";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { ProjectIcon } from "@/components/ui/project-icon";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { projectListOptions } from "@/data/queries/projects";
 import { useWorkspaceStore } from "@/data/workspace-store";
@@ -47,6 +46,7 @@ import {
   type GanttRange,
   type GanttZoom,
 } from "@/lib/gantt";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 const ROW_HEIGHT = 44;
 const HEADER_HEIGHT = 48;
@@ -186,8 +186,7 @@ export function GanttView({
   emptyLabel: string;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   const [zoom, setZoom] = useState<GanttZoom>("week");

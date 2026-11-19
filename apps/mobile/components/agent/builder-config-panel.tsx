@@ -31,10 +31,9 @@ import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { RuntimePickerSheet } from "@/components/agent/runtime-picker-sheet";
 import { MultiSelectSheet } from "@/components/agent/multi-select-sheet";
 import type { CatalogState } from "@/lib/catalog-state";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/react";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 type PermissionScope = AgentDraft["permissionScope"];
 
@@ -80,8 +79,7 @@ export function BuilderConfigPanel({
   onRuntimeSwitch,
 }: Props) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const [runtimePickerOpen, setRuntimePickerOpen] = useState(false);
   const [skillPickerOpen, setSkillPickerOpen] = useState(false);
   const [memberPickerOpen, setMemberPickerOpen] = useState(false);

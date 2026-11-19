@@ -45,10 +45,9 @@ import { useActorLookup } from "@/data/use-actor-name";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useStatusLabel } from "@/lib/status-options";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { handoffModeOf, type HandoffDraft, type HandoffMode } from "@/lib/workflow-handoff-edit";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export interface HandoffFieldsProps {
   /** The column's current draft handoff. */
@@ -82,8 +81,7 @@ export function HandoffFields({
   onPreview,
 }: HandoffFieldsProps) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const [pickerOpen, setPickerOpen] = useState<HandoffMode | null>(null);
   const mode = handoffModeOf(draft.handler);
 
@@ -312,8 +310,7 @@ function InstructionInput({
   placeholder: string;
   onChange: (next: string) => void;
 }) {
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   return (
     <TextInput
       value={value}
@@ -355,8 +352,7 @@ function StatusTargetRow({
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const statusLabel = useStatusLabel(wsId);
   const { entryOf } = useIssueStatuses(wsId);
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const [open, setOpen] = useState(false);
   const entry = value ? entryOf(value) : undefined;
 
@@ -469,8 +465,7 @@ function HandlerPickerSheet({
   onPick: (handler: IssueWorkflowStep["handler"]) => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { data: agents } = useQuery({ ...agentListOptions(wsId), enabled: mode === "agent" });
   const { data: squads } = useQuery({ ...squadListOptions(wsId), enabled: mode === "agent" });

@@ -43,9 +43,9 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { useAuthStore } from "@/data/auth-store";
 import { comparePluginVersions } from "@/lib/plugin-version";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 type BindingScope = "workspace" | "agent";
 
@@ -53,8 +53,7 @@ export default function PluginsPage() {
   const { t } = useTranslation();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const user = useAuthStore((s) => s.user);
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   const catalogQuery = useQuery(pluginCatalogOptions(wsId));
   const installationsQuery = useQuery(pluginInstallationsOptions(wsId));
@@ -380,8 +379,7 @@ function Notice({
   description: string;
   variant: "info" | "error";
 }) {
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   return (
     <View
       className={cn(
@@ -408,8 +406,7 @@ function Notice({
 
 function StateBadge({ state }: { state: PluginInstallationState }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const key =
     state === "disabled"
       ? "plugins.stateDisabled"
@@ -503,8 +500,7 @@ function OfficialPluginCard({
   onUninstall: (installationId: string) => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   const latest = releases[0]!;
   const selectedRelease =
@@ -1048,8 +1044,7 @@ function VersionChips({
   selected: string;
   onSelect: (version: string) => void;
 }) {
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   return (
     <View className="flex-row flex-wrap gap-1.5">
       {versions.map((v) => {
@@ -1097,8 +1092,7 @@ function ScopePicker({
   disabled: boolean;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   return (
     <View className="gap-2">
       <View className="flex-row rounded-md border border-border overflow-hidden">

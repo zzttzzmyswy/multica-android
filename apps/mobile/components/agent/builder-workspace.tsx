@@ -67,10 +67,9 @@ import { catalogRead } from "@/lib/catalog-read";
 import { keyboardBehavior } from "@/lib/keyboard";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { Text } from "@/components/ui/text";
 import { isPendingTaskActive } from "@/lib/chat-task-polling";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /** How long editing pauses before the configuration is written back. */
 const AUTOSAVE_DELAY_MS = 800;
@@ -86,8 +85,7 @@ export function BuilderWorkspace({
   startedRuntimeId: string;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const qc = useQueryClient();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);

@@ -51,16 +51,15 @@ import {
 import { propertyTypeIcon, propertyTypeLabelKey } from "@/lib/issue-properties";
 import { propertyIconGlyph } from "@/lib/property-icons";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export default function PropertiesPage() {
+  const palette = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const user = useAuthStore((s) => s.user);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
 
   const [query, setQuery] = useState("");
   const [showArchived, setShowArchived] = useState(false);
@@ -279,9 +278,9 @@ function PropertiesToolbar({
   activeCount: number;
   canManage: boolean;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
 
   return (
     <View className="px-4 pt-3 pb-2 gap-3">
@@ -340,9 +339,9 @@ function PropertyRow({
   onArchive: () => void;
   onRestore: () => void;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const muted = THEME[colorScheme].mutedForeground;
+  const muted = palette.mutedForeground;
   const usage = property.usage_count ?? 0;
   const { chips, rest } = propertyOptionChips(property);
   const hasOptions = propertyHasOptions(property);

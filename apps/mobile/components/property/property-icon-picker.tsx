@@ -10,9 +10,8 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { Text } from "@/components/ui/text";
 import { PROPERTY_ICON_OPTIONS } from "@/lib/property-icons";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export function PropertyIconPickerModal({
   visible,
@@ -26,8 +25,7 @@ export function PropertyIconPickerModal({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   return (
     <Modal

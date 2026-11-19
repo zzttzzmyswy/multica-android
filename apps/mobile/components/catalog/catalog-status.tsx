@@ -27,10 +27,9 @@ import { ActivityIndicator, Pressable, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Text } from "@/components/ui/text";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { resolveCatalogEmpty, type CatalogState } from "@/lib/catalog-state";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export function CatalogStatus({
   state,
@@ -54,8 +53,7 @@ export function CatalogStatus({
   className?: string;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   if (state === "ready") return null;
 

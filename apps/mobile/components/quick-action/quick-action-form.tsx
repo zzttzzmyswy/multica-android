@@ -49,9 +49,8 @@ import {
   type QuickActionAssignee,
 } from "@/components/quick-action/agent-squad-picker-modal";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 const MAX_NAME_LENGTH = 32;
 
@@ -62,13 +61,13 @@ function FieldLabel({
   icon: React.ComponentProps<typeof Ionicons>["name"];
   text: string;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   return (
     <View className="flex-row items-center gap-1.5">
       <Ionicons
         name={icon}
         size={13}
-        color={THEME[colorScheme].mutedForeground}
+        color={palette.mutedForeground}
       />
       <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
         {text}
@@ -84,8 +83,7 @@ function FieldError({ text }: { text: string }) {
 export function QuickActionForm({ action }: { action?: QuickAction | null }) {
   const isEdit = !!action;
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   const [name, setName] = useState(action?.name ?? "");
   const [visibility, setVisibility] = useState<QuickActionVisibility>(

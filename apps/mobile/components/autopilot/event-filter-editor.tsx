@@ -19,9 +19,8 @@ import {
   canAddFilter,
 } from "@/lib/autopilot-event-filter";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 interface Props {
   filters: WebhookEventFilter[];
@@ -31,8 +30,7 @@ interface Props {
 
 export function EventFilterEditor({ filters, onChange, editable }: Props) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const [event, setEvent] = useState("");
   const [actions, setActions] = useState("");
 

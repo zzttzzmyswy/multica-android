@@ -34,8 +34,7 @@ import { useDeleteRuntimeProfile } from "@/data/mutations/runtime-profiles";
 import { parseRuntimeProfileBoundConflict } from "@/lib/runtime-profile-conflict";
 import { classifyProfileDeleteFailure } from "@/lib/runtime-profile-delete";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 /**
  * What the dialog needs to name: the profile id the DELETE goes to, and the
@@ -67,8 +66,7 @@ export function DeleteRuntimeProfileDialog({
   onDeleted: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const deleteProfile = useDeleteRuntimeProfile();
   // The server-issued "agents still bound" sentence, shown above the buttons.
   // Cleared every time the dialog re-opens so a previous refusal cannot be

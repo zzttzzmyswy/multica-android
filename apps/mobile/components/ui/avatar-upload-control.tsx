@@ -33,8 +33,7 @@ import type { FileAsset } from "@/data/api";
 import { ActionSheet } from "@/lib/action-sheet";
 import { resolveAttachmentUrl } from "@/lib/attachment-url";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024; // 5 MB — matches what's reasonable on cellular.
 
@@ -62,8 +61,8 @@ function AvatarFallbackBody({
   name: string;
   size: number;
 }) {
-  const { colorScheme } = useColorScheme();
-  const muted = THEME[colorScheme].mutedForeground;
+  const palette = useThemePalette();
+  const muted = palette.mutedForeground;
   if (variant === "squad") {
     return <Ionicons name="people" size={size * 0.45} color={muted} />;
   }
@@ -110,8 +109,7 @@ export function AvatarUploadControl({
   accessibilityLabel?: string;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const [busy, setBusy] = useState(false);
 
   // `avatar_url` comes back as a server-relative path on self-hosted backends

@@ -28,18 +28,17 @@ import {
   isTerminalStatus,
   type DownloadTask,
 } from "@/lib/download-store";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { getCurrentLocale } from "@/lib/i18n";
 import { useTranslation } from "@/lib/i18n/react";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 type Tab = "active" | "finished";
 
 export default function DownloadsPage() {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const tasks = useDownloadsStore((s) => s.tasks);
   const [tab, setTab] = useState<Tab>("active");
 
@@ -365,8 +364,7 @@ function SourceLine({ task }: { task: DownloadTask }) {
 }
 
 function EmptyState({ icon, text }: { icon: React.ComponentProps<typeof Ionicons>["name"]; text: string }) {
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   return (
     <View className="items-center px-4 py-10">
       <Ionicons name={icon} size={36} color={theme.mutedForeground} />

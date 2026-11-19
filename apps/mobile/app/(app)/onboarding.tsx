@@ -46,9 +46,8 @@ import { useWorkspaceStore } from "@/data/workspace-store";
 import { workspaceListOptions } from "@/data/queries/workspaces";
 import { WORKSPACE_SLUG_REGEX, deriveSlug } from "@/lib/workspace-slug";
 import { keyboardBehavior } from "@/lib/keyboard";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 const FIRST_RUN_STEPS = ["welcome", "about-you", "workspace", "runtime"] as const;
 const NEW_WORKSPACE_STEPS = ["workspace"] as const;
@@ -77,8 +76,7 @@ export default function OnboardingRoute() {
   const setUser = useAuthStore((s) => s.setUser);
   const setCurrentWorkspace = useWorkspaceStore((s) => s.setCurrentWorkspace);
   const qc = useQueryClient();
-  const { colorScheme } = useColorScheme();
-  const tint = THEME[colorScheme];
+  const tint = useThemePalette();
 
   // Needed for the welcome "skip to my existing workspace" exit.
   const { data: workspaces } = useQuery(workspaceListOptions());
@@ -291,8 +289,7 @@ function AboutYouStep({ onNext }: { onNext: () => void }) {
   const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
-  const { colorScheme } = useColorScheme();
-  const tint = THEME[colorScheme];
+  const tint = useThemePalette();
   const [name, setName] = useState(user?.name ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -499,8 +496,7 @@ function RuntimeStep({
   onNext: () => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const tint = THEME[colorScheme];
+  const tint = useThemePalette();
   return (
     <View className="gap-6 pt-6">
       <StepHeader

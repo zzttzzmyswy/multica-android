@@ -35,10 +35,9 @@
 import { Modal, Pressable, TextInput, View } from "react-native";
 import { Button } from "@/components/ui/button";
 import { Text } from "@/components/ui/text";
-import { THEME } from "@/lib/theme";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import { useTranslation } from "@/lib/i18n/react";
 import { MAX_HANDOFF_NOTE } from "@/lib/run-confirm";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export function AssignConfirmDialog({
   visible,
@@ -74,7 +73,7 @@ export function AssignConfirmDialog({
   onDontStart: () => void;
   onClose: () => void;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   const { t } = useTranslation();
   const headline =
     count > 1
@@ -104,7 +103,7 @@ export function AssignConfirmDialog({
                 value={note}
                 onChangeText={onNoteChange}
                 placeholder={t("runConfirm.notePlaceholder")}
-                placeholderTextColor={THEME[colorScheme].mutedForeground}
+                placeholderTextColor={palette.mutedForeground}
                 maxLength={MAX_HANDOFF_NOTE}
                 multiline
                 editable={!busy && !noteDisabled}

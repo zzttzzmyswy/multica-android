@@ -46,11 +46,10 @@ import { memberListOptions } from "@/data/queries/members";
 import { agentListOptions } from "@/data/queries/agents";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { isSubscribedActor } from "@/lib/subscription";
 import { buildSubscriberPickerRows } from "@/lib/subscriber-picker";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 interface Props {
   visible: boolean;
@@ -79,8 +78,7 @@ export function SubscriberPickerSheet({
 }: Props) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const [query, setQuery] = useState("");
 
   // Four-state reads (MYS-1907): `isSuccess` cannot tell "still loading" from

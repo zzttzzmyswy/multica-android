@@ -57,11 +57,10 @@ import { useAuthStore } from "@/data/auth-store";
 import { useUpdateStore } from "@/data/update-store";
 import { useActiveDownloadCount, useDownloadsStore } from "@/data/downloads-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
 import { workspaceUnreadBadge } from "@/lib/workspace-unread-badge";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 // iOS bottom tab bar default height (above safe-area). React Navigation
 // doesn't expose this as a layout constant, but the value is stable
@@ -129,8 +128,7 @@ export function MoreTabDropdownAnchor({
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const user = useAuthStore((s) => s.user);
   const pathname = usePathname();
-  const { colorScheme } = useColorScheme();
-  const t2 = THEME[colorScheme];
+  const t2 = useThemePalette();
   const { t } = useTranslation();
   const currentWorkspace = useCurrentWorkspace(slug);
   // Cross-workspace unread: does any workspace OTHER than this one have unread

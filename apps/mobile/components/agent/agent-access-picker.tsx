@@ -34,9 +34,8 @@ import { MultiSelectSheet } from "@/components/agent/multi-select-sheet";
 import type { CatalogState } from "@/lib/catalog-state";
 import { useUpdateAgent } from "@/data/mutations/agents";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 type PermissionScope = AgentDraft["permissionScope"];
 
@@ -73,8 +72,7 @@ export function AgentAccessEditor({
   onDraftChange: (draft: AgentDraft) => void;
 }) {
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
   const [memberPickerOpen, setMemberPickerOpen] = useState(false);
 
   const selectable = useMemo(
@@ -188,8 +186,8 @@ export function AgentAccessReadonlySummary({
   agent: Agent;
   members: MemberWithUser[];
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
   const seeded = useMemo(() => deriveDuplicateAccess(agent), [agent]);
   const memberCount = seeded.memberIds.size;
   const memberNames = useMemo(() => {
@@ -213,7 +211,7 @@ export function AgentAccessReadonlySummary({
         <Ionicons
           name="lock-closed-outline"
           size={14}
-          color={THEME[colorScheme].mutedForeground}
+          color={palette.mutedForeground}
         />
       </View>
       <View className="flex-1 min-w-0 gap-0.5">
@@ -243,8 +241,8 @@ function EditableAgentAccessPicker({
   membersState?: CatalogState;
   onRetryMembers?: () => void;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
   const [saving, setSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const updateAgent = useUpdateAgent(agent.id);
@@ -326,7 +324,7 @@ function EditableAgentAccessPicker({
             <Ionicons
               name="checkmark-circle"
               size={14}
-              color={THEME[colorScheme].brand}
+              color={palette.brand}
             />
             <Text className="text-caption font-medium text-brand">
               {t("agents.access.saved")}

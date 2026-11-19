@@ -32,9 +32,8 @@ import { useAuthStore } from "@/data/auth-store";
 import { canEditSkill } from "@/lib/skill-guards";
 import { useSkillRole } from "@/lib/use-skill-role";
 import { batchOutcomeMessage, type BatchOutcome } from "@/lib/skill-batch";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { useTranslation } from "@/lib/i18n/react";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 const TOAST_MS = 4000;
 
@@ -68,8 +67,7 @@ export function SkillBatchBar({
   const role = useSkillRole(wsId);
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const { colorScheme } = useColorScheme();
-  const theme = THEME[colorScheme];
+  const theme = useThemePalette();
 
   const batchDelete = useBatchDeleteSkills();
 

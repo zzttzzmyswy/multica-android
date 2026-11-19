@@ -49,9 +49,8 @@ import {
 import { propertyIconGlyph, propertyIconLabel } from "@/lib/property-icons";
 import { keyboardBehavior } from "@/lib/keyboard";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 const MAX_NAME_LENGTH = 32;
 
@@ -68,13 +67,13 @@ function FieldLabel({
   icon: React.ComponentProps<typeof Ionicons>["name"];
   text: string;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   return (
     <View className="flex-row items-center gap-1.5">
       <Ionicons
         name={icon}
         size={13}
-        color={THEME[colorScheme].mutedForeground}
+        color={palette.mutedForeground}
       />
       <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
         {text}
@@ -98,8 +97,8 @@ interface PropertyFormProps {
 const EMPTY_OPTION = { name: "", color: "" };
 
 export function PropertyForm({ property }: PropertyFormProps) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
   const create = useCreateProperty();
   const update = useUpdateProperty();
   const editing = !!property;
@@ -293,7 +292,7 @@ export function PropertyForm({ property }: PropertyFormProps) {
                 <Ionicons
                   name={propertyTypeIcon(property?.type)}
                   size={16}
-                  color={THEME[colorScheme].mutedForeground}
+                  color={palette.mutedForeground}
                 />
                 <Text className="text-body text-muted-foreground">
                   {t(propertyTypeLabelKey(property?.type))}
@@ -321,8 +320,8 @@ export function PropertyForm({ property }: PropertyFormProps) {
                         size={13}
                         color={
                           selected
-                            ? THEME[colorScheme].foreground
-                            : THEME[colorScheme].mutedForeground
+                            ? palette.foreground
+                            : palette.mutedForeground
                         }
                       />
                       <Text
@@ -356,8 +355,8 @@ export function PropertyForm({ property }: PropertyFormProps) {
                   size={17}
                   color={
                     iconDraft
-                      ? THEME[colorScheme].foreground
-                      : THEME[colorScheme].mutedForeground
+                      ? palette.foreground
+                      : palette.mutedForeground
                   }
                 />
                 <Text
@@ -374,7 +373,7 @@ export function PropertyForm({ property }: PropertyFormProps) {
               <Ionicons
                 name="chevron-down"
                 size={16}
-                color={THEME[colorScheme].mutedForeground}
+                color={palette.mutedForeground}
               />
             </Pressable>
           </View>
@@ -441,7 +440,7 @@ export function PropertyForm({ property }: PropertyFormProps) {
                         <Ionicons
                           name="trash-outline"
                           size={16}
-                          color={THEME[colorScheme].mutedForeground}
+                          color={palette.mutedForeground}
                         />
                       </Pressable>
                     </View>
@@ -494,7 +493,7 @@ export function PropertyForm({ property }: PropertyFormProps) {
                 className="flex-row items-center gap-1.5 self-start rounded-md px-2 py-1.5 active:bg-secondary"
                 accessibilityLabel={t("properties.form.addOption")}
               >
-                <Ionicons name="add" size={15} color={THEME[colorScheme].primary} />
+                <Ionicons name="add" size={15} color={palette.primary} />
                 <Text className="text-body text-primary">{t("properties.form.addOption")}</Text>
               </Pressable>
               {showErrors && optionsMissing ? (
@@ -521,8 +520,8 @@ export function PropertyForm({ property }: PropertyFormProps) {
                 size={17}
                 color={
                   property.archived
-                    ? THEME[colorScheme].foreground
-                    : THEME[colorScheme].destructive
+                    ? palette.foreground
+                    : palette.destructive
                 }
               />
               <Text

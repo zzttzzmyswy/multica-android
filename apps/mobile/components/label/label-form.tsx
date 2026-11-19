@@ -41,10 +41,9 @@ import {
 } from "@/data/mutations/labels";
 import { keyboardBehavior } from "@/lib/keyboard";
 import { useTranslation } from "@/lib/i18n/react";
-import { useColorScheme } from "@/lib/use-color-scheme";
-import { THEME } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { labelScopeOf, type LabelScope } from "@/lib/labels-display";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 // Mirrors web `COLOR_PICKER_PRESETS` (packages/views/common/color-picker.tsx)
 // so mobile reuses the same catalog. Default for new labels is index 6 —
@@ -73,13 +72,13 @@ function FieldLabel({
   icon: React.ComponentProps<typeof Ionicons>["name"];
   text: string;
 }) {
-  const { colorScheme } = useColorScheme();
+  const palette = useThemePalette();
   return (
     <View className="flex-row items-center gap-1.5">
       <Ionicons
         name={icon}
         size={13}
-        color={THEME[colorScheme].mutedForeground}
+        color={palette.mutedForeground}
       />
       <Text className="text-caption font-medium text-muted-foreground uppercase tracking-wide">
         {text}
@@ -99,8 +98,8 @@ export function LabelForm({
   label?: Label | null;
   resourceType?: LabelScope;
 }) {
+  const palette = useThemePalette();
   const { t } = useTranslation();
-  const { colorScheme } = useColorScheme();
   const editing = !!label;
   // Edit mode follows the label's own catalog — a skill label opened from the
   // skill scope must not be re-filed as an issue label.
@@ -292,7 +291,7 @@ export function LabelForm({
               className="mt-6 flex-row items-center justify-center gap-2 rounded-md border border-destructive/40 px-3 py-3 active:bg-destructive/10"
               accessibilityLabel={t("labels.delete")}
             >
-              <Ionicons name="trash-outline" size={17} color={THEME[colorScheme].destructive} />
+              <Ionicons name="trash-outline" size={17} color={palette.destructive} />
               <Text className="text-body font-medium text-destructive">
                 {t("labels.delete")}
               </Text>
