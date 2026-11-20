@@ -104,6 +104,11 @@ export type CreateCommentVars = {
   /** Agents the user skipped via the trigger-preview chips — the server
    *  does not enqueue a run for these targets on submit. */
   suppressAgentIds?: string[];
+  /** Running turns the user chose to receive this comment instead of starting
+   *  a follow-up run (iteration 298). The server adds the text to each turn at
+   *  its next step; a turn that ended in the meantime falls back to a normal
+   *  trigger rather than being swapped for another run. */
+  steerTaskIds?: string[];
 };
 
 export function useCreateComment(issueId: string) {
@@ -112,11 +117,18 @@ export function useCreateComment(issueId: string) {
   const userId = useAuthStore((s) => s.user?.id ?? null);
 
   return useMutation({
-    mutationFn: ({ content, parentId, attachmentIds, suppressAgentIds }: CreateCommentVars) =>
+    mutationFn: ({
+      content,
+      parentId,
+      attachmentIds,
+      suppressAgentIds,
+      steerTaskIds,
+    }: CreateCommentVars) =>
       api.createComment(issueId, content, {
         parentId,
         attachmentIds,
         suppressAgentIds,
+        steerTaskIds,
       }),
     onMutate: async ({ content, parentId }) => {
       const key = issueKeys.timeline(wsId, issueId);
@@ -160,6 +172,7 @@ export function useCreateComment(issueId: string) {
           parentId: vars.parentId,
           attachmentIds: vars.attachmentIds,
           suppressAgentIds: vars.suppressAgentIds,
+          steerTaskIds: vars.steerTaskIds,
           error: err instanceof Error ? err.message : "Send failed",
         });
       }

@@ -443,6 +443,32 @@ export interface AgentTask {
    * reporting was not free, we just don't know what it cost.
    */
   usage?: TaskUsage[];
+  /**
+   * The steering capability this turn's runtime negotiated
+   * (`task-supplement-v1`). Present only on a RUNNING turn whose daemon can
+   * take additional input; absent on every other row and on every backend that
+   * predates the feature (`server/internal/handler/agent.go` —
+   * `hydrateTaskSupplementMetadata`, which fills it on the issue task-runs and
+   * agent task list endpoints).
+   *
+   * Read it together with `can_supplement`: this field says the FEATURE
+   * exists, `can_supplement` says THIS caller may use it. A client that reads
+   * either one alone offers a menu entry the server rejects.
+   */
+  supplement_capability?: string;
+  /**
+   * Comment ids already delivered into this turn. Until the 2026-08 migration
+   * every steered comment cost a fresh run; `lib/recipient-routing.ts` uses
+   * this only for the "already has this message" display decision, never for
+   * routing.
+   */
+  supplement_comment_ids?: string[];
+  /**
+   * Whether the CALLER may add a comment to this running turn. Server-computed
+   * per viewer (the same permission that gates the comment POST), so it must
+   * never be inferred on the client from ownership or role.
+   */
+  can_supplement?: boolean;
 }
 
 /**

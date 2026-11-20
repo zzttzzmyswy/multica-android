@@ -1068,6 +1068,21 @@ const OptionalStringArraySchema = z.preprocess(
   z.array(z.string()).optional(),
 );
 
+// Same "absent rather than wrong" rule for a single optional string / boolean.
+// A server that sends `can_supplement: "true"` (a string, which Go's encoding
+// would never do — but a proxy or a hand-rolled client could) must not make the
+// composer offer to steer a turn: the capability check would then be decided by
+// JavaScript truthiness instead of the server's own contract.
+const OptionalStringSchema = z.preprocess(
+  (value) => (typeof value === "string" ? value : undefined),
+  z.string().optional(),
+);
+
+const OptionalBooleanSchema = z.preprocess(
+  (value) => (typeof value === "boolean" ? value : undefined),
+  z.boolean().optional(),
+);
+
 // One (provider, model) slice of a run's token usage. Mirrors core's
 // `TaskUsageSchema` (packages/core/api/schemas.ts:1383-1391).
 //
@@ -1199,6 +1214,17 @@ export const AgentTaskSchema: z.ZodType<AgentTask> = z.object({
   // the transcript chip is present on runs opened from an issue and absent on
   // runs opened from an agent's activity tab.
   usage: z.array(TaskUsageSchema).optional().catch(undefined),
+  // Steering metadata (iteration 298). `.loose()` would pass these through
+  // anyway, but they are DECLARED because the failure mode of a silent
+  // passthrough is asymmetric: a malformed `can_supplement: "true"` (string)
+  // reaching `isSteerableTask` is truthy-adjacent and would offer "add to
+  // running turn" for a turn the server will refuse. `z.boolean()` with no
+  // `.catch` is wrong the other way (it would fail the whole row), so each
+  // degrades to "absent" — the same state an older server produces, which
+  // `isSteerableTask` already reads as "not steerable".
+  supplement_capability: OptionalStringSchema,
+  supplement_comment_ids: OptionalStringArraySchema,
+  can_supplement: OptionalBooleanSchema,
 }).loose();
 
 export const AgentTaskListSchema = z.array(AgentTaskSchema).default([]);

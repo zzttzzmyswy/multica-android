@@ -30,6 +30,11 @@ export interface FailedCommentPayload {
   /** Agents the user skipped in the trigger preview — preserved across a
    *  Retry so the re-fire sends exactly what the first attempt would have. */
   suppressAgentIds?: string[];
+  /** Running turns the user chose to steer (iteration 298). Preserved across
+   *  Retry for the same reason as the suppressed ids; a turn that has ended
+   *  by then is dropped server-side, never silently re-pointed at another
+   *  run. */
+  steerTaskIds?: string[];
   /** Human-readable error message from the failed mutation — surfaced
    *  inline so the user knows why the send didn't go through. */
   error: string;

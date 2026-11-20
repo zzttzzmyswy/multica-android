@@ -143,4 +143,52 @@ describe("comment trigger preview api (iter 106)", () => {
       }),
     );
   });
+
+  it("createComment sends steer_task_ids only when non-empty", async () => {
+    // Iteration 298: the wire half of run steering. An EMPTY list must be
+    // omitted, not sent as `[]` — an empty array would tell the server "steer
+    // nothing", and more importantly it would change the body of every
+    // ordinary comment this client posts.
+    const spy = fetchSpy().mockResolvedValue({
+      id: "c-1",
+      issue_id: "issue-1",
+      author_type: "member",
+      author_id: "u-1",
+      content: "x",
+      type: "comment",
+      parent_id: null,
+      reactions: [],
+      attachments: [],
+      created_at: "2026-08-26T00:00:00Z",
+      updated_at: "2026-08-26T00:00:00Z",
+      resolved_at: null,
+      resolved_by_type: null,
+      resolved_by_id: null,
+    });
+
+    await api.createComment("issue-1", "x", {
+      suppressAgentIds: ["a-1"],
+      steerTaskIds: ["t-1", "t-2"],
+    });
+    expect(spy).toHaveBeenCalledWith(
+      "/api/issues/issue-1/comments",
+      expect.objectContaining({
+        body: JSON.stringify({
+          content: "x",
+          type: "comment",
+          suppress_agent_ids: ["a-1"],
+          steer_task_ids: ["t-1", "t-2"],
+        }),
+      }),
+    );
+
+    spy.mockClear();
+    await api.createComment("issue-1", "x", { steerTaskIds: [] });
+    expect(spy).toHaveBeenCalledWith(
+      "/api/issues/issue-1/comments",
+      expect.objectContaining({
+        body: JSON.stringify({ content: "x", type: "comment" }),
+      }),
+    );
+  });
 });
