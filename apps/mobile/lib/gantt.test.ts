@@ -6,6 +6,7 @@ import {
   ganttBarGeometry,
   ganttCanvasRows,
   ganttInverted,
+  ganttPhoneLayout,
   computeGanttRange,
   utcDay,
 } from "./gantt";
@@ -196,6 +197,24 @@ describe("ganttBarGeometry", () => {
   });
 });
 
+describe("ganttPhoneLayout", () => {
+  it.each([320, 360, 390])("keeps over half of a %i dp phone free for dates", (width) => {
+    const layout = ganttPhoneLayout(width, 1);
+    expect(layout.compact).toBe(true);
+    expect(layout.labelWidth).toBeLessThan(width / 2);
+    expect(layout.rowHeight).toBeGreaterThanOrEqual(48);
+  });
+
+  it("grows the shared row pitch for large text without widening the label pane", () => {
+    const standard = ganttPhoneLayout(460, 1);
+    const large = ganttPhoneLayout(460, 1.8);
+    expect(standard.compact).toBe(false);
+    expect(large.compact).toBe(true);
+    expect(large.rowHeight).toBeGreaterThan(standard.rowHeight);
+    expect(large.labelWidth).toBeLessThanOrEqual(standard.labelWidth);
+  });
+});
+
 describe("ganttCanvasRows", () => {
   const rows = [
     issue({ id: "dated-open", start_date: "2026-03-01" }),
@@ -207,6 +226,12 @@ describe("ganttCanvasRows", () => {
   it("drops undated rows always (defensive: server sends scheduled=true)", () => {
     expect(ganttCanvasRows(rows, true).map((r) => r.id)).not.toContain("undated");
     expect(ganttCanvasRows(rows, false).map((r) => r.id)).not.toContain("undated");
+  });
+
+  it("recovers a completed-only scheduled window by turning on the toggle", () => {
+    const doneOnly = [rows[1]!, rows[2]!];
+    expect(ganttCanvasRows(doneOnly, false)).toEqual([]);
+    expect(ganttCanvasRows(doneOnly, true)).toEqual(doneOnly);
   });
 
   it("keeps done/cancelled only when showCompleted", () => {

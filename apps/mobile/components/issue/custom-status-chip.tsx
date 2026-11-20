@@ -46,10 +46,12 @@ export function CustomStatusChip({
   status,
   wsId,
   className,
+  labelLines = 1,
 }: {
   status: IssueStatus;
   wsId?: string | null;
   className?: string;
+  labelLines?: 1 | 2;
 }) {
   const catalog = useIssueStatuses(wsId ?? null);
   const entry = catalog.entryOf(status);
@@ -65,7 +67,7 @@ export function CustomStatusChip({
         color={entry.color}
         size={12}
       />
-      <Text className="text-micro leading-tight text-muted-foreground" numberOfLines={1}>
+      <Text className="shrink text-micro leading-tight text-muted-foreground" numberOfLines={labelLines}>
         {entry.name}
       </Text>
     </View>

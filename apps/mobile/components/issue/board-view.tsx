@@ -373,32 +373,37 @@ function ColumnHeader({
     );
   }
   return (
-    <View className="flex-row items-center gap-2 px-1 pb-2">
-      {leading}
-      <Text
-        numberOfLines={1}
-        className="flex-shrink text-caption uppercase tracking-wider font-medium text-muted-foreground"
-      >
-        {label}
-      </Text>
-      <Text className="ml-auto text-caption text-muted-foreground/60">
-        {column.data.length}
-      </Text>
+    <View className="flex-row items-center gap-1 px-2 py-2">
+      <View className="min-w-0 flex-1 flex-row items-start gap-2">
+        <View className="shrink-0 pt-1">{leading}</View>
+        <View className="min-w-0 flex-1 gap-1">
+          <Text
+            accessibilityRole="header"
+            accessibilityLabel={label}
+            numberOfLines={2}
+            className="text-body font-semibold text-foreground"
+          >
+            {label}
+          </Text>
+          <Text className="self-start rounded-full bg-secondary px-2 py-0.5 text-caption tabular-nums text-muted-foreground">
+            {column.data.length}
+          </Text>
+        </View>
+      </View>
       {/* Column-header quick create (web board-column.tsx:226-246, whose
           `+` sits opposite the lane title). The new issue is seeded with
           the column's own status / assignee, so "add here" means here. */}
       {onCreateIssue ? (
         <Pressable
           onPress={() => onCreateIssue(column)}
-          hitSlop={10}
-          className="active:opacity-60"
+          className="size-12 shrink-0 items-center justify-center rounded-full active:bg-secondary"
           accessibilityRole="button"
           accessibilityLabel={t("issues.boardAddIssue")}
         >
           <Ionicons
             name="add"
-            size={15}
-            color={palette.mutedForeground}
+            size={18}
+            color={palette.primary}
           />
         </Pressable>
       ) : null}
@@ -410,15 +415,14 @@ function ColumnHeader({
             !statusFixedByView && onHideStatus(column.status as IssueStatus)
           }
           disabled={statusFixedByView}
-          hitSlop={10}
-          className={statusFixedByView ? "opacity-30" : "active:opacity-60"}
+          className={`size-12 shrink-0 items-center justify-center rounded-full ${statusFixedByView ? "opacity-40" : "active:bg-secondary"}`}
           accessibilityRole="button"
           accessibilityState={{ disabled: statusFixedByView }}
           accessibilityLabel={t("issues.boardHideColumn")}
         >
           <Ionicons
             name="eye-off-outline"
-            size={15}
+            size={17}
             color={palette.mutedForeground}
           />
         </Pressable>
@@ -452,12 +456,12 @@ function HiddenColumnsLane({
   return (
     <View
       style={{ width: BOARD_COLUMN_WIDTH * 0.85, alignSelf: "stretch" }}
-      className="flex-col rounded-lg border border-dashed border-border bg-background/40"
+      className="flex-col rounded-xl border border-dashed border-border bg-secondary/20"
       accessibilityLabel={t("issues.boardHiddenColumns")}
     >
       <View className="px-3 pt-3 pb-2 flex-row items-center gap-2">
         <Ionicons name="eye-off-outline" size={14} color={dim} />
-        <Text className="text-caption uppercase tracking-wider font-medium text-muted-foreground">
+        <Text className="min-w-0 flex-1 text-body font-semibold text-foreground">
           {t("issues.boardHiddenColumns")}
         </Text>
       </View>
@@ -469,14 +473,14 @@ function HiddenColumnsLane({
           <Pressable
             key={status}
             onPress={() => onShowStatus(status)}
-            className="mx-2 mb-1 flex-row items-center gap-2 rounded-lg bg-secondary/30 px-2.5 py-2.5 active:bg-secondary"
+            className="mx-2 mb-1 min-h-12 flex-row items-center gap-2 rounded-lg bg-secondary/40 px-2.5 py-2.5 active:bg-secondary"
             accessibilityRole="button"
             accessibilityLabel={t("issues.boardShowColumn", {
               name: statusLabel(status),
             })}
           >
             <StatusIcon status={status} size={14} />
-            <Text numberOfLines={1} className="flex-1 text-body text-foreground">
+            <Text numberOfLines={2} className="min-w-0 flex-1 text-body text-foreground">
               {statusLabel(status)}
             </Text>
             <Ionicons name="eye-outline" size={15} color={dim} />
@@ -848,10 +852,10 @@ const BoardColumn = memo(function BoardColumn({
   return (
     <View
       style={{ width: BOARD_COLUMN_WIDTH, alignSelf: "stretch" }}
-      className="flex-col rounded-lg border border-border bg-background/60"
+      className="flex-col rounded-xl border border-border bg-secondary/20"
       onLayout={(e) => onLaneLayout(column.key, e)}
     >
-      <View className="px-2 pt-2">
+      <View className="mb-2 border-b border-border px-1">
         <ColumnHeader
           column={column}
           onCreateIssue={onCreateIssue}
@@ -861,9 +865,11 @@ const BoardColumn = memo(function BoardColumn({
       </View>
       {laneIds.length === 0 ? (
         <View className="flex-1 items-center justify-center px-4 pb-6">
-          <Text className="text-caption text-muted-foreground/50">
-            {translate("issues.boardEmptyColumn")}
-          </Text>
+          <View className="self-stretch rounded-xl border border-dashed border-border px-3 py-4">
+            <Text className="text-center text-caption text-muted-foreground">
+              {translate("issues.boardEmptyColumn")}
+            </Text>
+          </View>
         </View>
       ) : (
         <FlatList

@@ -216,7 +216,7 @@ export function BoardCard({
               onAccessibilityAction(e.nativeEvent.actionName)
           : undefined
       }
-      className={`rounded-lg border bg-card px-3 py-2.5 ${
+      className={`rounded-xl border bg-card px-3 py-3 ${
         lifted
           ? "border-border shadow-lg"
           : dimmed
@@ -224,29 +224,22 @@ export function BoardCard({
             : "border-border active:bg-secondary"
       }`}
       accessibilityRole="button"
-      accessibilityLabel={`${issue.title}${issue.status ? `, ${statusLabel(issue.status)}` : ""}`}
+      accessibilityLabel={[issue.identifier, issue.title, issue.status ? statusLabel(issue.status) : ""].filter(Boolean).join(", ")}
     >
-      <View className="flex-row items-start gap-1.5">
+      <View className="flex-row flex-wrap items-center gap-x-2 gap-y-1">
         {cardProperties.priority ? (
-          <View className="pt-0.5">
-            <PriorityIcon priority={issue.priority} size={13} />
-          </View>
+          <PriorityIcon priority={issue.priority} size={13} />
         ) : null}
-        <Text numberOfLines={2} className="flex-1 text-body font-medium leading-snug">
-          {issue.title}
+        <Text className="text-caption tabular-nums text-muted-foreground">
+          {issue.identifier}
         </Text>
-        {issue.status ? (
-          <View className="pt-0.5">
-            <CustomStatusChip status={issue.status} />
-          </View>
-        ) : null}
+        {issue.status ? <CustomStatusChip status={issue.status} className="max-w-full" labelLines={2} /> : null}
       </View>
+      <Text numberOfLines={3} className="mt-1.5 text-body font-semibold text-foreground">
+        {issue.title}
+      </Text>
 
-      {/* "→ MUL-123" for a card that is a duplicate (MUL-7349) — its own row
-       *  rather than inline in the title row above: web puts it beside the
-       *  identifier (board-card.tsx:206), and a phone card has no identifier
-       *  line to attach it to. Under the title is the nearest equivalent that
-       *  still reads as card metadata rather than as part of the title.
+      {/* The duplicate marker remains its own action below the card title.
        *
        *  A nested Pressable, so a tap on the marker navigates to the original
        *  without the card ALSO opening the duplicate — the card's own
@@ -258,13 +251,13 @@ export function BoardCard({
           {labels.slice(0, 3).map((label) => (
             <View
               key={label.id}
-              className="flex-row items-center gap-1 rounded-full bg-secondary/60 px-1.5 py-0.5"
+              className="max-w-full flex-row items-center gap-1 rounded-full bg-secondary/60 px-2 py-0.5"
             >
               <View
                 style={{ backgroundColor: label.color ?? "#8b8b8b" }}
-                className="size-2 rounded-full"
+                className="size-2 shrink-0 rounded-full"
               />
-              <Text className="text-micro text-muted-foreground">
+              <Text className="shrink text-caption text-muted-foreground" numberOfLines={2}>
                 {label.name}
               </Text>
             </View>
@@ -297,7 +290,7 @@ export function BoardCard({
             return (
               <View
                 key={property.id}
-                className="max-w-[160px] flex-row items-center gap-1 rounded-full bg-secondary/60 px-1.5 py-0.5"
+                className="max-w-full flex-row items-center gap-1 rounded-full bg-secondary/60 px-2 py-0.5"
               >
                 {chip.color ? (
                   <View
@@ -312,8 +305,8 @@ export function BoardCard({
                   />
                 )}
                 <Text
-                  numberOfLines={1}
-                  className="flex-shrink text-micro text-muted-foreground"
+                  numberOfLines={2}
+                  className="shrink text-caption text-muted-foreground"
                 >
                   {chip.text}
                 </Text>
@@ -333,10 +326,10 @@ export function BoardCard({
         </View>
       ) : null}
 
-      <View className="mt-2 flex-row items-center justify-between">
+      <View className="mt-2 flex-row flex-wrap items-center justify-between gap-x-2 gap-y-1">
         {dateKey ? (
           <Text
-            className={`text-micro ${
+            className={`shrink text-caption ${
               overdue ? "text-destructive" : "text-muted-foreground"
             }`}
           >
