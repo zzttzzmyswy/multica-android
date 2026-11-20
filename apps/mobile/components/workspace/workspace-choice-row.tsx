@@ -5,6 +5,7 @@ import { Text } from "@/components/ui/text";
 import { WorkspaceAvatar } from "@/components/workspace/workspace-avatar";
 import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 import { useTranslation } from "@/lib/i18n/react";
+import { workspaceChoiceIdentity } from "@/lib/workspace-choice-identity";
 import { cn } from "@/lib/utils";
 
 /** Presentation only: each host owns the switch route and confirmation. */
@@ -22,6 +23,7 @@ export function WorkspaceChoiceRow({
   const { t } = useTranslation();
   const theme = useThemePalette();
   const unread = !active && hasUnread;
+  const identity = workspaceChoiceIdentity(workspace);
   return (
     <Pressable
       onPress={onPress}
@@ -30,10 +32,10 @@ export function WorkspaceChoiceRow({
       accessibilityState={{ selected: active, disabled: active }}
       accessibilityLabel={
         active
-          ? t("a11y.currentWorkspace", { name: workspace.name })
+          ? t("a11y.currentWorkspace", { name: identity })
           : unread
-            ? t("a11y.switchToUnread", { name: workspace.name })
-            : t("a11y.switchTo", { name: workspace.name })
+            ? t("a11y.switchToUnread", { name: identity })
+            : t("a11y.switchTo", { name: identity })
       }
       className={cn(
         "min-h-14 flex-row items-center gap-3 px-3 py-3 active:bg-secondary",

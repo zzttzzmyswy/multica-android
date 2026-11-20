@@ -20,6 +20,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { workspaceChoiceIdentity } from "./workspace-choice-identity";
 
 // This file lives in `lib/`, so one level up is the mobile app root.
 const APP_ROOT = path.resolve(__dirname, "..");
@@ -105,6 +106,20 @@ describe("the shared workspace row announces itself", () => {
   it("marks the active workspace selected and announces it separately", () => {
     expect(src).toContain("accessibilityState={{ selected: active, disabled: active }}");
     expect(src).toContain('t("a11y.currentWorkspace"');
+  });
+
+  it("distinguishes same-named destinations in the row and confirmation", () => {
+    expect(workspaceChoiceIdentity({ name: "Engineering", slug: "eng-cn" }))
+      .toBe("Engineering (/eng-cn)");
+    expect(workspaceChoiceIdentity({ name: "Engineering", slug: "eng-us" }))
+      .toBe("Engineering (/eng-us)");
+    expect(src).toContain("const identity = workspaceChoiceIdentity(workspace)");
+    for (const key of ["currentWorkspace", "switchToUnread", "switchTo"]) {
+      expect(src).toContain(`t("a11y.${key}", { name: identity })`);
+    }
+    expect(code(SWITCH_SHEET)).toContain(
+      'tr.t("switchWorkspace.message", { name: workspaceChoiceIdentity(ws) })',
+    );
   });
 
   it("resolves that key in both mobile bundles", () => {

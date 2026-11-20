@@ -40,6 +40,7 @@ import { inboxUnreadSummaryOptions } from "@/data/queries/inbox";
 import { workspaceListOptions } from "@/data/queries/workspaces";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useTranslation } from "@/lib/i18n/react";
+import { workspaceChoiceIdentity } from "@/lib/workspace-choice-identity";
 import { workspaceUnreadBadge } from "@/lib/workspace-unread-badge";
 import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
@@ -64,7 +65,7 @@ export default function SwitchWorkspaceRoute() {
     if (ws.slug === activeSlug) return;
     Alert.alert(
       tr.t("switchWorkspace.title"),
-      tr.t("switchWorkspace.message", { name: ws.name }),
+      tr.t("switchWorkspace.message", { name: workspaceChoiceIdentity(ws) }),
       [
         { text: tr.t("common.cancel"), style: "cancel" },
         {
