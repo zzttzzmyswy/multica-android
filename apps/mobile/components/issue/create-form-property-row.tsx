@@ -79,7 +79,10 @@ function chipValueLabel(
   }
 }
 
-export function CreateFormPropertyRow() {
+export function CreateFormPropertyRow({
+  disabled,
+  isLocked,
+}: { disabled?: boolean; isLocked?: () => boolean } = {}) {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const { t } = useTranslation();
@@ -90,7 +93,7 @@ export function CreateFormPropertyRow() {
   const withValue = catalog.definitions.filter((p) => values[p.id] !== undefined);
 
   const open = (propertyId: string) => {
-    if (!wsSlug) return;
+    if (disabled || isLocked?.() || !wsSlug) return;
     router.push({
       pathname: "/[workspace]/new-issue-picker/property",
       params: { workspace: wsSlug, propertyId },
@@ -98,7 +101,7 @@ export function CreateFormPropertyRow() {
   };
 
   const openOverflow = () => {
-    if (!wsSlug) return;
+    if (disabled || isLocked?.() || !wsSlug) return;
     router.push({
       pathname: "/[workspace]/new-issue-picker/properties",
       params: { workspace: wsSlug },
@@ -113,7 +116,10 @@ export function CreateFormPropertyRow() {
           icon={<Ionicons name="refresh" size={14} color={theme.mutedForeground} />}
           label={t("newIssue.propertiesRetry")}
           variant="dimmed"
-          onPress={catalog.retry}
+          disabled={disabled}
+          onPress={() => {
+            if (!disabled && !isLocked?.()) catalog.retry();
+          }}
         />
       );
     }
@@ -137,6 +143,7 @@ export function CreateFormPropertyRow() {
           }
           label={`${property.name}: ${chipValueLabel(property, values[property.id], t)}`}
           variant="filled"
+          disabled={disabled}
           onPress={() => open(property.id)}
         />
       ))}
@@ -144,6 +151,7 @@ export function CreateFormPropertyRow() {
         icon={<Ionicons name="pricetag-outline" size={13} color={theme.mutedForeground} />}
         label={t("newIssue.propertiesAdd")}
         variant="dimmed"
+        disabled={disabled}
         onPress={openOverflow}
       />
     </View>

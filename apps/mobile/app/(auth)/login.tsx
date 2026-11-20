@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { KeyboardAvoidingView, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -18,19 +18,25 @@ import { useAuthStore } from "@/data/auth-store";
 import { api } from "@/data/api";
 import {
   getDisplayBaseUrl,
+  getServerResetTarget,
   hasCustomApiBaseUrl,
+  normalizeServerBaseUrl,
   resetApiBaseUrl,
 } from "@/data/server-config";
 import { isConnectionError, mapAuthError } from "@/lib/auth-error";
 import { keyboardBehavior } from "@/lib/keyboard";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 import { useTranslation } from "@/lib/i18n/react";
 
 export default function Login() {
   const { t } = useTranslation();
+  const palette = useThemePalette();
   const sendCode = useAuthStore((s) => s.sendCode);
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const actionPending = useRef(false);
+  const [switching, setSwitching] = useState(false);
 
   const [serverOpen, setServerOpen] = useState(false);
   const [serverInput, setServerInput] = useState("");
@@ -44,7 +50,9 @@ export default function Login() {
 
   const onSubmit = async () => {
     const trimmed = email.trim();
-    if (!trimmed) return;
+    if (!trimmed || actionPending.current) return;
+    const serverAtSubmit = hasCustomApiBaseUrl() ? getDisplayBaseUrl() : null;
+    actionPending.current = true;
     void Haptics.selectionAsync();
     setSubmitting(true);
     setError(null);
@@ -55,44 +63,66 @@ export default function Login() {
     } catch (err) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setError(mapAuthError(err, t("login.sendCodeError"), t));
-      if (isConnectionError(err) && hasCustomApiBaseUrl()) {
-        setFailedServer(getDisplayBaseUrl());
+      if (isConnectionError(err) && serverAtSubmit === getDisplayBaseUrl()) {
+        setFailedServer(serverAtSubmit);
       }
     } finally {
+      actionPending.current = false;
       setSubmitting(false);
     }
   };
 
   const currentServer = getDisplayBaseUrl();
+  const resetTarget = getServerResetTarget(currentServer);
+  const busy = submitting || serverSaving || switching;
 
   const onSaveServer = async () => {
+    if (actionPending.current) return;
+    const url = normalizeServerBaseUrl(serverInput);
+    if (!url) {
+      setServerError(t("login.serverInvalid"));
+      return;
+    }
+    actionPending.current = true;
     void Haptics.selectionAsync();
     setServerSaving(true);
     setServerError(null);
     setServerSaved(false);
-    setFailedServer(null);
     try {
-      await api.setBaseUrl(serverInput);
+      await api.setBaseUrl(url);
+      setFailedServer(null);
+      setError(null);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setServerInput("");
       setServerSaved(true);
-    } catch (err) {
-      setServerError(
-        err instanceof Error
-          ? err.message
-          : t("login.serverInvalid"),
-      );
+    } catch {
+      setServerError(t("login.serverSaveFailed"));
     } finally {
+      actionPending.current = false;
       setServerSaving(false);
     }
   };
 
-  const onResetServer = async () => {
-    void Haptics.selectionAsync();
-    setServerInput("");
+  const onResetServer = async (expected: string) => {
+    if (actionPending.current || !getServerResetTarget(expected)) return;
+    actionPending.current = true;
+    setSwitching(true);
     setServerError(null);
     setServerSaved(false);
-    await resetApiBaseUrl();
+    try {
+      if (await resetApiBaseUrl(expected)) {
+        setServerInput("");
+        setFailedServer(null);
+        setError(null);
+        setServerSaved(true);
+      }
+    } catch {
+      setServerError(t("login.serverResetFailed"));
+      setServerOpen(true);
+    } finally {
+      actionPending.current = false;
+      setSwitching(false);
+    }
   };
 
   return (
@@ -130,26 +160,27 @@ export default function Login() {
               onChangeText={setEmail}
               onSubmitEditing={onSubmit}
               returnKeyType="send"
-              editable={!submitting}
+              editable={!busy}
               invalid={!!error}
             />
             {error ? (
-              <Text className="text-body text-destructive">{error}</Text>
+              <Text accessibilityLiveRegion="polite" className="text-body text-destructive">{error}</Text>
             ) : null}
-            {error && failedServer && hasCustomApiBaseUrl() ? (
+            {error && failedServer && failedServer === currentServer ? (
               <ServerUnreachableNotice
                 failedBaseUrl={failedServer}
-                onSwitched={() => {
-                  setError(null);
-                  setFailedServer(null);
-                }}
+                defaultUrl={resetTarget}
+                switching={switching}
+                disabled={busy}
+                onSwitch={() => onResetServer(failedServer)}
+                onEdit={() => setServerOpen(true)}
               />
             ) : null}
           </View>
 
           <Button
             size="lg"
-            disabled={submitting || !email.trim()}
+            disabled={busy || !email.trim()}
             onPress={onSubmit}
           >
             <Text>{submitting ? t("login.sending") : t("login.sendCode")}</Text>
@@ -169,26 +200,23 @@ export default function Login() {
               <View
                 accessibilityRole="button"
                 accessibilityState={{ expanded: serverOpen }}
-                className="flex-row items-center justify-between active:opacity-70"
+                className="min-h-12 flex-row items-center gap-2 active:opacity-70"
               >
-                <Text className="text-caption font-medium text-muted-foreground">
-                  {t("login.server")}
-                </Text>
-                <View className="flex-row items-center gap-2 flex-1 justify-end">
+                <View className="min-w-0 flex-1 gap-0.5">
+                  <Text className="text-body font-medium text-foreground">
+                    {t("login.server")}
+                  </Text>
                   {currentServer ? (
-                    <Text
-                      className="text-caption text-muted-foreground max-w-[70%]"
-                      numberOfLines={1}
-                    >
+                    <Text className="text-caption text-muted-foreground">
                       {currentServer}
                     </Text>
                   ) : null}
-                  <Ionicons
-                    name={serverOpen ? "chevron-up" : "chevron-down"}
-                    size={14}
-                    color="#71717a"
-                  />
                 </View>
+                <Ionicons
+                  name={serverOpen ? "chevron-up" : "chevron-down"}
+                  size={16}
+                  color={palette.mutedForeground}
+                />
               </View>
             </CollapsibleTrigger>
             <CollapsibleContent>
@@ -206,7 +234,7 @@ export default function Login() {
                   placeholder={t("login.serverPlaceholder")}
                   value={serverInput}
                   onChangeText={setServerInput}
-                  editable={!serverSaving}
+                  editable={!busy}
                   invalid={!!serverError}
                 />
                 {serverError ? (
@@ -217,25 +245,30 @@ export default function Login() {
                     {t("login.serverUpdated")}
                   </Text>
                 ) : null}
-                <View className="flex-row gap-2">
+                <View className="gap-2">
                   <Button
                     variant="outline"
-                    size="sm"
-                    className="flex-1"
-                    disabled={serverSaving || !serverInput.trim()}
+                    className="min-h-12 h-auto py-2"
+                    disabled={busy || !serverInput.trim()}
                     onPress={onSaveServer}
                   >
                     <Text>{serverSaving ? t("common.saving") : t("common.save")}</Text>
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="flex-1"
-                    disabled={serverSaving || !hasCustomApiBaseUrl()}
-                    onPress={onResetServer}
-                  >
-                    <Text>{t("common.reset")}</Text>
-                  </Button>
+                  {resetTarget ? (
+                    <>
+                      <Text className="text-caption text-muted-foreground">
+                        {t("login.serverSwitchTarget", { url: resetTarget })}
+                      </Text>
+                      <Button
+                        variant="ghost"
+                        className="min-h-12 h-auto py-2"
+                        disabled={busy}
+                        onPress={() => onResetServer(currentServer)}
+                      >
+                        <Text>{switching ? t("login.switchingServer") : t("login.useDefaultServer")}</Text>
+                      </Button>
+                    </>
+                  ) : null}
                 </View>
               </View>
             </CollapsibleContent>

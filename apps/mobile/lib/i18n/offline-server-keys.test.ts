@@ -31,9 +31,15 @@ describe("unreachable-server recovery i18n", () => {
 
   const ZH_SPOT: Record<string, string> = {
     "login.offlineCustomServer":
-      "正在使用自定义服务器 {{url}}，该地址当前无法连接。可切回默认服务器。",
+      "暂时无法连接此自定义服务器：{{url}}",
     "login.useDefaultServer": "重置为默认",
     "login.switchingServer": "切换中…",
+    "login.serverResetFailed": "无法切换服务器，已保留当前服务器。",
+    "login.serverSwitchTarget": "默认服务器：{{url}}",
+    "login.editServer": "编辑服务器地址",
+    "login.serverSaveFailed": "无法保存服务器地址，请重试。",
+    "auth.serverTemporarilyUnavailable":
+      "服务器有响应，但暂时无法完成请求。请在当前服务器重试。",
   };
 
   it("resolves every recovery key in both locales", () => {

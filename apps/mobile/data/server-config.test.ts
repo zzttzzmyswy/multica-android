@@ -9,6 +9,7 @@
  * fresh. `expo-secure-store` is mocked as an in-memory KV store.
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import * as SecureStore from "expo-secure-store";
 
 const secureStoreMap = new Map<string, string>();
 
@@ -184,6 +185,46 @@ describe("resetApiBaseUrl", () => {
   });
 });
 
+describe("server recovery reset", () => {
+  const storageKey = "multica_server_base_url";
+  const current = "https://custom.example.com/api";
+
+  it.each(["", "not a URL", "HTTPS://custom.example.com:443/api/"])(
+    "does not clear the only server without a distinct usable fallback (%s)",
+    async (fallback) => {
+      const mod = await loadFreshServerConfig(fallback);
+      await mod.setApiBaseUrl(current);
+      expect(mod.getServerResetTarget(current)).toBeNull();
+      await expect(mod.resetApiBaseUrl(current)).resolves.toBe(false);
+      expect(mod.getApiBaseUrl()).toBe(current);
+      expect(secureStoreMap.get(storageKey)).toBe(current);
+    },
+  );
+
+  it("preserves different API paths and declines a stale reset", async () => {
+    const fallback = "https://custom.example.com/another";
+    const mod = await loadFreshServerConfig(fallback);
+    await mod.setApiBaseUrl(current);
+    expect(mod.getServerResetTarget(current)).toBe(fallback);
+    const save = mod.setApiBaseUrl("https://new.example.com");
+    const reset = mod.resetApiBaseUrl(current);
+    await save;
+    await expect(reset).resolves.toBe(false);
+    expect(secureStoreMap.get(storageKey)).toBe("https://new.example.com");
+  });
+
+  it("keeps the current server if removing the override fails", async () => {
+    const mod = await loadFreshServerConfig("https://default.example.com");
+    await mod.setApiBaseUrl(current);
+    vi.mocked(SecureStore.deleteItemAsync).mockRejectedValueOnce(new Error("storage busy"));
+    await expect(mod.resetApiBaseUrl(current)).rejects.toThrow("storage busy");
+    expect(mod.getApiBaseUrl()).toBe(current);
+    expect(secureStoreMap.get(storageKey)).toBe(current);
+    await expect(mod.resetApiBaseUrl(current)).resolves.toBe(true);
+    expect(mod.getApiBaseUrl()).toBe("https://default.example.com");
+  });
+});
+
 describe("subscribeApiBaseUrl", () => {
   it("notifies subscribers on set and reset, and unsubscribes", async () => {
     const mod = await loadFreshServerConfig("https://default.example.com");
@@ -246,6 +287,25 @@ describe("getWebBaseUrl", () => {
   it("keeps a non-api host verbatim when no web env is set", async () => {
     const mod = await loadFreshServerConfig("https://selfhost.example.net");
     expect(mod.getWebBaseUrl()).toBe("https://selfhost.example.net");
+  });
+
+  it("keeps the explicit LAN port for a runtime same-origin server", async () => {
+    const mod = await loadFreshServerConfig(
+      "https://api.example.com",
+      "https://multica.ai",
+    );
+    await mod.setApiBaseUrl("http://192.168.1.42:3000");
+    expect(mod.getWebBaseUrl()).toBe("http://192.168.1.42:3000");
+  });
+
+  it("strips the path but keeps the baked same-origin port", async () => {
+    const mod = await loadFreshServerConfig("https://portal.example.com:8443/prefix");
+    expect(mod.getWebBaseUrl()).toBe("https://portal.example.com:8443");
+  });
+
+  it("does not assume a split web host uses its API listener's port", async () => {
+    const mod = await loadFreshServerConfig("https://api.portal.example.com:9443");
+    expect(mod.getWebBaseUrl()).toBe("https://portal.example.com");
   });
 
   it("never throws — yields empty string when neither a web env nor any API base exists", async () => {

@@ -773,7 +773,7 @@ class ApiClient {
   }
 
   /** Point the app at a different Multica server at runtime. Persists the
-   *  override and makes it effective immediately — the underlying fetch chain
+   *  override before making it effective — the underlying fetch chain
    *  re-reads `getApiBaseUrl()` per request, and the realtime socket rebuilds
    *  on the change notification. Rejects with a validation error on a
    *  non-http(s) / hostless URL. */
