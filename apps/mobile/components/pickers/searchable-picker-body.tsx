@@ -19,7 +19,7 @@
  * content-sized parent resolves to zero height.
  */
 import { View } from "react-native";
-import { TextField } from "@/components/ui/text-field";
+import { SearchField } from "@/components/ui/search-field";
 
 export function SearchablePickerBody({
   query,
@@ -34,15 +34,12 @@ export function SearchablePickerBody({
 }) {
   return (
     <View className="flex-1">
-      <View className="px-3 pt-2 pb-1">
-        <TextField
-          value={query}
-          onChangeText={onQueryChange}
-          placeholder={placeholder}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-      </View>
+      <SearchField
+        className="mx-3 mb-1 mt-2"
+        value={query}
+        onChange={onQueryChange}
+        placeholder={placeholder}
+      />
       {children}
     </View>
   );

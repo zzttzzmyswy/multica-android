@@ -54,6 +54,7 @@ import {
   propertyWriteFailureMessage,
   writeCreatePropertyValues,
 } from "@/lib/create-property-writes";
+import { createIssueSubmitLock } from "@/lib/issue-submit-lock";
 import { classifyCreateFailure } from "@/lib/duplicate-issue-error";
 import { duplicateCreatePrompt } from "@/lib/create-failure-prompts";
 import { projectDetailOptions } from "@/data/queries/projects";
@@ -312,10 +313,10 @@ export default function NewIssueModal() {
   const propertyValues = useNewIssueDraftStore((s) => s.propertyValues);
   const createIssue = useCreateIssue();
   const quickCreate = useQuickCreateIssue();
-  // Loading state follows the ACTIVE mode — the header button must show a
-  // spinner for whichever submit is in flight.
-  const isSubmitting =
-    mode === "manual" ? createIssue.isPending : quickCreate.isPending;
+  // Hold the form through create, property writes and draft consumption.
+  // A synchronous gate also catches taps delivered before React re-renders.
+  const [submitLock] = useState(createIssueSubmitLock);
+  const [isSubmitting, setSubmitting] = useState(false);
 
   // Attachment ids freshly uploaded from either body's toolbar. Carried into
   // the create payload so the server binds them to the issue. One list for
@@ -593,10 +594,18 @@ export default function NewIssueModal() {
     wsSlug,
   ]);
 
-  const onSubmit = useCallback(() => {
-    if (mode === "manual") return submitManualMode();
-    return submitAgentMode();
-  }, [mode, submitManualMode, submitAgentMode]);
+  const onSubmit = useCallback(async () => {
+    if (!canSubmit || useNewIssueDraftStore.getState().mode !== mode) return;
+    await submitLock.run(async () => {
+      setSubmitting(true);
+      try {
+        if (mode === "manual") await submitManualMode();
+        else await submitAgentMode();
+      } finally {
+        setSubmitting(false);
+      }
+    });
+  }, [canSubmit, mode, submitLock, submitManualMode, submitAgentMode]);
 
   const headerRight = useCallback(
     () => (
@@ -629,17 +638,20 @@ export default function NewIssueModal() {
               return (
                 <Pressable
                   key={m.key}
-                  onPress={() => setMode(m.key)}
+                  disabled={isSubmitting}
+                  onPress={() => {
+                    if (!submitLock.busy) setMode(m.key);
+                  }}
                   className={cn(
-                    "flex-1 items-center rounded-full px-3 py-1.5",
+                    "min-h-12 min-w-0 flex-1 items-center justify-center rounded-full px-2 py-2",
                     active ? "bg-foreground" : "bg-transparent",
                   )}
                   accessibilityRole="button"
-                  accessibilityState={{ selected: active }}
+                  accessibilityState={{ selected: active, disabled: isSubmitting }}
                 >
                   <Text
                     className={cn(
-                      "text-body font-medium",
+                      "text-center text-body font-medium",
                       active ? "text-background" : "text-muted-foreground",
                     )}
                   >
@@ -669,7 +681,10 @@ export default function NewIssueModal() {
                 })}
               </Text>
               <Pressable
-                onPress={() => setParentCleared(true)}
+                disabled={isSubmitting}
+                onPress={() => {
+                  if (!submitLock.busy) setParentCleared(true);
+                }}
                 hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel={t("newIssue.parentChipClear")}
@@ -681,6 +696,12 @@ export default function NewIssueModal() {
                 />
               </Pressable>
             </View>
+          ) : null}
+
+          {isSubmitting ? (
+            <Text accessibilityLiveRegion="polite" className="text-caption text-muted-foreground">
+              {t("common.saving")}
+            </Text>
           ) : null}
 
           {mode === "manual" ? (
@@ -701,13 +722,18 @@ export default function NewIssueModal() {
                 onAttachmentUploaded={collectAttachment}
                 onUploadingChange={setUploadsPending}
               />
-              <CreateFormAttributeRow mode="manual" parentIssueId={parent ?? null} />
+              <CreateFormAttributeRow
+                mode="manual"
+                parentIssueId={parent ?? null}
+                disabled={isSubmitting}
+                isLocked={() => submitLock.busy}
+              />
               {/* Workspace-defined properties (MYS-2245). A sibling row rather
                   than a member of the standard field pool: that pool is a
                   closed union, while the property set is per-workspace and
                   unbounded. Values chosen here are written onto the issue
                   AFTER it exists — `POST /api/issues` has no field for them. */}
-              <CreateFormPropertyRow />
+              <CreateFormPropertyRow disabled={isSubmitting} isLocked={() => submitLock.busy} />
               {/* Pre-trigger caption — a passive line saying whether saving
                   will start a run, asked of the backend's own predicate
                   (web CreateRunHint). Renders nothing until it has an
@@ -728,6 +754,7 @@ export default function NewIssueModal() {
               onAttachmentUploaded={collectAttachment}
               onUploadingChange={setUploadsPending}
               disabled={isSubmitting}
+              isLocked={() => submitLock.busy}
             />
           )}
 
@@ -739,7 +766,7 @@ export default function NewIssueModal() {
               whichever mode submits. */}
           <Pressable
             onPress={() => {
-              if (wsId) {
+              if (wsId && !submitLock.busy) {
                 useNewIssueKeepOpenStore
                   .getState()
                   .setKeepOpen(wsId, !keepOpen);
@@ -747,9 +774,9 @@ export default function NewIssueModal() {
             }}
             disabled={isSubmitting || !wsId}
             accessibilityRole="switch"
-            accessibilityState={{ checked: keepOpen, disabled: isSubmitting }}
+            accessibilityState={{ checked: keepOpen, disabled: isSubmitting || !wsId }}
             accessibilityLabel={t("newIssue.createAnother")}
-            className="flex-row items-center gap-2 pt-1 active:opacity-70"
+            className="min-h-12 flex-row items-center gap-2 rounded-xl border border-border bg-secondary/30 px-3 py-2 active:opacity-70"
           >
             <Ionicons
               name={keepOpen ? "checkbox" : "square-outline"}
@@ -770,11 +797,13 @@ export default function NewIssueModal() {
             agent prompt carries the same toolbar and `@` support as the manual
             description. Self-hides via `if (!visible) return null` so it
             doesn't take space at rest. */}
-        <MentionSuggestionBar
-          {...(mode === "manual"
-            ? description.suggestionBar
-            : promptInput.suggestionBar)}
-        />
+        {isSubmitting ? null : (
+          <MentionSuggestionBar
+            {...(mode === "manual"
+              ? description.suggestionBar
+              : promptInput.suggestionBar)}
+          />
+        )}
       </KeyboardAvoidingView>
     </>
   );

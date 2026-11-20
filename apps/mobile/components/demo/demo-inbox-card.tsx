@@ -71,18 +71,18 @@ export function DemoInboxCard({ rows }: Props) {
                         "flex-1 text-body",
                         isUnread ? "font-medium text-foreground" : "text-muted-foreground",
                       )}
-                      numberOfLines={1}
+                      numberOfLines={2}
                     >
                       {row.title}
                     </Text>
                   </View>
                   {row.status ? <StatusIcon status={row.status} size={14} /> : null}
                 </View>
-                <View className="flex-row items-center gap-2 mt-0.5">
-                  <Text className="flex-1 text-caption text-muted-foreground" numberOfLines={1}>
+                <View className="mt-0.5 gap-0.5">
+                  <Text className="text-caption text-muted-foreground" numberOfLines={2}>
                     {row.detail}
                   </Text>
-                  <Text className="text-caption text-muted-foreground/60">{row.time}</Text>
+                  <Text className="text-caption text-muted-foreground">{row.time}</Text>
                 </View>
               </View>
             </View>

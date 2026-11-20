@@ -48,6 +48,7 @@ import * as Haptics from "expo-haptics";
 import { create } from "zustand";
 import type { Issue, PinnedItem, Project } from "@multica/core/types";
 import type { IssueView } from "@multica/core/api/schemas";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { IssueRow } from "@/components/issue/issue-row";
@@ -200,11 +201,12 @@ export function PinnedScreen() {
 
   if (pins.length === 0) {
     return (
-      <View className="flex-1 items-center justify-center bg-background px-6">
-        <Text className="text-body text-muted-foreground text-center">
-          {t("pins.empty")}
-        </Text>
-      </View>
+      <EmptyState
+        icon="pin-outline"
+        title={t("pins.emptyTitle")}
+        description={t("pins.empty")}
+        className="flex-1 bg-background"
+      />
     );
   }
 
@@ -357,7 +359,7 @@ function DraggablePinRow({
   return (
     <View
       style={dy !== 0 ? { transform: [{ translateY: dy }], zIndex: 10 } : undefined}
-      className="flex-row items-center bg-background"
+      className={dy !== 0 ? "flex-row items-center bg-surface-1" : "flex-row items-center bg-background"}
     >
       <View className="flex-1">
         <PinRow pin={pin} wsId={wsId} wsSlug={wsSlug} />
@@ -367,11 +369,10 @@ function DraggablePinRow({
         accessibilityLabel={t("pins.reorder")}
         accessibilityHint={t("pins.reorderHint")}
         accessibilityRole="adjustable"
-        className="px-3 py-4"
-        hitSlop={4}
+        className="size-12 shrink-0 items-center justify-center"
       >
         <Ionicons
-          name="reorder-two"
+          name="reorder-three-outline"
           size={18}
           color={palette.mutedForeground}
         />
@@ -523,7 +524,7 @@ function ViewPinRow({
         size={18}
         color={palette.mutedForeground}
       />
-      <Text className="flex-1 text-body text-foreground" numberOfLines={1}>
+      <Text className="min-w-0 flex-1 text-body-lg font-semibold text-foreground" numberOfLines={2}>
         {view.name || t("screen.view")}
       </Text>
       {view.visibility === "workspace" ? (

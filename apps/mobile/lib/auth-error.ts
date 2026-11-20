@@ -18,7 +18,10 @@
  *  the right move and switching servers is not. */
 const OFFLINE_PATTERN = /network|fetch|timeout|timed out|unreachable|offline/;
 
-export type ErrorClass = "offline" | "auth" | "other" | "unknown";
+const AUTH_PATTERN = /invalid|incorrect|wrong|expired|rate.?limit|too many|throttle/;
+const THROTTLE_PATTERN = /rate.?limit|too many|throttle/;
+
+export type ErrorClass = "offline" | "server" | "auth" | "other" | "unknown";
 
 function errorMessage(err: unknown): string | null {
   if (err instanceof Error) return err.message.toLowerCase();
@@ -32,13 +35,17 @@ function errorStatus(err: unknown): number | null {
 }
 
 export function classifyError(err: unknown): ErrorClass {
-  const msg = errorMessage(err);
-  if (msg === null) return "unknown";
-  if (errorStatus(err) === 0 || OFFLINE_PATTERN.test(msg)) return "offline";
-  if (/invalid|incorrect|wrong|expired|rate.?limit|too many|throttle/.test(msg)) {
-    return "auth";
+  const status = errorStatus(err);
+  const msg = errorMessage(err) ?? "";
+  // An HTTP response is not a fetch failure, regardless of its wording.
+  if (status === 0) return "offline";
+  if (status !== null) {
+    if (status >= 500 && status < 600) return "server";
+    if (status === 429 || AUTH_PATTERN.test(msg)) return "auth";
+    return "other";
   }
-  if (errorStatus(err) !== null) return "other";
+  if (OFFLINE_PATTERN.test(msg)) return "offline";
+  if (AUTH_PATTERN.test(msg)) return "auth";
   return "unknown";
 }
 
@@ -56,12 +63,14 @@ export function mapAuthError(
   switch (classifyError(err)) {
     case "offline":
       return t("auth.networkError");
+    case "server":
+      return t("auth.serverTemporarilyUnavailable");
     case "auth": {
       const msg = errorMessage(err) ?? "";
-      if (/expired/.test(msg)) return t("auth.codeExpired");
-      if (/rate.?limit|too many|throttle/.test(msg)) {
+      if (errorStatus(err) === 429 || THROTTLE_PATTERN.test(msg)) {
         return t("auth.tooManyAttempts");
       }
+      if (/expired/.test(msg)) return t("auth.codeExpired");
       return t("auth.codeMismatch");
     }
     default:

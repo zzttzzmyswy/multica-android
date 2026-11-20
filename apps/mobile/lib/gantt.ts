@@ -23,6 +23,18 @@ export const DAY_PX_BY_ZOOM: Record<GanttZoom, number> = {
   month: 6,
 };
 
+/** Phone-only layout; dates, row order and bar X geometry stay unchanged. */
+export function ganttPhoneLayout(width: number, fontScale: number) {
+  const compact = width < 440 || fontScale > 1.2;
+  return {
+    compact,
+    // A 250 dp desktop-like pane left only 70 dp for dates at 320 dp.
+    labelWidth: Math.min(250, Math.floor(width * (compact ? 0.44 : 0.47))),
+    // Both independently scrolling panes use the exact same row pitch.
+    rowHeight: Math.ceil(58 * Math.max(1, fontScale)),
+  };
+}
+
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export interface GanttRange {

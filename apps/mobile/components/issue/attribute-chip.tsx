@@ -23,6 +23,7 @@ interface Props {
   label: string | null;
   variant?: "filled" | "dimmed";
   onPress?: () => void;
+  disabled?: boolean;
   className?: string;
   /** Optional a11y label override — e.g. the quick-create actor chip
    *  announces "choose agent" instead of the current agent's name. */
@@ -34,6 +35,7 @@ export function AttributeChip({
   label,
   variant = "filled",
   onPress,
+  disabled,
   className,
   accessibilityLabel,
 }: Props) {
@@ -75,6 +77,9 @@ export function AttributeChip({
     return (
       <Pressable
         onPress={onPress}
+        disabled={disabled}
+        accessibilityRole="button"
+        accessibilityState={{ disabled }}
         accessibilityLabel={accessibilityLabel}
         className={cn(containerClass, "active:bg-secondary")}
         hitSlop={4}

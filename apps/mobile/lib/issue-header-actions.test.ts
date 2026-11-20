@@ -63,7 +63,7 @@ describe("planHeaderActions", () => {
     // action; folding `search` would make this the one screen without the
     // navigator-wide search entry.
     const plan = planHeaderActions(MIN_SCREEN_WIDTH, ALL);
-    for (const pinned of ["overflow", "search", "agentBadge"]) {
+    for (const pinned of ["overflow", "search"]) {
       expect(plan.visible).toContain(pinned);
     }
   });
@@ -90,6 +90,22 @@ describe("planHeaderActions", () => {
     const plan = planHeaderActions(MIN_SCREEN_WIDTH, present);
     expect(plan.width).toBeLessThanOrEqual(plan.budget);
     expect(plan.folded).toContain("wakeupBadge");
+  });
+
+  it("reserves the wider title lane on a 320dp device with large text", () => {
+    const plan = planHeaderActions(320, ALL, 2);
+    expect(plan.visible).toEqual(["search", "overflow"]);
+    expect(plan.folded).toContain("agentBadge");
+    expect(plan.folded).toContain("wakeupBadge");
+    expect(plan.width).toBeLessThanOrEqual(headerActionBudget(320, 160));
+  });
+
+  it("keeps ambient activity at ordinary scale and folds it last", () => {
+    expect(planHeaderActions(320, ALL).visible).toContain("agentBadge");
+    expect(planHeaderActions(360, ALL, 2).folded).toContain("agentBadge");
+    const plan = planHeaderActions(320, ALL, 3);
+    expect(plan.visible).toEqual(["search", "overflow"]);
+    expect(plan.budget).toBe(plan.width);
   });
 
   it("preserves display order in both buckets", () => {

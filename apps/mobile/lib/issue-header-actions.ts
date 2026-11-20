@@ -22,18 +22,16 @@
  *   - `search` — the navigator-wide entry point; it is the default
  *     `headerRight` for every other route, so dropping it here would make this
  *     the one screen where global search disappears.
- *   - the two badges — ambient STATUS, and status that has to be opened to be
- *     seen is not ambient. They are also absent from `present` when they would
- *     render nothing, so they cost nothing in the common case.
  *
- * The rest (`archive`, `threadNav`, `find`) has an equivalent inside the
- * overflow menu, so folding one costs a tap and nothing else.
+ * Every other action has an overflow equivalent. The agent badge is the
+ * last to fold so its ambient status stays visible whenever possible.
  */
 import {
   HEADER_ACTION_FOOTPRINT,
   HEADER_ACTION_GAP,
   HEADER_AGENT_BADGE_WIDTH,
   HEADER_WAKEUP_BADGE_WIDTH,
+  MIN_TITLE_WIDTH,
   headerActionBudget,
 } from "./header-title-budget";
 
@@ -82,10 +80,11 @@ const FOLD_PRIORITY: HeaderActionKey[] = [
   "find",
   "archive",
   "wakeupBadge",
+  "agentBadge",
 ];
 
 /** Never folded — see the module comment. */
-const PINNED: HeaderActionKey[] = ["search", "agentBadge", "overflow"];
+const PINNED: HeaderActionKey[] = ["search", "overflow"];
 
 export interface HeaderActionPlan {
   /** Rendered in the bar, in display order. */
@@ -112,17 +111,24 @@ export function planWidth(keys: HeaderActionKey[]): number {
  * @param present      which actions this issue actually has right now. Omit
  *                     the conditional ones (archive / badges) when they would
  *                     render null — an invisible badge must not reserve width.
+ * @param fontScale    system font scale applied by the native Stack title
  */
 export function planHeaderActions(
   screenWidth: number,
   present: HeaderActionKey[],
+  fontScale = 1,
 ): HeaderActionPlan {
-  const budget = headerActionBudget(screenWidth);
   // Only actions that are both present and known to the bar; unknown keys are
   // dropped rather than rendered.
   const active = HEADER_ACTION_DISPLAY_ORDER.filter((key) =>
     present.includes(key),
   );
+
+  // Keep the two essential controls even if the requested title lane is
+  // wider than the screen can ever afford. All remaining room goes to text.
+  const essentialWidth = planWidth(active.filter((key) => PINNED.includes(key)));
+  const scaledTitle = Math.ceil(MIN_TITLE_WIDTH * Math.max(1, fontScale));
+  const budget = Math.max(essentialWidth, headerActionBudget(screenWidth, scaledTitle));
 
   const folded = new Set<HeaderActionKey>();
   // Fold until the bar fits. Walking FOLD_PRIORITY means the most expendable

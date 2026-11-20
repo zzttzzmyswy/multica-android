@@ -10,16 +10,15 @@
  * web 的「更多菜单」里才有清空入口；移动端把它提到标题行 —— 触屏
  * 上外露比藏进三步菜单更符合单手操作。
  */
-import { useState } from "react";
-import { Alert, View } from "react-native";
+import { useRef, useState } from "react";
+import { ActivityIndicator, Alert, ScrollView, View, useWindowDimensions } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { ChatPendingTask, ChatQueuedTask } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { IconButton } from "@/components/ui/icon-button";
 import { useTranslation } from "@/lib/i18n/react";
 import { canSteer, queueEditDraftText, queueRows } from "@/lib/chat-queue";
-import { THEME } from "@/lib/theme";
-import { useColorScheme } from "@/lib/use-color-scheme";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 interface Props {
   pendingTask: ChatPendingTask | null | undefined;
@@ -37,23 +36,27 @@ export function ChatQueue({
   onClear,
 }: Props) {
   const { t } = useTranslation();
-  const { isDarkColorScheme } = useColorScheme();
-  const theme = isDarkColorScheme ? THEME.dark : THEME.light;
-  const mutedColor = theme.mutedForeground;
+  const { height } = useWindowDimensions();
+  const palette = useThemePalette();
+  const mutedColor = palette.mutedForeground;
   const tasks = queueRows(pendingTask);
   const steerable = canSteer(pendingTask);
   const [busy, setBusy] = useState<string | null>(null);
+  const inFlight = useRef(false);
 
   if (tasks.length === 0) return null;
 
   const run = async (key: string, action: () => Promise<void>) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(key);
     try {
       await action();
     } catch {
       Alert.alert(t("chat.queue.actionFailed"));
     } finally {
-      setBusy((current) => (current === key ? null : current));
+      inFlight.current = false;
+      setBusy(null);
     }
   };
 
@@ -61,64 +64,85 @@ export function ChatQueue({
     // Rounded top corners only — the bottom edge tucks behind the next card
     // (the composer), so a full radius looks detached. Same "emerges from
     // behind the input" reading as web's -mb-3 queue tuck.
-    <View className="mx-3 mb-[-6] rounded-t-lg border border-b-0 border-border bg-card px-3 pt-2 pb-3">
-      <View className="mb-1.5 flex-row items-center gap-1.5">
-        <Ionicons name="albums-outline" size={14} color={mutedColor} />
-        <Text className="flex-1 text-caption font-medium text-muted-foreground">
+    <View className="mx-3 mb-[-6] rounded-t-xl border border-b-0 border-border bg-card px-3 pb-2">
+      <View className="flex-row items-center gap-2">
+        <Ionicons name="albums-outline" size={16} color={mutedColor} />
+        <Text
+          accessibilityRole="header"
+          accessibilityLiveRegion="polite"
+          accessibilityState={{ busy: busy !== null }}
+          className="min-w-0 flex-1 text-caption font-semibold text-foreground"
+        >
           {t("chat.queue.title", { count: tasks.length })}
         </Text>
+        {busy !== null ? (
+          <ActivityIndicator size="small" color={palette.primary} accessibilityLabel={t("chat.queue.working")} />
+        ) : null}
         <IconButton
           name="close"
-          iconSize={13}
+          iconSize={17}
+          className="size-12 shrink-0 rounded-xl"
           disabled={busy !== null}
           accessibilityLabel={t("chat.queue.clear")}
           onPress={() => void run("clear", onClear)}
         />
       </View>
-      {tasks.map((task) => {
-        const rowText = queueEditDraftText(task) ?? t("chat.queue.fallback");
-        return (
-          <View
-            key={task.task_id}
-            className="min-h-8 flex-row items-center gap-1"
-          >
-            <Ionicons name="arrow-redo-outline" size={13} color={mutedColor} />
-            <Text
-              numberOfLines={1}
-              className="min-w-0 flex-1 text-body text-muted-foreground"
+      <ScrollView
+        style={{ maxHeight: Math.max(96, Math.min(224, Math.floor(height * 0.28))) }}
+        keyboardShouldPersistTaps="handled"
+        nestedScrollEnabled
+      >
+        {tasks.map((task) => {
+          const rowText = queueEditDraftText(task) ?? t("chat.queue.fallback");
+          return (
+            <View
+              key={task.task_id}
+              className="gap-1 border-t border-border px-1 pt-2"
             >
-              {rowText}
-            </Text>
-            <IconButton
-              name="play"
-              iconSize={13}
-              disabled={busy !== null || !steerable}
-              accessibilityLabel={t("chat.queue.steer")}
-              onPress={() =>
-                void run(`send:${task.task_id}`, () => onSendNow(task))
-              }
-            />
-            <IconButton
-              name="create-outline"
-              iconSize={13}
-              disabled={busy !== null}
-              accessibilityLabel={t("chat.queue.edit")}
-              onPress={() =>
-                void run(`edit:${task.task_id}`, () => onEdit(task))
-              }
-            />
-            <IconButton
-              name="trash-bin-outline"
-              iconSize={13}
-              disabled={busy !== null}
-              accessibilityLabel={t("chat.queue.remove")}
-              onPress={() =>
-                void run(`remove:${task.task_id}`, () => onRemove(task))
-              }
-            />
-          </View>
-        );
-      })}
+              <Text
+                numberOfLines={2}
+                accessibilityLabel={rowText}
+                className="text-body text-foreground"
+              >
+                {rowText}
+              </Text>
+              <View className="flex-row flex-wrap justify-end">
+                <IconButton
+                  name="play"
+                  iconSize={16}
+                  className="size-12 rounded-xl"
+                  disabled={busy !== null || !steerable}
+                  accessibilityLabel={t("chat.queue.steer")}
+                  accessibilityHint={!steerable ? t("chat.queue.steerUnavailable") : undefined}
+                  onPress={() =>
+                    void run(`send:${task.task_id}`, () => onSendNow(task))
+                  }
+                />
+                <IconButton
+                  name="create-outline"
+                  iconSize={17}
+                  className="size-12 rounded-xl"
+                  disabled={busy !== null}
+                  accessibilityLabel={t("chat.queue.edit")}
+                  onPress={() =>
+                    void run(`edit:${task.task_id}`, () => onEdit(task))
+                  }
+                />
+                <IconButton
+                  name="trash-bin-outline"
+                  iconSize={17}
+                  className="size-12 rounded-xl"
+                  disabled={busy !== null}
+                  accessibilityLabel={t("chat.queue.remove")}
+                  onPress={() =>
+                    void run(`remove:${task.task_id}`, () => onRemove(task))
+                  }
+                />
+              </View>
+            </View>
+          );
+        })}
+      </ScrollView>
     </View>
   );
 }

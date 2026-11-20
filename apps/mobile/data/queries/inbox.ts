@@ -270,12 +270,17 @@ export function mapArchivedInboxCache(
 ): ArchivedInboxCache {
   const apply = (items: InboxItem[]) => patch(items) ?? items;
   if (Array.isArray(data)) return apply(data);
+  // Prefix caches can contain unrelated or not-yet-hydrated shapes. Never
+  // coerce them into a page or destroy their metadata during optimistic work.
+  if (!data || typeof data !== "object") return data;
   if ("pages" in data) {
+    if (!Array.isArray(data.pages) || data.pages.some((page) => !page || !Array.isArray(page.items))) return data;
     return {
       ...data,
       pages: data.pages.map((page) => ({ ...page, items: apply(page.items) })),
     };
   }
+  if (!("items" in data) || !Array.isArray(data.items)) return data;
   return { ...data, items: apply(data.items) };
 }
 

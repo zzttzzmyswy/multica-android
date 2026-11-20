@@ -87,7 +87,12 @@ export function ProjectPropertiesSection({
   const leadKnown = leadCell.kind === "name";
 
   return (
-    <View className="border-y border-border bg-background">
+    <View className="mx-4 overflow-hidden rounded-2xl border border-border bg-background">
+      <View className="px-4 py-3 bg-secondary/30 border-b border-border">
+        <Text accessibilityRole="header" className="text-label font-semibold text-muted-foreground">
+          {t("project.propertiesTitle")}
+        </Text>
+      </View>
       <Row
         label={t("picker.status")}
         onPress={onPressStatus}
@@ -156,6 +161,7 @@ export function ProjectPropertiesSection({
       <WorkflowRow project={project} onPress={onPressWorkflow} />
       <Separator />
       <AccessRow project={project} onPress={onPressAccess} />
+      <Separator />
       <DateRow
         label={t("projects.detail.startDate")}
         value={project.start_date}
@@ -477,12 +483,14 @@ function Row({
   return (
     <Pressable
       onPress={onPress}
-      className="flex-row items-center gap-3 px-4 py-3 active:bg-secondary"
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      className="min-h-12 flex-row items-center gap-3 px-4 py-3 active:bg-secondary"
     >
-      <Text className="text-body text-muted-foreground w-20">{label}</Text>
-      <View className="flex-row items-center gap-2 flex-1">
+      <Text className="text-label text-muted-foreground w-20">{label}</Text>
+      <View className="min-w-0 flex-row items-center gap-2 flex-1">
         {left}
-        {right}
+        <View className="min-w-0 flex-1">{right}</View>
       </View>
       <Chevron />
     </Pressable>

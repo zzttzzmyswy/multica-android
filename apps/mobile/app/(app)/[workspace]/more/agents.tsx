@@ -19,8 +19,8 @@
  * archived; within a tier, more active tasks first, then name. Archived
  * rows are dimmed so a retired agent is never missed.
  */
-import { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, Pressable, ScrollView, View } from "react-native";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, Alert, FlatList, Pressable, View } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Stack, router } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -31,7 +31,7 @@ import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { HeaderSearchGroup } from "@/components/ui/header-search-button";
-import { TextField } from "@/components/ui/text-field";
+import { SearchField } from "@/components/ui/search-field";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { PresenceDot } from "@/components/ui/presence-dot";
 import {
@@ -77,8 +77,10 @@ import {
 } from "@/components/agent/agent-access-batch-sheet";
 import {
   accessScopeOfAgent,
+  areAllVisibleAgentsSelected,
   buildAgentBatchSelection,
   matchesAccessFilter,
+  retainConfirmedAgentIds,
 } from "@/lib/agent-list-access";
 import type { AccessScope } from "@/lib/agent-access";
 import { useTranslation } from "@/lib/i18n/react";
@@ -243,22 +245,11 @@ export default function AgentsPage() {
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  const [batchAccess, setBatchAccess] = useState(false);
+  const [batchAccess, setBatchAccess] = useState<{
+    workspaceId: typeof wsId; ids: string[]; count: number;
+  } | null>(null);
   const [applyingAccess, setApplyingAccess] = useState(false);
   const [scopeFilter, setScopeFilter] = useState<AccessScope | "all">("all");
-
-  const batch = useMemo(
-    () =>
-      buildAgentBatchSelection({
-        agents: sorted,
-        selectedIds,
-        currentUserId,
-        currentRole: currentMember?.role,
-      }),
-    [sorted, selectedIds, currentUserId, currentMember?.role],
-  );
-  const canBatchArchive = batch.manageableIds.length > 0;
-  const ownedAccessed = batch.ownedIds.length > 0;
 
   // Scope rows: the access chip's result, BEFORE the sheet's filters and the
   // search box. Web's `scopeRows` (agents-page.tsx:1050-1067) is the same
@@ -343,6 +334,20 @@ export default function AgentsPage() {
       .map((row) => row.agent);
   }, [scopeRows, filterRows, filters, search, activeFilterCount]);
 
+  const batch = useMemo(
+    () => buildAgentBatchSelection({
+      agents: filtered,
+      selectedIds,
+      currentUserId,
+      currentRole: currentMember?.role,
+    }),
+    [filtered, selectedIds, currentUserId, currentMember?.role],
+  );
+  const latestBatch = useRef({ workspaceId: wsId, batch });
+  useLayoutEffect(() => {
+    latestBatch.current = { workspaceId: wsId, batch };
+  }, [wsId, batch]);
+
   const invalidateAgents = () =>
     void qc.invalidateQueries({
       queryKey: agentListAllOptions(wsId).queryKey,
@@ -371,27 +376,29 @@ export default function AgentsPage() {
 
   const toggleSelectAll = () => {
     setSelectedIds((current) =>
-      current.size === filtered.length
+      areAllVisibleAgentsSelected(filtered, current)
         ? new Set()
         : new Set(filtered.map((a) => a.id)),
     );
   };
 
   const confirmArchive = () => {
-    if (batch.archivableIds.length === 0) return;
+    const confirmed = batch.archivableIds;
+    if (confirmed.length === 0) return;
     Alert.alert(
       t("agents.batch.confirmArchiveTitle"),
-      t("agents.batch.confirmArchiveMessage", { count: batch.selection.length }),
+      t("agents.batch.confirmArchiveMessage", { count: confirmed.length }),
       [
         { text: t("common.cancel"), style: "cancel" },
         {
           text: t("agents.batch.actions.archive"),
           style: "destructive",
           onPress: async () => {
-            const res = await runBatch(
-              (id) => api.archiveAgent(id),
-              batch.archivableIds,
-            );
+            const current = latestBatch.current;
+            if (current.workspaceId !== wsId) return;
+            const ids = retainConfirmedAgentIds(confirmed, current.batch.archivableIds);
+            if (ids.length === 0) return;
+            const res = await runBatch((id) => api.archiveAgent(id), ids);
             if (res.failed > 0) Alert.alert(t("common.unknownError"));
           },
         },
@@ -400,33 +407,43 @@ export default function AgentsPage() {
   };
 
   const restoreBatch = async () => {
-    if (batch.archivedIds.length === 0) return;
+    if (batch.restorableIds.length === 0) return;
     const res = await runBatch(
       (id) => api.restoreAgent(id),
-      batch.archivedIds,
+      batch.restorableIds,
     );
     if (res.failed > 0) Alert.alert(t("common.unknownError"));
   };
 
   const applyAccess = async (change: AccessChangePick) => {
-    if (!change || applyingAccess || !ownedAccessed) return;
+    if (!change || applyingAccess || !batchAccess) return;
+    const current = latestBatch.current;
+    if (current.workspaceId !== batchAccess.workspaceId) {
+      setBatchAccess(null);
+      return;
+    }
+    const ids = retainConfirmedAgentIds(batchAccess.ids, current.batch.ownedIds);
+    if (ids.length === 0) {
+      setBatchAccess(null);
+      return;
+    }
     setApplyingAccess(true);
     try {
       const res = await runBatch(
         (id) => api.updateAgent(id, change),
-        batch.ownedIds,
+        ids,
       );
       setApplyingAccess(false);
-      setBatchAccess(false);
+      setBatchAccess(null);
       Alert.alert(
         t("agents.batch.resultPartial", {
           succeeded: res.succeeded,
-          skipped: batch.accessSkipCount,
+          skipped: batchAccess.count - ids.length,
         }),
       );
     } catch {
       setApplyingAccess(false);
-      setBatchAccess(false);
+      setBatchAccess(null);
       Alert.alert(t("common.unknownError"));
     }
   };
@@ -567,18 +584,13 @@ export default function AgentsPage() {
                     that pairs each field with its direction). Hidden in
                     selection mode, like the scope chips, to leave room for
                     the batch bar. */}
-                <View className="flex-row items-center gap-2 px-3 pb-2">
-                  <View className="flex-1">
-                    <TextField
-                      value={search}
-                      onChangeText={setSearch}
-                      placeholder={t("agents.searchPlaceholder")}
-                      autoCorrect={false}
-                      autoCapitalize="none"
-                      returnKeyType="search"
-                      className="min-h-9"
-                    />
-                  </View>
+                <SearchField
+                  value={search}
+                  onChange={setSearch}
+                  placeholder={t("agents.searchPlaceholder")}
+                  className="mx-3 mb-2"
+                />
+                <View className="flex-row flex-wrap items-center gap-2 px-3 pb-2">
                   <AgentSortPicker
                     sortField={sortField}
                     sortDirection={sortDirection}
@@ -595,7 +607,7 @@ export default function AgentsPage() {
               data={filtered}
               keyExtractor={(item) => item.id}
               ItemSeparatorComponent={() => <View className="h-px bg-border ml-4" />}
-              contentContainerClassName="pb-24"
+              contentContainerClassName="pb-4"
               ListEmptyComponent={
                 <Text className="px-4 py-8 text-center text-body text-muted-foreground">
                   {noMatchText}
@@ -623,23 +635,29 @@ export default function AgentsPage() {
               refreshing={isRefetching}
               onRefresh={refetch}
             />
-            {selectionMode && batch.selection.length > 0 ? (
+            {selectionMode ? (
               <BatchBar
                 count={batch.selection.length}
-                allSelected={selectedIds.size === filtered.length}
+                allSelected={areAllVisibleAgentsSelected(filtered, selectedIds)}
+                hasVisibleRows={filtered.length > 0}
                 anyArchived={batch.archivedIds.length > 0}
-                canArchive={canBatchArchive}
+                canArchive={batch.archivableIds.length > 0}
+                canRestore={batch.restorableIds.length > 0}
                 busy={applyingAccess}
                 onClear={() => setSelectedIds(new Set())}
                 onSelectAll={toggleSelectAll}
                 onArchive={confirmArchive}
                 onRestore={() => void restoreBatch()}
                 onSetAccess={() => {
-                  if (!ownedAccessed) {
+                  if (batch.ownedIds.length === 0) {
                     Alert.alert(t("agents.batch.noOwnedSelected"));
                     return;
                   }
-                  setBatchAccess(true);
+                  setBatchAccess({
+                    workspaceId: wsId,
+                    ids: batch.ownedIds,
+                    count: batch.selection.length,
+                  });
                 }}
               />
             ) : null}
@@ -647,11 +665,11 @@ export default function AgentsPage() {
         )}
       </View>
       <AgentAccessBatchSheet
-        visible={batchAccess}
+        visible={batchAccess !== null}
         members={members.filter((m) => m.user_id !== currentUserId)}
         applying={applyingAccess}
         onApply={(change) => void applyAccess(change)}
-        onClose={() => setBatchAccess(false)}
+        onClose={() => setBatchAccess(null)}
       />
       <AgentFilterSheet
         visible={filterOpen}
@@ -748,10 +766,10 @@ function AgentSortPicker({
       onPress={openSortPicker}
       accessibilityRole="button"
       accessibilityLabel={t("agents.sort")}
-      className="flex-row items-center gap-1 rounded-md border border-border bg-secondary/50 px-2 py-1.5 active:opacity-70"
+      className="min-h-12 max-w-full flex-row items-center gap-2 rounded-xl border border-border bg-secondary/50 px-3 py-2 active:opacity-70"
     >
       <Ionicons name="swap-vertical" size={14} color={muted} />
-      <Text className="text-caption text-muted-foreground" numberOfLines={1}>
+      <Text className="shrink text-caption text-muted-foreground">
         {activeLabel}
       </Text>
     </Pressable>
@@ -788,7 +806,7 @@ function AgentFilterButton({
           : t("agents.filter.open")
       }
       className={cn(
-        "flex-row items-center gap-1 rounded-md border px-2 py-1.5 active:opacity-70",
+        "min-h-12 max-w-full flex-row items-center gap-2 rounded-xl border px-3 py-2 active:opacity-70",
         active ? "border-primary bg-primary/10" : "border-border bg-secondary/50",
       )}
     >
@@ -816,9 +834,8 @@ function AgentFilterButton({
 /**
  * Ownership / lifecycle scope pills — the mobile counterpart of web's scope
  * segmented control (`agent-list-toolbar.tsx:226-256`). Web renders scope
- * buttons on desktop and a `Select` below `md`; the phone is always that small
- * screen, and the project's own list toolbars already use scrolling pills
- * (`IssueSurfaceScopeToolbar`), so pills are the mobile idiom here too.
+ * buttons on desktop and a `Select` below `md`; mobile uses wrapping pills
+ * so the choices and counts remain visible at larger text sizes.
  *
  * Each pill carries its total from the FULL set (`scopeCounts`), so the
  * numbers stay put while the search box and the filter sheet narrow the list —
@@ -836,12 +853,7 @@ function AgentsScopeTabs({
 }) {
   const { t } = useTranslation();
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      className="flex-grow-0 shrink-0"
-      contentContainerClassName="px-3 pt-2 gap-1.5"
-    >
+    <View className="flex-row flex-wrap px-3 pt-2 gap-1.5">
       {AGENT_SCOPES.map((value) => {
         const active = scope === value;
         return (
@@ -851,7 +863,7 @@ function AgentsScopeTabs({
             accessibilityRole="button"
             accessibilityState={{ selected: active }}
             className={cn(
-              "px-2.5 py-1 rounded-full border",
+              "min-h-12 max-w-full justify-center rounded-full border px-3 py-2",
               active ? "bg-secondary border-border" : "border-transparent",
             )}
           >
@@ -866,7 +878,7 @@ function AgentsScopeTabs({
           </Pressable>
         );
       })}
-    </ScrollView>
+    </View>
   );
 }
 
@@ -885,20 +897,17 @@ function ScopeFilterChips({
     { value: "owner-only", labelKey: "agents.scope.ownerOnly" },
   ];
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      className="flex-grow-0 shrink-0"
-      contentContainerClassName="px-3 py-2 gap-1.5"
-    >
+    <View className="flex-row flex-wrap px-3 py-2 gap-1.5">
       {OPTIONS.map((o) => {
         const active = value === o.value;
         return (
           <Pressable
             key={o.value}
             onPress={() => onChange(o.value)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
             className={cn(
-              "px-2.5 py-1 rounded-full border",
+              "min-h-12 max-w-full justify-center rounded-full border px-3 py-2",
               active
                 ? "bg-secondary border-border"
                 : "border-transparent",
@@ -915,15 +924,17 @@ function ScopeFilterChips({
           </Pressable>
         );
       })}
-    </ScrollView>
+    </View>
   );
 }
 
 function BatchBar({
   count,
   allSelected,
+  hasVisibleRows,
   anyArchived,
   canArchive,
+  canRestore,
   busy,
   onClear,
   onSelectAll,
@@ -933,8 +944,10 @@ function BatchBar({
 }: {
   count: number;
   allSelected: boolean;
+  hasVisibleRows: boolean;
   anyArchived: boolean;
   canArchive: boolean;
+  canRestore: boolean;
   busy: boolean;
   onClear: () => void;
   onSelectAll: () => void;
@@ -945,19 +958,19 @@ function BatchBar({
   const { t } = useTranslation();
   const theme = useThemePalette();
   return (
-    <View className="absolute bottom-4 left-0 right-0 px-4">
-      <View className="flex-row items-center gap-2 rounded-xl border border-border bg-background px-3 py-2.5 shadow-lg">
+    <View className="px-3 pb-3 pt-1">
+      <View className="flex-row flex-wrap items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 shadow-lg">
         <Text className="text-body font-medium text-foreground tabular-nums">
           {t("agents.batch.selectedCount", { count })}
         </Text>
-        {!allSelected ? (
-          <Pressable onPress={onSelectAll} disabled={busy} className="px-1.5">
+        {hasVisibleRows && !allSelected ? (
+          <Pressable onPress={onSelectAll} disabled={busy} accessibilityRole="button" className="min-h-12 justify-center px-2">
             <Text className="text-caption font-medium text-brand">
               {t("agents.batch.selectAll")}
             </Text>
           </Pressable>
         ) : null}
-        <Pressable onPress={onClear} disabled={busy} className="px-1.5">
+        <Pressable onPress={onClear} disabled={busy || count === 0} accessibilityRole="button" accessibilityLabel={t("common.clear")} className="size-12 items-center justify-center">
           <Ionicons name="close" size={16} color={theme.mutedForeground} />
         </Pressable>
         <View className="flex-1" />
@@ -965,7 +978,8 @@ function BatchBar({
           <IconButton
             name="refresh-outline"
             onPress={onRestore}
-            disabled={!canArchive || busy}
+            disabled={!canRestore || busy}
+            className="size-12"
             accessibilityLabel={t("agents.batch.actions.restore")}
           />
         ) : null}
@@ -973,12 +987,14 @@ function BatchBar({
           name="archive-outline"
           onPress={onArchive}
           disabled={!canArchive || busy}
+          className="size-12"
           accessibilityLabel={t("agents.batch.actions.archive")}
         />
         <IconButton
           name="people-outline"
           onPress={onSetAccess}
-          disabled={busy}
+          disabled={busy || count === 0}
+          className="size-12"
           accessibilityLabel={t("agents.batch.actions.setAccess")}
         />
       </View>
@@ -1112,7 +1128,9 @@ function SelectableAgentRow({
   return (
     <Pressable
       onPress={onToggle}
-      className={cn("px-4 py-3", !archived && "active:bg-secondary")}
+      className="min-h-12 px-4 py-3 active:bg-secondary"
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: selected }}
       accessibilityLabel={agent.name}
     >
       <View className={cn("flex-row items-center gap-3", archived && "opacity-60")}>

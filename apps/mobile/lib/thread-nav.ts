@@ -14,6 +14,7 @@
  */
 import type { TimelineEntry } from "@multica/core/types";
 import { preprocessMentionShortcodes } from "@multica/core/markdown";
+import { isDeletedComment } from "./comment-deletion";
 import { deriveThreadResolution } from "./thread-resolution";
 
 export type ThreadNavFilter = "all" | "unresolved" | "resolved" | "mine";
@@ -25,7 +26,7 @@ export interface ThreadNavThread {
   entry: TimelineEntry;
   /** Covers reply resolutions too, via the shared derivation. */
   resolved: boolean;
-  /** Replies under the root, excluding the root itself. */
+  /** Visible replies under the root, excluding the root and tombstones. */
   replyCount: number;
   /** The current user authored, replied to, or was @mentioned in this thread. */
   involvesMe: boolean;
@@ -152,11 +153,13 @@ export function prepareThreads(
   threads: readonly ThreadNavThread[],
   resolveActorName: (entry: TimelineEntry) => string,
   nowMs: number,
+  deletedTitle = "",
 ): PreparedThread[] {
   return threads.map((thread) => {
-    const preview = commentPreview(thread.entry.content ?? "");
-    const authorName = resolveActorName(thread.entry);
-    const title = preview.title || authorName;
+    const deleted = isDeletedComment(thread.entry);
+    const preview = commentPreview(deleted ? "" : (thread.entry.content ?? ""));
+    const authorName = deleted ? "" : resolveActorName(thread.entry);
+    const title = deleted ? deletedTitle : preview.title || authorName;
     return {
       thread,
       title,
@@ -243,9 +246,8 @@ export function buildThreadNavThreads(
 
   return roots.map((root) => {
     // A reply to a reply is bundled under the same root by the timeline
-    // builder, so walking the whole subtree keeps `replyCount` equal to what
-    // the bubble renders — a one-level count would report a smaller number
-    // than the reader can see.
+    // builder. Keep traversing deleted parents so surviving descendants
+    // stay attached, then count only the replies the timeline can show.
     const replies: TimelineEntry[] = [];
     const queue = [...(childrenByParent.get(root.id) ?? [])];
     while (queue.length > 0) {
@@ -267,7 +269,7 @@ export function buildThreadNavThreads(
       id: root.id,
       entry: root,
       resolved: deriveThreadResolution(root, replies).kind !== "none",
-      replyCount: replies.length,
+      replyCount: replies.filter((reply) => !isDeletedComment(reply)).length,
       involvesMe,
     };
   });

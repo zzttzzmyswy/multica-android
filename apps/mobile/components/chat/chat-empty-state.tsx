@@ -26,7 +26,8 @@
  * offered the same three suggestions in the same words. The surrounding
  * empty-state copy keeps its own `empty_state.*` lineage from web.
  */
-import { View } from "react-native";
+import { ScrollView, View } from "react-native";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { ConversationStarterList } from "@/components/chat/conversation-starter-list";
@@ -69,27 +70,27 @@ export function ChatEmptyState({
   // prompts here would presume the user already knows what chat is for.
   if (!hasSessions) {
     return (
-      <View className="flex-1 items-center justify-center px-6 py-8">
-        <View className="max-w-xs items-center gap-3">
-          <Text className="text-title-sm font-semibold text-foreground text-center">
-            {t("chat.emptyFirstTitle")}
-          </Text>
-          <Text className="text-body text-muted-foreground text-center">
-            <Text className="text-body text-muted-foreground">
-              ✨ {t("chat.emptyFirstIntro")}
-            </Text>
-            <Text className="text-body font-medium text-foreground">
-              {t("chat.emptyFirstStrong")}
-            </Text>
-            <Text className="text-body text-muted-foreground">
+      <ScrollView
+        className="flex-1"
+        contentContainerClassName="grow justify-center"
+        keyboardShouldPersistTaps="handled"
+      >
+        <EmptyState
+          icon="chatbubble-ellipses-outline"
+          title={t("chat.emptyFirstTitle")}
+          description={
+            <>
+              {t("chat.emptyFirstIntro")}
+              <Text className="text-body font-semibold text-foreground">{t("chat.emptyFirstStrong")}</Text>
               {t("chat.emptyFirstOutro")}
-            </Text>
-          </Text>
-          <Text className="text-body text-muted-foreground text-center">
+            </>
+          }
+        >
+          <Text className="text-center text-body text-muted-foreground">
             {t("chat.emptyFirstLine")}
           </Text>
-        </View>
-      </View>
+        </EmptyState>
+      </ScrollView>
     );
   }
 
@@ -105,34 +106,36 @@ export function ChatEmptyState({
     fallbackConversationStarters(t),
   );
   return (
-    <View className="flex-1 items-center justify-center px-6 py-8 gap-5">
-      <View className="items-center gap-1">
-        <Text className="text-title-sm font-semibold text-foreground text-center">
-          {title}
-        </Text>
-        <Text className="text-body text-muted-foreground text-center">
-          {t("chat.tryAsking")}
-        </Text>
-      </View>
-      <View className="w-full max-w-xs">
-        <ConversationStarterList
-          starters={starters}
-          icons={isFallback ? STARTER_ICONS : undefined}
-          onPick={onPickPrompt}
-        />
-      </View>
-      {onCustomizeStarters ? (
-        <Button
-          variant="ghost"
-          onPress={onCustomizeStarters}
-          className="h-auto px-2 py-1"
-          accessibilityLabel={t("chat.customizeStarters")}
-        >
-          <Text className="text-caption text-muted-foreground">
-            {t("chat.customizeStarters")}
-          </Text>
-        </Button>
-      ) : null}
-    </View>
+    <ScrollView
+      className="flex-1"
+      contentContainerClassName="grow justify-center"
+      keyboardShouldPersistTaps="handled"
+    >
+      <EmptyState
+        icon="chatbubble-ellipses-outline"
+        title={title}
+        description={t("chat.tryAsking")}
+      >
+        <View className="w-full max-w-xs">
+          <ConversationStarterList
+            starters={starters}
+            icons={isFallback ? STARTER_ICONS : undefined}
+            onPick={onPickPrompt}
+          />
+        </View>
+        {onCustomizeStarters ? (
+          <Button
+            variant="ghost"
+            onPress={onCustomizeStarters}
+            className="h-auto px-2 py-1"
+            accessibilityLabel={t("chat.customizeStarters")}
+          >
+            <Text className="text-caption text-muted-foreground">
+              {t("chat.customizeStarters")}
+            </Text>
+          </Button>
+        ) : null}
+      </EmptyState>
+    </ScrollView>
   );
 }

@@ -563,12 +563,12 @@ const MessageRow = memo(function MessageRow({
   const body = (
     <View
       className={cn(
-        "self-end max-w-[80%] gap-1.5 rounded-2xl border-2 px-3.5 py-2 transition-colors",
+        "self-end max-w-[88%] gap-1.5 rounded-2xl rounded-br-md border-2 px-3.5 py-2.5 transition-colors",
         isSelecting
           ? "bg-primary/5 border-primary/30"
           : longPress.isPressed
             ? "bg-muted border-primary/30"
-            : "bg-muted border-transparent",
+            : "bg-surface-1 border-transparent",
       )}
     >
       <Markdown

@@ -121,7 +121,7 @@ describe("#1 custom properties on create", () => {
   const layout = read("app/(app)/[workspace]/_layout.tsx");
 
   it("draws the property row in manual mode", () => {
-    expect(screen).toContain("<CreateFormPropertyRow />");
+    expect(screen).toMatch(/<CreateFormPropertyRow\s+disabled=\{isSubmitting\}/);
     expect(screen).toContain(
       'import { CreateFormPropertyRow } from "@/components/issue/create-form-property-row";',
     );

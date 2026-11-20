@@ -280,3 +280,16 @@ describe("no surface reads a base token inline past the palette", () => {
     ).toEqual([]);
   });
 });
+
+describe("native modal transitions respect reduced motion", () => {
+  it.each([
+    ["lib/action-sheet.tsx", "fade"],
+    ["lib/rich-content/fullscreen-preview.tsx", "slide"],
+    ["components/chat/agent-picker-sheet.tsx", "fade"],
+    ["components/rich-content/mermaid-viewer.tsx", "slide"],
+  ])("keeps %s transitions off under reduced motion", (filename, normal) => {
+    const src = code(filename);
+    expect(src).toContain("const reduceMotion = useReducedMotion();");
+    expect(src).toContain(`animationType={reduceMotion ? "none" : "${normal}"}`);
+  });
+});

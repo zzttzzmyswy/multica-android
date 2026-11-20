@@ -8,9 +8,11 @@ import type { Agent, AgentPermissionMode } from "@multica/core/types";
 import { describe, expect, it } from "vitest";
 import {
   accessScopeOfAgent,
+  areAllVisibleAgentsSelected,
   buildAgentBatchSelection,
   isRestrictedAgent,
   matchesAccessFilter,
+  retainConfirmedAgentIds,
 } from "./agent-list-access";
 
 function agent(
@@ -226,5 +228,40 @@ describe("buildAgentBatchSelection", () => {
       currentRole: "owner",
     });
     expect(plan.selection.map((s) => s.id)).toEqual(["a", "c"]);
+  });
+});
+
+describe("agent directory batch safety", () => {
+  it("does not treat a same-sized replacement as selected or eligible", () => {
+    const selectedIds = new Set(["previous"]);
+    const visible = [agent("replacement", { owner_id: "me" })];
+    expect(areAllVisibleAgentsSelected(visible, selectedIds)).toBe(false);
+    expect(areAllVisibleAgentsSelected([], selectedIds)).toBe(false);
+    expect(areAllVisibleAgentsSelected(visible, new Set(["replacement", "hidden"]))).toBe(true);
+    const batch = buildAgentBatchSelection({
+      agents: visible, selectedIds, currentUserId: "me", currentRole: "admin",
+    });
+    expect(batch.selection).toEqual([]);
+    expect(batch.archivableIds).toEqual([]);
+    expect(batch.ownedIds).toEqual([]);
+  });
+
+  it("restores only archived agents the user manages", () => {
+    const agents = [
+      agent("owned-active", { owner_id: "me" }),
+      agent("others-archived", { owner_id: "other", archived: true }),
+      agent("owned-archived", { owner_id: "me", archived: true }),
+    ];
+    const selectedIds = new Set(agents.map(({ id }) => id));
+    const plan = (currentRole: "member" | "admin") => buildAgentBatchSelection({
+      agents, selectedIds, currentUserId: "me", currentRole,
+    });
+    expect(plan("member").restorableIds).toEqual(["owned-archived"]);
+    expect(plan("admin").restorableIds).toEqual(["others-archived", "owned-archived"]);
+  });
+
+  it("confirmation can lose ineligible targets but cannot add newly eligible ones", () => {
+    expect(retainConfirmedAgentIds(["lost", "kept"], ["new", "kept"])).toEqual(["kept"]);
+    expect(retainConfirmedAgentIds(["lost"], ["new"])).toEqual([]);
   });
 });

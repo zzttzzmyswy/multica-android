@@ -20,6 +20,8 @@ function code(rel: string): string {
 
 const HOOK = code("lib/use-picker-search.ts");
 const SHELL = code("components/pickers/picker-body-shell.tsx");
+const FIELD = code("components/ui/search-field.tsx");
+const SHEET = code("components/pickers/searchable-picker-body.tsx");
 
 describe("usePickerSearch", () => {
   it("only takes the native path on iOS", () => {
@@ -61,16 +63,19 @@ describe("PickerBodyShell", () => {
   });
 
   it("renders a real text input, not a disabled stand-in", () => {
-    expect(SHELL).toMatch(/<TextInput/);
-    expect(SHELL).toMatch(/onChangeText=\{onChange\}/);
-    expect(SHELL).not.toMatch(/editable=\{false\}/);
+    expect(SHELL).toMatch(/<SearchField[\s\S]*?onChange=\{search.onQueryChange\}/);
+    expect(SHEET).toMatch(/<SearchField[\s\S]*?onChange=\{onQueryChange\}/);
+    expect(FIELD).toMatch(/<TextInput/);
+    expect(FIELD).toMatch(/onChangeText=\{onChange\}/);
+    expect(FIELD).not.toMatch(/editable=\{false\}/);
   });
 
   it("offers a cross-platform clear control", () => {
     // `clearButtonMode` is iOS-only, so an Android user needs the explicit
     // button or the only way to clear the filter is deleting characters.
-    expect(SHELL).not.toMatch(/clearButtonMode/);
-    expect(SHELL).toMatch(/onChange\(""\)/);
+    expect(FIELD).not.toMatch(/clearButtonMode/);
+    expect(FIELD).toMatch(/onPress=\{\(\) => onChange\(""\)\}/);
+    expect(FIELD).toContain('accessibilityLabel={t("common.clear")}');
   });
 
   it("hides the title where the native header already draws one", () => {

@@ -5,9 +5,11 @@
  * — tap opens the sessions + agent picker sheet.
  */
 import { Pressable, View } from "react-native";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import type { Agent, ChatSession } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
+import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 import { useTranslation } from "@/lib/i18n/react";
 
 interface Props {
@@ -22,6 +24,7 @@ export function ChatTitleButton({
   onPress,
 }: Props) {
   const { t } = useTranslation();
+  const palette = useThemePalette();
   const agentName = currentAgent?.name ?? t("nav.chat");
   const subtitle = currentSession?.title || t("a11y.newChat");
 
@@ -29,7 +32,7 @@ export function ChatTitleButton({
     <Pressable
       onPress={onPress}
       hitSlop={4}
-      className="flex-row items-center gap-2 px-2 py-1 rounded-lg active:bg-secondary"
+      className="min-w-0 max-w-full shrink flex-row items-center gap-2 rounded-xl px-2 py-1 active:bg-secondary"
       accessibilityRole="button"
       accessibilityLabel={t("a11y.sessionsAndPicker")}
     >
@@ -39,15 +42,15 @@ export function ChatTitleButton({
         size={24}
         showPresence
       />
-      <View>
+      <View className="min-w-0 shrink">
         <View className="flex-row items-center gap-1">
           <Text
-            className="text-title-sm font-semibold text-foreground"
+            className="shrink text-title-sm font-semibold text-foreground"
             numberOfLines={1}
           >
             {agentName}
           </Text>
-          <Text className="text-caption text-muted-foreground">▼</Text>
+          <Ionicons name="chevron-down" size={12} color={palette.mutedForeground} />
         </View>
         <Text
           className="text-caption text-muted-foreground"

@@ -82,15 +82,19 @@ describe("downloadReducer", () => {
     expect(tasks[0].totalBytes).toBe(100);
   });
 
-  it("progress with unknown content-length keeps the previous progress", () => {
-    const tasks = reduce([
-      begin(),
-      { type: "progress", id: "dl-1", written: 25, expected: 100 },
-      { type: "progress", id: "dl-1", written: 40, expected: -1 },
-    ]);
-    expect(tasks[0].progress).toBe(0.25);
-    // The known Content-Length from the first event is retained.
-    expect(tasks[0].totalBytes).toBe(100);
+  it("counts received bytes before Content-Length and retains the total if a later event omits it", () => {
+    let tasks = reduce([begin(), { type: "progress", id: "dl-1", written: 25, expected: -1 }]);
+    expect(tasks[0]).toMatchObject({ bytesWritten: 25, totalBytes: null, progress: 0 });
+
+    const progress = (written: number, expected: number) => {
+      tasks = downloadReducer(tasks, { type: "progress", id: "dl-1", written, expected });
+      return tasks[0];
+    };
+    expect(progress(30, 100)).toMatchObject({ bytesWritten: 30, totalBytes: 100, progress: 0.3 });
+    expect(progress(40, -1)).toMatchObject({ bytesWritten: 40, totalBytes: 100, progress: 0.4 });
+    expect(progress(2, NaN)).toMatchObject({ bytesWritten: 40, totalBytes: 100, progress: 0.4 });
+    expect(progress(Infinity, Infinity)).toMatchObject({ bytesWritten: 40, totalBytes: 100, progress: 0.4 });
+    expect(progress(110, 100)).toMatchObject({ bytesWritten: 110, totalBytes: 100, progress: 1 });
   });
 
   it("complete transitions to completed with 1.0 progress", () => {

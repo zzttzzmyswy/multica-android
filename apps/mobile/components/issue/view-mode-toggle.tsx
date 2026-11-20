@@ -6,30 +6,33 @@
  * swimlane (its cross-lane move is a long-press menu rather than web's
  * drag-and-drop; see `swimlane-view.tsx`).
  *
- * Sits right of the scope pills on all issue-list surfaces, next to the
- * filter trigger. Reads/writes the `view` field on the screen's view store;
- * switching never clears filters or sort (same store, same query window).
+ * Sits beneath the scope and filter row. Switching the view never clears
+ * filters or sort (same store, same query window).
  *
  * Glyphs: Ionicons `list` / `grid` for list / board, MaterialCommunityIcons
  * `table` / `chart-gantt` / `view-column-outline` for table / gantt /
  * swimlane (Ionicons has none of those three).
  */
-import { Pressable, View } from "react-native";
+import { Pressable, useWindowDimensions, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import type { IssueViewMode } from "@/data/stores/issue-filter-slice";
+import { useFontScale } from "@/data/stores/type-appearance-store";
+import { issueViewModeColumns } from "@/lib/issue-view-mode-layout";
+import { Text } from "@/components/ui/text";
 import { useTranslation } from "@/lib/i18n/react";
 import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 const OPTIONS: {
   value: IssueViewMode;
   a11yKey: string;
+  labelKey: string;
 }[] = [
-  { value: "list", a11yKey: "a11y.viewList" },
-  { value: "board", a11yKey: "a11y.viewBoard" },
-  { value: "table", a11yKey: "a11y.viewTable" },
-  { value: "gantt", a11yKey: "a11y.viewGantt" },
-  { value: "swimlane", a11yKey: "a11y.viewSwimlane" },
+  { value: "list", a11yKey: "a11y.viewList", labelKey: "issues.viewList" },
+  { value: "board", a11yKey: "a11y.viewBoard", labelKey: "issues.viewBoard" },
+  { value: "table", a11yKey: "a11y.viewTable", labelKey: "issues.viewTable" },
+  { value: "gantt", a11yKey: "a11y.viewGantt", labelKey: "issues.viewGantt" },
+  { value: "swimlane", a11yKey: "a11y.viewSwimlane", labelKey: "issues.viewSwimlane" },
 ];
 
 function ModeGlyph({ value, color }: { value: IssueViewMode; color: string }) {
@@ -63,9 +66,12 @@ export function ViewModeToggle({
 }) {
   const { t } = useTranslation();
   const palette = useThemePalette();
+  const { width, fontScale } = useWindowDimensions();
+  const appFontScale = useFontScale();
+  const columns = issueViewModeColumns(width, fontScale * (appFontScale ?? 1));
   return (
     <View
-      className="flex-row items-center rounded-lg border border-border bg-secondary/40 p-0.5"
+      className="flex-row flex-wrap items-stretch rounded-xl bg-secondary/70 p-1"
       accessibilityRole="tablist"
     >
       {OPTIONS.map((opt) => {
@@ -77,12 +83,18 @@ export function ViewModeToggle({
           <Pressable
             key={opt.value}
             onPress={() => onChange(opt.value)}
-            className={`rounded-md px-2 py-1 ${active ? "bg-accent" : ""}`}
+            className={`min-h-12 min-w-0 grow items-center justify-center gap-0.5 rounded-lg px-0.5 py-1 active:bg-surface-2 ${active ? "bg-background" : ""}`}
+            style={{ flexBasis: `${100 / columns}%` }}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
             accessibilityLabel={t(opt.a11yKey)}
           >
             <ModeGlyph value={opt.value} color={color} />
+            <Text
+              className={active ? "text-center text-micro font-semibold text-foreground" : "text-center text-micro text-muted-foreground"}
+            >
+              {t(opt.labelKey)}
+            </Text>
           </Pressable>
         );
       })}

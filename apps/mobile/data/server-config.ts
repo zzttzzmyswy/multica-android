@@ -30,6 +30,15 @@ let customBaseUrl: string | null = null;
  *  here and re-read `getApiBaseUrl()` on change. */
 const listeners = new Set<() => void>();
 
+// Serialize writes so a delayed reset can't erase a newly saved endpoint.
+let serverChange: Promise<void> = Promise.resolve();
+function persistServerChange<T>(action: () => Promise<T>): Promise<T> {
+  const result = serverChange.then(action);
+  serverChange = result.then(() => undefined, () => undefined);
+  return result;
+}
+
+
 export function subscribeApiBaseUrl(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
@@ -87,7 +96,8 @@ export function getDisplayBaseUrl(): string {
  *  the API — e.g. api.multica.ai vs multica.ai), then derive from the
  *  *effective* API base. Self-hosters commonly put the API behind an `api.`
  *  subdomain while the web UI sits at the root domain, so a leading `api.`
- *  is stripped from the derived origin; a host without it is used verbatim.
+ *  is stripped from the derived origin. A split API listener does not tell
+ *  us the web port; for a same-origin server, keep the parsed origin and port.
  *  Never throws: callers treat an empty string as "no web link". */
 export function getWebBaseUrl(): string {
   if (customBaseUrl) {
@@ -108,10 +118,9 @@ export function getWebBaseUrl(): string {
 function webOriginFrom(apiBase: string): string {
   try {
     const url = new URL(apiBase);
-    const host = url.hostname.startsWith("api.")
-      ? url.hostname.slice(4)
-      : url.hostname;
-    return `${url.protocol}//${host}`;
+    if (url.protocol !== "http:" && url.protocol !== "https:") return "";
+    if (!url.hostname.startsWith("api.")) return url.origin;
+    return `${url.protocol}//${url.hostname.slice(4)}`;
   } catch {
     return "";
   }
@@ -133,15 +142,28 @@ export function normalizeServerBaseUrl(input: string): string | null {
   return trimmed;
 }
 
-/** Persist a custom base URL override and make it effective immediately. */
+/** Destination offered when actually switching away from the active override. */
+export function getServerResetTarget(expected: string): string | null {
+  if (customBaseUrl !== expected) return null;
+  const fallback = normalizeServerBaseUrl(getDefaultApiBaseUrl());
+  const current = normalizeServerBaseUrl(expected);
+  if (!fallback || !current || new URL(fallback).href === new URL(current).href) {
+    return null;
+  }
+  return fallback;
+}
+
+/** Persist a custom base URL override before switching requests to it. */
 export async function setApiBaseUrl(input: string): Promise<void> {
   const normalized = normalizeServerBaseUrl(input);
   if (!normalized) {
     throw new Error("Enter a valid server URL, e.g. https://api.example.com");
   }
-  customBaseUrl = normalized;
-  notifyApiBaseUrlChanged();
-  await SecureStore.setItemAsync(SERVER_URL_KEY, normalized);
+  await persistServerChange(async () => {
+    await SecureStore.setItemAsync(SERVER_URL_KEY, normalized);
+    customBaseUrl = normalized;
+    notifyApiBaseUrlChanged();
+  });
 }
 
 /** Restore a persisted override into the in-memory cache on cold start.
@@ -152,9 +174,15 @@ export async function loadApiBaseUrl(): Promise<string | null> {
   return saved;
 }
 
-/** Clear any override and fall back to the build-time env default. */
-export async function resetApiBaseUrl(): Promise<void> {
-  customBaseUrl = null;
-  notifyApiBaseUrlChanged();
-  await SecureStore.deleteItemAsync(SERVER_URL_KEY);
+/** Switch only if the expected override still has a distinct usable fallback. */
+export function resetApiBaseUrl(
+  expected: string | null = customBaseUrl,
+): Promise<boolean> {
+  return persistServerChange(async () => {
+    if (!expected || !getServerResetTarget(expected)) return false;
+    await SecureStore.deleteItemAsync(SERVER_URL_KEY);
+    customBaseUrl = null;
+    notifyApiBaseUrlChanged();
+    return true;
+  });
 }

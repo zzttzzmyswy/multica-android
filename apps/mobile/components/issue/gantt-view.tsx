@@ -8,8 +8,8 @@
  *   - The vertical axis renders month blocks + day/week/month ticks in one
  *     header row (web splits them into two sticky rows; a phone saves the
  *     height). Today line, weekend shading and month gridlines carry over.
- *   - Zoom (day/week/month) + "show completed" live in a compact toolbar
- *     row above the canvas, mirroring web's toolbar semantics.
+ *   - Zoom (day/week/month) + "show completed" stay reachable above the
+ *     canvas, including when filtering removes every row.
  *   - All geometry (range padding, bar left/width, inverted normalization,
  *     show-completed filtering) comes from `lib/gantt.ts` so the
  *     rules stay unit-testable — this component only draws.
@@ -17,7 +17,7 @@
  *     list/board/table views).
  */
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 import type { Issue } from "@multica/core/types";
 import { useQuery } from "@tanstack/react-query";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -30,6 +30,7 @@ import { useTranslation } from "@/lib/i18n/react";
 import { THEME } from "@/lib/theme";
 import { projectListOptions } from "@/data/queries/projects";
 import { useWorkspaceStore } from "@/data/workspace-store";
+import { useFontScale } from "@/data/stores/type-appearance-store";
 import { sortIssues } from "@/lib/filter-issues";
 import type { IssueSortDirection, IssueSortField } from "@/data/stores/issue-filter-slice";
 import {
@@ -39,6 +40,7 @@ import {
   daysBetween,
   ganttBarGeometry,
   ganttCanvasRows,
+  ganttPhoneLayout,
   isMonthStartUTC,
   isWeekendUTC,
   isWeekStartUTC,
@@ -48,10 +50,7 @@ import {
 } from "@/lib/gantt";
 import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
-const ROW_HEIGHT = 44;
 const HEADER_HEIGHT = 48;
-const LEFT_COL_WIDTH = 250;
-const TOOLBAR_HEIGHT = 40;
 
 const ZOOMS: { value: GanttZoom; labelKey: string }[] = [
   { value: "day", labelKey: "issues.gantt.zoomDay" },
@@ -82,33 +81,42 @@ const GanttLabelCell = memo(function GanttLabelCell({
   issue,
   projectIcon,
   borderColor,
+  rowHeight,
+  compact,
   onPress,
 }: {
   issue: Issue;
   projectIcon: string | null | undefined;
   borderColor: string;
+  rowHeight: number;
+  compact: boolean;
   onPress: (issue: Issue) => void;
 }) {
   return (
     <Pressable
       onPress={() => onPress(issue)}
-      className="flex-row items-center gap-1.5 px-2"
-      style={{ height: ROW_HEIGHT, width: LEFT_COL_WIDTH, borderBottomWidth: 0.5, borderColor }}
+      accessibilityRole="button"
+      accessibilityLabel={`${issue.identifier}, ${issue.title}`}
+      className="flex-row items-center gap-2 px-2 active:bg-secondary"
+      style={{ height: rowHeight, borderBottomWidth: 0.5, borderColor }}
     >
-      <StatusIcon status={issue.status} size={13} />
-      <PriorityIcon priority={issue.priority} size={12} />
-      <Text
-        numberOfLines={1}
-        className="text-micro text-muted-foreground tabular-nums"
-        style={{ width: 52 }}
-      >
-        {issue.identifier}
-      </Text>
-      <Text numberOfLines={1} className="flex-1 text-caption">
-        {issue.title}
-      </Text>
-      {projectIcon ? <ProjectIcon icon={projectIcon} size="sm" /> : null}
-      {issue.assignee_type && issue.assignee_id ? (
+      <View className="min-w-0 flex-1 gap-0.5">
+        <View className="flex-row items-center gap-1.5">
+          <StatusIcon status={issue.status} size={13} />
+          {!compact ? <PriorityIcon priority={issue.priority} size={12} /> : null}
+          <Text
+            numberOfLines={1}
+            className="shrink text-caption text-muted-foreground tabular-nums"
+          >
+            {issue.identifier}
+          </Text>
+        </View>
+        <Text numberOfLines={2} className="text-caption font-medium text-foreground">
+          {issue.title}
+        </Text>
+      </View>
+      {!compact && projectIcon ? <ProjectIcon icon={projectIcon} size="sm" /> : null}
+      {!compact && issue.assignee_type && issue.assignee_id ? (
         <ActorAvatar type={issue.assignee_type} id={issue.assignee_id} size={16} />
       ) : null}
     </Pressable>
@@ -123,6 +131,7 @@ const GanttRow = memo(function GanttRow({
   dayPx,
   totalDays,
   barColor,
+  rowHeight,
   onPress,
 }: {
   issue: Issue;
@@ -130,6 +139,7 @@ const GanttRow = memo(function GanttRow({
   dayPx: number;
   totalDays: number;
   barColor: string;
+  rowHeight: number;
   onPress: (issue: Issue) => void;
 }) {
   const bar = ganttBarGeometry({
@@ -142,13 +152,16 @@ const GanttRow = memo(function GanttRow({
   const trackWidth = totalDays * dayPx;
 
   return (
-    <View style={{ height: ROW_HEIGHT, width: trackWidth }}>
+    <View style={{ height: rowHeight, width: trackWidth }}>
       {bar ? (
         <Pressable
           onPress={() => onPress(issue)}
+          accessibilityRole="button"
+          accessibilityLabel={`${issue.identifier}, ${issue.title}`}
+          hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
           style={{
             position: "absolute",
-            top: ROW_HEIGHT / 2 - (bar.isMarker ? 6 : 9),
+            top: rowHeight / 2 - (bar.isMarker ? 6 : 9),
             left: bar.left,
             width: bar.isMarker ? 12 : Math.max(bar.width, 8),
             height: bar.isMarker ? 12 : 18,
@@ -188,6 +201,12 @@ export function GanttView({
   const { t } = useTranslation();
   const theme = useThemePalette();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const { width, fontScale } = useWindowDimensions();
+  const appFontScale = useFontScale();
+  const { labelWidth, rowHeight, compact } = ganttPhoneLayout(
+    width,
+    fontScale * (appFontScale ?? 1),
+  );
 
   const [zoom, setZoom] = useState<GanttZoom>("week");
   const [showCompleted, setShowCompleted] = useState(false);
@@ -215,6 +234,9 @@ export function GanttView({
     return sortIssues(ganttCanvasRows(issues, showCompleted), sortField, sortDirection);
   }, [issues, showCompleted, sortBy, sortDirection]);
 
+  const hasScheduled = scheduled.length > 0;
+  const filteredToEmpty =
+    !hasScheduled && !showCompleted && ganttCanvasRows(issues, true).length > 0;
   const range = useMemo(
     () => computeGanttRange(scheduled, today, zoom),
     [scheduled, today, zoom],
@@ -239,10 +261,13 @@ export function GanttView({
   useEffect(() => {
     // Center today near the left edge on mount / zoom change — web scrolls
     // the today line ~240px into view.
+    if (!hasScheduled) {
+      vScrollY.current = 0;
+      return;
+    }
     const target = Math.max(0, todayOffsetDays * dayPx - 100);
     scrollRef.current?.scrollTo({ x: target, animated: false });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [zoom]);
+  }, [dayPx, todayOffsetDays, hasScheduled]);
 
   const monthBlocks = useMemo(() => {
     const out: { label: string; left: number; width: number }[] = [];
@@ -289,23 +314,14 @@ export function GanttView({
     };
   }, [theme]);
 
-  if (scheduled.length === 0) {
-    return (
-      <View className="flex-1 items-center justify-center px-8">
-        <Text className="text-center text-body text-muted-foreground">{emptyLabel}</Text>
-      </View>
-    );
-  }
-
   return (
     <View className="flex-1">
       {/* Toolbar — zoom segmented control + show-completed toggle */}
       <View
-        className="flex-row items-center gap-2 border-b border-border px-3"
-        style={{ height: TOOLBAR_HEIGHT }}
+        className="flex-row flex-wrap items-center justify-between gap-2 border-b border-border bg-background px-3 py-2"
       >
         <View
-          className="flex-row rounded-md border border-border p-0.5"
+          className="max-w-full flex-row flex-wrap gap-1 rounded-xl border border-border bg-secondary/30 p-1"
           accessibilityLabel={t("issues.gantt.tooltip.zoom")}
         >
           {ZOOMS.map((opt) => {
@@ -314,13 +330,13 @@ export function GanttView({
               <Pressable
                 key={opt.value}
                 onPress={() => setZoom(opt.value)}
-                className={`rounded px-2 py-0.5 ${active ? "bg-accent" : ""}`}
+                className={`min-h-12 min-w-12 max-w-full items-center justify-center rounded-lg px-2 py-1 ${active ? "bg-accent" : "active:bg-secondary"}`}
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
                 accessibilityLabel={t(opt.labelKey)}
               >
                 <Text
-                  className={`text-micro ${active ? "text-foreground font-medium" : "text-muted-foreground"}`}
+                  className={`text-center text-caption ${active ? "text-foreground font-medium" : "text-muted-foreground"}`}
                 >
                   {t(opt.labelKey)}
                 </Text>
@@ -328,22 +344,21 @@ export function GanttView({
             );
           })}
         </View>
-        <View className="flex-1" />
         <Pressable
           onPress={() => setShowCompleted((v) => !v)}
-          className="flex-row items-center gap-1 rounded-md border border-border px-2 py-1"
-          accessibilityRole="button"
-          accessibilityState={{ selected: showCompleted }}
+          className="min-h-12 max-w-full flex-row items-center gap-2 rounded-xl border border-border px-3 py-1 active:bg-secondary"
+          accessibilityRole="switch"
+          accessibilityState={{ checked: showCompleted }}
           accessibilityHint={t("issues.gantt.tooltip.showCompleted")}
           accessibilityLabel={t("issues.gantt.showCompleted")}
         >
           <MaterialCommunityIcons
             name={showCompleted ? "toggle-switch" : "toggle-switch-off"}
-            size={14}
+            size={20}
             color={showCompleted ? theme.primary : theme.mutedForeground}
           />
           <Text
-            className={`text-micro ${showCompleted ? "text-foreground" : "text-muted-foreground"}`}
+            className={`shrink text-caption ${showCompleted ? "text-foreground" : "text-muted-foreground"}`}
           >
             {t("issues.gantt.showCompleted")}
           </Text>
@@ -354,133 +369,76 @@ export function GanttView({
           column lives OUTSIDE the horizontal ScrollView (labels never scroll
           under the ticks); vertical scroll is shared via onScroll sync so the
           two panes stay row-aligned. */}
-      <View className="flex-1 flex-row">
-        {/* Left column — header cell + labels, vertically synced */}
-        <ScrollView
-          ref={leftScrollRef}
-          showsVerticalScrollIndicator={false}
-          scrollEventThrottle={16}
-          onScroll={(e) => {
-            const y = e.nativeEvent.contentOffset.y;
-            if (Math.abs(y - vScrollY.current) > 0.5) syncVertical("left", y);
-          }}
-          style={{ width: LEFT_COL_WIDTH, borderRightWidth: 0.5, borderColor: theme.border }}
-        >
-          <View style={{ height: HEADER_HEIGHT }} className="justify-end border-b border-border px-3 pb-1.5">
-            <Text className="text-micro font-medium text-muted-foreground">
-              {t("issues.gantt.headerIssue")}
-            </Text>
-          </View>
-          {scheduled.map((issue) => {
-            const projectIcon = issue.project_id ? projectById.get(issue.project_id) : undefined;
-            return (
-              <GanttLabelCell
-                key={issue.id}
-                issue={issue}
-                projectIcon={projectIcon}
-                borderColor={theme.border}
-                onPress={onOpenIssue}
-              />
-            );
-          })}
-        </ScrollView>
-        {/* Timeline — header (month + ticks) + rows scroll horizontally; the
-            inner vertical ScrollView syncs with the label column. */}
-        <ScrollView
-          ref={scrollRef}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          scrollEventThrottle={16}
-        >
-          <View style={{ width: trackWidth }}>
-            {/* Header */}
-            <View className="border-b border-border" style={{ height: HEADER_HEIGHT }}>
-              {/* Month row */}
-              <View style={{ position: "absolute", left: 0, top: 0, height: 22, width: trackWidth }}>
-                {monthBlocks.map((b, i) => (
-                  <View
-                    key={i}
-                    style={{ position: "absolute", left: b.left, width: b.width, top: 0, bottom: 0, justifyContent: "center", paddingLeft: 4 }}
-                  >
-                    {b.width > 40 ? (
-                      <Text numberOfLines={1} className="text-micro font-medium text-muted-foreground">
-                        {b.label}
-                      </Text>
-                    ) : null}
-                  </View>
-                ))}
-              </View>
-              {/* Day/week/month tick row */}
-              <View style={{ position: "absolute", left: 0, top: 22, height: 26, width: trackWidth }}>
-                {dayTicks.map((tick, i) => (
-                  <View
-                    key={i}
-                    style={{
-                      position: "absolute",
-                      left: i * dayPx,
-                      width: dayPx,
-                      top: 0,
-                      bottom: 0,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      borderLeftWidth: 0.5,
-                      borderColor: tick.isMonth
-                        ? theme.border
-                        : tick.isWeek
-                          ? theme.border
-                          : theme.muted,
-                    }}
-                  >
-                    {tick.showLabel ? (
-                      zoom === "day" ? (
-                        <Text className="text-micro leading-none text-muted-foreground tabular-nums">
-                          {tick.date.getUTCDate()}
-                        </Text>
-                      ) : zoom === "week" ? (
-                        <Text className="text-micro leading-none text-muted-foreground tabular-nums">
-                          {tick.date.getUTCDate()}
-                        </Text>
-                      ) : (
-                        <Text className="text-micro leading-none text-muted-foreground tabular-nums whitespace-nowrap">
-                          {MONTH_NAMES[tick.date.getUTCMonth()]} {tick.date.getUTCDate()}
-                        </Text>
-                      )
-                    ) : null}
-                  </View>
-                ))}
-              </View>
-              {todayOffsetDays >= 0 && todayOffsetDays <= totalDays ? (
-                <View
-                  style={{
-                    position: "absolute",
-                    left: todayOffsetDays * dayPx,
-                    top: 0,
-                    bottom: 0,
-                    width: 1,
-                    backgroundColor: theme.brand,
-                  }}
-                />
-              ) : null}
+      {!hasScheduled ? (
+        <View className="flex-1 items-center justify-center px-8">
+          <Text className="text-center text-body text-muted-foreground">
+            {filteredToEmpty ? t("issues.filterEmpty") : emptyLabel}
+          </Text>
+        </View>
+      ) : (
+        <View className="flex-1 flex-row">
+          {/* Both headers stay out of the synchronized vertical scroll. */}
+          <View style={{ width: labelWidth, borderRightWidth: 0.5, borderColor: theme.border }}>
+            <View style={{ height: HEADER_HEIGHT }} className="justify-end border-b border-border px-2 pb-1.5">
+              <Text className="text-caption font-medium text-muted-foreground" numberOfLines={2}>
+                {t("issues.gantt.headerIssue")}
+              </Text>
             </View>
-
-            {/* Rows + background gridlines. flexGrow keeps the pane filling
-                the row layout while letting content overflow scroll. */}
             <ScrollView
-              ref={bodyScrollRef}
-              style={{ flexGrow: 1 }}
+              ref={leftScrollRef}
               showsVerticalScrollIndicator={false}
               scrollEventThrottle={16}
               onScroll={(e) => {
                 const y = e.nativeEvent.contentOffset.y;
-                if (Math.abs(y - vScrollY.current) > 0.5) syncVertical("body", y);
+                if (Math.abs(y - vScrollY.current) > 0.5) syncVertical("left", y);
               }}
+              className="flex-1"
             >
-              <View style={{ height: scheduled.length * ROW_HEIGHT }}>
-                {/* Background gridlines + today line spanning all rows */}
-                <View
-                  pointerEvents="none"
-                  style={{ position: "absolute", left: 0, top: 0, width: trackWidth, height: scheduled.length * ROW_HEIGHT }}
-                >
+              {scheduled.map((issue) => {
+                const projectIcon = issue.project_id ? projectById.get(issue.project_id) : undefined;
+                return (
+                  <GanttLabelCell
+                    key={issue.id}
+                    issue={issue}
+                    projectIcon={projectIcon}
+                    borderColor={theme.border}
+                    rowHeight={rowHeight}
+                    compact={compact}
+                    onPress={onOpenIssue}
+                  />
+                );
+              })}
+            </ScrollView>
+          </View>
+          {/* Timeline — header (month + ticks) + rows scroll horizontally; the
+              inner vertical ScrollView syncs with the label column. */}
+          <ScrollView
+            ref={scrollRef}
+            className="flex-1"
+            horizontal
+            nestedScrollEnabled
+            scrollEventThrottle={16}
+          >
+            <View className="self-stretch" style={{ width: trackWidth }}>
+              {/* Header */}
+              <View className="border-b border-border" style={{ height: HEADER_HEIGHT }}>
+                {/* Month row */}
+                <View style={{ position: "absolute", left: 0, top: 0, height: 22, width: trackWidth }}>
+                  {monthBlocks.map((b, i) => (
+                    <View
+                      key={i}
+                      style={{ position: "absolute", left: b.left, width: b.width, top: 0, bottom: 0, justifyContent: "center", paddingLeft: 4 }}
+                    >
+                      {b.width > 40 ? (
+                        <Text numberOfLines={1} className="text-micro font-medium text-muted-foreground">
+                          {b.label}
+                        </Text>
+                      ) : null}
+                    </View>
+                  ))}
+                </View>
+                {/* Day/week/month tick row */}
+                <View style={{ position: "absolute", left: 0, top: 22, height: 26, width: trackWidth }}>
                   {dayTicks.map((tick, i) => (
                     <View
                       key={i}
@@ -490,42 +448,113 @@ export function GanttView({
                         width: dayPx,
                         top: 0,
                         bottom: 0,
-                        backgroundColor: isWeekendUTC(tick.date) ? theme.muted : "transparent",
-                        opacity: isWeekendUTC(tick.date) ? 0.4 : 1,
-                        borderLeftWidth: tick.isMonth || tick.isWeek ? 0.5 : 0,
-                        borderColor: tick.isMonth ? theme.border : theme.muted,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        borderLeftWidth: 0.5,
+                        borderColor: tick.isMonth
+                          ? theme.border
+                          : tick.isWeek
+                            ? theme.border
+                            : theme.muted,
                       }}
+                    >
+                      {tick.showLabel ? (
+                        zoom === "day" ? (
+                          <Text className="text-micro leading-none text-muted-foreground tabular-nums">
+                            {tick.date.getUTCDate()}
+                          </Text>
+                        ) : zoom === "week" ? (
+                          <Text className="text-micro leading-none text-muted-foreground tabular-nums">
+                            {tick.date.getUTCDate()}
+                          </Text>
+                        ) : (
+                          <Text className="text-micro leading-none text-muted-foreground tabular-nums whitespace-nowrap">
+                            {MONTH_NAMES[tick.date.getUTCMonth()]} {tick.date.getUTCDate()}
+                          </Text>
+                        )
+                      ) : null}
+                    </View>
+                  ))}
+                </View>
+                {todayOffsetDays >= 0 && todayOffsetDays <= totalDays ? (
+                  <View
+                    style={{
+                      position: "absolute",
+                      left: todayOffsetDays * dayPx,
+                      top: 0,
+                      bottom: 0,
+                      width: 1,
+                      backgroundColor: theme.brand,
+                    }}
+                  />
+                ) : null}
+              </View>
+
+              {/* Rows + background gridlines, bounded below the fixed header. */}
+              <ScrollView
+                ref={bodyScrollRef}
+                className="flex-1"
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={false}
+                scrollEventThrottle={16}
+                onScroll={(e) => {
+                  const y = e.nativeEvent.contentOffset.y;
+                  if (Math.abs(y - vScrollY.current) > 0.5) syncVertical("body", y);
+                }}
+              >
+                <View style={{ height: scheduled.length * rowHeight }}>
+                  {/* Background gridlines + today line spanning all rows */}
+                  <View
+                    pointerEvents="none"
+                    style={{ position: "absolute", left: 0, top: 0, width: trackWidth, height: scheduled.length * rowHeight }}
+                  >
+                    {dayTicks.map((tick, i) => (
+                      <View
+                        key={i}
+                        style={{
+                          position: "absolute",
+                          left: i * dayPx,
+                          width: dayPx,
+                          top: 0,
+                          bottom: 0,
+                          backgroundColor: isWeekendUTC(tick.date) ? theme.muted : "transparent",
+                          opacity: isWeekendUTC(tick.date) ? 0.4 : 1,
+                          borderLeftWidth: tick.isMonth || tick.isWeek ? 0.5 : 0,
+                          borderColor: tick.isMonth ? theme.border : theme.muted,
+                        }}
+                      />
+                    ))}
+                    {todayOffsetDays >= 0 && todayOffsetDays <= totalDays ? (
+                      <View
+                        style={{
+                          position: "absolute",
+                          left: todayOffsetDays * dayPx,
+                          top: 0,
+                          bottom: 0,
+                          width: 1,
+                          backgroundColor: theme.brand,
+                        }}
+                      />
+                    ) : null}
+                  </View>
+                  {scheduled.map((issue) => (
+                    <GanttRow
+                      key={issue.id}
+                      issue={issue}
+                      range={range}
+                      dayPx={dayPx}
+                      totalDays={totalDays}
+                      barColor={barColorFor(issue)}
+                      rowHeight={rowHeight}
+                      onPress={onOpenIssue}
                     />
                   ))}
-                  {todayOffsetDays >= 0 && todayOffsetDays <= totalDays ? (
-                    <View
-                      style={{
-                        position: "absolute",
-                        left: todayOffsetDays * dayPx,
-                        top: 0,
-                        bottom: 0,
-                        width: 1,
-                        backgroundColor: theme.brand,
-                      }}
-                    />
-                  ) : null}
                 </View>
-                {scheduled.map((issue) => (
-                  <GanttRow
-                    key={issue.id}
-                    issue={issue}
-                    range={range}
-                    dayPx={dayPx}
-                    totalDays={totalDays}
-                    barColor={barColorFor(issue)}
-                    onPress={onOpenIssue}
-                  />
-                ))}
-              </View>
-            </ScrollView>
-          </View>
-        </ScrollView>
-      </View>
+              </ScrollView>
+            </View>
+          </ScrollView>
+        </View>
+      )}
     </View>
   );
 }

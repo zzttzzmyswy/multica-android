@@ -23,10 +23,11 @@
  * is layout + touch.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, TextInput, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { TimelineEntry } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
+import { SearchField } from "@/components/ui/search-field";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
 
 import { PickerSheet } from "./pickers/picker-sheet";
@@ -143,8 +144,9 @@ export function ThreadNavSheet({
             ),
           ),
         Date.now(),
+        t("comment.deletedPlaceholder"),
       ),
-    [threads, resolveActorName],
+    [threads, resolveActorName, t],
   );
 
   const rows = useMemo(
@@ -166,6 +168,7 @@ export function ThreadNavSheet({
           value={query}
           onChange={setQuery}
           placeholder={t("threadNav.searchPlaceholder")}
+          className="mx-4 mb-2 mt-2"
         />
         <FilterChips
           active={filter}
@@ -231,7 +234,7 @@ function GroupHeader({ group }: { group: ThreadDayGroup }) {
   }[group];
   return (
     <View className="px-4 pt-4 pb-1">
-      <Text className="text-caption font-medium text-muted-foreground">
+      <Text accessibilityRole="header" className="text-caption font-medium text-muted-foreground">
         {label}
       </Text>
     </View>
@@ -253,7 +256,7 @@ function ThreadRow({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      className="flex-row items-start gap-3 px-4 py-2.5 active:bg-secondary/50"
+      className="min-h-12 flex-row items-start gap-3 px-4 py-3 active:bg-secondary/50"
     >
       <ActorAvatar
         // Core's `TimelineEntry.actor_type` is a bare `string`; the avatar
@@ -263,30 +266,24 @@ function ThreadRow({
         size={28}
       />
       <View className="flex-1 min-w-0">
-        <View className="flex-row items-baseline gap-2">
-          <Text
-            className={cn(
-              "flex-1 text-body",
-              thread.resolved
-                ? "text-muted-foreground"
-                : "font-medium text-foreground",
-            )}
-            numberOfLines={1}
-          >
-            {title}
-          </Text>
-          <Text className="text-caption text-muted-foreground">
+        <Text
+          className={cn(
+            "text-body",
+            thread.resolved
+              ? "text-muted-foreground"
+              : "font-medium text-foreground",
+          )}
+          numberOfLines={2}
+        >
+          {title}
+        </Text>
+        <View className="mt-1 flex-row flex-wrap items-center gap-x-2 gap-y-1">
+          <Text className="text-caption tabular-nums text-muted-foreground">
             {formatStamp(thread.entry.created_at, group)}
           </Text>
-        </View>
-        <View className="mt-0.5 flex-row items-center gap-2">
-          {/* Withheld author → the sub-line drops entirely. A blank caption
-           *  leaves the same height with nothing in it, which reads as a
-           *  rendering fault; the row still carries the timestamp above and the
-           *  preview as its title, so nothing the reader needs is lost
-           *  (MYS-2227). */}
+          {/* Omit the author label if the name is withheld (MYS-2227). */}
           {authorName ? (
-            <Text className="text-caption text-muted-foreground" numberOfLines={1}>
+            <Text className="max-w-full text-caption text-muted-foreground" numberOfLines={1}>
               {authorName}
             </Text>
           ) : null}
@@ -309,8 +306,8 @@ function ThreadRow({
         </View>
         {excerpt ? (
           <Text
-            className="mt-0.5 text-caption text-muted-foreground"
-            numberOfLines={1}
+            className="mt-1 text-caption text-muted-foreground"
+            numberOfLines={2}
           >
             {excerpt}
           </Text>
@@ -342,16 +339,16 @@ function FilterChips({
             accessibilityRole="button"
             accessibilityState={{ selected }}
             className={cn(
-              "rounded-full border px-3 py-1",
+              "min-h-12 max-w-full items-center justify-center rounded-full border px-3 py-2 active:bg-secondary",
               selected
-                ? "border-transparent bg-secondary"
+                ? "border-primary/30 bg-primary/10"
                 : "border-border bg-transparent",
             )}
           >
             <Text
               className={cn(
                 "text-caption",
-                selected ? "text-foreground" : "text-muted-foreground",
+                selected ? "font-semibold text-foreground" : "text-muted-foreground",
               )}
             >
               {`${labels[filter]} ${counts[filter]}`}
@@ -359,48 +356,6 @@ function FilterChips({
           </Pressable>
         );
       })}
-    </View>
-  );
-}
-
-/** Same chrome as the filter sheets' search row, with an explicit clear
- *  button: RN's `clearButtonMode` is iOS-only. */
-function SearchField({
-  value,
-  onChange,
-  placeholder,
-}: {
-  value: string;
-  onChange: (text: string) => void;
-  placeholder: string;
-}) {
-  const palette = useThemePalette();
-  const muted = palette.mutedForeground;
-  return (
-    <View className="px-4 pt-2 pb-1">
-      <View className="flex-row items-center gap-2 rounded-xl border border-border bg-secondary/40 px-3 py-2">
-        <Ionicons name="search" size={16} color={muted} />
-        <TextInput
-          value={value}
-          onChangeText={onChange}
-          placeholder={placeholder}
-          placeholderTextColor={muted}
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="search"
-          accessibilityLabel={placeholder}
-          className="flex-1 py-0 text-body text-foreground"
-        />
-        {value ? (
-          <Pressable
-            onPress={() => onChange("")}
-            hitSlop={8}
-            accessibilityLabel={placeholder}
-          >
-            <Ionicons name="close-circle" size={16} color={muted} />
-          </Pressable>
-        ) : null}
-      </View>
     </View>
   );
 }

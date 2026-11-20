@@ -27,6 +27,7 @@ import type { ReactNode } from "react";
 import { Modal, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Text } from "@/components/ui/text";
+import { useReducedMotion } from "@/lib/appearance-a11y-runtime";
 import { useTranslation } from "@/lib/i18n/react";
 
 interface Props {
@@ -38,6 +39,7 @@ interface Props {
 }
 
 export function FullscreenPreview({ visible, onClose, title, children }: Props) {
+  const reduceMotion = useReducedMotion();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
 
@@ -48,7 +50,7 @@ export function FullscreenPreview({ visible, onClose, title, children }: Props) 
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType={reduceMotion ? "none" : "slide"}
       presentationStyle="fullScreen"
       // Android's hardware back closes the overlay instead of leaving the
       // screen — the same contract every other modal in the app honours.

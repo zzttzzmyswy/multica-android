@@ -103,7 +103,7 @@ import { canAssignAgent } from "@/lib/can-assign-agent";
 import { useWorkspaceAgentAvailability } from "@/lib/workspace-agent-availability";
 import { didPendingTaskFinish, isPendingTaskActive } from "@/lib/chat-task-polling";
 import { useAgentPresence } from "@/lib/use-agent-presence";
-import { queueEditDraftText } from "@/lib/chat-queue";
+import { queueEditDraftText, reconcileQueueCancellation } from "@/lib/chat-queue";
 import { clearChatQueue } from "@/lib/chat-queue-clear";
 import { planCancelRestore } from "@/lib/chat-draft-restore";
 import { useChatDraftRestore } from "@/lib/use-chat-draft-restore";
@@ -698,7 +698,7 @@ export default function ChatTab() {
     async (task: ChatQueuedTask) => {
       if (!activeSessionId) return;
       const sessionId = activeSessionId;
-      try {
+      await reconcileQueueCancellation(async () => {
         // queue_action=edit 在服务端取消排队任务。本地 `queueEditDraftText`
         // 只是 composer 缓存里的乐观文本；服务端的权威内容随响应
         // `cancelled_chat_message` 回来（web 同路径），因此以响应为准，
@@ -725,10 +725,8 @@ export default function ChatTab() {
         } else {
           setDraft(sessionId, queueEditDraftText(task) ?? t("chat.queue.fallback"));
         }
-      } finally {
         patchPending((old) => removePendingChatTask(old, task.task_id));
-        invalidatePendingTask(qc, sessionId);
-      }
+      }, () => invalidatePendingTask(qc, sessionId));
     },
     [activeSessionId, patchPending, setDraft, t, qc, settleDurableRestore],
   );
@@ -737,7 +735,7 @@ export default function ChatTab() {
     async (task: ChatQueuedTask) => {
       if (!activeSessionId) return;
       const sessionId = activeSessionId;
-      try {
+      await reconcileQueueCancellation(async () => {
         // 显式 remove 是丢弃：服务端会删掉这条排队消息，但**不回填** composer。
         // 仍要读响应，把被删掉的那条气泡从缓存里摘掉，否则界面上会留一条
         // 服务端已经不存在、且永远不会再执行的消息。
@@ -753,10 +751,8 @@ export default function ChatTab() {
         if (plan.removeMessageId) {
           removeChatMessageFromCache(qc, sessionId, plan.removeMessageId);
         }
-      } finally {
         patchPending((old) => removePendingChatTask(old, task.task_id));
-        invalidatePendingTask(qc, sessionId);
-      }
+      }, () => invalidatePendingTask(qc, sessionId));
     },
     [activeSessionId, patchPending, qc],
   );

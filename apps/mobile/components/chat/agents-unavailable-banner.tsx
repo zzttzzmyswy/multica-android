@@ -45,9 +45,9 @@ export function AgentsUnavailableBanner({ onRetry }: { onRetry: () => void }) {
       <Pressable
         onPress={onRetry}
         accessibilityRole="button"
-        className="self-start mt-1.5 rounded-md bg-secondary px-2.5 py-1 active:opacity-70"
+        className="mt-1.5 min-h-12 justify-center self-start rounded-xl bg-secondary px-3 py-2 active:opacity-70"
       >
-        <Text className="text-caption font-medium text-foreground">
+        <Text className="text-body font-medium text-foreground">
           {t("common.retry")}
         </Text>
       </Pressable>

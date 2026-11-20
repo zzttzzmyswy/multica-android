@@ -35,7 +35,7 @@
  *     and offered no friction against accidental taps.
  */
 import { useEffect, useMemo } from "react";
-import { Image, Pressable, View } from "react-native";
+import { Image, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, usePathname } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
@@ -47,6 +47,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Text } from "@/components/ui/text";
@@ -124,6 +125,14 @@ export function MoreTabDropdownAnchor({
   triggerRef: React.RefObject<TriggerRef | null>;
 }) {
   const insets = useSafeAreaInsets();
+  const { height, width } = useWindowDimensions();
+  // The anchor sits above the safe-area tab bar. Leave room for the popover
+  // offset and its own padding and keep every action reachable by scrolling.
+  const menuHeight = Math.max(
+    0,
+    Math.min(528, height - insets.top - insets.bottom - TAB_BAR_HEIGHT - 24),
+  );
+  const menuWidth = Math.min(312, width - insets.left - insets.right - 24);
   const slug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const user = useAuthStore((s) => s.user);
@@ -192,63 +201,71 @@ export function MoreTabDropdownAnchor({
           side="top"
           align="end"
           sideOffset={6}
-          className="w-72 p-2"
+          className="rounded-2xl p-2"
+          style={{ width: menuWidth }}
         >
-          <UserCard
-            user={user}
-            onPress={() => slug && router.push(`/${slug}/more/settings`)}
-            chevronTint={t2.mutedForeground}
-          />
-
-          <DropdownMenuSeparator />
-
-          <WorkspaceCard
-            currentWorkspaceName={currentWorkspace?.name}
-            currentWorkspaceAvatarUrl={currentWorkspace?.avatar_url}
-            showUnreadDot={otherWorkspaceUnread}
-            dotTint={t2.brand}
-            onPress={() =>
-              slug && router.push(`/${slug}/switch-workspace`)
-            }
-            chevronTint={t2.mutedForeground}
-          />
-
-          <DropdownMenuSeparator />
-
-          {navItems.map((item) => (
-            <DropdownMenuItem
-              key={item.path}
-              onPress={() => slug && router.push(`/${slug}${item.path}`)}
-              accessibilityLabel={t(item.labelKey)}
-              className={cn(
-                "h-9 gap-3",
-                isActive(item.path) && "bg-secondary",
-              )}
-            >
-              <Ionicons
-                name={item.icon}
-                color={t2.foreground}
-                size={18}
+          <ScrollView style={{ maxHeight: menuHeight }} keyboardShouldPersistTaps="handled">
+            <View className="gap-0.5 rounded-xl bg-surface-1 p-1">
+              <UserCard
+                user={user}
+                onPress={() => slug && router.push(`/${slug}/more/settings`)}
+                chevronTint={t2.mutedForeground}
               />
-              <Text className="text-body text-foreground">{t(item.labelKey)}</Text>
-              {hasUpdate && item.path === "/more/about" ? (
-                <View
-                  className="ml-auto size-2 rounded-full bg-destructive"
-                  accessibilityLabel={t("update.hasNew")}
-                />
-              ) : null}
-              {activeDownloads > 0 && item.path === "/more/downloads" ? (
-                <View
-                  className="ml-auto min-w-[18px] h-[18px] rounded-full bg-primary items-center justify-center px-1"
-                  accessibilityLabel={t("downloads.tab.active")}
+
+              <WorkspaceCard
+                currentWorkspaceName={currentWorkspace?.name}
+                currentWorkspaceAvatarUrl={currentWorkspace?.avatar_url}
+                showUnreadDot={otherWorkspaceUnread}
+                dotTint={t2.brand}
+                onPress={() =>
+                  slug && router.push(`/${slug}/switch-workspace`)
+                }
+                chevronTint={t2.mutedForeground}
+              />
+            </View>
+            <DropdownMenuSeparator className="mx-0 my-2 bg-border/60" />
+            <DropdownMenuLabel className="px-2.5 font-semibold">{t("nav.more")}</DropdownMenuLabel>
+            {navItems.map((item) => {
+              const active = isActive(item.path);
+              return (
+                <DropdownMenuItem
+                  key={item.path}
+                  onPress={() => slug && router.push(`/${slug}${item.path}`)}
+                  accessibilityLabel={t(item.labelKey)}
+                  accessibilityState={{ selected: active }}
+                  className={cn(
+                    "min-h-12 gap-3 rounded-xl px-2.5",
+                    active && "bg-brand/10",
+                  )}
                 >
-                  <Text className="text-micro font-semibold text-white">
-                    {activeDownloads}
+                  <Ionicons
+                    name={item.icon}
+                    color={active ? t2.foreground : t2.mutedForeground}
+                    size={18}
+                  />
+                  <Text className={cn("min-w-0 flex-1 text-body text-foreground", active && "font-semibold")}>
+                    {t(item.labelKey)}
                   </Text>
-                </View>
-              ) : null}
-            </DropdownMenuItem>
-          ))}
+                  {hasUpdate && item.path === "/more/about" ? (
+                    <View
+                      className="ml-auto size-2 rounded-full bg-destructive"
+                      accessibilityLabel={t("update.hasNew")}
+                    />
+                  ) : null}
+                  {activeDownloads > 0 && item.path === "/more/downloads" ? (
+                    <View
+                      className="ml-auto min-w-[18px] h-[18px] rounded-full bg-primary items-center justify-center px-1"
+                      accessibilityLabel={t("downloads.tab.active")}
+                    >
+                      <Text className="text-micro font-semibold text-primary-foreground">
+                        {activeDownloads}
+                      </Text>
+                    </View>
+                  ) : null}
+                </DropdownMenuItem>
+              );
+            })}
+          </ScrollView>
         </DropdownMenuContent>
       </DropdownMenu>
     </View>
@@ -275,7 +292,7 @@ function UserCard({
   return (
     <DropdownMenuItem
       onPress={onPress}
-      className="h-12 gap-3"
+      className="min-h-12 gap-3 rounded-lg"
       accessibilityLabel={t("settings.accountSettings")}
     >
       {user?.avatar_url ? (
@@ -349,7 +366,7 @@ function WorkspaceCard({
     <DropdownMenuItem
       onPress={onPress}
       disabled={!canSwitch}
-      className="h-12 gap-3"
+      className="min-h-12 gap-3 rounded-lg"
       accessibilityLabel={
         canSwitch
           ? showUnreadDot

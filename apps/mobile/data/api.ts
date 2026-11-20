@@ -551,7 +551,8 @@ import type {
   CreateFeedbackInput,
   CreateFeedbackResponse,
 } from "./schemas";
-import { File, Paths } from "expo-file-system";
+import { Directory, File, Paths } from "expo-file-system";
+import { downloadCacheDirectoryName } from "@/lib/download-store";
 import { createDownloadResumable } from "expo-file-system/legacy";
 import { getCurrentSlug } from "./workspace-store";
 import { getApiBaseUrl, getEnvBaseUrl, setApiBaseUrl } from "./server-config";
@@ -773,7 +774,7 @@ class ApiClient {
   }
 
   /** Point the app at a different Multica server at runtime. Persists the
-   *  override and makes it effective immediately — the underlying fetch chain
+   *  override before making it effective — the underlying fetch chain
    *  re-reads `getApiBaseUrl()` per request, and the realtime socket rebuilds
    *  on the change notification. Rejects with a validation error on a
    *  non-http(s) / hostless URL. */
@@ -6241,7 +6242,7 @@ class ApiClient {
       totalBytesWritten: number;
       totalBytesExpectedToWrite: number;
     }) => void,
-    opts?: { authenticated?: boolean },
+    opts?: { authenticated?: boolean; cacheKey?: string },
   ): { done: Promise<LocalDownload>; cancel: () => void } | null {
     const absUrl = resolveAttachmentUrl(rawUrl);
     if (!absUrl) return null;
@@ -6254,20 +6255,38 @@ class ApiClient {
     }
 
     const safeName = sanitizeBasename(filename) || "download";
-    const destination = new File(Paths.cache, safeName).uri;
+    const directory = opts?.cacheKey
+      ? new Directory(Paths.cache, downloadCacheDirectoryName(opts.cacheKey))
+      : undefined;
+    const destination = new File(directory ?? Paths.cache, safeName).uri;
+    const cleanup = () => {
+      try {
+        if (directory?.exists) directory.delete();
+      } catch {
+        // Download failure is more useful than a cache cleanup failure.
+      }
+    };
     const start = Date.now();
     console.log(`[api] → GET ${absUrl}`, { rid: createRequestId() });
 
-    const resumable = createDownloadResumable(
-      absUrl,
-      destination,
-      { headers },
-      (data) => onProgress?.(data),
-    );
+    let resumable: ReturnType<typeof createDownloadResumable>;
+    let transfer: ReturnType<typeof resumable.downloadAsync>;
+    try {
+      directory?.create({ idempotent: true });
+      resumable = createDownloadResumable(
+        absUrl,
+        destination,
+        { headers },
+        (data) => onProgress?.(data),
+      );
+      transfer = resumable.downloadAsync();
+    } catch (err) {
+      cleanup();
+      throw err;
+    }
     let cancelled = false;
 
-    const done = resumable
-      .downloadAsync()
+    const done = transfer
       .then((result) => {
         // `undefined` is the native contract for an aborted task.
         if (cancelled || !result) throw new DownloadCancelledError();
@@ -6286,6 +6305,7 @@ class ApiClient {
         return { uri: result.uri, name: safeName };
       })
       .catch((err: unknown) => {
+        cleanup();
         if (err instanceof DownloadCancelledError) throw err;
         console.error(`[api] ← DOWNLOAD FAILED ${absUrl}`, {
           duration: `${Date.now() - start}ms`,

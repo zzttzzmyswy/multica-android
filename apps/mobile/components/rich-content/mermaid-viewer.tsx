@@ -22,6 +22,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Text } from "@/components/ui/text";
 import { THEME } from "@/lib/theme";
 import { useColorScheme } from "@/lib/use-color-scheme";
+import { useReducedMotion } from "@/lib/appearance-a11y-runtime";
 import { useTranslation } from "@/lib/i18n/react";
 import {
   buildMermaidDocument,
@@ -60,6 +61,7 @@ interface Props {
 }
 
 export function MermaidViewer({ visible, onClose, source }: Props) {
+  const reduceMotion = useReducedMotion();
   const { t } = useTranslation();
   const { isDarkColorScheme } = useColorScheme();
   const theme = isDarkColorScheme ? THEME.dark : THEME.light;
@@ -168,7 +170,7 @@ export function MermaidViewer({ visible, onClose, source }: Props) {
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType={reduceMotion ? "none" : "slide"}
       presentationStyle="fullScreen"
       onRequestClose={close}
     >

@@ -3,8 +3,9 @@
  * which is the mobile list's default view.
  *
  * Layout:
- *   [📦 icon]  Project title          [3/12]
- *              [● in progress] [▍▍ high] [👤 Ada]   2d ago
+ *   [icon]  Project title                  [menu]
+ *           [status] [priority] [lead]
+ *           [progress] [recency]
  *
  * The three chips on the secondary line are web's three in-place controls
  * (iteration 253, MYS-2202): web renders status, priority AND lead as live
@@ -15,6 +16,7 @@ import { Pressable, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { Project } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
+import { ProgressRing } from "@/components/ui/progress-ring";
 import { ProjectIcon } from "@/components/ui/project-icon";
 import { ProjectRowMenu } from "@/components/project/project-row-menu";
 import type { ProjectRowMenuProps } from "@/components/project/project-row-menu";
@@ -82,7 +84,8 @@ export function ProjectRow({
     <Pressable
       onPress={onPress}
       onLongPress={onLongPress}
-      className={cn("active:bg-secondary px-4 py-3", selected && "bg-brand/5")}
+      className={cn("px-4 py-3.5 active:bg-secondary", selected && "bg-brand/10")}
+      accessibilityState={selectionMode ? { selected } : undefined}
     >
       <View className="flex-row items-start gap-3">
         {selectionMode ? (
@@ -94,11 +97,13 @@ export function ProjectRow({
             />
           </View>
         ) : null}
-        <ProjectIcon icon={project.icon} size="lg" />
-        <View className="flex-1 gap-1">
+        <View className="size-10 items-center justify-center rounded-xl bg-surface-1">
+          <ProjectIcon icon={project.icon} size="lg" />
+        </View>
+        <View className="min-w-0 flex-1 gap-2">
           <View className="flex-row items-start gap-1.5">
             <Text
-              className="text-title-sm text-foreground font-medium flex-shrink"
+              className="shrink text-title-sm font-semibold text-foreground"
               numberOfLines={2}
             >
               {project.title}
@@ -119,58 +124,43 @@ export function ProjectRow({
               />
             ) : null}
           </View>
-          {/* Secondary line: status, priority and lead, all three editable in
-              place (web's card renders exactly these three as controls —
-              `projects-page.tsx:597-679`). Each is its own tap target nested
-              inside the row's `Pressable`, so the touch goes to the cell and
-              every other point on the row still opens the project.
-
-              The lead chip is new to this card. Web puts it in the card's
-              footer beside the created date; on a phone that footer line is the
-              count + recency column on the right, and a fourth element would
-              push the title off a two-line budget. The line below the title is
-              where the card's secondary text lives, so the lead joins it. */}
-          <View className="flex-row items-center gap-3 flex-wrap">
+          {/* Same in-place editors as the web card; wrap them on a phone
+              so metadata never takes space from the project title. */}
+          <View className="flex-row flex-wrap items-center gap-x-2 gap-y-1">
             <ProjectStatusCell
+              card
               project={project}
               edit={cellEdit}
               iconSize={CARD_ICON_SIZE}
             />
             <ProjectPriorityCell
+              card
               project={project}
               edit={cellEdit}
               iconSize={CARD_ICON_SIZE}
             />
             <ProjectLeadCell
+              card
               project={project}
               edit={cellEdit}
               avatarSize={CARD_AVATAR_SIZE}
             />
           </View>
-        </View>
-        <View className="items-end gap-1">
-          {showCount ? (
-            <Text className="text-caption text-muted-foreground tabular-nums">
-              {project.done_count}/{totalIssues}
+          <View className="flex-row flex-wrap items-center gap-x-3 gap-y-1">
+            {showCount ? (
+              <View className="flex-row items-center gap-1.5">
+                <ProgressRing done={project.done_count} total={totalIssues} size={12} />
+                <Text className="text-caption font-medium tabular-nums text-muted-foreground">
+                  {project.done_count}/{totalIssues}
+                </Text>
+              </View>
+            ) : null}
+            <Text className="text-caption text-muted-foreground">
+              {timeAgo(project.updated_at)}
             </Text>
-          ) : (
-            <Text className="text-caption text-muted-foreground/60">—</Text>
-          )}
-          <Text className="text-micro text-muted-foreground/70">
-            {timeAgo(project.updated_at)}
-          </Text>
+          </View>
         </View>
-        {/* Row actions (MYS-2197). The trigger claims the touch responder, so
-            opening the sheet never falls through to the row's own onPress —
-            tapping elsewhere on the row still navigates. In selection mode the
-            kebab gives way to the leading checkbox: a row carries one control
-            for picking, and picking is what the mode is for (the rule the
-            skills, autopilots and labels lists follow). Web renders the menu in
-            both of its views; mobile does too, via this prop.
-
-            The right column above stacks count over recency, so the kebab sits
-            beside that column rather than inside it — it is a control, not a
-            third line of secondary text. */}
+        {/* Row actions stay independent of opening or selecting the row. */}
         {menu && !selectionMode ? <ProjectRowMenu project={project} {...menu} /> : null}
       </View>
     </Pressable>

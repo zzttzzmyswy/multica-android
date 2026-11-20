@@ -34,3 +34,16 @@ export function queueEditDraftText(task: ChatQueuedTask): string | null {
   const trimmed = task.content?.trim();
   return trimmed ? trimmed : null;
 }
+/** Refresh canonical queue state even if a network failure made the result
+ * ambiguous. The local cancellation (including draft restoration) is only
+ * committed by the fulfilled action; rejection never evicts a pending row. */
+export async function reconcileQueueCancellation(
+  applyConfirmedAction: () => Promise<void>,
+  refreshPending: () => void,
+): Promise<void> {
+  try {
+    await applyConfirmedAction();
+  } finally {
+    refreshPending();
+  }
+}

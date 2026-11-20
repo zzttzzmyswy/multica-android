@@ -69,18 +69,21 @@ export default function Demo() {
   return (
     <SafeAreaView className="flex-1 bg-background">
       {/* Page header — self-drawn (the auth stack hides headers). */}
-      <View className="h-12 flex-row items-center justify-between px-4">
-        <Text className="text-title-sm font-semibold text-foreground">{t("demo.title")}</Text>
+      <View className="min-h-12 flex-row items-center gap-2 border-b border-border px-4 py-1">
+        <Text accessibilityRole="header" className="min-w-0 flex-1 text-title-sm font-semibold text-foreground">
+          {t("demo.title")}
+        </Text>
         <IconButton
           name="close"
           iconSize={22}
+          className="size-12 shrink-0 rounded-xl"
           onPress={closeDemo}
           accessibilityLabel={t("demo.close")}
         />
       </View>
 
       <ScrollView contentContainerClassName="px-4 pb-10">
-        <View className="gap-8 pt-2">
+        <View className="w-full max-w-[600px] gap-8 self-center pt-2">
           {/* Hero */}
           <View className="items-center gap-3 px-2 pt-4">
             <MulticaLogo size={56} />
@@ -201,8 +204,8 @@ export default function Demo() {
             <Text className="px-1 text-center text-title-sm font-semibold text-foreground">
               {t("demo.footer.title")}
             </Text>
-            <Button size="lg" onPress={closeDemo}>
-              <Text>{t("demo.footer.cta")}</Text>
+            <Button size="lg" className="min-h-12 h-auto py-2.5" onPress={closeDemo}>
+              <Text className="text-center">{t("demo.footer.cta")}</Text>
             </Button>
             <Text className="px-4 text-center text-caption leading-relaxed text-muted-foreground">
               {t("demo.footer.hint")}

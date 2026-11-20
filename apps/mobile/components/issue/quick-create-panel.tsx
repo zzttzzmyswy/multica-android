@@ -54,6 +54,7 @@ interface Props {
   /** Mirrors the in-flight upload flag so the screen can hold submit. */
   onUploadingChange: (uploading: boolean) => void;
   disabled?: boolean;
+  isLocked?: () => boolean;
 }
 
 export function QuickCreatePanel({
@@ -61,6 +62,7 @@ export function QuickCreatePanel({
   onAttachmentUploaded,
   onUploadingChange,
   disabled,
+  isLocked,
 }: Props) {
   const { t } = useTranslation();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
@@ -105,7 +107,7 @@ export function QuickCreatePanel({
     : t("newIssue.agentSelectAgent");
 
   const openActorPicker = () => {
-    if (!wsSlug) return;
+    if (disabled || isLocked?.() || !wsSlug) return;
     router.push({
       pathname: "/[workspace]/new-issue-picker/agent",
       params: { workspace: wsSlug },
@@ -137,11 +139,12 @@ export function QuickCreatePanel({
           }
           label={actor ? actorLabel : t("newIssue.agentSelectAgent")}
           variant={actor ? "filled" : "dimmed"}
+          disabled={disabled}
           onPress={openActorPicker}
           accessibilityLabel={t("a11y.newIssueAgentPicker")}
         />
       </View>
-      <CreateFormAttributeRow mode="agent" />
+      <CreateFormAttributeRow mode="agent" disabled={disabled} isLocked={isLocked} />
     </View>
   );
 }

@@ -192,7 +192,7 @@ describe("an author's name on a surface that also indexes it", () => {
     // would let the query match a word nobody can see — iteration 255's defect,
     // one surface over.
     expect(sheet).toContain("actorNameText(\n            resolveActorName(");
-    expect(sheet).toContain("[threads, resolveActorName],");
+    expect(sheet).toContain("[threads, resolveActorName, t],");
     // Withheld → the sub-line drops rather than leaving a blank caption.
     expect(sheet).toContain("{authorName ? (");
   });

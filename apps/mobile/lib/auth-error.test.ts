@@ -31,7 +31,10 @@ describe("classifyError", () => {
   });
 
   it("treats a 5xx from a reachable server as server-side, not offline", () => {
-    expect(classifyError(apiError("internal server error", 500))).toBe("other");
+    expect(classifyError(apiError("internal server error", 500))).toBe("server");
+    expect(classifyError(apiError("504 Gateway Timeout", 504))).toBe("server");
+    expect(classifyError(apiError("HTTP 504", 504))).toBe("server");
+    expect(classifyError(apiError("network quota", 400))).toBe("other");
   });
 
   it("returns unknown for non-Error values and unremarkable errors", () => {
@@ -46,6 +49,7 @@ describe("isConnectionError", () => {
     expect(isConnectionError(new TypeError("Network request failed"))).toBe(true);
     expect(isConnectionError(apiError("invalid code", 400))).toBe(false);
     expect(isConnectionError(apiError("internal server error", 500))).toBe(false);
+    expect(isConnectionError(apiError("Gateway Timeout", 504))).toBe(false);
     expect(isConnectionError(undefined)).toBe(false);
   });
 });
@@ -75,8 +79,17 @@ describe("mapAuthError", () => {
     expect(mapAuthError(apiError("too many attempts", 429), "fallback", t)).toBe(
       "auth.tooManyAttempts",
     );
+    expect(mapAuthError(apiError("HTTP 429", 429), "fallback", t)).toBe(
+      "auth.tooManyAttempts",
+    );
     expect(mapAuthError(apiError("invalid code", 400), "fallback", t)).toBe(
       "auth.codeMismatch",
+    );
+  });
+
+  it("asks for a same-server retry after a gateway response", () => {
+    expect(mapAuthError(apiError("Gateway Timeout", 504), "fallback", t)).toBe(
+      "auth.serverTemporarilyUnavailable",
     );
   });
 

@@ -235,6 +235,44 @@ describe("buildThreadNavThreads", () => {
     expect(threads[0]!.replyCount).toBe(2);
   });
 
+  it("counts surviving replies through a deleted intermediate comment", () => {
+    const deletedAt = "2026-01-02T00:00:00Z";
+    const entries = [
+      comment("A"),
+      comment("B", { parent_id: "A", deleted_at: deletedAt }),
+      comment("C", { parent_id: "B", resolved_at: deletedAt }),
+    ];
+    expect(buildThreadNavThreads(entries, null)).toMatchObject([
+      { id: "A", replyCount: 1, resolved: true },
+    ]);
+  });
+
+  it("keeps a deleted root as the jump target for surviving replies", () => {
+    const entries = [
+      comment("A", { deleted_at: "2026-01-02T00:00:00Z" }),
+      comment("B", { parent_id: "A" }),
+    ];
+    expect(buildThreadNavThreads(entries, null)).toMatchObject([
+      { id: "A", entry: entries[0], replyCount: 1 },
+    ]);
+  });
+
+  it("indexes the localized placeholder instead of a deleted root's stale text", () => {
+    const entries = [comment("A", {
+      deleted_at: "2026-01-02T00:00:00Z",
+      content: "Old title",
+    })];
+    const rows = prepareThreads(
+      buildThreadNavThreads(entries, null),
+      () => "Old author",
+      Date.parse("2026-01-02T00:00:00Z"),
+      "已删除",
+    );
+    expect(rows[0]).toMatchObject({ title: "已删除", excerpt: "", authorName: "" });
+    expect(filterThreads(rows, "all", "已删除")).toHaveLength(1);
+    expect(filterThreads(rows, "all", "old")).toHaveLength(0);
+  });
+
   it("marks a reply-resolved thread resolved, matching the folded timeline", () => {
     const entries: TimelineEntry[] = [
       comment("A"),

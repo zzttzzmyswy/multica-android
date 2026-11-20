@@ -124,12 +124,16 @@ interface Props {
    * When null/undefined no stage chip renders at all.
    */
   parentIssueId?: string | null;
+  disabled?: boolean;
+  isLocked?: () => boolean;
 }
 
 export function CreateFormAttributeRow({
   fields = ALL_FIELDS,
   mode,
   parentIssueId,
+  disabled,
+  isLocked,
 }: Props) {
   const palette = useThemePalette();
   const wsSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
@@ -165,7 +169,7 @@ export function CreateFormAttributeRow({
     priority === "none" ? t("attr.priority") : t(`enum.priority.${priority}`);
 
   const open = (field: NewIssuePickerField) => {
-    if (!wsSlug) return;
+    if (disabled || isLocked?.() || !wsSlug) return;
     router.push({
       pathname: NEW_ISSUE_PICKER_PATHNAMES[field],
       params: { workspace: wsSlug },
@@ -173,7 +177,7 @@ export function CreateFormAttributeRow({
   };
 
   const openFieldSettings = () => {
-    if (!wsSlug) return;
+    if (disabled || isLocked?.() || !wsSlug) return;
     router.push(`/${wsSlug}/more/settings/issues`);
   };
 
@@ -182,7 +186,7 @@ export function CreateFormAttributeRow({
   // opened the modal). Without it the sheet cannot fetch the sibling ceiling,
   // and the option list would floor back to Stage 1–3.
   const openStage = () => {
-    if (!wsSlug || !parentIssueId) return;
+    if (disabled || isLocked?.() || !wsSlug || !parentIssueId) return;
     // Record which parent the sheet is open for BEFORE pushing it — the sheet
     // reads the id from the route param, but writes the pick back through this
     // store so the value stays tagged with its parent.
@@ -256,7 +260,7 @@ export function CreateFormAttributeRow({
     : [];
 
   const openMore = () => {
-    if (!wsSlug) return;
+    if (disabled || isLocked?.() || !wsSlug) return;
     const fieldLabels = menuFields.map((f) => fieldLabel(f));
     const customizeIndex = fieldLabels.length;
     const cancelIndex = customizeIndex + 1;
@@ -297,6 +301,7 @@ export function CreateFormAttributeRow({
             }
             label={statusLabel(status)}
             variant="filled"
+            disabled={disabled}
             onPress={() => open("status")}
           />
         );
@@ -306,6 +311,7 @@ export function CreateFormAttributeRow({
             icon={<PriorityIcon priority={priority} />}
             label={priorityLabel}
             variant={priority === "none" ? "dimmed" : "filled"}
+            disabled={disabled}
             onPress={() => open("priority")}
           />
         );
@@ -330,6 +336,7 @@ export function CreateFormAttributeRow({
             }
             label={assigneeLabel}
             variant={assignee ? "filled" : "dimmed"}
+            disabled={disabled}
             onPress={() => open("assignee")}
           />
         );
@@ -345,6 +352,7 @@ export function CreateFormAttributeRow({
             }
             label={dueDate ? formatDueDate(dueDate, t, intlLocale) : t("attr.dueDate")}
             variant={dueDate ? "filled" : "dimmed"}
+            disabled={disabled}
             onPress={() => open("due-date")}
           />
         );
@@ -362,6 +370,7 @@ export function CreateFormAttributeRow({
               startDate ? formatDueDate(startDate, t, intlLocale) : t("attr.startDate")
             }
             variant={startDate ? "filled" : "dimmed"}
+            disabled={disabled}
             onPress={() => open("start-date")}
           />
         );
@@ -371,6 +380,7 @@ export function CreateFormAttributeRow({
             icon={<LabelDots labels={labels} />}
             label={summarizeLabels(labels, t("attr.labels"))}
             variant="filled"
+            disabled={disabled}
             onPress={() => open("labels")}
           />
         ) : (
@@ -380,6 +390,7 @@ export function CreateFormAttributeRow({
             }
             label={t("attr.labels")}
             variant="dimmed"
+            disabled={disabled}
             onPress={() => open("labels")}
           />
         );
@@ -395,6 +406,7 @@ export function CreateFormAttributeRow({
             }
             label={project?.title ?? t("attr.project")}
             variant={project ? "filled" : "dimmed"}
+            disabled={disabled}
             onPress={() => open("project")}
           />
         );
@@ -424,6 +436,7 @@ export function CreateFormAttributeRow({
                 stage == null ? t("attr.stage") : t("stage.value", { n: stage })
               }
               variant={stage == null ? "dimmed" : "filled"}
+              disabled={disabled}
               onPress={openStage}
             />
           </View>
@@ -436,6 +449,7 @@ export function CreateFormAttributeRow({
               }
               label=""
               variant="dimmed"
+              disabled={disabled}
               onPress={openMore}
               className="px-2.5"
               accessibilityLabel={t("newIssue.moreFieldsA11y")}

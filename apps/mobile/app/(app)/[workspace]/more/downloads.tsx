@@ -14,12 +14,13 @@
  * session is restored.
  */
 import { Alert, Pressable, ScrollView, View } from "react-native";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { File } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { Text } from "@/components/ui/text";
-import { useDownloadsStore } from "@/data/downloads-store";
+import { DOWNLOAD_ERROR_INTERRUPTED, useDownloadsStore } from "@/data/downloads-store";
+import { formatBytes } from "@/lib/format-bytes";
 import { mimeTypeForFilename } from "@/lib/attachment-download";
 import { installApkFile, openUnknownAppSourcesSettings } from "@/lib/install-update";
 import {
@@ -41,6 +42,7 @@ export default function DownloadsPage() {
   const theme = useThemePalette();
   const tasks = useDownloadsStore((s) => s.tasks);
   const [tab, setTab] = useState<Tab>("active");
+  const observingRetries = useRef(new Set<string>());
 
   useEffect(() => {
     void useDownloadsStore.getState().hydrate();
@@ -85,6 +87,42 @@ export default function DownloadsPage() {
     );
   };
 
+  const showInstallError = (err: unknown) => {
+    Alert.alert(
+      t("screen.downloads"),
+      [t("update.error.installFailed"), err instanceof Error ? err.message : ""]
+        .filter(Boolean)
+        .join("\n"),
+      [
+        { text: t("common.cancel"), style: "cancel" },
+        {
+          text: t("update.openSettings"),
+          onPress: () => void openUnknownAppSourcesSettings(),
+        },
+      ],
+    );
+  };
+
+  const retryTask = async (task: DownloadTask) => {
+    const run = await useDownloadsStore.getState().retry(task.id).catch(() => {
+      Alert.alert(t("screen.downloads"), t("downloads.retryFailed"));
+    });
+    if (!run || observingRetries.current.has(run.id)) return;
+    observingRetries.current.add(run.id);
+    if (useDownloadsStore.getState().tasks.some((row) => row.id === run.id && row.status === "downloading")) {
+      setTab("active");
+    }
+    // Only the install handoff can reject after enqueue; network failures
+    // resolve with a failed row and its reason.
+    try {
+      await run.done;
+    } catch (err) {
+      showInstallError(err);
+    } finally {
+      observingRetries.current.delete(run.id);
+    }
+  };
+
   /** Terminal open action: an update APK goes to the system installer
    *  (content-URI), everything else to the share/open sheet. Any `.apk`
    *  filename routes to the installer even when a persisted task lost its
@@ -97,21 +135,7 @@ export default function DownloadsPage() {
       task.source.kind === "update" ||
       task.filename?.toLowerCase().endsWith(".apk");
     if (isApk) {
-      void installApkFile(new File(uri)).catch((err) => {
-        Alert.alert(
-          t("screen.downloads"),
-          [t("update.error.installFailed"), err instanceof Error ? err.message : ""]
-            .filter(Boolean)
-            .join("\n"),
-          [
-            { text: t("common.cancel"), style: "cancel" },
-            {
-              text: t("update.openSettings"),
-              onPress: () => void openUnknownAppSourcesSettings(),
-            },
-          ],
-        );
-      });
+      void installApkFile(new File(uri)).catch(showInstallError);
       return;
     }
     void Sharing.shareAsync(uri, { mimeType: mimeTypeForFilename(task.filename) });
@@ -119,7 +143,7 @@ export default function DownloadsPage() {
 
   return (
     <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-      <View className="flex-row items-center gap-2 px-4 pt-3">
+      <View className="flex-row flex-wrap items-center gap-2 px-4 pt-3">
         <TabPill
           active={tab === "active"}
           label={t("downloads.tab.active")}
@@ -135,7 +159,8 @@ export default function DownloadsPage() {
         {tab === "finished" && finished.length > 0 ? (
           <Pressable
             onPress={confirmClearFinished}
-            className="ml-auto flex-row items-center gap-1 px-2 py-1.5 rounded-full bg-muted active:opacity-80"
+            className="ml-auto min-h-12 min-w-12 flex-row items-center justify-center gap-1 rounded-full bg-muted px-3 active:opacity-80"
+            accessibilityRole="button"
             accessibilityLabel={t("downloads.clearFinished")}
           >
             <Ionicons name="trash-outline" size={13} color={theme.mutedForeground} />
@@ -165,8 +190,8 @@ export default function DownloadsPage() {
               key={task.id}
               task={task}
               theme={theme}
-              onOpen={(uri, mime) => openTask(task)}
-              onRetry={() => useDownloadsStore.getState().retry(task.id)}
+              onOpen={() => openTask(task)}
+              onRetry={() => void retryTask(task)}
               onDelete={() => confirmRemove(task)}
             />
           ))}
@@ -190,8 +215,10 @@ function TabPill({
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="tab"
+      accessibilityState={{ selected: active }}
       className={cn(
-        "flex-row items-center gap-1.5 rounded-full px-4 py-1.5",
+        "min-h-12 min-w-12 flex-row items-center gap-1.5 rounded-full px-4",
         active ? "bg-foreground" : "bg-muted",
       )}
     >
@@ -232,37 +259,54 @@ function ActiveRow({
   theme: typeof THEME["light"];
 }) {
   const { t } = useTranslation();
-  const pct = task.totalBytes ? Math.round(task.progress * 100) : null;
+  const pct = task.totalBytes != null && Number.isFinite(task.totalBytes) && task.totalBytes > 0
+    ? Math.round(task.progress * 100)
+    : null;
+  const received = task.bytesWritten ?? 0;
   return (
     <View className="rounded-xl border border-border bg-card px-3 py-2.5">
-      <View className="flex-row items-center gap-2">
+      <View className="flex-row items-start gap-2">
         <Ionicons name="download-outline" size={16} color={theme.mutedForeground} />
-        <Text className="flex-1 text-body text-foreground" numberOfLines={1}>
+        <Text className="min-w-0 flex-1 text-body text-foreground" numberOfLines={3}>
           {task.filename}
         </Text>
-        {pct != null ? (
-          <Text className="text-caption text-muted-foreground tabular-nums">
-            {pct}%
-          </Text>
-        ) : null}
+      </View>
+      <SourceLine task={task} />
+      {pct != null ? (
+        <View
+          accessible
+          accessibilityRole="progressbar"
+          accessibilityLabel={t("downloads.downloading")}
+          accessibilityValue={{ min: 0, max: 100, now: pct }}
+          className="mt-2 gap-1"
+        >
+          <View className="h-1.5 overflow-hidden rounded-full bg-muted">
+            <View className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
+          </View>
+          <Text className="text-caption text-muted-foreground tabular-nums">{pct}%</Text>
+        </View>
+      ) : (
+        <Text className="mt-2 text-caption text-muted-foreground tabular-nums">
+          {received > 0
+            ? t("downloads.receivedBytes", { size: formatBytes(received) })
+            : t("downloads.downloading")}
+        </Text>
+      )}
+      <View className="mt-2 flex-row flex-wrap justify-end gap-2">
         <Pressable
-          onPress={() => useDownloadsStore.getState().cancel(task.id)}
-          className="rounded-full bg-muted px-2.5 py-1 active:opacity-80"
-          accessibilityLabel={t("downloads.cancel")}
+          onPress={() => void useDownloadsStore.getState().cancel(task.id)}
+          className={ACTION_CLASS}
+          accessibilityRole="button"
         >
           <Text className="text-caption text-muted-foreground">{t("downloads.cancel")}</Text>
         </Pressable>
       </View>
-      <View className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-        <View
-          className="h-full rounded-full bg-primary"
-          style={{ width: `${Math.round(task.progress * 100)}%` }}
-        />
-      </View>
-      <SourceLine task={task} />
     </View>
   );
 }
+
+const ACTION_CLASS =
+  "min-h-12 min-w-12 flex-row items-center justify-center gap-1 rounded-full bg-muted px-3 active:opacity-80";
 
 function FinishedRow({
   task,
@@ -273,7 +317,7 @@ function FinishedRow({
 }: {
   task: DownloadTask;
   theme: typeof THEME["light"];
-  onOpen: (uri: string, mimeType: string) => void;
+  onOpen: () => void;
   onRetry: () => void;
   onDelete: () => void;
 }) {
@@ -292,48 +336,39 @@ function FinishedRow({
         : theme.mutedForeground;
   return (
     <View className="rounded-xl border border-border bg-card px-3 py-2.5">
-      <View className="flex-row items-center gap-2">
+      <View className="flex-row items-start gap-2">
         <Ionicons name={icon} size={16} color={iconColor} />
-        <View className="flex-1 min-w-0">
-          <Text className="text-body text-foreground" numberOfLines={1}>
-            {task.filename}
-          </Text>
-        </View>
+        <Text className="min-w-0 flex-1 text-body text-foreground" numberOfLines={3}>
+          {task.filename}
+        </Text>
+      </View>
+      <View className="mt-1 flex-row flex-wrap items-center gap-x-2">
+        <StatusLabel task={task} />
+        <Text className="text-caption text-muted-foreground">
+          {formatDownloadTime(task.completedAt ?? task.createdAt)}
+        </Text>
+      </View>
+      <SourceLine task={task} />
+      {task.status === "failed" && task.error ? (
+        <Text className="mt-1 text-caption text-destructive" numberOfLines={3}>
+          {task.error === DOWNLOAD_ERROR_INTERRUPTED ? t("downloads.error.interrupted") : task.error}
+        </Text>
+      ) : null}
+      <View className="mt-2 flex-row flex-wrap justify-end gap-2">
         {task.status === "completed" && task.localUri ? (
-          <Pressable
-            onPress={() => {
-              onOpen(task.localUri!, mimeTypeForFilename(task.filename));
-            }}
-            className="flex-row items-center gap-1 rounded-full bg-muted px-2.5 py-1 active:opacity-80"
-            accessibilityLabel={t("downloads.open")}
-          >
+          <Pressable onPress={onOpen} className={ACTION_CLASS} accessibilityRole="button">
             <Ionicons name="open-outline" size={12} color={theme.mutedForeground} />
             <Text className="text-caption text-muted-foreground">{t("downloads.open")}</Text>
           </Pressable>
-        ) : task.status === "failed" ? (
-          <Pressable
-            onPress={onRetry}
-            className="flex-row items-center gap-1 rounded-full bg-muted px-2.5 py-1 active:opacity-80"
-            accessibilityLabel={t("downloads.retry")}
-          >
+        ) : task.status === "failed" || task.status === "cancelled" ? (
+          <Pressable onPress={onRetry} className={ACTION_CLASS} accessibilityRole="button">
             <Ionicons name="refresh" size={12} color={theme.mutedForeground} />
             <Text className="text-caption text-muted-foreground">{t("downloads.retry")}</Text>
           </Pressable>
         ) : null}
-        <Pressable
-          onPress={onDelete}
-          className="rounded-full bg-muted px-2.5 py-1 active:opacity-80"
-          accessibilityLabel={t("downloads.delete")}
-        >
+        <Pressable onPress={onDelete} className={ACTION_CLASS} accessibilityRole="button">
           <Text className="text-caption text-muted-foreground">{t("downloads.delete")}</Text>
         </Pressable>
-      </View>
-      <View className="mt-1 flex-row items-center gap-2">
-        <StatusLabel task={task} />
-        <Text className="text-caption text-muted-foreground" numberOfLines={1}>
-          {formatDownloadTime(task.completedAt ?? task.createdAt)}
-        </Text>
-        <SourceLine task={task} />
       </View>
     </View>
   );

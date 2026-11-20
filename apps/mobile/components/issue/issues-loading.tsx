@@ -5,10 +5,7 @@
  * a list-like structure instead of a centered spinner. Mirrors the
  * "perceived perf wins over centered spinner" pattern from InboxLoading.
  *
- * Row skeleton mirrors `IssueRow` layout (px-4 py-3, priority dot +
- * identifier slot + title flex + trailing assignee circle), and the section
- * header skeleton mirrors the page's `SectionHeader` (px-4 py-2 with a
- * status-icon-shaped dot and a short label band).
+ * Row skeleton follows the title-first, two-tier IssueRow layout.
  */
 import { View } from "react-native";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,11 +20,13 @@ export function IssuesLoading() {
             <Skeleton className="h-3 w-20" />
           </View>
           {Array.from({ length: 3 }).map((_, rowIdx) => (
-            <View key={rowIdx} className="flex-row items-center gap-3 px-4 py-3">
-              <Skeleton className="size-3.5 rounded-full" />
-              <Skeleton className="h-3 w-14" />
-              <Skeleton className="h-3.5 flex-1" />
-              <Skeleton className="size-6 rounded-full" />
+            <View key={rowIdx} className="gap-2 px-4 py-3.5">
+              <Skeleton className={rowIdx % 2 ? "h-4 w-3/5" : "h-4 w-4/5"} />
+              <View className="flex-row items-center gap-2">
+                <Skeleton className="size-3.5 rounded-full" />
+                <Skeleton className="h-3 w-14" />
+                <Skeleton className="size-5 rounded-full" />
+              </View>
             </View>
           ))}
         </View>

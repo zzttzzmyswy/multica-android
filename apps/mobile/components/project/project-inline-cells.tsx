@@ -63,12 +63,14 @@ function CellPress({
   edit,
   project,
   className,
+  card,
   children,
 }: {
   column: ProjectCellColumn;
   edit?: ProjectInlineEdit;
   project: Project;
   className?: string;
+  card?: boolean;
   children: React.ReactNode;
 }) {
   const { t } = useTranslation();
@@ -78,8 +80,13 @@ function CellPress({
       ? () => edit.onEdit(project, column)
       : undefined;
 
+  const cellClass = cn(
+    "flex-row items-center",
+    card && "max-w-full shrink rounded-lg bg-secondary/70 px-2 py-1.5",
+    className,
+  );
   if (!onPress) {
-    return <View className={cn("flex-row items-center", className)}>{children}</View>;
+    return <View className={cellClass}>{children}</View>;
   }
 
   return (
@@ -87,7 +94,7 @@ function CellPress({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={t("a11y.tableEditCell", { column: columnLabel })}
-      className={cn("flex-row items-center active:opacity-70", className)}
+      className={cn(cellClass, "active:opacity-70", card && "min-h-9")}
     >
       {children}
     </Pressable>
@@ -100,15 +107,17 @@ export function ProjectStatusCell({
   project,
   edit,
   iconSize = 12,
+  card,
   textClassName = "text-caption text-muted-foreground",
 }: {
   project: Project;
   edit?: ProjectInlineEdit;
   iconSize?: number;
+  card?: boolean;
   textClassName?: string;
 }) {
   return (
-    <CellPress column="status" edit={edit} project={project} className="gap-1.5">
+    <CellPress column="status" card={card} edit={edit} project={project} className="gap-1.5">
       <ProjectStatusIcon status={project.status} size={iconSize} />
       <Text className={cn("flex-shrink", textClassName)} numberOfLines={1}>
         {projectStatusLabel(project.status)}
@@ -125,15 +134,17 @@ export function ProjectPriorityCell({
   project,
   edit,
   iconSize = 12,
+  card,
   textClassName = "text-caption text-muted-foreground",
 }: {
   project: Project;
   edit?: ProjectInlineEdit;
   iconSize?: number;
+  card?: boolean;
   textClassName?: string;
 }) {
   return (
-    <CellPress column="priority" edit={edit} project={project} className="gap-1.5">
+    <CellPress column="priority" card={card} edit={edit} project={project} className="gap-1.5">
       {project.priority === "none" ? (
         <Text className="text-caption text-muted-foreground/60">—</Text>
       ) : (
@@ -173,6 +184,7 @@ export function ProjectLeadCell({
   project,
   edit,
   avatarSize,
+  card,
   textClassName = "text-caption text-muted-foreground",
 }: {
   project: Project;
@@ -180,6 +192,7 @@ export function ProjectLeadCell({
   /** Renders the avatar at this size. Omit for a text-only cell (the table had
    *  no avatar before this round; the card, like web's, has one). */
   avatarSize?: number;
+  card?: boolean;
   textClassName?: string;
 }) {
   const { t } = useTranslation();
@@ -201,7 +214,7 @@ export function ProjectLeadCell({
   const name = cell.kind === "name" ? cell.name : t("projects.leadNone");
 
   return (
-    <CellPress column="lead" edit={edit} project={project} className="gap-1.5">
+    <CellPress column="lead" card={card} edit={edit} project={project} className="gap-1.5">
       {avatarSize === undefined ? null : (
         <LeadAvatar project={project} size={avatarSize} empty={empty} />
       )}

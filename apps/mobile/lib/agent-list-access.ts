@@ -50,7 +50,7 @@ export interface AgentBatchSelection {
     ownedByMe: boolean;
     canManage: boolean;
   }[];
-  /** Archived-at-set selected rows (restore targets). */
+  /** Archived-at-set selected rows, regardless of permissions. */
   archivedIds: string[];
   /** Live selected rows (bulk-access / archive eligibility). */
   activeIds: string[];
@@ -58,6 +58,8 @@ export interface AgentBatchSelection {
   ownedIds: string[];
   /** canManage rows (owner OR workspace admin) — restore targets. */
   manageableIds: string[];
+  /** Selected archived rows the current user may restore. */
+  restorableIds: string[];
   /** Selected live rows the current user may archive. */
   archivableIds: string[];
   /** Selected minus owned — rows bulk access must skip (web skip-count). */
@@ -82,6 +84,7 @@ export function buildAgentBatchSelection({
   const ownedIds: string[] = [];
   const manageableIds: string[] = [];
   const archivableIds: string[] = [];
+  const restorableIds: string[] = [];
 
   for (const agent of agents) {
     if (!selectedIds.has(agent.id)) continue;
@@ -91,8 +94,10 @@ export function buildAgentBatchSelection({
       currentUserId != null && agent.owner_id === currentUserId;
     const canManage = ownedByMe || isManager;
     selection.push({ id: agent.id, archived, ownedByMe, canManage });
-    if (archived) archivedIds.push(agent.id);
-    else {
+    if (archived) {
+      archivedIds.push(agent.id);
+      if (canManage) restorableIds.push(agent.id);
+    } else {
       activeIds.push(agent.id);
       if (canManage) archivableIds.push(agent.id);
     }
@@ -107,6 +112,23 @@ export function buildAgentBatchSelection({
     ownedIds,
     manageableIds,
     archivableIds,
+    restorableIds,
     accessSkipCount: selection.length - ownedIds.length,
   };
+}
+
+/** A delayed confirmation may lose targets, but cannot acquire new ones. */
+export function retainConfirmedAgentIds(
+  confirmed: readonly string[],
+  currentlyEligible: readonly string[],
+): string[] {
+  const eligible = new Set(currentlyEligible);
+  return confirmed.filter((id) => eligible.has(id));
+}
+
+export function areAllVisibleAgentsSelected(
+  visible: readonly { id: string }[],
+  selectedIds: ReadonlySet<string>,
+): boolean {
+  return visible.length > 0 && visible.every(({ id }) => selectedIds.has(id));
 }
