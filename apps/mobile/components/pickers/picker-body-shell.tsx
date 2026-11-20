@@ -11,11 +11,10 @@
  * `children` is the scrollable picker body; it stays `flex-1` so the list
  * keeps its own scroll behaviour and keyboard handling.
  */
-import { Pressable, TextInput, View } from "react-native";
-import Ionicons from "@expo/vector-icons/Ionicons";
+import { View } from "react-native";
+import { SearchField } from "@/components/ui/search-field";
 import { Text } from "@/components/ui/text";
 import type { PickerSearch } from "@/lib/use-picker-search";
-import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export function PickerBodyShell({
   search,
@@ -36,13 +35,14 @@ export function PickerBodyShell({
     <View className="flex-1">
       {bodyChrome && title ? (
         <View className="px-4 pt-3 pb-1">
-          <Text className="text-title-sm font-semibold text-foreground">
+          <Text accessibilityRole="header" className="text-title font-semibold text-foreground">
             {title}
           </Text>
         </View>
       ) : null}
       {bodyChrome ? (
         <SearchField
+          className="mx-4 mb-1 mt-2"
           value={search.query}
           onChange={search.onQueryChange}
           placeholder={search.placeholder}
@@ -50,53 +50,6 @@ export function PickerBodyShell({
         />
       ) : null}
       {children}
-    </View>
-  );
-}
-
-/** Same chrome as the filter sheets' search row, with an explicit clear
- *  button: RN's `clearButtonMode` is iOS-only, so an Android user would
- *  otherwise have no way to clear the filter but deleting characters. */
-function SearchField({
-  value,
-  onChange,
-  placeholder,
-  autoFocus,
-}: {
-  value: string;
-  onChange: (text: string) => void;
-  placeholder: string;
-  autoFocus?: boolean;
-}) {
-  const palette = useThemePalette();
-  const muted = palette.mutedForeground;
-
-  return (
-    <View className="px-4 pt-2 pb-1">
-      <View className="flex-row items-center gap-2 rounded-xl px-3 py-2 border border-border bg-secondary/40">
-        <Ionicons name="search" size={16} color={muted} />
-        <TextInput
-          value={value}
-          onChangeText={onChange}
-          placeholder={placeholder}
-          placeholderTextColor={muted}
-          autoFocus={autoFocus}
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="search"
-          accessibilityLabel={placeholder}
-          className="flex-1 text-body text-foreground py-0"
-        />
-        {value ? (
-          <Pressable
-            onPress={() => onChange("")}
-            hitSlop={8}
-            accessibilityLabel={placeholder}
-          >
-            <Ionicons name="close-circle" size={16} color={muted} />
-          </Pressable>
-        ) : null}
-      </View>
     </View>
   );
 }

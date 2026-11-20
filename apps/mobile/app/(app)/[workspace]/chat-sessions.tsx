@@ -10,13 +10,12 @@
  * pattern as `useNewIssueDraftStore` for the new-issue form.
  *
  * IM-style list (MYS-449, aligned with web chat-thread-list.tsx): each row is
- * avatar + title + last-message preview + IM timestamp, a red unread *count*
+ * avatar + title + last-message preview + IM timestamp, an unread *count*
  * badge, and a "typing…" indicator for sessions with an in-flight task — which
  * downgrades to a static "waiting" when the agent is definitively offline, so a
  * queued task on a disconnected agent stops claiming to be typing. Two
  * views toggled locally: history (active chats + footer entry into the
- * archive) and archived (the ONLY place a chat can be hard-deleted — long-
- * press → unarchive + delete, mirroring web's archived view).
+ * archive) and archived (the ONLY place a chat can be hard-deleted — row menu → unarchive + delete, mirroring the web view).
  */
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
@@ -191,49 +190,42 @@ export default function ChatSessionsRoute() {
     }
 
     return (
-      <Pressable
+      <View
         key={session.id}
-        onPress={() => {
-          requestSelect(session.id);
-          router.back();
-        }}
-        onLongPress={() => openActions(session)}
         className={cn(
-          "flex-row items-center gap-3 px-4 py-3 active:bg-secondary",
-          selected && "bg-secondary/60",
+          "mx-3 mb-1 flex-row items-center rounded-2xl border border-transparent",
+          selected && "border-primary/30 bg-primary/5",
         )}
       >
-        <ActorAvatar
-          type="agent"
-          id={session.agent_id}
-          size={40}
-          showPresence
-        />
-        <View className="flex-1 min-w-0">
-          {/* Line 1: title + pinned + time */}
-          <View className="flex-row items-center gap-1">
-            <Text
-              className={cn(
-                "text-body shrink",
-                unread > 0 ? "font-semibold text-foreground" : "text-foreground",
-              )}
-              numberOfLines={1}
-            >
-              {titleText}
-            </Text>
-            {session.pinned ? (
-              <Text className="text-micro text-muted-foreground">
-                {t("chat.pinned")}
-              </Text>
-            ) : null}
-            <View className="flex-1" />
-            <Text className="text-micro text-muted-foreground shrink-0">
-              {timeText}
-            </Text>
+        <Pressable
+          onPress={() => {
+            requestSelect(session.id);
+            router.back();
+          }}
+          onLongPress={() => openActions(session)}
+          accessibilityRole="button"
+          accessibilityState={{ selected }}
+          className="min-h-12 min-w-0 flex-1 flex-row items-start gap-3 rounded-xl py-3 pl-3 pr-1 active:bg-secondary"
+        >
+          <View className="pt-0.5">
+            <ActorAvatar type="agent" id={session.agent_id} size={36} showPresence />
           </View>
-          {/* Line 2: agent name · preview + unread badge (web MUL-6264) */}
-          <View className="mt-0.5 flex-row items-center gap-2">
-            <View className="flex-1 min-w-0 flex-row items-center gap-1.5">
+          <View className="min-w-0 flex-1">
+            <View className="flex-row items-start gap-1.5">
+              <Text
+                className={cn(
+                  "min-w-0 flex-1 text-body text-foreground",
+                  selected || unread > 0 ? "font-semibold" : "font-medium",
+                )}
+                numberOfLines={2}
+              >
+                {titleText}
+              </Text>
+              {selected ? (
+                <Ionicons name="checkmark-circle" size={16} color={palette.primary} />
+              ) : null}
+            </View>
+            <View className="mt-0.5 flex-row items-center gap-1.5">
               {agentName ? (
                 <>
                   <Text
@@ -242,47 +234,57 @@ export default function ChatSessionsRoute() {
                   >
                     {agentName}
                   </Text>
-                  <Text
-                    className="shrink-0 text-caption text-muted-foreground/60"
-                    numberOfLines={1}
-                  >
-                    ·
-                  </Text>
+                  <Text className="shrink-0 text-caption text-muted-foreground">·</Text>
                 </>
               ) : null}
               <View className="min-w-0 flex-1">{preview}</View>
             </View>
-            {unread > 0 ? (
-              <View className="min-w-[18px] h-[18px] rounded-full bg-destructive items-center justify-center px-1 shrink-0">
-                <Text className="text-micro font-semibold text-white">
-                  {unreadBadgeText(unread)}
+            <View className="mt-1.5 flex-row flex-wrap items-center gap-x-2 gap-y-1">
+              <Text className="text-caption tabular-nums text-muted-foreground">
+                {timeText}
+              </Text>
+              {session.pinned ? (
+                <Text className="text-caption text-muted-foreground">
+                  {t("chat.pinned")}
                 </Text>
-              </View>
-            ) : null}
+              ) : null}
+              {unread > 0 ? (
+                <View className="min-h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5">
+                  <Text className="text-micro font-semibold text-primary-foreground">
+                    {unreadBadgeText(unread)}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
           </View>
-        </View>
-        {selected ? (
-          <Text className="text-body text-primary font-semibold shrink-0">✓</Text>
-        ) : null}
-      </Pressable>
+        </Pressable>
+        <Pressable
+          onPress={() => openActions(session)}
+          accessibilityRole="button"
+          accessibilityLabel={`${t("a11y.sessionActions")}: ${titleText}`}
+          className="size-12 shrink-0 items-center justify-center rounded-xl active:bg-secondary"
+        >
+          <Ionicons name="ellipsis-horizontal" size={19} color={muted} />
+        </Pressable>
+      </View>
     );
   };
 
   // Archived view: back header, then the archived rows. Hard delete lives
-  // only here (via each row's long-press menu) — web parity.
+  // only here (via each row's action menu) — web parity.
   if (view === "archived") {
     return (
       <View className="flex-1">
-        <View className="flex-row items-center gap-2 px-4 pt-4 pb-3">
+        <View className="flex-row items-center gap-2 px-3 pb-2 pt-3">
           <Pressable
             onPress={() => setView("history")}
-            hitSlop={12}
-            className="p-0.5"
-            accessibilityLabel="back"
+            className="size-12 items-center justify-center rounded-xl active:bg-secondary"
+            accessibilityRole="button"
+            accessibilityLabel={t("common.back")}
           >
             <Ionicons name="chevron-back" size={22} className="text-foreground" />
           </Pressable>
-          <Text className="flex-1 text-title-sm font-semibold text-foreground">
+          <Text accessibilityRole="header" className="flex-1 text-title-sm font-semibold text-foreground">
             {t("chat.archivedTitle")}
           </Text>
           <Text className="text-body text-muted-foreground tabular-nums">
@@ -302,7 +304,8 @@ export default function ChatSessionsRoute() {
     archivedSessions.length > 0 ? (
       <Pressable
         onPress={() => setView("archived")}
-        className="flex-row items-center gap-3 px-4 py-3 mt-1 active:bg-secondary"
+        accessibilityRole="button"
+        className="mx-3 mb-3 mt-2 min-h-12 flex-row items-center gap-3 rounded-xl border border-border bg-card px-3 py-2 active:bg-secondary"
       >
         <View className="h-9 w-9 items-center justify-center rounded-full bg-muted">
           <Ionicons name="archive-outline" size={16} className="text-muted-foreground" />
@@ -320,7 +323,7 @@ export default function ChatSessionsRoute() {
   return (
     <View className="flex-1">
       <View className="px-4 pt-4 pb-3">
-        <Text className="text-title-sm font-semibold text-foreground">{t("chat.chats")}</Text>
+        <Text accessibilityRole="header" className="text-title-sm font-semibold text-foreground">{t("chat.chats")}</Text>
       </View>
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         {sessionsRead.state !== "ready" ? (

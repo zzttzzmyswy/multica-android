@@ -29,7 +29,7 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Pressable,
-  TextInput,
+  Text as RNText,
   View,
   type ListRenderItem,
 } from "react-native";
@@ -45,6 +45,8 @@ import type {
   SearchIssueResult,
   SearchProjectResult,
 } from "@multica/core/types";
+import { SearchField } from "@/components/ui/search-field";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Text } from "@/components/ui/text";
 import { StatusIcon } from "@/components/ui/status-icon";
 import { PriorityIcon } from "@/components/ui/priority-icon";
@@ -79,6 +81,7 @@ import {
   type SearchPage,
   type SearchPageKey,
 } from "@/lib/search-commands";
+import { searchHighlightParts } from "@/lib/search-highlight";
 import { searchIssueSnippets } from "@/lib/search-snippets";
 import { filterMemberMatches } from "@/lib/member-search";
 import { keyboardBehavior } from "@/lib/keyboard";
@@ -119,40 +122,16 @@ function HighlightText({
   className,
   numberOfLines,
 }: HighlightTextProps) {
-  const parts = useMemo(() => {
-    const q = query.trim();
-    if (!q) return [{ text, hit: false }];
-    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const regex = new RegExp(`(${escaped})`, "gi");
-    const out: { text: string; hit: boolean }[] = [];
-    let last = 0;
-    let m: RegExpExecArray | null;
-    while ((m = regex.exec(text)) !== null) {
-      if (m.index > last) out.push({ text: text.slice(last, m.index), hit: false });
-      out.push({ text: m[0], hit: true });
-      last = regex.lastIndex;
-    }
-    if (last < text.length) out.push({ text: text.slice(last), hit: false });
-    return out.length > 0 ? out : [{ text, hit: false }];
-  }, [text, query]);
-
+  const palette = useThemePalette();
+  const parts = useMemo(() => searchHighlightParts(text, query), [text, query]);
   return (
     <Text className={className} numberOfLines={numberOfLines}>
-      {parts.map((p, i) =>
-        p.hit ? (
-          // Inline hex (yellow-200) instead of a Tailwind class because the
-          // mobile tailwind.config.js intentionally curates its own palette
-          // (no `yellow-*`) — see apps/mobile/CLAUDE.md "Visual tokens".
-          <Text
-            key={i}
-            className="text-foreground"
-            style={{ backgroundColor: "#fef08a" }}
-          >
-            {p.text}
-          </Text>
-        ) : (
-          <Text key={i}>{p.text}</Text>
-        ),
+      {parts.map((part, index) =>
+        part.hit ? (
+          <RNText key={index} style={{ backgroundColor: palette.secondary, color: palette.foreground, fontWeight: "700" }}>
+            {part.text}
+          </RNText>
+        ) : part.text,
       )}
     </Text>
   );
@@ -215,9 +194,16 @@ function SearchIssueRow({ item, query, slug }: SearchIssueRowProps) {
   return (
     <Pressable
       onPress={() => navigateOnTap(slug, `/${slug}/issue/${item.id}`)}
-      className="active:bg-secondary px-4 py-3"
+      accessibilityRole="button"
+      className="mx-3 min-h-12 gap-1.5 rounded-xl px-3 py-3 active:bg-secondary"
     >
-      <View className="flex-row items-center gap-3">
+      <HighlightText
+        text={item.title}
+        query={query}
+        className="text-body-lg font-semibold text-foreground"
+        numberOfLines={2}
+      />
+      <View className="flex-row flex-wrap items-center gap-2">
         <StatusIcon
           status={item.status}
           category={statusEntry?.category}
@@ -225,45 +211,25 @@ function SearchIssueRow({ item, query, slug }: SearchIssueRowProps) {
           size={14}
         />
         <PriorityIcon priority={item.priority} size={14} />
-        <Text className="text-caption text-muted-foreground shrink-0 w-16">
+        <Text className="shrink text-caption font-medium text-muted-foreground" numberOfLines={1}>
           {item.identifier}
         </Text>
-        <View className="flex-1">
-          <HighlightText
-            text={item.title}
-            query={query}
-            className="text-body text-foreground"
-            numberOfLines={1}
-          />
-        </View>
-        <IssueAssigneeAvatar
-          assigneeType={item.assignee_type}
-          assigneeId={item.assignee_id}
-        />
+        <IssueAssigneeAvatar assigneeType={item.assignee_type} assigneeId={item.assignee_id} />
       </View>
       {snippets.map((snippet) => (
-        <View
-          key={snippet.kind}
-          className="flex-row items-start gap-2 mt-1 pl-[68px]"
-        >
+        <View key={snippet.kind} className="flex-row items-start gap-2 rounded-lg bg-surface-1 px-2 py-1.5">
           <Ionicons
-            name={
-              snippet.kind === "description"
-                ? "document-text-outline"
-                : "chatbubble-outline"
-            }
-            size={12}
+            name={snippet.kind === "description" ? "document-text-outline" : "chatbubble-outline"}
+            size={13}
             color={muted}
             style={{ marginTop: 2 }}
           />
-          <View className="flex-1">
-            <HighlightText
-              text={snippet.text}
-              query={query}
-              className="text-caption text-muted-foreground"
-              numberOfLines={1}
-            />
-          </View>
+          <HighlightText
+            text={snippet.text}
+            query={query}
+            className="min-w-0 flex-1 text-caption text-muted-foreground"
+            numberOfLines={2}
+          />
         </View>
       ))}
     </Pressable>
@@ -282,37 +248,34 @@ function SearchProjectRow({ item, query, slug }: SearchProjectRowProps) {
   return (
     <Pressable
       onPress={() => navigateOnTap(slug, `/${slug}/project/${item.id}`)}
-      className="active:bg-secondary px-4 py-3"
+      accessibilityRole="button"
+      className="mx-3 min-h-12 rounded-xl px-3 py-3 active:bg-secondary"
     >
-      <View className="flex-row items-center gap-3">
-        <ProjectIcon icon={item.icon} size="md" />
-        <View className="flex-1">
+      <View className="flex-row items-start gap-3">
+        <View className="size-8 items-center justify-center rounded-lg bg-surface-1">
+          <ProjectIcon icon={item.icon} size="md" />
+        </View>
+        <View className="min-w-0 flex-1 gap-1">
           <HighlightText
             text={item.title}
             query={query}
-            className="text-body text-foreground"
-            numberOfLines={1}
+            className="text-body-lg font-semibold text-foreground"
+            numberOfLines={2}
           />
-        </View>
-        <View className="flex-row items-center gap-1.5 shrink-0">
-          <ProjectStatusIcon status={item.status} size={12} />
-          <Text className="text-caption text-muted-foreground">
-            {projectStatusLabel(item.status)}
-          </Text>
-        </View>
-      </View>
-      {showSnippet ? (
-        <View className="flex-row items-start mt-1 pl-[36px]">
-          <View className="flex-1">
+          <View className="flex-row items-center gap-1.5">
+            <ProjectStatusIcon status={item.status} size={12} />
+            <Text className="shrink text-caption text-muted-foreground">{projectStatusLabel(item.status)}</Text>
+          </View>
+          {showSnippet ? (
             <HighlightText
               text={item.matched_snippet ?? ""}
               query={query}
               className="text-caption text-muted-foreground"
-              numberOfLines={1}
+              numberOfLines={2}
             />
-          </View>
+          ) : null}
         </View>
-      ) : null}
+      </View>
     </Pressable>
   );
 }
@@ -327,7 +290,8 @@ function SearchMemberRow({ member, query, slug }: SearchMemberRowProps) {
   return (
     <Pressable
       onPress={() => navigateOnTap(slug, `/${slug}/more/members/${member.id}`)}
-      className="active:bg-secondary px-4 py-3"
+      accessibilityRole="button"
+      className="mx-3 min-h-12 rounded-xl px-3 py-3 active:bg-secondary"
     >
       <View className="flex-row items-center gap-3">
         <ActorAvatar type="member" id={member.user_id} size={28} />
@@ -363,25 +327,25 @@ function RecentRow({ item, slug }: RecentRowProps) {
   return (
     <Pressable
       onPress={() => navigateOnTap(slug, `/${slug}/issue/${item.id}`)}
-      className="active:bg-secondary px-4 py-3"
+      accessibilityRole="button"
+      className="mx-3 min-h-12 rounded-xl px-3 py-3 active:bg-secondary"
     >
-      <View className="flex-row items-center gap-3">
-        <StatusIcon
-          status={item.status}
-          category={statusEntry?.category}
-          color={statusEntry?.is_system ? undefined : (statusEntry?.color ?? undefined)}
-          size={14}
-        />
-        <Text className="text-caption text-muted-foreground shrink-0 w-16">
-          {item.identifier}
-        </Text>
-        <Text className="flex-1 text-body text-foreground" numberOfLines={1}>
+      <View className="gap-1.5">
+        <Text className="text-body-lg font-semibold text-foreground" numberOfLines={2}>
           {item.title}
         </Text>
-        <IssueAssigneeAvatar
-          assigneeType={item.assignee_type}
-          assigneeId={item.assignee_id}
-        />
+        <View className="flex-row flex-wrap items-center gap-2">
+          <StatusIcon
+            status={item.status}
+            category={statusEntry?.category}
+            color={statusEntry?.is_system ? undefined : (statusEntry?.color ?? undefined)}
+            size={14}
+          />
+          <Text className="shrink text-caption text-muted-foreground" numberOfLines={1}>
+            {item.identifier}
+          </Text>
+          <IssueAssigneeAvatar assigneeType={item.assignee_type} assigneeId={item.assignee_id} />
+        </View>
       </View>
     </Pressable>
   );
@@ -445,7 +409,7 @@ function ActionRow({
   onPress: () => void;
 }) {
   return (
-    <Pressable onPress={onPress} className="active:bg-secondary px-4 py-3">
+    <Pressable onPress={onPress} accessibilityRole="button" className="mx-3 min-h-12 rounded-xl px-3 py-3 active:bg-secondary">
       <View className="flex-row items-center gap-3">
         {icon}
         <HighlightText
@@ -537,6 +501,8 @@ export default function SearchModal() {
       return;
     }
 
+    // Do not show the previous query's results under the new input.
+    setResults(EMPTY_RESULTS);
     setIsLoading(true);
     debounceRef.current = setTimeout(async () => {
       const controller = new AbortController();
@@ -767,7 +733,7 @@ export default function SearchModal() {
       switch (item.kind) {
         case "header":
           return (
-            <Text className="px-4 pt-4 pb-1 text-caption font-medium text-muted-foreground uppercase">
+            <Text accessibilityRole="header" className="px-6 pt-4 pb-1 text-label font-semibold text-muted-foreground">
               {item.title}
             </Text>
           );
@@ -804,7 +770,7 @@ export default function SearchModal() {
           return <RecentRow item={item.issue} slug={slug} />;
       }
     },
-    [slug],
+    [onPressCommand, onPressPage, slug, theme.mutedForeground, themePreference],
   );
 
   return (
@@ -813,22 +779,13 @@ export default function SearchModal() {
         className="flex-1"
         behavior={keyboardBehavior}
       >
-        {/* Search input row */}
-        <View className="flex-row items-center gap-3 border-b border-border px-4 py-2">
-          <Ionicons name="search" size={20} color={theme.mutedForeground} />
-          <TextInput
-            value={query}
-            onChangeText={handleChange}
-            placeholder={t("search.placeholder")}
-            placeholderTextColor={theme.mutedForeground}
-            autoFocus
-            autoCorrect={false}
-            autoCapitalize="none"
-            returnKeyType="search"
-            clearButtonMode="while-editing"
-            className="flex-1 text-title-sm text-foreground"
-          />
-        </View>
+        <SearchField
+          className="mx-4 my-2"
+          value={query}
+          onChange={handleChange}
+          placeholder={t("search.placeholder")}
+          autoFocus
+        />
 
         {/* Body */}
         <FlatList
@@ -843,17 +800,9 @@ export default function SearchModal() {
                 <ActivityIndicator color={theme.mutedForeground} />
               </View>
             ) : trimmedQuery && !hasResults ? (
-              <View className="items-center justify-center py-12 px-6">
-                <Text className="text-body text-muted-foreground text-center">
-                  {t("search.noResults", { query: trimmedQuery })}
-                </Text>
-              </View>
+              <EmptyState icon="search-outline" title={t("a11y.search")} description={t("search.noResults", { query: trimmedQuery })} />
             ) : !trimmedQuery && recentIssues.length === 0 ? (
-              <View className="items-center justify-center py-12 px-6">
-                <Text className="text-body text-muted-foreground text-center">
-                  {t("search.empty")}
-                </Text>
-              </View>
+              <EmptyState icon="search-outline" title={t("a11y.search")} description={t("search.empty")} />
             ) : null
           }
           ListFooterComponent={
