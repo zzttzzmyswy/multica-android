@@ -40,6 +40,10 @@ import type {
   GroupedIssuesResponse,
   GitHubConnectResponse,
   GitHubPullRequest,
+  IssueEnvironment,
+  IssueEnvironmentActionRecord,
+  IssueEnvironmentCommand,
+  IssueEnvironmentsResponse,
   InboxItem,
   InboxWorkspaceUnread,
   Label,
@@ -301,6 +305,154 @@ export const IssuePullRequestsResponseSchema = z.object({
 export const EMPTY_ISSUE_PULL_REQUESTS_RESPONSE: { pull_requests: GitHubPullRequest[] } = {
   pull_requests: [],
 };
+
+// ── Issue environments ──────────────────────────────────────────────────────
+// Same drift posture as web's `packages/core/api/schemas.ts:461-560`, and the
+// reason each default matters:
+//
+//   - An action record from a newer server carrying an unknown action is
+//     DROPPED (the enum has no `.catch`), so the row shows no control it could
+//     not carry out. An unknown STATUS reads as `failed`, which at worst offers
+//     a retry.
+//   - One malformed environment drops out of the list instead of taking the
+//     whole section with it (`lenientArray`).
+//   - An unknown state reads as `unreachable`: the row then offers no Open
+//     action, which is the safe direction. A kind this client does not know, or
+//     none from an older server, reads as a server.
+//   - `controllable` / `can_control` default to FALSE, so a server that predates
+//     section control renders read-only rather than dead buttons.
+export const IssueEnvironmentActionSchema = z.object({
+  id: z.string(),
+  action: z.enum(["stop", "restart", "start", "logs"]),
+  status: z.enum(["pending", "succeeded", "failed", "expired"]).catch("failed"),
+  error: z.string().optional().default(""),
+  environment_id: z.string().nullable().optional().default(null),
+  runtime_id: z.string().optional().default(""),
+  task_id: z.string().nullable().optional().default(null),
+  repo: z.string().optional().default(""),
+  name: z.string().optional().default(""),
+  actor_type: z.string().optional().default("member"),
+  actor_id: z.string().nullable().optional().default(null),
+  created_at: z.string(),
+  completed_at: z.string().nullable().optional().default(null),
+}).loose();
+
+const OptionalIssueEnvironmentActionSchema = IssueEnvironmentActionSchema.nullable()
+  .optional()
+  .default(null)
+  .catch(null);
+
+export const IssueEnvironmentCommandSchema = IssueEnvironmentActionSchema.extend({
+  output: z.string().nullable().optional().default(null),
+}).loose();
+
+export const IssueEnvironmentSchema = z.object({
+  id: z.string(),
+  issue_id: z.string(),
+  task_id: z.string(),
+  runtime_id: z.string().nullable().optional().default(null),
+  agent_id: z.string().nullable().optional().default(null),
+  local_key: z.string().catch(""),
+  source: z.enum(["config", "detected"]).catch("detected"),
+  kind: z.enum(["server", "app"]).catch("server"),
+  repo: z.string().optional().default(""),
+  name: z.string(),
+  label: z.string().optional().default(""),
+  url: z.string().optional().default(""),
+  port: z.number().nullable().optional().default(null),
+  state: z
+    .enum(["starting", "running", "exited", "stopped", "unreachable"])
+    .catch("unreachable"),
+  detail: z.string().optional().default(""),
+  excerpt: z.string().optional().default(""),
+  started_at: z.string(),
+  expires_at: z.string().nullable().optional().default(null),
+  last_seen_at: z.string(),
+  ended_at: z.string().nullable().optional().default(null),
+  controllable: z.boolean().optional().default(false),
+  can_control: z.boolean().optional().default(false),
+  pending_action: OptionalIssueEnvironmentActionSchema,
+  last_action: OptionalIssueEnvironmentActionSchema,
+  origin: OptionalIssueEnvironmentActionSchema,
+}).loose();
+
+const DeclaredEnvironmentSchema = z.object({
+  repo: z.string(),
+  name: z.string(),
+  label: z.string().optional().default(""),
+  start: z.string().optional().default(""),
+}).loose();
+
+const IssueEnvironmentConfigSchema = z.object({
+  runtime_id: z.string(),
+  task_id: z.string(),
+  reported_at: z.string(),
+  can_control: z.boolean().optional().default(false),
+  environments: z.array(DeclaredEnvironmentSchema).default([]),
+}).loose();
+
+/** An array where one bad row is dropped rather than failing the whole read. */
+function lenientArray<T extends z.ZodType>(schema: T) {
+  return z
+    .array(z.unknown())
+    .optional()
+    .default([])
+    .transform((items) =>
+      items.flatMap((item) => {
+        const parsed = schema.safeParse(item);
+        return parsed.success ? [parsed.data as z.infer<T>] : [];
+      }),
+    );
+}
+
+export const IssueEnvironmentsResponseSchema = z.object({
+  environments: lenientArray(IssueEnvironmentSchema),
+  configs: lenientArray(IssueEnvironmentConfigSchema),
+  pending_starts: lenientArray(IssueEnvironmentActionSchema),
+  failed_starts: lenientArray(IssueEnvironmentActionSchema),
+}).loose();
+
+export const EMPTY_ISSUE_ENVIRONMENTS_RESPONSE: IssueEnvironmentsResponse = {
+  environments: [],
+  configs: [],
+  pending_starts: [],
+  failed_starts: [],
+};
+
+/** The command an unanswered read gets: `failed` with the reason, so the
+ *  caller's poll stops instead of spinning on a shape it cannot read. */
+export const EMPTY_ISSUE_ENVIRONMENT_COMMAND: IssueEnvironmentCommand = {
+  id: "",
+  action: "logs",
+  status: "failed",
+  error: "",
+  environment_id: null,
+  runtime_id: "",
+  task_id: null,
+  repo: "",
+  name: "",
+  actor_type: "member",
+  actor_id: null,
+  created_at: new Date(0).toISOString(),
+  completed_at: null,
+  output: null,
+};
+
+/** Compile-time proof the inferred schemas still match the hand-written types
+ *  — a field renamed on one side and not the other fails here, not on a
+ *  device. */
+type _EnvironmentAssignable =
+  IssueEnvironment extends z.infer<typeof IssueEnvironmentSchema> ? true : never;
+type _EnvironmentsResponseAssignable =
+  IssueEnvironmentsResponse extends z.infer<typeof IssueEnvironmentsResponseSchema>
+    ? true
+    : never;
+type _ActionAssignable =
+  IssueEnvironmentActionRecord extends z.infer<typeof IssueEnvironmentActionSchema>
+    ? true
+    : never;
+export type { _EnvironmentAssignable, _EnvironmentsResponseAssignable, _ActionAssignable };
+
 
 // Label responses are consumed by settings tables and resource pickers. Keep
 // the resource type lenient so newer server scopes do not break older clients,

@@ -352,3 +352,17 @@ export type {
   WorkspaceSubscriptionSeatReconcileResult,
   CreateWorkspaceSubscriptionPortalResponse,
 } from "./billing";
+export type {
+  IssueEnvironment,
+  IssueEnvironmentAction,
+  IssueEnvironmentActionRecord,
+  IssueEnvironmentActionStatus,
+  IssueEnvironmentCommand,
+  IssueEnvironmentConfig,
+  IssueEnvironmentKind,
+  IssueEnvironmentSource,
+  IssueEnvironmentState,
+  IssueEnvironmentsResponse,
+  DeclaredEnvironment,
+  StartIssueEnvironmentRequest,
+} from "./environment";

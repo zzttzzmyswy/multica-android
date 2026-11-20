@@ -240,6 +240,21 @@ export const issueKeys = {
   // One rule's trigger history — fetched only when the reader opens that row.
   wakeupRuns: (wsId: string | null, id: string, wakeupId: string) =>
     [...issueKeys.wakeups(wsId, id), "runs", wakeupId] as const,
+  // The servers / desktop apps this issue's runs left running (MYS-2980).
+  //
+  // `environmentsAll` is the PREFIX, mirroring core's
+  // `issueKeys.environmentsAll` (packages/core/issues/queries.ts:166). The
+  // `environment:changed` WS event carries only `{ issue_id }`, and the server
+  // broadcasts it for rows the client has no id for — so one invalidation has
+  // to reach every per-issue environments cache without enumerating ids.
+  environmentsAll: (wsId: string | null) =>
+    [...issueKeys.all(wsId), "environments"] as const,
+  environments: (wsId: string | null, id: string) =>
+    [...issueKeys.environmentsAll(wsId), id] as const,
+  // One log command's poll state, keyed by command so two rows reading logs at
+  // once cannot overwrite each other.
+  environmentCommand: (wsId: string | null, issueId: string, commandId: string) =>
+    [...issueKeys.environments(wsId, issueId), "command", commandId] as const,
   // The WORKSPACE-wide rule table (MYS-2043) — every issue's rules on one page,
   // behind web's 自动化 → 任务唤醒 tab. Keyed under its own `workspaceWakeups`
   // prefix rather than under `all(wsId)`: this is a paginated, filtered query

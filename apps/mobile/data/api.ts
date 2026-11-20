@@ -60,6 +60,9 @@ import type {
   InboxItem,
   InboxWorkspaceUnread,
   Invitation,
+  IssueEnvironmentCommand,
+  IssueEnvironmentsResponse,
+  StartIssueEnvironmentRequest,
   Issue,
   IssueDuplicates,
   IssueLabelsResponse,
@@ -303,6 +306,14 @@ import {
   EMPTY_CANCEL_TASK_RESPONSE,
   ChatDraftRestoresResponseSchema,
   EMPTY_CHAT_DRAFT_RESTORES,
+  // Issue environments (MYS-2980). Core owns the schema because web and mobile
+  // read the SAME payload and must decode it the same way — a row this client
+  // dropped and web kept would make the two clients disagree about which
+  // services the issue has running.
+  IssueEnvironmentsResponseSchema,
+  EMPTY_ISSUE_ENVIRONMENTS_RESPONSE,
+  IssueEnvironmentCommandSchema,
+  EMPTY_ISSUE_ENVIRONMENT_COMMAND,
 } from "@multica/core/api/schemas";
 import type {
   CreateIssueViewRequest,
@@ -3758,6 +3769,111 @@ class ApiClient {
       IssuePullRequestsResponseSchema,
       EMPTY_ISSUE_PULL_REQUESTS_RESPONSE,
       { ...opts, endpoint: "GET /api/issues/:id/pull-requests" },
+    );
+  }
+
+  // ── Issue environments (MYS-2980) ────────────────────────────────────────
+  // The servers and desktop apps this issue's runs left running, plus the four
+  // commands the section can send a machine. Mirrors web's
+  // `packages/core/api/client.ts:5718-5765` one endpoint at a time.
+  //
+  // Both read paths parse through the SHARED core schema + empty fallback: a
+  // failed parse leaves the section empty (which hides it) rather than
+  // rendering half a row, and keeps mobile's decode identical to web's.
+
+  /** Environments the issue's runs started — live rows plus recently ended. */
+  async listIssueEnvironments(
+    issueId: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<IssueEnvironmentsResponse> {
+    return this.fetchValidated(
+      `/api/issues/${issueId}/environments`,
+      IssueEnvironmentsResponseSchema,
+      EMPTY_ISSUE_ENVIRONMENTS_RESPONSE,
+      { ...opts, endpoint: "GET /api/issues/:id/environments" },
+    );
+  }
+
+  /** Ask the row's machine to stop it. Resolves once the command is queued —
+   *  the machine acts later, and the polled list shows it pending until then. */
+  async stopIssueEnvironment(
+    issueId: string,
+    environmentId: string,
+  ): Promise<IssueEnvironmentCommand> {
+    return this.issueEnvironmentCommand(
+      `/api/issues/${issueId}/environments/${environmentId}/stop`,
+      "stop",
+    );
+  }
+
+  /** Ask the machine to start it again from the same code. */
+  async restartIssueEnvironment(
+    issueId: string,
+    environmentId: string,
+  ): Promise<IssueEnvironmentCommand> {
+    return this.issueEnvironmentCommand(
+      `/api/issues/${issueId}/environments/${environmentId}/restart`,
+      "restart",
+    );
+  }
+
+  /** Ask the machine for the end of its log; poll the command until it has
+   *  an `output`. */
+  async readIssueEnvironmentLogs(
+    issueId: string,
+    environmentId: string,
+  ): Promise<IssueEnvironmentCommand> {
+    return this.issueEnvironmentCommand(
+      `/api/issues/${issueId}/environments/${environmentId}/logs`,
+      "logs",
+    );
+  }
+
+  /** Start an environment the latest run on a machine declared. */
+  async startIssueEnvironment(
+    issueId: string,
+    body: StartIssueEnvironmentRequest,
+  ): Promise<IssueEnvironmentCommand> {
+    return this.issueEnvironmentCommand(
+      `/api/issues/${issueId}/environments/start`,
+      "start",
+      body,
+    );
+  }
+
+  /** One command's current state — the poll target for a log read. */
+  async getIssueEnvironmentCommand(
+    issueId: string,
+    commandId: string,
+  ): Promise<IssueEnvironmentCommand> {
+    return this.issueEnvironmentCommand(
+      `/api/issues/${issueId}/environment-commands/${commandId}`,
+      "logs",
+    );
+  }
+
+  private async issueEnvironmentCommand(
+    path: string,
+    action: IssueEnvironmentCommand["action"],
+    body?: unknown,
+  ): Promise<IssueEnvironmentCommand> {
+    // The fallback carries the action that was asked for, so a malformed
+    // answer reads as "that action failed" rather than as some other command's
+    // result — the caller shows `error` and stops polling.
+    const fallback: IssueEnvironmentCommand = {
+      ...EMPTY_ISSUE_ENVIRONMENT_COMMAND,
+      action,
+      created_at: new Date().toISOString(),
+    };
+    const raw = await this.fetch<unknown>(path, {
+      method: body === undefined ? "GET" : "POST",
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+    return parseWithFallback(
+      raw,
+      IssueEnvironmentCommandSchema,
+      fallback,
+      { endpoint: `${body === undefined ? "GET" : "POST"} ${path.replace(/[0-9a-f-]{36}/g, ":id")}` },
     );
   }
 

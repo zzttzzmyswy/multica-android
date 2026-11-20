@@ -26,8 +26,10 @@ import type {
   Label,
   MoveIssueRequest,
   Reaction,
+  StartIssueEnvironmentRequest,
   TimelineEntry,
   UpdateIssueRequest,
+  IssueEnvironmentCommand,
 } from "@multica/core/types";
 import { api } from "@/data/api";
 import { serverConfigOptions } from "@/data/queries/config";
@@ -1545,6 +1547,51 @@ export function useCreateCommentSubIssue() {
       qc.invalidateQueries({ queryKey: issueKeys.timeline(wsId, vars.sourceIssueId) });
       qc.invalidateQueries({ queryKey: issueKeys.childProgress(wsId) });
       qc.invalidateQueries({ queryKey: issueKeys.list(wsId) });
+    },
+  });
+}
+
+// ── Issue environments (MYS-2980) ───────────────────────────────────────────
+
+/** What a control asks for. Mirrors web's `IssueEnvironmentControl`
+ *  (packages/core/issues/environments.ts:30) — a discriminated union rather
+ *  than an optional bag so "start" cannot be sent without the run it starts
+ *  from. */
+export type IssueEnvironmentControl =
+  | { action: "stop" | "restart"; environmentId: string }
+  | { action: "start"; body: StartIssueEnvironmentRequest };
+
+/**
+ * Stop, restart or start an environment.
+ *
+ * No optimistic patch: these are COMMANDS to a machine that answers later, so
+ * the row's real state does not change when the request returns — it changes
+ * when the machine acts. The `onSettled` invalidation is what shows the
+ * command as pending (the server records it before returning), and matches
+ * web's `useControlIssueEnvironment` exactly.
+ *
+ * The caller surfaces a failure with the action's own wording; that mapping
+ * lives in the section component because it needs the localized string.
+ */
+export function useControlIssueEnvironment(issueId: string) {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  return useMutation({
+    mutationFn: (control: IssueEnvironmentControl): Promise<IssueEnvironmentCommand> => {
+      switch (control.action) {
+        case "stop":
+          return api.stopIssueEnvironment(issueId, control.environmentId);
+        case "restart":
+          return api.restartIssueEnvironment(issueId, control.environmentId);
+        case "start":
+          return api.startIssueEnvironment(issueId, control.body);
+      }
+    },
+    onSettled: () => {
+      // This issue's cache. The workspace-wide prefix would refetch every open
+      // issue's environments for a write that touched one, and the WS event the
+      // server publishes on the answer already reaches any other viewer.
+      qc.invalidateQueries({ queryKey: issueKeys.environments(wsId, issueId) });
     },
   });
 }

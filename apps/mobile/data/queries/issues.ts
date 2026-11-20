@@ -452,3 +452,54 @@ export const issueSubscribersOptions = (wsId: string | null, id: string) =>
     queryFn: ({ signal }) => api.listIssueSubscribers(id, { signal }),
     enabled: !!wsId && !!id,
   });
+
+/**
+ * The servers / desktop apps this issue's runs left running (MYS-2980).
+ *
+ * Mirrors web's `issueEnvironmentsOptions` (packages/core/issues/queries.ts:710).
+ * The polling interval is the whole point of the query and is copied from web
+ * verbatim:
+ *
+ *   - 5s while a command is in flight. Nothing else announces a command's
+ *     completion — the daemon answers out of band, and the `environment:changed`
+ *     event the server publishes on the answer is not guaranteed to land on a
+ *     phone that just woke up. Polling is what turns "stopping…" into "stopped".
+ *   - 60s otherwise, because two facts decay on their own with no event at all:
+ *     a live row turning `unreachable` once its daemon goes quiet, and a
+ *     command expiring unanswered.
+ */
+export const issueEnvironmentsOptions = (wsId: string | null, id: string) =>
+  queryOptions({
+    queryKey: issueKeys.environments(wsId, id),
+    queryFn: ({ signal }) => api.listIssueEnvironments(id, { signal }),
+    enabled: !!wsId && !!id,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      const pending =
+        !!data &&
+        (data.pending_starts.length > 0 ||
+          data.environments.some((env) => env.pending_action?.status === "pending"));
+      return pending ? 5_000 : 60_000;
+    },
+  });
+
+/**
+ * One command the machine has not answered yet — the poll target behind "view
+ * logs". Polls at 1s only while the command is `pending`, and stops for good
+ * once it settles: web gates it identically
+ * (`issueEnvironmentCommandOptions`, packages/core/issues/environments.ts:12).
+ */
+export const issueEnvironmentCommandOptions = (
+  wsId: string | null,
+  issueId: string,
+  commandId: string | null,
+) =>
+  queryOptions({
+    queryKey: issueKeys.environmentCommand(wsId, issueId, commandId ?? ""),
+    queryFn: ({ signal }) =>
+      api.getIssueEnvironmentCommand(issueId, commandId ?? ""),
+    enabled: !!wsId && !!issueId && !!commandId,
+    refetchInterval: (query) =>
+      query.state.data?.status === "pending" ? 1_000 : false,
+    staleTime: Infinity,
+  });
