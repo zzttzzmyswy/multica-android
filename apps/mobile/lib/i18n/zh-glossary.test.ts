@@ -80,6 +80,12 @@ const ISSUE_SENSE_NO_TOKEN_KEYS = [
   // established reading of this sentence, not a new one.
   "runConfirm.createWillStartSquad",
   "timeline.subtasks",
+  // "keeps working on the original task" — the thing the agent keeps working
+  // on is the ISSUE it was assigned, not the run it is in: the sentence says
+  // the steered comment does not divert it to new work. Upstream's zh-Hans
+  // renders the same web string (`comment.recipient_steer_desc`) with 原任务,
+  // so this is the established reading here too.
+  "comment.recipient_steer_desc",
 ];
 
 /** Every key that legitimately renders the run entity as lowercase `task`. */

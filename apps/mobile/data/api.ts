@@ -3783,12 +3783,20 @@ class ApiClient {
       type?: string;
       attachmentIds?: string[];
       suppressAgentIds?: string[];
+      steerTaskIds?: string[];
     },
   ): Promise<Comment> {
     // Body shape mirrors backend `CreateCommentRequest`
     // (server/internal/handler/comment.go:165). `parent_id` is sent only
     // when present so top-level comments don't carry an explicit null.
     // `type` defaults to "comment" matching web client.ts:686.
+    //
+    // `steer_task_ids` (iteration 298) is the web-parity half of run steering:
+    // the listed RUNNING turns take this comment at their next step instead of
+    // the recipient starting a follow-up run. Omitted when empty so a
+    // deployment that predates the field never sees an unknown key — and so
+    // the ordinary "just post a comment" path stays byte-identical to what
+    // this client sent before.
     return this.fetchValidatedWith(
       `/api/issues/${issueId}/comments`,
       CommentSchema,
@@ -3802,6 +3810,9 @@ class ApiClient {
           ...(opts?.attachmentIds ? { attachment_ids: opts.attachmentIds } : {}),
           ...(opts?.suppressAgentIds
             ? { suppress_agent_ids: opts.suppressAgentIds }
+            : {}),
+          ...(opts?.steerTaskIds?.length
+            ? { steer_task_ids: opts.steerTaskIds }
             : {}),
         }),
       },

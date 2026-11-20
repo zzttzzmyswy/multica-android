@@ -99,6 +99,9 @@ interface Props {
     /** Agents the user skipped via the trigger preview. Populated by the
      *  comment composer (see `suppressAgentIds` prop); chat ignores it. */
     suppressAgentIds?: string[];
+    /** Running turns that take this message instead of starting a follow-up
+     *  run (see `steerTaskIds` prop); chat ignores it. */
+    steerTaskIds?: string[];
   }) => Promise<void>;
 
   /** Push target for the `@` button. The picker route reads /
@@ -163,6 +166,17 @@ interface Props {
   /** Agents the user skipped via the trigger preview. Forwarded to
    *  `onSubmit` so the server does not enqueue runs for these targets. */
   suppressAgentIds?: string[];
+
+  /** Running turns the user chose to deliver this message into
+   *  (`steer_task_ids`). Forwarded to `onSubmit` unchanged. */
+  steerTaskIds?: string[];
+
+  /** Reports whether the draft holds at least one attachment. The comment
+   *  composer needs it because a running turn can only take TEXT: while a
+   *  file is staged, "add to current run" has to disappear from the recipient
+   *  menu and a notice has to explain why. Fires only on a real change, so a
+   *  parent may store it directly without a render loop. */
+  onAttachmentsChange?: (hasAttachments: boolean) => void;
 
   /** When true the composer renders flush at the bottom of its parent
    *  while a `KeyboardStickyView` lifts it above the IME and the
@@ -261,6 +275,8 @@ export function MessageComposer({
   slashSkills,
   triggerPreviewSlot,
   suppressAgentIds,
+  steerTaskIds,
+  onAttachmentsChange,
   restoreRequest,
   restoreReady = false,
   onRestoreApplied,
@@ -487,6 +503,20 @@ export function MessageComposer({
   // its slot, and this effect re-runs on every draft change, so the restore
   // lands the moment the user sends or clears what they were typing.
   const busy = text.trim().length > 0 || attachments.length > 0 || mentions.length > 0;
+  // Tell the owner whether a running turn could take this draft. Reported only
+  // on a real change: the owner stores it in state, and an unconditional call
+  // on every render would re-render it forever (false → false is still a new
+  // effect run). `attachments.length > 0` counts an in-flight upload too — the
+  // file WILL be part of the message, so the recipient menu must already be
+  // telling the truth while it uploads.
+  const hasAttachments = attachments.length > 0;
+  const reportedAttachments = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (!onAttachmentsChange) return;
+    if (reportedAttachments.current === hasAttachments) return;
+    reportedAttachments.current = hasAttachments;
+    onAttachmentsChange(hasAttachments);
+  }, [hasAttachments, onAttachmentsChange]);
   useEffect(() => {
     if (!restoreRequest || !restoreId) {
       // The slot emptied — a released request (surface hidden, wrong session)
@@ -558,6 +588,7 @@ export function MessageComposer({
         attachmentIds: activeIds,
         mentions: mentionsSnap,
         suppressAgentIds,
+        steerTaskIds,
       });
       // Success → fully exit composing mode. Explicit triple-step
       // because a missing blur leaves the keyboard up; missing
@@ -584,6 +615,7 @@ export function MessageComposer({
     clearMentions,
     onSubmit,
     suppressAgentIds,
+    steerTaskIds,
   ]);
 
   /** Streams a picked asset to /api/upload-file, updating the matching
