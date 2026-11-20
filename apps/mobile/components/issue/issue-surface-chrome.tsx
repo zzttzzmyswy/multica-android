@@ -130,13 +130,13 @@ export function FilterTriggerButton({
   const palette = useThemePalette();
   const { t } = useTranslation();
   return (
-    <View style={{ position: "relative" }} className="ml-2">
+    <View style={{ position: "relative" }} className="shrink-0">
       <Button
         variant="outline"
         size="sm"
         onPress={onPress}
         accessibilityLabel={t("a11y.filter")}
-        className="w-9 px-0"
+        className="size-11 rounded-xl px-0"
       >
         <Ionicons
           name="options-outline"
@@ -155,23 +155,12 @@ export function FilterTriggerButton({
 }
 
 /**
- * Toolbar row mirroring web's IssuesHeader: left-aligned scope pill group +
- * right-side mode switch and Filter icon (red dot when filters are active).
- * Generic over the scope value type so each surface passes its own `SCOPES`
- * config.
+ * Scopes and view modes retain web semantics. The view controls sit on
+ * their own row on a phone: sharing one line with five mode icons and
+ * the filter made scope labels hard to discover at narrow widths.
  *
- * The pill group scrolls horizontally instead of shrinking: scope pills are
- * fixed-width, so a narrow phone with three scopes and the five-button mode
- * switch (list / board / table / gantt / swimlane) leaves the row wider than
- * the screen. Shrinking the group only clipped the pills under the mode
- * switch — the buttons overflow their shrunken box. Scrolling keeps every
- * scope reachable and the mode switch fixed.
- *
- * `agentsWorking` is passed through to the second row rather than seated here:
- * web puts the chip on the same flex row as its display controls, but mobile's
- * row is already at capacity (three scopes + five mode buttons + filter), and
- * a chip carrying an avatar stack and a count sentence would be the first thing
- * to be squeezed. `IssueSurfaceAgentActivityRow` below is where it lives.
+ * Agent activity stays in its own optional IssueSurfaceAgentActivityRow
+ * below the toolbar so longer translated text never crowds out the controls.
  */
 export function IssueSurfaceScopeToolbar<S extends string>({
   scopes,
@@ -193,41 +182,41 @@ export function IssueSurfaceScopeToolbar<S extends string>({
   t: (id: string, params?: Record<string, string | number>) => string;
 }) {
   return (
-    <View className="flex-row items-center justify-between px-4 pt-2 pb-2">
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        className="flex-1 min-w-0"
-        contentContainerStyle={{ gap: 4, alignItems: "center" }}
-      >
-        {scopes.map((s) => {
-          const active = scope === s.value;
-          return (
-            <Button
-              key={s.value}
-              variant="outline"
-              size="sm"
-              onPress={() => onChange(s.value)}
-              className={active ? "bg-accent" : ""}
-              accessibilityState={{ selected: active }}
-            >
-              <Text
-                numberOfLines={1}
-                className={active ? "text-accent-foreground" : "text-muted-foreground"}
+    <View className="gap-2 px-4 py-2">
+      <View className="flex-row items-center gap-2">
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          className="flex-1 min-w-0"
+          contentContainerStyle={{ gap: 4, alignItems: "center" }}
+        >
+          {scopes.map((s) => {
+            const active = scope === s.value;
+            return (
+              <Button
+                key={s.value}
+                variant={active ? "secondary" : "ghost"}
+                size="sm"
+                onPress={() => onChange(s.value)}
+                className="min-h-11 h-auto rounded-full py-1.5"
+                accessibilityState={{ selected: active }}
               >
-                {t(s.labelKey)}
-              </Text>
-            </Button>
-          );
-        })}
-      </ScrollView>
-      <View className="flex-row items-center gap-1.5 ml-2 shrink-0">
-        <ViewModeToggle view={view} onChange={onViewChange} />
+                <Text
+                  numberOfLines={1}
+                  className={active ? "text-accent-foreground" : "text-muted-foreground"}
+                >
+                  {t(s.labelKey)}
+                </Text>
+              </Button>
+            );
+          })}
+        </ScrollView>
         <FilterTriggerButton
           onPress={onOpenFilter}
           hasActiveFilters={hasActiveFilters}
         />
       </View>
+      <ViewModeToggle view={view} onChange={onViewChange} />
     </View>
   );
 }

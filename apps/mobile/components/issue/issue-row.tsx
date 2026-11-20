@@ -3,8 +3,8 @@
  * (tabs)/my-issues, more/issues (workspace-wide), and project detail's
  * related-issues bucket.
  *
- * Layout mirrors web's `packages/views/issues/components/list-row.tsx`:
- *   [status?]  priority  identifier  title  …  assignee
+ * Web uses one desktop-width line. Mobile gives the title its own line(s)
+ * and wraps the metadata under it without changing the fields or actions.
  *
  * `showStatus` is opt-in because the my-issues SectionList already groups
  * by status (rendering it again per-row would be visual noise). The
@@ -144,160 +144,147 @@ export function IssueRow({
     <Pressable
       onPress={onPress}
       onLongPress={onLongPress}
-      className={`active:bg-secondary px-4 py-3 ${selected ? "bg-primary/5" : ""}`}
-      accessibilityState={{ selected }}
+      className={cn("px-4 py-3.5 active:bg-secondary", selected && "bg-brand/10")}
+      accessibilityState={selectionMode ? { selected } : undefined}
     >
-      <View className="flex-row items-center gap-3">
+      <View className="flex-row items-start gap-2.5">
         {selectionMode ? (
           <Ionicons
+            style={{ marginTop: 1 }}
             name={selected ? "checkmark-circle" : "ellipse-outline"}
             size={22}
             color={selected ? checkColor : palette.mutedForeground}
           />
         ) : null}
-        {showStatus ? (
-          <Pressable
-            onPress={onPressStatus}
-            disabled={!onPressStatus}
-            hitSlop={8}
-            accessibilityRole={onPressStatus ? "button" : undefined}
-            className="flex-row items-center gap-1.5 active:opacity-60"
-          >
-            <StatusIcon
-              status={issue.status}
-              category={statusEntry?.category}
-              color={statusEntry?.is_system ? undefined : (statusEntry?.color ?? undefined)}
-              size={14}
-            />
-            <CustomStatusChip status={issue.status} />
-          </Pressable>
-        ) : null}
-        <PriorityIcon priority={issue.priority} size={14} />
-        <Text
-          className="text-caption text-muted-foreground shrink-0 w-16"
-          numberOfLines={1}
-        >
-          {issue.identifier}
-        </Text>
-        <IssueAgentActivityIndicator issueId={issue.id} />
-        <Text className="flex-1 text-body text-foreground" numberOfLines={1}>
-          {issue.title}
-        </Text>
-        {/* "→ MUL-123" for a row that is a duplicate (MUL-7349). Web draws it
-         *  inline after the title (list-row.tsx:137). Sits BEFORE the progress
-         *  ring and the due-date chip so the two trailing affordances keep
-         *  their positions whether or not this row is a duplicate — a marker
-         *  that shifted them would make the row's tap targets move.
-         *
-         *  Takes no `wsSlug` prop: the marker reads the active workspace from
-         *  the store itself, the way `IssueReactionRow` does in this same
-         *  folder. This row is mounted by four surfaces and only one of them
-         *  threads a slug through, so a prop would mean widening three
-         *  signatures the feature has nothing to do with. */}
-        <IssueDuplicateOfMarker issue={issue} />
-        {showChildProgress ? (
-          <View className="flex-row items-center gap-1 px-1.5 py-0.5 rounded-full bg-secondary shrink-0">
-            <ProgressRing done={childProgress.done} total={childProgress.total} size={11} />
-            <Text className="text-micro text-muted-foreground tabular-nums font-medium">
-              {childProgress.done}/{childProgress.total}
+        <View className="min-w-0 flex-1 gap-1.5">
+          <Text className="text-body-lg font-semibold text-foreground" numberOfLines={2}>
+            {issue.title}
+          </Text>
+          <View className="flex-row flex-wrap items-center gap-x-2 gap-y-1">
+            {showStatus ? (
+              <Pressable
+                onPress={onPressStatus}
+                disabled={!onPressStatus}
+                accessibilityRole={onPressStatus ? "button" : undefined}
+                className={cn(
+                  "max-w-full shrink flex-row items-center gap-1.5",
+                  onPressStatus && "min-h-9 min-w-9 px-2 active:opacity-60",
+                )}
+              >
+                <StatusIcon
+                  status={issue.status}
+                  category={statusEntry?.category}
+                  color={statusEntry?.is_system ? undefined : (statusEntry?.color ?? undefined)}
+                  size={14}
+                />
+                <CustomStatusChip status={issue.status} className="shrink" />
+              </Pressable>
+            ) : null}
+            <PriorityIcon priority={issue.priority} size={14} />
+            <Text className="max-w-full shrink text-caption font-medium text-muted-foreground" numberOfLines={1}>
+              {issue.identifier}
             </Text>
+            <IssueAgentActivityIndicator issueId={issue.id} />
+            <IssueDuplicateOfMarker issue={issue} />
+            {showChildProgress ? (
+              <View className="flex-row items-center gap-1 px-1.5 py-0.5 rounded-full bg-secondary shrink-0">
+                <ProgressRing done={childProgress.done} total={childProgress.total} size={11} />
+                <Text className="text-micro text-muted-foreground tabular-nums font-medium">
+                  {childProgress.done}/{childProgress.total}
+                </Text>
+              </View>
+            ) : null}
+            {projectChip ? (
+              <View className="flex-row items-center gap-1 shrink max-w-[144px]">
+                <ProjectIcon icon={projectChip.icon} size="sm" />
+                <Text
+                  className="text-caption text-muted-foreground shrink"
+                  numberOfLines={1}
+                >
+                  {projectChip.title}
+                </Text>
+              </View>
+            ) : null}
+            {onPressDueDate ? (
+              <Pressable
+                onPress={onPressDueDate}
+                accessibilityRole="button"
+                accessibilityLabel={dueLabel ? `${t("attr.dueDate")}: ${dueLabel}` : t("attr.dueDate")}
+                className="flex-row items-center gap-0.5 min-h-9 rounded-full px-2 active:opacity-60"
+              >
+                <Ionicons
+                  name="calendar-outline"
+                  size={12}
+                  color={palette.mutedForeground}
+                />
+                <Text
+                  className={cn(
+                    "text-micro tabular-nums",
+                    dueLabel ? "text-muted-foreground" : "text-muted-foreground/50",
+                  )}
+                >
+                  {dueLabel ?? "–"}
+                </Text>
+              </Pressable>
+            ) : null}
+            {issue.assignee_type && issue.assignee_id ? (
+              /* Tap keeps its existing meaning (open the assignee picker — the
+                 row's inline edit affordance, web parity). The profile card goes
+                 on LONG-press instead: this avatar is already inside a control
+                 that owns the tap, so an inner press target would shadow it.
+                 Long-press has no other meaning here — the row's own long-press
+                 (multi-select) is on the outer Pressable and only fires when this
+                 inner one does not. */
+              <Pressable
+                onPress={onPressAssignee}
+                onLongPress={profileFor(issue.assignee_type, issue.assignee_id)}
+                disabled={!onPressAssignee}
+                accessibilityRole={onPressAssignee ? "button" : undefined}
+                accessibilityLabel={(() => {
+                  if (!profileFor(issue.assignee_type, issue.assignee_id)) {
+                    return undefined;
+                  }
+                  // The row's only text-free claim about the assignee. Until the
+                  // directory for this actor's type answers there is no name to
+                  // announce — the generic profile-call label says what the tap
+                  // does without naming someone the row cannot identify
+                  // (MYS-2215).
+                  const name = actorNameText(
+                    resolveActorName(issue.assignee_type, issue.assignee_id),
+                  );
+                  return name
+                    ? t("profileCard.openAria", { name })
+                    : t("profileCard.title");
+                })()}
+                className={onPressAssignee ? "size-9 items-center justify-center rounded-full active:bg-secondary" : undefined}
+              >
+                <ActorAvatar
+                  type={issue.assignee_type}
+                  id={issue.assignee_id}
+                  size={20}
+                  showPresence
+                />
+              </Pressable>
+            ) : onPressAssignee ? (
+              /* No assignee yet — web's SubIssueRow renders a dashed placeholder
+                 so the row keeps a tap target for "assign someone". */
+              <Pressable
+                onPress={onPressAssignee}
+                accessibilityRole="button"
+                accessibilityLabel={t("attr.assignee")}
+                className="size-9 items-center justify-center rounded-full active:bg-secondary"
+              >
+                <View className="size-5 items-center justify-center rounded-full border border-dashed border-muted-foreground/40">
+                  <Ionicons
+                    name="person-add-outline"
+                    size={11}
+                    color={palette.mutedForeground}
+                  />
+                </View>
+              </Pressable>
+            ) : null}
           </View>
-        ) : null}
-        {/* Project chip, in web's relative slot: after the title-side group
-         *  and before the date / assignee affordances, so those two keep
-         *  their positions whether or not this issue has a project. Capped
-         *  and ellipsised because a phone row is already carrying the
-         *  identifier, title, progress and a date — an unbounded project name
-         *  would push the title to nothing. */}
-        {projectChip ? (
-          <View className="flex-row items-center gap-1 shrink max-w-[92px]">
-            <ProjectIcon icon={projectChip.icon} size="sm" />
-            <Text
-              className="text-micro text-muted-foreground shrink"
-              numberOfLines={1}
-            >
-              {projectChip.title}
-            </Text>
-          </View>
-        ) : null}
-        {onPressDueDate ? (
-          <Pressable
-            onPress={onPressDueDate}
-            hitSlop={8}
-            accessibilityRole="button"
-            className="flex-row items-center gap-0.5 rounded-full px-1.5 py-0.5 active:opacity-60"
-          >
-            <Ionicons
-              name="calendar-outline"
-              size={12}
-              color={palette.mutedForeground}
-            />
-            <Text
-              className={cn(
-                "text-micro tabular-nums",
-                dueLabel ? "text-muted-foreground" : "text-muted-foreground/50",
-              )}
-            >
-              {dueLabel ?? "–"}
-            </Text>
-          </Pressable>
-        ) : null}
-        {issue.assignee_type && issue.assignee_id ? (
-          /* Tap keeps its existing meaning (open the assignee picker — the
-             row's inline edit affordance, web parity). The profile card goes
-             on LONG-press instead: this avatar is already inside a control
-             that owns the tap, so an inner press target would shadow it.
-             Long-press has no other meaning here — the row's own long-press
-             (multi-select) is on the outer Pressable and only fires when this
-             inner one does not. */
-          <Pressable
-            onPress={onPressAssignee}
-            onLongPress={profileFor(issue.assignee_type, issue.assignee_id)}
-            disabled={!onPressAssignee}
-            hitSlop={8}
-            accessibilityRole={onPressAssignee ? "button" : undefined}
-            accessibilityLabel={(() => {
-              if (!profileFor(issue.assignee_type, issue.assignee_id)) {
-                return undefined;
-              }
-              // The row's only text-free claim about the assignee. Until the
-              // directory for this actor's type answers there is no name to
-              // announce — the generic profile-call label says what the tap
-              // does without naming someone the row cannot identify
-              // (MYS-2215).
-              const name = actorNameText(
-                resolveActorName(issue.assignee_type, issue.assignee_id),
-              );
-              return name
-                ? t("profileCard.openAria", { name })
-                : t("profileCard.title");
-            })()}
-            className="active:opacity-60"
-          >
-            <ActorAvatar
-              type={issue.assignee_type}
-              id={issue.assignee_id}
-              size={20}
-              showPresence
-            />
-          </Pressable>
-        ) : onPressAssignee ? (
-          /* No assignee yet — web's SubIssueRow renders a dashed placeholder
-             so the row keeps a tap target for "assign someone". */
-          <Pressable
-            onPress={onPressAssignee}
-            hitSlop={8}
-            accessibilityRole="button"
-            className="items-center justify-center rounded-full border border-dashed border-muted-foreground/40 active:opacity-60"
-            style={{ width: 20, height: 20 }}
-          >
-            <Ionicons
-              name="person-add-outline"
-              size={11}
-              color={palette.mutedForeground}
-            />
-          </Pressable>
-        ) : null}
+        </View>
       </View>
     </Pressable>
   );

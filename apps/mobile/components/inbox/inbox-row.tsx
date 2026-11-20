@@ -53,7 +53,10 @@ export function InboxRow({ item, onPress, onLongPress, archived }: Props) {
     <Pressable
       onPress={onPress}
       onLongPress={onLongPress}
-      className="bg-background active:bg-secondary px-4 py-3"
+      className={cn(
+        "px-4 py-3.5 active:bg-secondary",
+        isUnread ? "bg-brand/5" : "bg-background",
+      )}
     >
       <View className="flex-row gap-3">
         <ActorAvatar type={actorType} id={actorId} size={36} showPresence />
@@ -66,12 +69,12 @@ export function InboxRow({ item, onPress, onLongPress, archived }: Props) {
               ) : null}
               <Text
                 className={cn(
-                  "flex-1 text-body",
+                  "flex-1 text-body-lg",
                   isUnread
-                    ? "font-medium text-foreground"
-                    : "text-muted-foreground",
+                    ? "font-semibold text-foreground"
+                    : "text-foreground",
                 )}
-                numberOfLines={1}
+                numberOfLines={2}
               >
                 {displayTitle}
               </Text>
@@ -93,11 +96,7 @@ export function InboxRow({ item, onPress, onLongPress, archived }: Props) {
             <View className="flex-1 min-w-0">
               <InboxDetailLabel
                 item={item}
-                className={
-                  isUnread
-                    ? "text-muted-foreground"
-                    : "text-muted-foreground/60"
-                }
+                className="text-muted-foreground"
               />
             </View>
             <View className="flex-row items-center gap-1.5 shrink-0">
@@ -112,12 +111,7 @@ export function InboxRow({ item, onPress, onLongPress, archived }: Props) {
                 <IssueAgentActivityIndicator issueId={item.issue_id} />
               ) : null}
               <Text
-                className={cn(
-                  "text-caption shrink-0",
-                  isUnread
-                    ? "text-muted-foreground"
-                    : "text-muted-foreground/60",
-                )}
+                className="shrink-0 text-caption text-muted-foreground"
               >
                 {timeAgo(item.created_at)}
               </Text>

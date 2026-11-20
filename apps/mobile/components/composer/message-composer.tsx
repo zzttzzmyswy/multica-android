@@ -45,6 +45,7 @@ import {
   type ReactNode,
 } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { cn } from "@/lib/utils";
 import { Alert, ActivityIndicator, Keyboard, Pressable, ScrollView, TextInput, View } from "react-native";
 import { KeyboardStickyView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -773,7 +774,7 @@ export function MessageComposer({
 
   const pillContent = (
     <View
-      className="border-t border-border bg-background px-3 pt-2"
+      className="bg-background px-3 pt-2"
       style={{ paddingBottom: (manageKeyboard ? insets.bottom : 0) + 8 }}
     >
       <Pressable
@@ -782,14 +783,14 @@ export function MessageComposer({
         accessibilityRole="button"
         accessibilityLabel={pillLabel}
         accessibilityState={{ disabled }}
-        className="flex-row items-center gap-2 h-11 px-4 rounded-full bg-secondary active:opacity-80"
+        className="min-h-12 flex-row items-center gap-2.5 rounded-[22px] border border-border bg-surface-1 px-4 py-2.5 active:bg-secondary"
       >
         <Ionicons
           name={pillIcon}
           size={18}
           color={theme.mutedForeground}
         />
-        <Text className="text-title-sm text-muted-foreground">
+        <Text className="min-w-0 flex-1 text-title-sm text-muted-foreground">
           {disabled && disabledReason ? disabledReason : pillLabel}
         </Text>
       </Pressable>
@@ -840,7 +841,7 @@ export function MessageComposer({
       )}
 
       <View
-        className="rounded-3xl border border-border bg-secondary"
+        className="rounded-[22px] border border-border bg-surface-1"
         style={{ borderCurve: "continuous" }}
       >
         {(mentions.length > 0 || attachments.length > 0) ? (
@@ -877,7 +878,7 @@ export function MessageComposer({
                       disabled={pending}
                       accessibilityRole="button"
                       accessibilityLabel={`/${item.label}`}
-                      className="flex-row items-center gap-2 px-3 py-2 active:bg-secondary"
+                      className="min-h-12 flex-row items-center gap-2 px-3 py-2 active:bg-secondary"
                     >
                       {pending ? (
                         <ActivityIndicator
@@ -930,7 +931,7 @@ export function MessageComposer({
           />
         </View>
 
-        <View className="flex-row items-center px-2 pb-2 pt-1">
+        <View className="flex-row items-center px-1.5 pb-1.5 pt-1">
           {/* @ leads the toolbar — highest-signal attachment (only one
            *  that drives notifications) and cross-resource (people +
            *  issues), pride-of-place left. */}
@@ -940,42 +941,49 @@ export function MessageComposer({
             color={mentions.length > 0 ? theme.primary : undefined}
             onPress={onAtPress}
             accessibilityLabel={t("a11y.mentionSomeone")}
-            className="h-8 w-8"
+            className="size-12 rounded-full"
           />
           <IconButton
             name="image-outline"
             iconSize={20}
             onPress={onImagePress}
             accessibilityLabel={t("a11y.uploadImage")}
-            className="h-8 w-8"
+            className="size-12 rounded-full"
           />
           <IconButton
             name="attach-outline"
             iconSize={20}
             onPress={onFilePress}
             accessibilityLabel={t("a11y.uploadFile")}
-            className="h-8 w-8"
+            className="size-12 rounded-full"
           />
           <View className="flex-1" />
           {submitMode === "stop" && renderStop ? (
             renderStop()
           ) : (
-            <IconButton
-              name="arrow-up"
-              iconSize={18}
-              color={theme.primaryForeground}
-              variant="default"
+            <Pressable
               onPress={handleSubmit}
               disabled={!canSend}
-              hitSlop={12}
-              className="h-8 w-8 rounded-full"
+              className="size-12 shrink-0 items-center justify-center rounded-full active:bg-secondary"
+              accessibilityRole="button"
               accessibilityLabel={
                 submitMode === "queue-send"
                   ? t("a11y.queueSend")
                   : t("a11y.send")
               }
               accessibilityState={{ disabled: !canSend }}
-            />
+            >
+              <View className={cn(
+                "size-9 items-center justify-center rounded-full",
+                canSend ? "bg-primary" : "bg-secondary",
+              )}>
+                <Ionicons
+                  name={submitMode === "queue-send" ? "arrow-up-circle-outline" : "arrow-up"}
+                  size={19}
+                  color={canSend ? theme.primaryForeground : theme.mutedForeground}
+                />
+              </View>
+            </Pressable>
           )}
         </View>
       </View>

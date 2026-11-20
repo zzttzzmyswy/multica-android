@@ -20,10 +20,10 @@
  * Active / inactive tint colors are derived from the current colour
  * scheme via THEME so dark mode picks contrasting values automatically.
  */
-import { useRef } from "react";
+import { useRef, type ComponentProps } from "react";
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { View } from "react-native";
+import { Platform, View } from "react-native";
 import type { TriggerRef } from "@rn-primitives/dropdown-menu";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { THEME } from "@/lib/theme";
@@ -43,6 +43,25 @@ import { MoreTabDropdownAnchor } from "@/components/nav/more-tab-dropdown";
 const BADGE_STYLE = {
   backgroundColor: THEME.light.brand,
 };
+
+function TabGlyph({ name, color, size, focused }: {
+  name: ComponentProps<typeof Ionicons>["name"];
+  color: string;
+  size: number;
+  focused: boolean;
+}) {
+  if (Platform.OS !== "android") {
+    return <Ionicons name={name} color={color} size={size} />;
+  }
+  return (
+    <View className="h-7 w-10 items-center justify-center" pointerEvents="none">
+      {focused ? (
+        <View className="absolute inset-0 rounded-full bg-brand/[0.15]" />
+      ) : null}
+      <Ionicons name={name} color={color} size={22} />
+    </View>
+  );
+}
 
 export default function TabsLayout() {
   const t = useThemePalette();
@@ -71,7 +90,9 @@ export default function TabsLayout() {
           headerShown: false,
           tabBarActiveTintColor: t.foreground,
           tabBarInactiveTintColor: t.mutedForeground,
-          tabBarStyle: { backgroundColor: t.background },
+          tabBarStyle: {
+            backgroundColor: Platform.OS === "android" ? t.surface1 : t.background,
+          },
           tabBarLabelStyle: { fontSize: 11 },
         }}
       >
@@ -82,7 +103,8 @@ export default function TabsLayout() {
             tabBarBadge: inboxBadge,
             tabBarBadgeStyle: BADGE_STYLE,
             tabBarIcon: ({ color, size, focused }) => (
-              <Ionicons
+              <TabGlyph
+                focused={focused}
                 name={focused ? "file-tray" : "file-tray-outline"}
                 color={color}
                 size={size}
@@ -95,7 +117,8 @@ export default function TabsLayout() {
           options={{
             title: translate("nav.projects"),
             tabBarIcon: ({ color, size, focused }) => (
-              <Ionicons
+              <TabGlyph
+                focused={focused}
                 name={focused ? "layers" : "layers-outline"}
                 color={color}
                 size={size}
@@ -108,7 +131,8 @@ export default function TabsLayout() {
           options={{
             title: translate("nav.myIssues"),
             tabBarIcon: ({ color, size, focused }) => (
-              <Ionicons
+              <TabGlyph
+                focused={focused}
                 name={focused ? "checkbox" : "checkbox-outline"}
                 color={color}
                 size={size}
@@ -121,7 +145,8 @@ export default function TabsLayout() {
           options={{
             title: translate("nav.pinned"),
             tabBarIcon: ({ color, size, focused }) => (
-              <Ionicons
+              <TabGlyph
+                focused={focused}
                 name={focused ? "pin" : "pin-outline"}
                 color={color}
                 size={size}
@@ -141,7 +166,8 @@ export default function TabsLayout() {
             tabBarBadge: chatBadge,
             tabBarBadgeStyle: BADGE_STYLE,
             tabBarIcon: ({ color, size, focused }) => (
-              <Ionicons
+              <TabGlyph
+                focused={focused}
                 name={focused ? "chatbubble" : "chatbubble-outline"}
                 color={color}
                 size={size}
@@ -153,8 +179,8 @@ export default function TabsLayout() {
           name="more"
           options={{
             title: translate("nav.more"),
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="ellipsis-horizontal" color={color} size={size} />
+            tabBarIcon: ({ color, size, focused }) => (
+              <TabGlyph name="ellipsis-horizontal" color={color} size={size} focused={focused} />
             ),
           }}
           listeners={() => ({

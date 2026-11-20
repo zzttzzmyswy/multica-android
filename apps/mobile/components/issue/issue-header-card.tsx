@@ -31,16 +31,20 @@ export function IssueHeaderCard({
   titleHighlighted?: boolean;
 }) {
   return (
-    <View className="px-4 pt-4 pb-3 gap-3">
-      <Text className="text-caption text-muted-foreground">{issue.identifier}</Text>
-      <View>
-        <Text className="text-display-sm font-bold text-foreground">
-          {issue.title}
-        </Text>
-        <HighlightOverlay
-          active={titleHighlighted}
-          className="absolute -inset-1 rounded-lg border-2 border-brand/50 bg-brand/5"
-        />
+    <View className="gap-3 px-4 pb-4 pt-5">
+      <View className="gap-2">
+        <View className="self-start rounded-md bg-secondary px-2 py-1">
+          <Text className="text-caption font-semibold text-muted-foreground">{issue.identifier}</Text>
+        </View>
+        <View>
+          <Text accessibilityRole="header" className="text-display-sm font-bold text-foreground">
+            {issue.title}
+          </Text>
+          <HighlightOverlay
+            active={titleHighlighted}
+            className="absolute -inset-1 rounded-lg border-2 border-brand/50 bg-brand/5"
+          />
+        </View>
       </View>
       {/* Activity row sits between title and attributes — it represents
        *  "who's doing this issue right now / who has done it" (dynamic),

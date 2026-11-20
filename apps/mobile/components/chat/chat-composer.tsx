@@ -200,19 +200,20 @@ function StopButton({ onPress }: { onPress: () => void }) {
     >
       <Pressable
         onPress={onPress}
-        className="h-8 w-8 items-center justify-center rounded-full bg-foreground active:opacity-80"
-        hitSlop={12}
+        className="size-12 items-center justify-center rounded-full active:bg-secondary"
         accessibilityRole="button"
         accessibilityLabel={t("chat.stopAgent")}
       >
-        <View
-          style={{
-            width: 10,
-            height: 10,
-            backgroundColor: theme.background,
-            borderRadius: 1.5,
-          }}
-        />
+        <View className="size-9 items-center justify-center rounded-full bg-primary">
+          <View
+            style={{
+              width: 10,
+              height: 10,
+              backgroundColor: theme.primaryForeground,
+              borderRadius: 1.5,
+            }}
+          />
+        </View>
       </Pressable>
     </Animated.View>
   );
