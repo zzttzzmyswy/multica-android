@@ -453,10 +453,38 @@ export const HANDOFF_MODE_KEYS = ["none", "agent", "member"] as const;
  */
 const CONTENT_LEADING_KEYS = CONTENT_LEADINGS;
 
+/**
+ * The environment row states (MYS-2980). `EnvironmentRowState` is
+ * `IssueEnvironmentState` plus the client-only `stopping`, and the row builds
+ * `environments.state.${caps.rowState}` from it — so a state added to
+ * `lib/issue-environments.ts` without its leaf would render a raw id on the
+ * row, which reads as a bug rather than as a state.
+ *
+ * Listed literally rather than derived from the type: a type union is erased at
+ * runtime, and `Object.keys` over a `Record<Union, …>` is exactly the table the
+ * module doc above says to prefer. Keep the two in step — the compiler does not
+ * check a hand-written list against a widened union, so the row's own test
+ * (`lib/issue-environments-wiring.test.ts`) pins the same set from the other
+ * side.
+ */
+export const ENVIRONMENT_STATE_KEYS = [
+  "starting",
+  "running",
+  "exited",
+  "stopped",
+  "unreachable",
+  "stopping",
+  "preparing",
+] as const;
+
 export const DYNAMIC_FAMILIES: Record<string, readonly string[]> = {
   "settings.appearance.leading.<step>": prefixed(
     "settings.appearance.leading.",
     CONTENT_LEADING_KEYS,
+  ),
+  "environments.state.<state>": prefixed(
+    "environments.state.",
+    ENVIRONMENT_STATE_KEYS,
   ),
   "wakeups.ruleStates.<state>": prefixed(
     "wakeups.ruleStates.",

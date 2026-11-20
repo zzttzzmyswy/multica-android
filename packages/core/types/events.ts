@@ -57,6 +57,11 @@ export type WSEventType =
   | "reaction:removed"
   | "issue_reaction:added"
   | "issue_reaction:removed"
+  // A reported environment's state changed, or a section command was answered
+  // (MYS-2980). Carries only the issue id — the server does not send the row,
+  // and the row it changed may be one this client has never seen — so the
+  // handler invalidates the issue's environments cache rather than patching it.
+  | "environment:changed"
   | "chat:message"
   | "chat:done"
   | "chat:quick_actions"
@@ -383,6 +388,15 @@ export interface IssueReactionRemovedPayload {
   actor_id: string;
 }
 
+/** An issue's environments changed, or a command against one was answered
+ *  (MYS-2980). Deliberately carries only the issue id: a command can create or
+ *  end a row this client has no id for, so there is nothing to patch — the
+ *  payload exists to say "refetch this issue's environments", matching the
+ *  server's own minimal broadcast and web's `use-realtime-sync.ts:1085`. */
+export interface EnvironmentChangedPayload {
+  issue_id: string;
+}
+
 export interface ChatMessageEventPayload {
   chat_session_id: string;
   message_id: string;
@@ -537,6 +551,7 @@ export interface WSEventPayloadMap {
   "property:updated": PropertyChangedPayload;
   "issue_reaction:added": IssueReactionAddedPayload;
   "issue_reaction:removed": IssueReactionRemovedPayload;
+  "environment:changed": EnvironmentChangedPayload;
   "comment:created": CommentCreatedPayload;
   "comment:updated": CommentUpdatedPayload;
   "comment:deleted": CommentDeletedPayload;

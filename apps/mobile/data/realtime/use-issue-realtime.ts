@@ -9,6 +9,8 @@
  *   - activity:created → timeline
  *   - reaction:added / reaction:removed → comment reactions on timeline
  *   - issue_reaction:added / issue_reaction:removed → issue-level reactions on detail
+ *   - environment:changed → this issue's environments section (MYS-2980);
+ *     invalidate only, since the payload names no row
  *   - task:queued / task:coalesced / task:dispatch / task:progress /
  *     task:completed / task:failed / task:cancelled → invalidate timeline +
  *     detail (task state can flip an issue's status server-side without
@@ -247,6 +249,16 @@ export function useIssueRealtime(
             payload.emoji,
             payload.actor_id,
           );
+        }),
+
+        // ----- Environments -----
+        // The payload carries only the issue id (see `EnvironmentChangedPayload`),
+        // so there is nothing to patch — and a command can add or end a row this
+        // client has no id for. Invalidate rather than update in place, per the
+        // "patch over invalidate only when the payload has the object" rule.
+        ws.on("environment:changed", (payload) => {
+          if (payload.issue_id !== issueId) return;
+          qc.invalidateQueries({ queryKey: issueKeys.environments(wsId, issueId) });
         }),
 
         // ----- Agent task progress -----

@@ -101,6 +101,7 @@ import {
 } from "./issue-duplicates";
 import { IssueSourceContextBanner } from "./issue-source-context";
 import { PullRequestList } from "./pull-request-list";
+import { IssueEnvironmentsSection } from "./issue-environments-section";
 import { DeliverablesSection } from "./deliverables-section";
 import { QuickActionsSection } from "@/components/quick-action/quick-actions-section";
 import { WakeupsSection } from "./wakeups-section";
@@ -837,6 +838,13 @@ export function TimelineList({
           between the sub-issue list and the Activity header; fetches its own
           data via issuePullRequestsOptions and re-renders on cache changes. */}
       <PullRequestList issueId={issue.id} />
+      {/* Environments (MYS-2980) — the servers this issue's runs left running.
+          Web puts this directly below the PR sidebar section and above
+          deliverables (`issue-detail.tsx:3297-3308`), and the same order is
+          kept here. Renders nothing at all when the issue has no environment
+          and nothing startable, so an issue that never ran a service gains no
+          row. */}
+      <IssueEnvironmentsSection issueId={issue.id} />
       {/* Deliverables (MUL-7649) — the files this issue's comments delivered,
           as a whole. Web's sidebar puts it directly below the PR section, and
           the same order is kept here. Reads the raw `entries` rather than the
