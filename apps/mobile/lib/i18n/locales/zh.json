@@ -2349,6 +2349,7 @@
   "menu.reply": "回复",
   "menu.resolveThread": "解决该讨论",
   "menu.selectText": "选择文本",
+  "menu.selectTextHint": "长按正文，再拖动选区手柄，选择并复制部分文字。",
   "menu.unresolveThread": "重新打开讨论",
   "myIssues.emptyAgents": "还没有指派给您智能体或小队的任务。",
   "myIssues.emptyAll": "还没有指派给您、由您创建，或涉及您的智能体与小队的任务。",

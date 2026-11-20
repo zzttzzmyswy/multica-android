@@ -11,8 +11,8 @@
  *
  *   1. Known language + Shiki ready: token runs from `codeToTokensBase`
  *      rendered as nested `<Text>` children, each carrying its theme color
- *      via inline `style.color`. Per-line wrapping is preserved by giving
- *      each line its own outer `<Text>`.
+ *      via inline `style.color`. Explicit newlines keep a single selectable
+ *      text host while preserving code line boundaries.
  *
  *   2. Unknown language, engine unavailable, or first frame before init
  *      finishes: plain `<Text>` of the raw source. Visually identical to
@@ -30,6 +30,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Pressable,
   ScrollView,
+  Text as RNText,
   View,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
@@ -130,30 +131,24 @@ function HighlightedCode({
   lines: HighlightedLine[];
   selectable: boolean;
 }) {
-  // One outer <Text> per line so RN treats each line as its own typographic
-  // run. An empty line gets a single space so it still occupies a row's
-  // height — otherwise blank lines collapse to zero pixels.
+  // One native Text host for the entire block lets Android selection handles
+  // cross line boundaries. Nested spans preserve Shiki colours without making
+  // each line an independent selection island. Explicit newlines also retain
+  // blank lines (and copy the actual code, not placeholder spaces). Inline
+  // RNText spans inherit code typography, unlike our styled Text defaults.
   return (
-    <View>
+    <Text className={CODE_BLOCK_TEXT_CLASS} selectable={selectable}>
       {lines.map((line, i) => (
-        <Text
-          key={i}
-          className={CODE_BLOCK_TEXT_CLASS}
-          selectable={selectable}
-        >
-          {line.tokens.length === 0
-            ? " "
-            : line.tokens.map((t, j) => (
-                <Text
-                  key={j}
-                  style={t.color ? { color: t.color } : undefined}
-                >
-                  {t.content}
-                </Text>
-              ))}
-        </Text>
+        <RNText key={i}>
+          {i > 0 ? "\n" : ""}
+          {line.tokens.map((token, j) => (
+            <RNText key={j} style={token.color ? { color: token.color } : undefined}>
+              {token.content}
+            </RNText>
+          ))}
+        </RNText>
       ))}
-    </View>
+    </Text>
   );
 }
 

@@ -429,6 +429,12 @@ export default function ChatTab() {
     useCallback(() => () => useChatSelectStore.getState().clear(), []),
   );
 
+  // Sessions can change without the tab blurring. Do not carry selection
+  // mode (or its Done toolbar) into a different conversation.
+  useEffect(() => {
+    useChatSelectStore.getState().clear();
+  }, [activeSessionId]);
+
   // ── Auto markRead while viewing a session with unread state ──────────
   const isFocused = useIsFocused();
   const markRead = useMarkChatSessionRead();

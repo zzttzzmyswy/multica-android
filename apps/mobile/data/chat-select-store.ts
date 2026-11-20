@@ -3,11 +3,10 @@
  * "Select Text" in a chat bubble's long-press action sheet
  * (`components/chat/message-long-press.tsx` → `useChatMessageLongPress`),
  * the targeted message id is parked here. The bubble row reads this store
- * and, when matched, (a) drops the `Pressable.onLongPress` wrapper so the
+ * and, when matched, (a) drops the `LongPressView` wrapper so the
  * long-press gesture no longer races with text-selection, and (b) sets
  * `selectable={true}` on the Markdown / Text body — the next long-press
- * inside the bubble fires UIKit's native selection magnifier + handles +
- * Copy/Look Up callout.
+ * inside the bubble opens native selection handles and the copy menu.
  *
  * Why a separate Zustand store (not props / context, and not reused from
  * the comment surface):
@@ -21,9 +20,9 @@
  *     reusing it would let a comment scroll wipe a chat selection (or
  *     vice versa) and let id collisions cross-trigger selection state.
  *
- * Lifecycle: cleared when (a) the user taps the floating Done pill,
- * (b) the chat list scrolls, or (c) the chat tab loses focus —
- * so each fresh navigation into chat starts with no message selected.
+ * Lifecycle: Android uses the explicit Done control and retains selection
+ * while scrolling; iOS clears on outside taps and scrolling. Navigation
+ * away clears selection (including chat session switches).
  */
 import { create } from "zustand";
 
