@@ -78,6 +78,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   RefreshControl,
   View,
@@ -90,6 +91,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { useQuery } from "@tanstack/react-query";
 import type { Issue, TimelineEntry } from "@multica/core/types";
 import { Text } from "@/components/ui/text";
+import { Button } from "@/components/ui/button";
 import { IssueHeaderCard } from "./issue-header-card";
 import { IssueDescription } from "./issue-description";
 import { IssueReactionRow } from "./issue-reaction-row";
@@ -249,8 +251,8 @@ export function TimelineList({
   findFraction,
 }: Props) {
   const { t } = useTranslation();
-  // Top-level selection subscription gates the outer "tap-outside-to-dismiss"
-  // Pressable below. When null, the Pressable stays disabled and every tap
+  // Selection controls the Android Done toolbar and iOS tap-to-dismiss
+  // responder. When null, the Pressable stays disabled and every tap
   // passes through to comment cards / chip rows / reactions normally.
   const selectingId = useCommentSelectStore((s) => s.selectingId);
 
@@ -952,22 +954,25 @@ export function TimelineList({
   return (
     <ImageSequenceProvider blocks={imageBlocks}>
     <View className="flex-1">
-      {/* Outer Pressable owns the "tap anywhere outside the selected
-          comment to exit text-selection mode" gesture. Disabled when
-          no comment is selected → layout-only wrapper, every tap passes
-          through to cells / chips / reactions. Active state captures any
-          tap that didn't fire an inner Pressable — selecting CommentBody
-          renders without its own Pressable wrapper (see comment-card.tsx
-          `if (isSelecting) return body;`), so taps on the selected
-          comment dismiss too, matching iOS Notes / iMessage. Scroll
-          gestures are unaffected. */}
+      {/* Android native selection owns body touches. Do not enable an
+          ancestor tap responder that clears the mode on selection touches. */}
+    {Platform.OS === "android" && selectingId ? (
+      <View className="flex-row items-center gap-2 px-3 py-2 bg-muted">
+        <Text className="flex-1 text-caption text-muted-foreground" accessibilityLiveRegion="polite">
+          {t("menu.selectTextHint")}
+        </Text>
+        <Button variant="ghost" onPress={() => useCommentSelectStore.getState().clear()}>
+          <Text>{t("common.done")}</Text>
+        </Button>
+      </View>
+    ) : null}
       <Pressable
         onPress={
           selectingId
             ? () => useCommentSelectStore.getState().clear()
             : undefined
         }
-        disabled={!selectingId}
+        disabled={Platform.OS === "android" || !selectingId}
         style={{ flex: 1 }}
       >
       <FlashList
@@ -1021,16 +1026,16 @@ export function TimelineList({
         onLayout={(e) => {
           viewportHeightRef.current = e.nativeEvent.layout.height;
         }}
-        // Any user-initiated scroll exits comment text-selection mode —
+        // On iOS a user-initiated scroll exits comment text-selection mode —
         // matches iMessage's behavior where scrolling implicitly commits /
         // dismisses the selection caret. Hooks both drag-start and the
         // momentum kick after a flick so a fast scroll can't escape.
-        onScrollBeginDrag={() =>
-          useCommentSelectStore.getState().clear()
-        }
-        onMomentumScrollBegin={() =>
-          useCommentSelectStore.getState().clear()
-        }
+        onScrollBeginDrag={() => {
+          if (Platform.OS !== "android") useCommentSelectStore.getState().clear();
+        }}
+        onMomentumScrollBegin={() => {
+          if (Platform.OS !== "android") useCommentSelectStore.getState().clear();
+        }}
         viewabilityConfigCallbackPairs={viewabilityCallbackPairs.current}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />

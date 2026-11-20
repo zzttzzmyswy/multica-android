@@ -2229,6 +2229,7 @@
   "menu.reply": "Reply",
   "menu.resolveThread": "Resolve Thread",
   "menu.selectText": "Select Text",
+  "menu.selectTextHint": "Long-press the text, then drag the handles to select and copy part of it.",
   "menu.unresolveThread": "Unresolve Thread",
   "myIssues.emptyAgents": "No issues assigned to your agents or squads yet.",
   "myIssues.emptyAll": "Nothing assigned to you, created by you, or involving your agents and squads yet.",

@@ -44,6 +44,7 @@ import { memo, useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   View,
   type NativeScrollEvent,
@@ -63,6 +64,7 @@ import type { AgentAvailability } from "@multica/core/agents";
 import { prepareTaskMessages } from "@multica/core/task-transcript";
 import { taskMessagesOptions } from "@/data/queries/chat";
 import { Text } from "@/components/ui/text";
+import { Button } from "@/components/ui/button";
 import { Markdown } from "@/lib/markdown";
 import { ImageSequenceProvider } from "@/lib/markdown/image-sequence";
 import { failureReasonLabel } from "@/lib/failure-reason-label";
@@ -170,8 +172,8 @@ export const ChatMessageList = memo(function ChatMessageList({
   onRegenerateQuickActions,
   quickActionsPendingMessageId = null,
 }: Props) {
-  // Top-level selection subscription gates the outer "tap-outside-to-dismiss"
-  // Pressable below. When null, the Pressable stays disabled and every tap
+  // Selection controls the Android Done toolbar and iOS tap-to-dismiss
+  // responder. When null, the Pressable stays disabled and every tap
   // passes through to the list cells / bubble long-press wrappers normally.
   const selectingId = useChatSelectStore((s) => s.selectingId);
 
@@ -345,24 +347,27 @@ export const ChatMessageList = memo(function ChatMessageList({
     showLiveSection && (liveTaskMessages?.length ?? 0) > 0;
 
   return (
-    // Outer Pressable owns the "tap anywhere outside the selected bubble
-    // to exit text-selection mode" gesture. Disabled when no message is
-    // selected, so it's a layout-only wrapper and every tap passes straight
-    // through to the FlashList cells. Active state captures any tap that
-    // didn't fire an inner Pressable — bubble cells in selecting mode
-    // render their body without a Pressable wrapper (see `MessageRow`'s
-    // `if (isSelecting) return body;`), so taps on the selected bubble
-    // also dismiss, matching iOS Notes / iMessage behaviour. Scroll
-    // gestures are unaffected (Pressable only intercepts non-drag taps).
+    // Android native text selection must own body touches, including handle
+    // drags. Keep the outer responder disabled there and exit explicitly.
     <ImageSequenceProvider blocks={imageBlocks}>
     <View className="flex-1">
+    {Platform.OS === "android" && selectingId ? (
+      <View className="flex-row items-center gap-2 px-3 py-2 bg-muted">
+        <Text className="flex-1 text-caption text-muted-foreground" accessibilityLiveRegion="polite">
+          {t("menu.selectTextHint")}
+        </Text>
+        <Button variant="ghost" onPress={() => useChatSelectStore.getState().clear()}>
+          <Text>{t("common.done")}</Text>
+        </Button>
+      </View>
+    ) : null}
     <Pressable
       onPress={
         selectingId
           ? () => useChatSelectStore.getState().clear()
           : undefined
       }
-      disabled={!selectingId}
+      disabled={Platform.OS === "android" || !selectingId}
       style={{ flex: 1 }}
     >
     {/* `key` on first message id forces remount on session switch so
@@ -430,12 +435,16 @@ export const ChatMessageList = memo(function ChatMessageList({
         autoscrollToBottomThreshold: 0.2,
         startRenderingFromBottom: true,
       }}
-      // Any user-initiated scroll exits message text-selection mode —
+      // On iOS a user-initiated scroll exits message text-selection mode —
       // matches iMessage's behavior where scrolling implicitly commits /
       // dismisses the selection caret. Hooks both drag-start and the
       // momentum kick after a flick so a fast scroll can't escape.
-      onScrollBeginDrag={() => useChatSelectStore.getState().clear()}
-      onMomentumScrollBegin={() => useChatSelectStore.getState().clear()}
+      onScrollBeginDrag={() => {
+        if (Platform.OS !== "android") useChatSelectStore.getState().clear();
+      }}
+      onMomentumScrollBegin={() => {
+        if (Platform.OS !== "android") useChatSelectStore.getState().clear();
+      }}
       // iMessage-style keyboard dismissal: dragging the list pulls the
       // keyboard down with the finger (iOS); tapping empty space between
       // bubbles dismisses it. `handled` keeps Pressables inside bubbles

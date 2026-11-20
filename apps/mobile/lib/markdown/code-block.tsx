@@ -130,30 +130,23 @@ function HighlightedCode({
   lines: HighlightedLine[];
   selectable: boolean;
 }) {
-  // One outer <Text> per line so RN treats each line as its own typographic
-  // run. An empty line gets a single space so it still occupies a row's
-  // height — otherwise blank lines collapse to zero pixels.
+  // One native Text host for the entire block lets Android selection handles
+  // cross line boundaries. Nested spans preserve Shiki colours without making
+  // each line an independent selection island. Explicit newlines also retain
+  // blank lines (and copy the actual code, not placeholder spaces).
   return (
-    <View>
+    <Text className={CODE_BLOCK_TEXT_CLASS} selectable={selectable}>
       {lines.map((line, i) => (
-        <Text
-          key={i}
-          className={CODE_BLOCK_TEXT_CLASS}
-          selectable={selectable}
-        >
-          {line.tokens.length === 0
-            ? " "
-            : line.tokens.map((t, j) => (
-                <Text
-                  key={j}
-                  style={t.color ? { color: t.color } : undefined}
-                >
-                  {t.content}
-                </Text>
-              ))}
+        <Text key={i}>
+          {i > 0 ? "\n" : ""}
+          {line.tokens.map((token, j) => (
+            <Text key={j} style={token.color ? { color: token.color } : undefined}>
+              {token.content}
+            </Text>
+          ))}
         </Text>
       ))}
-    </View>
+    </Text>
   );
 }
 

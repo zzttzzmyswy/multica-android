@@ -3,10 +3,10 @@
  * comment's long-press action sheet (`components/issue/comment-context-
  * menu.tsx` → `useCommentLongPress`), the targeted comment id is parked
  * here. `CommentBody` reads this store and, when matched, (a) drops the
- * `Pressable.onLongPress` handler so the long-press gesture no longer
+ * `LongPressView` handler so the long-press gesture no longer
  * races with text-selection, and (b) sets `selectable={true}` on the
- * Markdown body — the next long-press inside the bubble fires UIKit's
- * native selection magnifier + handles + Copy/Look Up callout.
+ * Markdown body — the next long-press inside the bubble opens native
+ * selection handles and the copy menu.
  *
  * Why a separate Zustand store (not props / context):
  *   - Only one comment can be in selection mode at a time across the app —
@@ -15,9 +15,9 @@
  *     in a different component tree than the comment list — easier to wire
  *     via a global store than to thread callbacks through every parent.
  *
- * Lifecycle: cleared when (a) the user taps the floating Done pill,
- * (b) the timeline scrolls, or (c) the issue-detail screen unmounts —
- * so each fresh navigation into an issue starts with no comment selected.
+ * Lifecycle: Android uses the explicit Done control and retains selection
+ * while scrolling; iOS clears on outside taps and scrolling. Navigation
+ * away clears selection when the issue screen unmounts.
  */
 import { create } from "zustand";
 
