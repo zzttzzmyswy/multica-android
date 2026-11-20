@@ -11,8 +11,8 @@
  *
  *   1. Known language + Shiki ready: token runs from `codeToTokensBase`
  *      rendered as nested `<Text>` children, each carrying its theme color
- *      via inline `style.color`. Per-line wrapping is preserved by giving
- *      each line its own outer `<Text>`.
+ *      via inline `style.color`. Explicit newlines keep a single selectable
+ *      text host while preserving code line boundaries.
  *
  *   2. Unknown language, engine unavailable, or first frame before init
  *      finishes: plain `<Text>` of the raw source. Visually identical to
@@ -30,6 +30,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Pressable,
   ScrollView,
+  Text as RNText,
   View,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
@@ -133,18 +134,19 @@ function HighlightedCode({
   // One native Text host for the entire block lets Android selection handles
   // cross line boundaries. Nested spans preserve Shiki colours without making
   // each line an independent selection island. Explicit newlines also retain
-  // blank lines (and copy the actual code, not placeholder spaces).
+  // blank lines (and copy the actual code, not placeholder spaces). Inline
+  // RNText spans inherit code typography, unlike our styled Text defaults.
   return (
     <Text className={CODE_BLOCK_TEXT_CLASS} selectable={selectable}>
       {lines.map((line, i) => (
-        <Text key={i}>
+        <RNText key={i}>
           {i > 0 ? "\n" : ""}
           {line.tokens.map((token, j) => (
-            <Text key={j} style={token.color ? { color: token.color } : undefined}>
+            <RNText key={j} style={token.color ? { color: token.color } : undefined}>
               {token.content}
-            </Text>
+            </RNText>
           ))}
-        </Text>
+        </RNText>
       ))}
     </Text>
   );

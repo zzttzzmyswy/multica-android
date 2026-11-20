@@ -46,6 +46,9 @@ it("uses one selectable Text host across highlighted code lines", () => {
   expect(source).toContain('{i > 0 ? "\\n" : ""}');
   expect(source).not.toContain("<View>");
   expect(source).toContain("token.color");
+  expect(source).toContain("<RNText key={i}>");
+  expect(source).toContain("<RNText key={j}");
+  expect(source).not.toContain("<Text key=");
 });
 
 it("clears chat selection on session switches and navigation away", () => {
