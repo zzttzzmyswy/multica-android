@@ -13,10 +13,12 @@
  * `table` / `chart-gantt` / `view-column-outline` for table / gantt /
  * swimlane (Ionicons has none of those three).
  */
-import { Pressable, View } from "react-native";
+import { Pressable, useWindowDimensions, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import type { IssueViewMode } from "@/data/stores/issue-filter-slice";
+import { useFontScale } from "@/data/stores/type-appearance-store";
+import { issueViewModeColumns } from "@/lib/issue-view-mode-layout";
 import { Text } from "@/components/ui/text";
 import { useTranslation } from "@/lib/i18n/react";
 import { useThemePalette } from "@/lib/appearance-a11y-runtime";
@@ -64,9 +66,12 @@ export function ViewModeToggle({
 }) {
   const { t } = useTranslation();
   const palette = useThemePalette();
+  const { width, fontScale } = useWindowDimensions();
+  const appFontScale = useFontScale();
+  const columns = issueViewModeColumns(width, fontScale * (appFontScale ?? 1));
   return (
     <View
-      className="flex-row items-center rounded-xl bg-secondary/70 p-1"
+      className="flex-row flex-wrap items-stretch rounded-xl bg-secondary/70 p-1"
       accessibilityRole="tablist"
     >
       {OPTIONS.map((opt) => {
@@ -78,15 +83,15 @@ export function ViewModeToggle({
           <Pressable
             key={opt.value}
             onPress={() => onChange(opt.value)}
-            className={`min-h-11 min-w-0 flex-1 items-center justify-center gap-0.5 rounded-lg px-0.5 py-1 active:bg-surface-2 ${active ? "bg-background" : ""}`}
+            className={`min-h-12 min-w-0 grow items-center justify-center gap-0.5 rounded-lg px-0.5 py-1 active:bg-surface-2 ${active ? "bg-background" : ""}`}
+            style={{ flexBasis: `${100 / columns}%` }}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
             accessibilityLabel={t(opt.a11yKey)}
           >
             <ModeGlyph value={opt.value} color={color} />
             <Text
-              numberOfLines={1}
-              className={active ? "text-micro font-semibold text-foreground" : "text-micro text-muted-foreground"}
+              className={active ? "text-center text-micro font-semibold text-foreground" : "text-center text-micro text-muted-foreground"}
             >
               {t(opt.labelKey)}
             </Text>

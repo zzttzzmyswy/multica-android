@@ -43,6 +43,7 @@ import type {
   ProjectPriority,
   ProjectStatus,
 } from "@multica/core/types";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
@@ -434,7 +435,18 @@ export function ProjectsScreen({
   }
 
   if (data.length === 0) {
-    return <EmptyState onCreate={onCreate} t={t} />;
+    return (
+      <EmptyState
+        icon="layers-outline"
+        title={t("projects.emptyTitle")}
+        description={t("projects.emptyMessage")}
+        className="flex-1"
+      >
+        <Button onPress={onCreate} className="min-h-12 rounded-xl">
+          <Text>{t("projects.create")}</Text>
+        </Button>
+      </EmptyState>
+    );
   }
 
   return (
@@ -604,9 +616,7 @@ export function ProjectsScreen({
           maxToRenderPerBatch={10}
           updateCellsBatchingPeriod={40}
           ListEmptyComponent={
-            <Text className="px-4 py-8 text-center text-body text-muted-foreground">
-              {t("projects.noMatches")}
-            </Text>
+            <EmptyState icon="search-outline" title={t("projects.noMatches")} className="py-10" />
           }
           renderItem={({ item }) => (
             <ProjectRow
@@ -866,28 +876,6 @@ function FilterRow({
           );
         })}
       </View>
-    </View>
-  );
-}
-
-function EmptyState({
-  onCreate,
-  t,
-}: {
-  onCreate: () => void;
-  t: (id: string) => string;
-}) {
-  return (
-    <View className="flex-1 items-center justify-center px-6 gap-4">
-      <Text className="text-title-sm font-medium text-foreground">
-        {t("projects.emptyTitle")}
-      </Text>
-      <Text className="text-body text-muted-foreground text-center">
-        {t("projects.emptyMessage")}
-      </Text>
-      <Button variant="default" onPress={onCreate}>
-        <Text>{t("projects.create")}</Text>
-      </Button>
     </View>
   );
 }

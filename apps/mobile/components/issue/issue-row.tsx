@@ -168,7 +168,7 @@ export function IssueRow({
                 accessibilityRole={onPressStatus ? "button" : undefined}
                 className={cn(
                   "max-w-full shrink flex-row items-center gap-1.5",
-                  onPressStatus && "min-h-9 min-w-9 px-2 active:opacity-60",
+                  onPressStatus && "min-h-12 min-w-12 px-2 active:opacity-60",
                 )}
               >
                 <StatusIcon
@@ -210,7 +210,7 @@ export function IssueRow({
                 onPress={onPressDueDate}
                 accessibilityRole="button"
                 accessibilityLabel={dueLabel ? `${t("attr.dueDate")}: ${dueLabel}` : t("attr.dueDate")}
-                className="flex-row items-center gap-0.5 min-h-9 rounded-full px-2 active:opacity-60"
+                className="flex-row items-center gap-0.5 min-h-12 min-w-12 justify-center rounded-full px-2 active:opacity-60"
               >
                 <Ionicons
                   name="calendar-outline"
@@ -256,7 +256,7 @@ export function IssueRow({
                     ? t("profileCard.openAria", { name })
                     : t("profileCard.title");
                 })()}
-                className={onPressAssignee ? "size-9 items-center justify-center rounded-full active:bg-secondary" : undefined}
+                className={onPressAssignee ? "size-12 items-center justify-center rounded-full active:bg-secondary" : undefined}
               >
                 <ActorAvatar
                   type={issue.assignee_type}
@@ -272,7 +272,7 @@ export function IssueRow({
                 onPress={onPressAssignee}
                 accessibilityRole="button"
                 accessibilityLabel={t("attr.assignee")}
-                className="size-9 items-center justify-center rounded-full active:bg-secondary"
+                className="size-12 items-center justify-center rounded-full active:bg-secondary"
               >
                 <View className="size-5 items-center justify-center rounded-full border border-dashed border-muted-foreground/40">
                   <Ionicons

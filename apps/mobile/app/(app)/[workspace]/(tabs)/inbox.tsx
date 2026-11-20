@@ -9,6 +9,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { InboxItem } from "@multica/core/types";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -641,27 +642,16 @@ export default function Inbox() {
           // Transient: the fallback effect flips to the main list as soon as
           // the (non-loading, non-error, unfiltered) archive is confirmed
           // empty.
-          <InboxEmpty
-            iconColor={palette.mutedForeground}
-            titleText={t("inbox.archivedEmpty")}
-          />
+          <EmptyState icon="archive-outline" title={t("inbox.archivedEmpty")} className="flex-1" />
         ) : emptyReason === "filtered" ? (
           // Deliberately NOT the empty-archive copy: nothing is missing, the
           // selection is just narrow. Wording says which, and the way out is
           // one press rather than backing out of the archive.
-          <View className="flex-1 items-center justify-center px-8 gap-3">
-            <Ionicons
-              name="filter-outline"
-              size={42}
-              color={palette.mutedForeground}
-            />
-            <Text className="text-title-sm font-medium text-foreground text-center">
-              {t("inbox.archivedFilterEmpty")}
-            </Text>
+          <EmptyState icon="filter-outline" title={t("inbox.archivedFilterEmpty")} className="flex-1">
             <Button variant="outline" onPress={() => wsId && clearFilters(wsId)}>
               <Text>{t("inbox.archivedFiltersClear")}</Text>
             </Button>
-          </View>
+          </EmptyState>
         ) : (
           <FlatList
             data={archivedData}
@@ -801,24 +791,17 @@ export default function Inbox() {
             // narrow enough to hide all 339 groups. Web draws the same
             // distinction (`inbox-page.tsx:602-617`), and the way out is one
             // press rather than clearing four dimensions by hand.
-            <View className="flex-1 items-center justify-center px-8 gap-3">
-              <Ionicons
-                name="filter-outline"
-                size={42}
-                color={palette.mutedForeground}
-              />
-              <Text className="text-title-sm font-medium text-foreground text-center">
-                {t("inbox.filterEmpty")}
-              </Text>
+            <EmptyState icon="filter-outline" title={t("inbox.filterEmpty")} className="flex-1">
               <Button variant="outline" onPress={() => wsId && clearFilters(wsId)}>
                 <Text>{t("inbox.archivedFiltersClear")}</Text>
               </Button>
-            </View>
+            </EmptyState>
           ) : (
-            <InboxEmpty
-              iconColor={palette.mutedForeground}
-              titleText={t("inbox.zero")}
-              subtitleText={t("inbox.emptySubtitle")}
+            <EmptyState
+              icon="mail-open-outline"
+              title={t("inbox.zero")}
+              description={t("inbox.emptySubtitle")}
+              className="flex-1"
             />
           )}
           {/* The archive entry is shown under BOTH empty states, matching
@@ -872,30 +855,6 @@ function InboxLoading() {
           </View>
         </View>
       ))}
-    </View>
-  );
-}
-
-function InboxEmpty({
-  iconColor,
-  titleText,
-  subtitleText,
-}: {
-  iconColor: string;
-  titleText: string;
-  subtitleText?: string;
-}) {
-  return (
-    <View className="flex-1 items-center justify-center px-8 gap-3">
-      <Ionicons name="mail-open-outline" size={42} color={iconColor} />
-      <Text className="text-title-sm font-medium text-foreground text-center">
-        {titleText}
-      </Text>
-      {subtitleText ? (
-        <Text className="text-body text-muted-foreground text-center">
-          {subtitleText}
-        </Text>
-      ) : null}
     </View>
   );
 }

@@ -19,6 +19,7 @@ import { Pressable, ScrollView, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { Issue, IssuePriority, IssueStatus, WorkingAgentSummary } from "@multica/core/types";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { ActorAvatar } from "@/components/ui/actor-avatar";
@@ -715,10 +716,6 @@ export function IssueSectionHeader({
 
 export function SurfaceEmptyState({ message }: { message: string }) {
   return (
-    <View className="flex-1 items-center justify-center px-6">
-      <Text className="text-body text-muted-foreground text-center">
-        {message}
-      </Text>
-    </View>
+    <EmptyState icon="list-outline" title={message} className="flex-1" />
   );
 }
