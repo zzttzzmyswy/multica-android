@@ -17,7 +17,6 @@ import { useState } from "react";
 import { ActivityIndicator, Alert, Image, Linking, ScrollView, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Constants from "expo-constants";
-import { File } from "expo-file-system";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -34,7 +33,7 @@ import { UPDATE_STATE_KEYS, resolveUpdateState } from "@/lib/about-update-state"
 import {
   APK_MIME_TYPE,
   apkCacheFilename,
-  installApkFile,
+  installDownloadedUpdate,
   openUnknownAppSourcesSettings,
   resolveDeviceAbi,
 } from "@/lib/install-update";
@@ -123,9 +122,7 @@ export default function AboutPage() {
         mimeType: APK_MIME_TYPE,
         source: { kind: "update", name: release.tag_name },
         authenticated: false,
-        onCompleted: async (local) => {
-          await installApkFile(new File(local.uri));
-        },
+        onCompleted: installDownloadedUpdate,
       });
       const outcome = await done;
       if (outcome.status === "failed") {

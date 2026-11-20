@@ -18,7 +18,7 @@ import { ActorAvatar } from "@/components/ui/actor-avatar";
 import { cn } from "@/lib/utils";
 import { isAgentRuntimeBound } from "@/lib/is-agent-runtime-bound";
 import { useTranslation } from "@/lib/i18n/react";
-import { useThemePalette } from "@/lib/appearance-a11y-runtime";
+import { useReducedMotion, useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 interface Props {
   visible: boolean;
@@ -35,6 +35,7 @@ export function AgentPickerSheet({
   onPick,
   onClose,
 }: Props) {
+  const reduceMotion = useReducedMotion();
   const { t } = useTranslation();
   const palette = useThemePalette();
   const needsRuntime = t("picker.needsRuntime");
@@ -43,7 +44,7 @@ export function AgentPickerSheet({
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType={reduceMotion ? "none" : "fade"}
       onRequestClose={onClose}
     >
       <View className="flex-1 items-center justify-center px-4">

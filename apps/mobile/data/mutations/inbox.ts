@@ -28,34 +28,56 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { InboxItem } from "@multica/core/types";
 import { api } from "@/data/api";
-import { inboxKeys, patchArchivedInboxCaches } from "@/data/queries/inbox";
+import { inboxKeys } from "@/data/queries/inbox";
 import { invalidateInboxSummary } from "@/data/realtime/inbox-ws-updaters";
 import { useWorkspaceStore } from "@/data/workspace-store";
-import { WRITE_FAILURE_TITLE_KEY } from "@/lib/write-failure";
+import {
+  acquireInboxWrite,
+  patchInboxFields,
+  resolveInboxIssue,
+  rollbackInboxFields,
+} from "./inbox-optimistic";
+import {
+  WRITE_FAILURE_TITLE_KEY,
+  WRITE_FAILURE_CONFLICT_KEY,
+  WRITE_FAILURE_CONFLICT_CODE_KEY,
+} from "@/lib/write-failure";
+
+const pendingFeedback = {
+  [WRITE_FAILURE_CONFLICT_KEY]: "inbox.actionPending",
+  [WRITE_FAILURE_CONFLICT_CODE_KEY]: "inbox_action_pending",
+};
 
 export function useMarkInboxRead() {
   const qc = useQueryClient();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   return useMutation({
-    meta: { [WRITE_FAILURE_TITLE_KEY]: "inbox.markReadFailed" },
+    meta: { ...pendingFeedback, [WRITE_FAILURE_TITLE_KEY]: "inbox.markReadFailed" },
     mutationFn: (id: string) => api.markInboxRead(id),
     onMutate: async (id) => {
       const key = inboxKeys.list(wsId);
-      // Synchronous patch FIRST — see the file-level doc comment for why.
-      qc.setQueryData<InboxItem[]>(key, (old) =>
-        old?.map((item) => (item.id === id ? { ...item, read: true } : item)),
-      );
-      // Then the standard cancel + snapshot dance for rollback.
-      await qc.cancelQueries({ queryKey: key });
-      const prev = qc.getQueryData<InboxItem[]>(key);
-      return { prev, key };
+      const release = acquireInboxWrite(qc, wsId, [`read:${id}`]);
+      // Capture before the synchronous navigation-critical read flip.
+      const undo = patchInboxFields(qc, [key], "read", true, (item) => item.id === id);
+      try {
+        await qc.cancelQueries({ queryKey: key }, { revert: false });
+        return { undo, release };
+      } catch (error) {
+        rollbackInboxFields(qc, undo);
+        release();
+        throw error;
+      }
     },
-    onError: (_err, _id, ctx) => {
-      if (ctx?.prev) qc.setQueryData(ctx.key, ctx.prev);
-    },
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: inboxKeys.list(wsId) });
+    onError: (_err, _id, ctx) => rollbackInboxFields(qc, ctx?.undo),
+    onSettled: async (_data, _error, _variables, ctx) => {
+      if (!ctx) return;
+      try {
+        // A failed refresh must not turn a successful write into a rollback.
+        await qc.invalidateQueries({ queryKey: inboxKeys.list(wsId) }).catch(() => undefined);
+      } finally {
+        ctx.release();
+      }
     },
   });
 }
@@ -74,29 +96,34 @@ export function useMarkInboxUnread() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   return useMutation({
-    meta: { [WRITE_FAILURE_TITLE_KEY]: "inbox.markUnreadFailed" },
+    meta: { ...pendingFeedback, [WRITE_FAILURE_TITLE_KEY]: "inbox.markUnreadFailed" },
     mutationFn: (id: string) => api.markInboxUnread(id),
     onMutate: async (id) => {
       const key = inboxKeys.list(wsId);
-      // Synchronous patch FIRST — same load-bearing ordering as mark-read
-      // (see the file-level doc comment): the flipped read state must be
-      // visible to the very next paint of the row.
-      qc.setQueryData<InboxItem[]>(key, (old) =>
-        markInboxUnreadPatch(old, id),
-      );
-      await qc.cancelQueries({ queryKey: key });
-      const prev = qc.getQueryData<InboxItem[]>(key);
-      return { prev, key };
+      const release = acquireInboxWrite(qc, wsId, [`read:${id}`]);
+      const undo = patchInboxFields(qc, [key], "read", false, (item) => item.id === id);
+      try {
+        await qc.cancelQueries({ queryKey: key }, { revert: false });
+        return { undo, release };
+      } catch (error) {
+        rollbackInboxFields(qc, undo);
+        release();
+        throw error;
+      }
     },
-    onError: (_err, _id, ctx) => {
-      if (ctx?.prev) qc.setQueryData(ctx.key, ctx.prev);
-    },
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: inboxKeys.list(wsId) });
-      // The switcher dot must light again when this workspace goes back to
-      // having unread items — that count lives on the server. Mirrors web's
-      // useMarkInboxUnread (packages/core/inbox/mutations.ts:71).
-      invalidateInboxSummary(qc);
+    onError: (_err, _id, ctx) => rollbackInboxFields(qc, ctx?.undo),
+    onSettled: async (_data, _error, _variables, ctx) => {
+      if (!ctx) return;
+      try {
+        // A failed refresh must not turn a successful write into a rollback.
+        await qc.invalidateQueries({ queryKey: inboxKeys.list(wsId) }).catch(() => undefined);
+        // The switcher dot must light again when this workspace goes back to
+        // having unread items — that count lives on the server. Mirrors web's
+        // useMarkInboxUnread (packages/core/inbox/mutations.ts:71).
+        invalidateInboxSummary(qc);
+      } finally {
+        ctx.release();
+      }
     },
   });
 }
@@ -106,30 +133,38 @@ export function useArchiveInbox() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   return useMutation({
-    meta: { [WRITE_FAILURE_TITLE_KEY]: "inbox.archiveFailed" },
+    meta: { ...pendingFeedback, [WRITE_FAILURE_TITLE_KEY]: "inbox.archiveFailed" },
     mutationFn: (id: string) => api.archiveInbox(id),
     onMutate: async (id) => {
-      const key = inboxKeys.list(wsId);
-      await qc.cancelQueries({ queryKey: key });
-      const prev = qc.getQueryData<InboxItem[]>(key);
-      qc.setQueryData<InboxItem[]>(key, (old) => archiveInboxPatch(old, id));
-      // The archived side needs no optimistic insert: the row arrives when
-      // the invalidate below refetches page one. Inserting it locally would
-      // have to guess its position in a cursor-ordered, server-filtered list
-      // — and the list is filtered server-side, so a row that does not match
-      // the active selection must not appear at all.
-      return { prev, key };
+      // Resolve once across all pages BEFORE patching any page: siblings can
+      // live on a page that does not contain the tapped notification.
+      const issueId = resolveInboxIssue(qc, wsId, id);
+      const release = acquireInboxWrite(qc, wsId, [`archived:${issueId ? `issue:${issueId}` : `item:${id}`}`]);
+      try {
+        await qc.cancelQueries({ queryKey: inboxKeys.list(wsId) });
+        const keys = [inboxKeys.list(wsId)];
+        const undo = patchInboxFields(qc, keys, "archived", true,
+          (item) => item.id === id || (!!issueId && item.issue_id === issueId));
+        // Opposite bucket is invalidated, never optimistically inserted into.
+        return { undo, release };
+      } catch (error) {
+        release();
+        throw error;
+      }
     },
-    onError: (_err, _id, ctx) => {
-      if (ctx?.prev) qc.setQueryData(ctx.key, ctx.prev);
-    },
-    onSettled: () => {
-      // Both lists: the item just moved from the main inbox into the archive,
-      // and a sibling of the same issue could resurface in the archived view
-      // after the refetch (web invalidates all inbox keys too). The prefix
-      // reaches the paged archive and its facets, so the counts follow the
-      // rows rather than lagging a reload behind.
-      qc.invalidateQueries({ queryKey: inboxKeys.all(wsId) });
+    onError: (_err, _id, ctx) => rollbackInboxFields(qc, ctx?.undo),
+    onSettled: async (_data, _error, _variables, ctx) => {
+      if (!ctx) return;
+      try {
+        // Both lists: the item just moved from the main inbox into the archive,
+        // and a sibling of the same issue could resurface in the archived view
+        // after the refetch (web invalidates all inbox keys too). The prefix
+        // reaches the paged archive and its facets, so the counts follow the
+        // rows rather than lagging a reload behind.
+        await qc.invalidateQueries({ queryKey: inboxKeys.all(wsId) }).catch(() => undefined);
+      } finally {
+        ctx.release();
+      }
     },
   });
 }
@@ -161,8 +196,8 @@ export function archiveInboxPatch(
  * Mirrors web's useUnarchiveInbox (packages/core/inbox/mutations.ts): the
  * optimistic patch targets the ARCHIVED cache only — flipping `archived:false`
  * drops the row out of the archived view at once (the dedup helper filters on
- * it), the user stays put on the archive view, and rollback is a single
- * snapshot restore. The main list is left to onSettled: its contents after a
+ * it), the user stays put, and rollback restores only this write's changed
+ * archived flags. The main list is left to onSettled: its contents after a
  * restore are the server's call (which sibling rows come back, their read
  * state, their order), so it is invalidated instead of reconstructed
  * client-side. The server preserves the row's read state verbatim.
@@ -172,36 +207,40 @@ export function useUnarchiveInbox() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   return useMutation({
-    meta: { [WRITE_FAILURE_TITLE_KEY]: "inbox.unarchiveFailed" },
+    meta: { ...pendingFeedback, [WRITE_FAILURE_TITLE_KEY]: "inbox.unarchiveFailed" },
     mutationFn: (id: string) => api.unarchiveInbox(id),
     onMutate: async (id) => {
-      // Cancel by the archived PREFIX, not the single legacy key: the archive
-      // view reads a paged infinite query, and a page still in flight would
-      // otherwise land after the optimistic patch and put the restored row
-      // back on screen.
-      await qc.cancelQueries({ queryKey: inboxKeys.archived(wsId) });
-      // Patches every archived cache under the prefix — the legacy array and
-      // the paged entries for every filter selection the user has visited —
-      // so the restored row leaves the archive whichever view is showing.
-      const prev = patchArchivedInboxCaches(qc, wsId, (items) =>
-        unarchiveInboxPatch(items, id),
-      );
-      return { prev };
-    },
-    onError: (_err, _id, ctx) => {
-      for (const [key, data] of ctx?.prev ?? []) {
-        qc.setQueryData(key, data);
+      // Resolve once across all pages BEFORE patching any page: siblings can
+      // live on a page that does not contain the tapped notification.
+      const issueId = resolveInboxIssue(qc, wsId, id);
+      const release = acquireInboxWrite(qc, wsId, [`archived:${issueId ? `issue:${issueId}` : `item:${id}`}`]);
+      try {
+        await qc.cancelQueries({ queryKey: inboxKeys.archived(wsId) });
+        const keys = qc.getQueriesData({ queryKey: inboxKeys.archived(wsId) }).map(([key]) => key);
+        const undo = patchInboxFields(qc, keys, "archived", false,
+          (item) => item.id === id || (!!issueId && item.issue_id === issueId));
+        // Opposite bucket is invalidated, never optimistically inserted into.
+        return { undo, release };
+      } catch (error) {
+        release();
+        throw error;
       }
     },
-    onSettled: () => {
-      // Both lists: the item just moved from the archive back into the main
-      // inbox, and the unread tab badge rises again when it was archived
-      // unread (that badge derives from the main list cache).
-      qc.invalidateQueries({ queryKey: inboxKeys.all(wsId) });
-      // …and so does the cross-workspace switcher dot, which is a server-side
-      // count. Mirrors web's useUnarchiveInbox
-      // (packages/core/inbox/mutations.ts:145).
-      invalidateInboxSummary(qc);
+    onError: (_err, _id, ctx) => rollbackInboxFields(qc, ctx?.undo),
+    onSettled: async (_data, _error, _variables, ctx) => {
+      if (!ctx) return;
+      try {
+        // Both lists: the item just moved from the archive back into the main
+        // inbox, and the unread tab badge rises again when it was archived
+        // unread (that badge derives from the main list cache).
+        await qc.invalidateQueries({ queryKey: inboxKeys.all(wsId) }).catch(() => undefined);
+        // …and so does the cross-workspace switcher dot, which is a server-side
+        // count. Mirrors web's useUnarchiveInbox
+        // (packages/core/inbox/mutations.ts:145).
+        invalidateInboxSummary(qc);
+      } finally {
+        ctx.release();
+      }
     },
   });
 }
@@ -246,24 +285,30 @@ export function useMarkAllInboxRead() {
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   return useMutation({
-    meta: { [WRITE_FAILURE_TITLE_KEY]: "inbox.markReadFailed" },
+    meta: { ...pendingFeedback, [WRITE_FAILURE_TITLE_KEY]: "inbox.markReadFailed" },
     mutationFn: () => api.markAllInboxRead(),
     onMutate: async () => {
       const key = inboxKeys.list(wsId);
-      await qc.cancelQueries({ queryKey: key });
-      const prev = qc.getQueryData<InboxItem[]>(key);
-      qc.setQueryData<InboxItem[]>(key, (old) =>
-        old?.map((item) =>
-          !item.archived ? { ...item, read: true } : item,
-        ),
-      );
-      return { prev, key };
+      const ids = new Set((qc.getQueryData<InboxItem[]>(key) ?? []).filter((item) => !item.archived).map((item) => item.id));
+      const release = acquireInboxWrite(qc, wsId, [...ids].map((id) => `read:${id}`));
+      try {
+        await qc.cancelQueries({ queryKey: key });
+        const undo = patchInboxFields(qc, [key], "read", true, (item) => ids.has(item.id) && !item.archived);
+        return { undo, release };
+      } catch (error) {
+        release();
+        throw error;
+      }
     },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.prev) qc.setQueryData(ctx.key, ctx.prev);
-    },
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: inboxKeys.list(wsId) });
+    onError: (_err, _vars, ctx) => rollbackInboxFields(qc, ctx?.undo),
+    onSettled: async (_data, _error, _variables, ctx) => {
+      if (!ctx) return;
+      try {
+        // A failed refresh must not turn a successful write into a rollback.
+        await qc.invalidateQueries({ queryKey: inboxKeys.list(wsId) }).catch(() => undefined);
+      } finally {
+        ctx.release();
+      }
     },
   });
 }

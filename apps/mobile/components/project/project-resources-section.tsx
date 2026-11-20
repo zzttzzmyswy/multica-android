@@ -54,6 +54,7 @@ import {
   worktreeUnsupportedInfo,
   type WorktreeUnsupportedInfo,
 } from "@/lib/project-resources";
+import { projectResourceState } from "@/lib/project-resource-state";
 import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 interface Props {
@@ -64,9 +65,13 @@ interface Props {
 export function ProjectResourcesSection({ projectId, onAdd }: Props) {
   const { t } = useTranslation();
   const wsId = useWorkspaceStore((s) => s.currentWorkspaceId);
-  const { data: resources, isLoading } = useQuery(
+  const { data: resources, isError, isFetching, refetch } = useQuery(
     projectResourcesOptions(wsId, projectId),
   );
+  // Same typed resources and row actions as the web sidebar, but mobile keeps
+  // failure recovery beside the list instead of collapsing an unanswered read
+  // into the empty state. React Query retains the last successful rows.
+  const state = projectResourceState({ resources, isError });
   const remove = useDeleteProjectResource(projectId);
   /** The local directory whose mode sheet is open, if any. Held as the whole
    *  resource (not just its id) because the sheet needs the current mode and
@@ -126,27 +131,50 @@ export function ProjectResourcesSection({ projectId, onAdd }: Props) {
   );
 
   return (
-    <View>
-      <View className="flex-row items-center justify-between px-4 py-2 bg-background">
-        <Text className="text-caption uppercase tracking-wider text-muted-foreground font-medium">
+    <View className="mx-4 mt-4 overflow-hidden rounded-2xl border border-border bg-background">
+      <View className="flex-row items-center justify-between gap-3 px-4 py-2 bg-secondary/30">
+        <Text accessibilityRole="header" className="flex-1 text-label text-muted-foreground font-semibold">
           {t("resource.sectionTitle")}
         </Text>
-        <Pressable onPress={onAdd} className="px-2 py-1 active:bg-secondary rounded">
-          <Text className="text-caption text-brand">{t("resource.add")}</Text>
+        <Pressable
+          onPress={onAdd}
+          accessibilityRole="button"
+          accessibilityLabel={t("resource.add")}
+          className="min-h-11 items-center justify-center px-3 active:bg-secondary rounded-lg"
+        >
+          <Text className="text-label font-medium text-brand">{t("resource.add")}</Text>
         </Pressable>
       </View>
-      {isLoading ? (
-        <View className="px-4 py-4 items-center">
+      {state === "error" || state === "stale" ? (
+        <View className="gap-3 border-t border-border px-4 py-4">
+          <Text accessibilityRole="alert" accessibilityLiveRegion="polite" className="text-body text-muted-foreground">
+            {t(state === "error" ? "resource.loadFailed" : "resource.refreshFailed")}
+          </Text>
+          <Button
+            variant="outline"
+            onPress={() => void refetch()}
+            disabled={isFetching}
+            accessibilityLabel={t("common.retry")}
+            accessibilityState={{ disabled: isFetching, busy: isFetching }}
+            className="min-h-11 self-start"
+          >
+            {isFetching ? <ActivityIndicator size="small" /> : null}
+            <Text>{t("common.retry")}</Text>
+          </Button>
+        </View>
+      ) : null}
+      {state === "loading" ? (
+        <View className="px-4 py-6 items-center" accessibilityState={{ busy: true }}>
           <ActivityIndicator size="small" />
         </View>
-      ) : !resources || resources.length === 0 ? (
-        <View className="px-4 py-3">
-          <Text className="text-body text-muted-foreground/70">
+      ) : state === "empty" ? (
+        <View className="px-4 py-5 border-t border-border">
+          <Text className="text-body text-muted-foreground">
             {t("project.noResources")}
           </Text>
         </View>
       ) : (
-        resources.map((resource) => (
+        resources?.map((resource) => (
           <ResourceRow
             key={resource.id}
             resource={resource}
@@ -194,7 +222,7 @@ function ResourceRow({
       delayLongPress={400}
       accessibilityRole="button"
       accessibilityLabel={resource.label ?? subtitle}
-      className="flex-row items-center gap-3 px-4 py-2.5 active:bg-secondary border-t border-border"
+      className="flex-row items-center gap-3 px-4 py-3.5 min-h-14 active:bg-secondary border-t border-border"
     >
       <Ionicons
         name={iconFor(resource.resource_type)}
@@ -202,7 +230,7 @@ function ResourceRow({
         color={palette.mutedForeground}
       />
       <View className="flex-1 min-w-0">
-        <Text className="text-body text-foreground" numberOfLines={1}>
+        <Text className="text-body font-medium text-foreground" numberOfLines={2}>
           {resource.label ?? subtitle}
         </Text>
         {resource.label ? (
@@ -210,28 +238,28 @@ function ResourceRow({
             {subtitle}
           </Text>
         ) : null}
-      </View>
-      {local ? (
-        <View
-          className={
-            executionModeOf(local) === "worktree"
-              ? "rounded-full border border-brand/40 bg-brand/10 px-2 py-0.5"
-              : "rounded-full border border-border bg-secondary/60 px-2 py-0.5"
-          }
-        >
-          <Text
+        {local ? (
+          <View
             className={
               executionModeOf(local) === "worktree"
-                ? "text-micro font-medium text-brand"
-                : "text-micro text-muted-foreground"
+                ? "mt-2 self-start rounded-full border border-brand/40 bg-brand/10 px-2 py-0.5"
+                : "mt-2 self-start rounded-full border border-border bg-secondary/60 px-2 py-0.5"
             }
           >
-            {executionModeOf(local) === "worktree"
-              ? t("resource.modeBadgeWorktree")
-              : t("resource.modeBadgeInPlace")}
-          </Text>
-        </View>
-      ) : null}
+            <Text
+              className={
+                executionModeOf(local) === "worktree"
+                  ? "text-micro font-medium text-brand"
+                  : "text-micro text-muted-foreground"
+              }
+            >
+              {executionModeOf(local) === "worktree"
+                ? t("resource.modeBadgeWorktree")
+                : t("resource.modeBadgeInPlace")}
+            </Text>
+          </View>
+        ) : null}
+      </View>
     </Pressable>
   );
 }

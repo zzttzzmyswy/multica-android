@@ -37,12 +37,19 @@ export interface DownloadTask {
   progress: number;
   /** Total bytes when the server sent Content-Length, else null. */
   totalBytes: number | null;
+  /** Bytes received even without a known total; optional in old history. */
+  bytesWritten?: number;
   error?: string | null;
   /** Epoch ms when the task was registered. */
   createdAt: number;
   completedAt?: number | null;
   /** `file://` URI of the finished download (terminal + completed). */
   localUri?: string | null;
+}
+
+/** Isolated cache directory, preserving the filename presented to Android. */
+export function downloadCacheDirectoryName(id: string): string {
+  return `managed-download-${id}`;
 }
 
 /** History cap for the tasks list (spec MYS-336 §「历史裁剪上限」). */
@@ -119,16 +126,22 @@ export function downloadReducer(
       ];
     }
     case "progress": {
-      return tasks.map((t) =>
-        t.id !== action.id || t.status !== "downloading"
-          ? t
-          : {
-              ...t,
-              progress: normalizeProgress(action.written, action.expected, t.progress),
-              totalBytes:
-                action.expected > 0 ? action.expected : t.totalBytes,
-            },
-      );
+      return tasks.map((t) => {
+        if (t.id !== action.id || t.status !== "downloading") return t;
+        const bytesWritten = Math.max(
+          t.bytesWritten ?? 0,
+          Number.isFinite(action.written) ? action.written : 0,
+        );
+        const totalBytes = Number.isFinite(action.expected) && action.expected > 0
+          ? action.expected
+          : t.totalBytes;
+        return {
+          ...t,
+          bytesWritten,
+          totalBytes,
+          progress: normalizeProgress(bytesWritten, totalBytes ?? -1, t.progress),
+        };
+      });
     }
     case "complete": {
       return tasks.map((t) =>

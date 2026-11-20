@@ -97,6 +97,11 @@ export async function installApkFile(file: File): Promise<void> {
   }
 }
 
+/** Shared by About and Downloads retry so one APK transfer gets one installer handoff. */
+export function installDownloadedUpdate(local: { uri: string }): Promise<void> {
+  return installApkFile(new File(local.uri));
+}
+
 /**
  * Jump to this app's "install unknown apps" toggle. Called when install is
  * blocked because the user hasn't allowed APK installs from this source.

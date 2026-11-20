@@ -31,17 +31,17 @@ export function DemoChatCard({
   return (
     <Card className="gap-3">
       {/* User question — right-aligned, same shape as a real sent message. */}
-      <View className="self-end max-w-[80%] gap-1 rounded-2xl border-2 border-transparent bg-muted px-3.5 py-2">
+      <View className="self-end max-w-[88%] gap-1 rounded-2xl border-2 border-transparent bg-muted px-3.5 py-2">
         <Text className="text-body text-foreground">{askText}</Text>
-        <Text className="self-end text-micro text-muted-foreground/70">{askTime}</Text>
+        <Text className="self-end text-micro text-muted-foreground">{askTime}</Text>
       </View>
 
       {/* Agent reply — left-aligned with the author row above the bubble. */}
-      <View className="self-start max-w-[85%] gap-1.5">
-        <View className="flex-row items-center gap-1.5">
+      <View className="self-start max-w-[92%] gap-1.5">
+        <View className="flex-row flex-wrap items-center gap-x-1.5 gap-y-1">
           <MockAvatar kind="agent" initials={agentName[0] ?? ""} size={20} />
           <Text className="text-caption font-medium text-foreground">{agentName}</Text>
-          <Text className="text-micro text-muted-foreground/60">{replyTime}</Text>
+          <Text className="text-micro text-muted-foreground">{replyTime}</Text>
         </View>
         <View className="rounded-2xl border border-border bg-background px-3.5 py-2">
           <Text className="text-body leading-relaxed text-foreground">{replyText}</Text>

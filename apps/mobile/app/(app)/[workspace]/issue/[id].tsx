@@ -81,10 +81,13 @@ import { resolveCatalogState } from "@/lib/catalog-state";
 import { showMarkDuplicateAction } from "@/lib/issue-duplicates";
 import { useIntlLocale, useTranslation } from "@/lib/i18n/react";
 
-/** Labels for header actions that the bar folded into the overflow menu.
- *  Each is the same string its toolbar button announces, so a reader who
- *  looked for the button recognises the entry. */
-type FoldableActionKey = "archive" | "threadNav" | "find";
+/** Labels for header controls that moved into the overflow menu. */
+type FoldableActionKey =
+  | "archive"
+  | "threadNav"
+  | "find"
+  | "agentBadge"
+  | "wakeupBadge";
 
 const FOLDED_ACTION_LABEL: Record<
   FoldableActionKey,
@@ -95,6 +98,8 @@ const FOLDED_ACTION_LABEL: Record<
 > = {
   threadNav: (t) => t("threadNav.open"),
   find: (t) => t("detail.find.placeholder"),
+  agentBadge: (t) => t("runsTimeline.title"),
+  wakeupBadge: (t) => t("wakeups.wait.open"),
   archive: (t, archiveMode) =>
     t(
       archiveMode === "unarchive"
@@ -103,12 +108,15 @@ const FOLDED_ACTION_LABEL: Record<
     ),
 };
 
-/** Narrow a plan entry to the foldable ones — `search` / the badges / the
- *  overflow button are pinned by `planHeaderActions` and never appear in
- *  `folded`, so this is total in practice; the guard keeps it honest if the
- *  policy ever changes. */
+/** Only actions with an overflow equivalent may fold. */
 function isFoldableAction(key: HeaderActionKey): key is FoldableActionKey {
-  return key === "archive" || key === "threadNav" || key === "find";
+  return (
+    key === "archive" ||
+    key === "threadNav" ||
+    key === "find" ||
+    key === "agentBadge" ||
+    key === "wakeupBadge"
+  );
 }
 
 export default function IssueDetail() {
@@ -387,7 +395,7 @@ export default function IssueDetail() {
   // 411dp phone and it rendered as "MYS-…". `planHeaderActions` decides what
   // the bar can afford and folds the rest into the overflow menu; the two
   // badges report their own presence so nothing invisible reserves width.
-  const { width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth, fontScale } = useWindowDimensions();
   const agentBadgePresent = useIssueAgentBadgePresent(id);
   const wakeupBadgePresent = useIssueWakeupBadgePresent(id);
   const headerActions = useMemo(() => {
@@ -397,9 +405,10 @@ export default function IssueDetail() {
     if (fromInbox && inboxItemId && archiveMode) present.push("archive");
     if (agentBadgePresent) present.push("agentBadge");
     if (wakeupBadgePresent) present.push("wakeupBadge");
-    return planHeaderActions(windowWidth, present);
+    return planHeaderActions(windowWidth, present, fontScale);
   }, [
     windowWidth,
+    fontScale,
     fromInbox,
     inboxItemId,
     archiveMode,
@@ -519,6 +528,14 @@ export default function IssueDetail() {
           setThreadNavOpen(true);
         } else if (kind === "find") {
           setFindOpen(true);
+        } else if (kind === "agentBadge" || kind === "wakeupBadge") {
+          router.push({
+            pathname:
+              kind === "agentBadge"
+                ? "/[workspace]/issue/[id]/runs"
+                : "/[workspace]/issue/[id]/wakeups",
+            params: { workspace: wsSlug, id: issue.id },
+          });
         } else if (kind === "archive" || kind === "unarchive") {
           onToggleInboxArchive();
         } else if (kind === "pin") {
@@ -659,7 +676,9 @@ export default function IssueDetail() {
                   {/* Ambient agent-working badge — renders null when no
                    *  active tasks, so it doesn't crowd the header in the
                    *  common case. See agent-header-badge.tsx. */}
-                  <AgentHeaderBadge issueId={id} />
+                  {headerActions.visible.includes("agentBadge") ? (
+                    <AgentHeaderBadge issueId={id} />
+                  ) : null}
                   {headerActions.visible.includes("wakeupBadge") ? (
                     <IssueWakeupHeaderBadge issueId={id} />
                   ) : null}

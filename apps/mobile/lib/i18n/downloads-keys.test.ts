@@ -63,6 +63,12 @@ describe("downloads i18n", () => {
     }
   });
 
+  it("interpolates the received size in both locales", () => {
+    expect(mod.translate("downloads.receivedBytes", { size: "512 KB" })).toBe("512 KB received");
+    mod.setLocale("zh");
+    expect(mod.translate("downloads.receivedBytes", { size: "512 KB" })).toBe("已接收 512 KB");
+  });
+
   it("source label keys feed the download-manager source renderer", () => {
     mod.setLocale("zh");
     expect(mod.translate("downloads.source.chat")).toBe("聊天");

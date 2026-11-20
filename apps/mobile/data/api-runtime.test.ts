@@ -7,8 +7,24 @@ process.env.EXPO_PUBLIC_API_URL = "https://api.test";
 
 vi.mock("expo-file-system", () => ({
   File: class {
-    uri = "file:///mock";
+    uri: string;
     exists = false;
+    constructor(parent: { uri: string }, name: string) {
+      this.uri = `${parent.uri}/${name}`;
+    }
+  },
+  Directory: class {
+    uri: string;
+    exists = false;
+    constructor(parent: { uri: string }, name: string) {
+      this.uri = `${parent.uri}/${name}`;
+    }
+    create() {
+      this.exists = true;
+    }
+    delete() {
+      this.exists = false;
+    }
   },
   Paths: {
     document: { uri: "file:///doc" },
@@ -230,6 +246,23 @@ describe("createDownloadTask", () => {
       expect.any(Object),
       expect.any(Function),
     );
+  });
+
+  it("uses isolated cache paths for same-name managed files without changing their basename", async () => {
+    const m = await mockResumableOnce({ uri: "file:///cache/mock/x.bin", status: 200 });
+    m.mockClear();
+    const path = "/api/attachments/abc/download";
+    const first = api.createDownloadTask(path, "x.bin", undefined, { cacheKey: "first" });
+    const second = api.createDownloadTask(path, "x.bin", undefined, {
+      cacheKey: "second",
+      authenticated: false,
+    });
+    await Promise.all([first?.done, second?.done]);
+    expect(m.mock.calls.map(([, destination]) => destination)).toEqual([
+      "file:///cache/managed-download-first/x.bin",
+      "file:///cache/managed-download-second/x.bin",
+    ]);
+    expect(m.mock.calls[1][2]).toEqual({ headers: {} });
   });
 
   it("resolves the saved uri for 2xx responses", async () => {

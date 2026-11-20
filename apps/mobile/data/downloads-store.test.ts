@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { installDownloadedUpdate } from "@/lib/install-update";
 
 // ── Native-module mocks (Node vitest lane) ────────────────────────────────
 
@@ -212,6 +213,7 @@ describe("downloads-store lifecycle", () => {
     resolveDone({ uri: "file:///doc/x.pdf", name: "x.pdf" });
     await flush();
     expect(useDownloadsStore.getState().tasks[0].status).toBe("cancelled");
+    expect(mockedShare).not.toHaveBeenCalled();
   });
 
   it("treats a native DownCancelled rejection as cancelled", async () => {
@@ -266,6 +268,99 @@ describe("downloads-store lifecycle", () => {
     expect(tasks[0]).toMatchObject({ status: "downloading", source: SOURCE });
     expect(tasks[0].id).not.toBe(first.id);
     expect(mockedCreate).toHaveBeenCalledTimes(2);
+  });
+
+  it("dedups two simultaneous retries and allows later retries after cancel and failure", async () => {
+    let rejectRetry!: (reason: Error) => void;
+    mockedCreate
+      .mockReturnValueOnce(handleWith(Promise.reject(new Error("first failure"))))
+      .mockReturnValueOnce(handleWith(new Promise((_, reject) => { rejectRetry = reject; })))
+      .mockReturnValueOnce(handleWith(Promise.reject(new Error("second failure"))))
+      .mockReturnValueOnce(handleWith(new Promise(() => {})));
+    const store = useDownloadsStore.getState();
+    const original = await store.downloadManaged({ url: URL, filename: "folder/x.pdf", source: SOURCE });
+    await original.done;
+    const [left, right] = await Promise.all([store.retry(original.id), store.retry(original.id)]);
+    expect(left?.id).toBe(right?.id);
+    expect(left?.done).toBe(right?.done);
+    expect(mockedCreate).toHaveBeenCalledTimes(2);
+    expect(useDownloadsStore.getState().tasks).toHaveLength(2);
+
+    await store.cancel(left!.id);
+    rejectRetry(new DownloadCancelledError());
+    expect(await left?.done).toMatchObject({ status: "cancelled" });
+    const again = await store.retry(left!.id);
+    expect(await again?.done).toMatchObject({ status: "failed", error: "second failure" });
+    const final = await store.retry(again!.id);
+    expect(final?.id).not.toBe(again?.id);
+    expect(mockedCreate).toHaveBeenCalledTimes(4);
+  });
+
+  it("shares first-time hydration and keeps both newly queued tasks", async () => {
+    const store = useDownloadsStore.getState();
+    fileStore.set("file:///doc/download-store.json", JSON.stringify([{
+      id: "history", filename: "history.txt", url: URL, source: SOURCE,
+      status: "failed", progress: 0, totalBytes: null, createdAt: 1,
+    }]));
+    mockedCreate.mockReturnValue(handleWith(new Promise(() => {})));
+    const hydrate = store.hydrate();
+    expect(store.hydrate()).toBe(hydrate);
+    const [x, y] = await Promise.all([
+      store.downloadManaged({ url: URL, filename: "x.pdf" }),
+      store.downloadManaged({ url: URL, filename: "y.pdf" }),
+    ]);
+    expect(useDownloadsStore.getState().tasks.map((task) => task.id)).toEqual([y.id, x.id, "history"]);
+  });
+
+  it("keeps auth and completion policy separate and isolates same-name cache targets", async () => {
+    const attachmentLocal = { uri: "file:///cache/attachment/x.apk", name: "x.apk" };
+    const updateLocal = { uri: "file:///cache/update/x.apk", name: "x.apk" };
+    let resolveAttachment!: (value: typeof attachmentLocal) => void;
+    let resolveUpdate!: (value: typeof updateLocal) => void;
+    mockedCreate
+      .mockReturnValueOnce(handleWith(new Promise((resolve) => { resolveAttachment = resolve; })))
+      .mockReturnValueOnce(handleWith(new Promise((resolve) => { resolveUpdate = resolve; })));
+    const store = useDownloadsStore.getState();
+    const attachment = await store.downloadManaged({ url: URL, filename: "x.apk" });
+    const onCompleted = vi.fn();
+    const update = await store.downloadManaged({
+      url: URL, filename: "x.apk", authenticated: false, onCompleted,
+    });
+    expect(update.id).not.toBe(attachment.id);
+    expect(mockedCreate.mock.calls.map((call) => call[3])).toEqual([
+      { authenticated: true, cacheKey: attachment.id },
+      { authenticated: false, cacheKey: update.id },
+    ]);
+    resolveAttachment(attachmentLocal);
+    resolveUpdate(updateLocal);
+    await Promise.all([attachment.done, update.done]);
+    expect(onCompleted).toHaveBeenCalledExactlyOnceWith(updateLocal);
+    expect(mockedShare).toHaveBeenCalledTimes(1);
+    expect(mockedShare).toHaveBeenCalledWith(attachmentLocal.uri, expect.any(Object));
+  });
+
+  it("dedups an in-flight About update and preserves a completed download on install rejection", async () => {
+    const store = useDownloadsStore.getState();
+    const source = { kind: "update", name: "v0.3.1" } as const;
+    const installer = vi.mocked(getContentUriAsync);
+    installer.mockRejectedValueOnce(new Error("blocked"));
+    let resolveUpdate!: (value: { uri: string; name: string }) => void;
+    mockedCreate
+      .mockReturnValueOnce(handleWith(Promise.reject(new Error("first failure"))))
+      .mockReturnValueOnce(handleWith(new Promise((resolve) => { resolveUpdate = resolve; })));
+    const opts = { url: URL, filename: "x.apk", source, authenticated: false, onCompleted: installDownloadedUpdate };
+    const original = await store.downloadManaged(opts);
+    await original.done;
+    const current = await store.downloadManaged(opts);
+    const retry = await store.retry(original.id);
+    expect(retry?.id).toBe(current.id);
+    expect(mockedCreate).toHaveBeenCalledTimes(2);
+    const rejection = expect(retry?.done).rejects.toThrow("blocked");
+    resolveUpdate({ uri: "file:///cache/x.apk", name: "x.apk" });
+    await rejection;
+    expect(useDownloadsStore.getState().tasks[0]).toMatchObject({ id: current.id, status: "completed" });
+    expect(mockedShare).not.toHaveBeenCalled();
+    expect(await store.retry(current.id)).toBeUndefined();
   });
 
   it("removeTask drops the row", async () => {
@@ -370,7 +465,7 @@ describe("downloads-store persistence", () => {
     const calls = mockedCreate.mock
       .calls as unknown as Array<[string, string, unknown, { authenticated: boolean } | undefined]>;
     const optsArg = calls[0][3];
-    expect(optsArg).toEqual({ authenticated: false });
+    expect(optsArg).toMatchObject({ authenticated: false, cacheKey: id });
 
     const outcome = await done;
     expect(outcome).toMatchObject({ status: "completed" });
@@ -443,7 +538,7 @@ describe("downloads-store persistence", () => {
     // The retried task skips internal auth headers again and its terminal
     // action is the system installer, not the share sheet.
     const secondOpts = mockedCreate.mock.calls[1][3] as { authenticated: boolean };
-    expect(secondOpts).toEqual({ authenticated: false });
+    expect(secondOpts).toMatchObject({ authenticated: false });
     expect(useDownloadsStore.getState().tasks[0]).toMatchObject({
       status: "completed",
       source: { kind: "update", name: "v0.3.1" },

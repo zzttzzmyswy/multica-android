@@ -31,6 +31,7 @@ import {
   type ActionSheetOptions,
   type ActionSheetCallback,
 } from "@/lib/action-sheet-core";
+import { useReducedMotion } from "@/lib/appearance-a11y-runtime";
 import { useTranslation } from "@/lib/i18n/react";
 
 export type { ActionSheetOptions, ActionSheetCallback };
@@ -57,6 +58,7 @@ export const ActionSheet: ActionSheetApi = {
 };
 
 export function ActionSheetProvider({ children }: { children: React.ReactNode }) {
+  const reduceMotion = useReducedMotion();
   const { t } = useTranslation();
   const [request, setRequest] = useState<
     { options: ActionSheetOptions; callback: ActionSheetCallback } | null
@@ -89,7 +91,7 @@ export function ActionSheetProvider({ children }: { children: React.ReactNode })
       <Modal
         transparent
         visible={request !== null}
-        animationType="fade"
+        animationType={reduceMotion ? "none" : "fade"}
         onRequestClose={() => onPress(cancelIndex)}
       >
         <View className="flex-1 justify-end">

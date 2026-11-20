@@ -99,25 +99,25 @@ export function DemoIssueCard({
             label={assignee.kind === "unassigned" ? unassignedLabel : assignee.name}
             onPress={() => setAssignee(nextAssignee(assignee))}
           />
-          <Text className="ml-auto text-caption text-muted-foreground/60">{tapHint}</Text>
+          <Text className="basis-full text-caption text-muted-foreground">{tapHint}</Text>
         </View>
 
         {/* Mini activity feed — same shape as the real issue timeline. */}
         <View className="gap-2">
           <View className="flex-row items-center gap-2">
             <MockAvatar kind={activityActorKind} initials={activityActorInitials} size={20} />
-            <Text className="flex-1 text-caption text-muted-foreground" numberOfLines={1}>
-              {activityText}
-            </Text>
-            <Text className="text-caption text-muted-foreground/60">{activityTime}</Text>
+            <View className="min-w-0 flex-1 gap-0.5">
+              <Text className="text-caption text-muted-foreground">{activityText}</Text>
+              <Text className="text-caption text-muted-foreground">{activityTime}</Text>
+            </View>
           </View>
-          <View className="ml-8 rounded-lg border border-border bg-muted/40 px-3 py-2 gap-0.5">
-            <View className="flex-row items-center gap-2">
+          <View className="ml-4 rounded-xl border border-border bg-muted/40 px-3 py-2 gap-0.5">
+            <View className="flex-row flex-wrap items-center gap-2">
               <MockAvatar kind="agent" initials="C" size={18} />
               <Text className="text-caption font-medium text-foreground">{commentActor}</Text>
-              <Text className="ml-auto text-caption text-muted-foreground/60">{commentTime}</Text>
+              <Text className="text-caption text-muted-foreground">{commentTime}</Text>
             </View>
-            <Text className="text-caption leading-relaxed text-muted-foreground" numberOfLines={2}>
+            <Text className="text-caption leading-relaxed text-muted-foreground">
               {commentText}
             </Text>
           </View>
