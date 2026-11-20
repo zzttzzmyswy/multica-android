@@ -111,7 +111,7 @@ export default function TextAppearanceScreen() {
   return (
     <ScrollView
       className="flex-1 bg-background"
-      contentContainerClassName="px-4 py-4 gap-6"
+      contentContainerClassName="gap-6 px-4 pb-8 pt-4"
     >
       <Stack.Screen options={{ title: t("settings.appearance.typeTitle") }} />
 
@@ -121,7 +121,7 @@ export default function TextAppearanceScreen() {
           rather than lorem ipsum: a reader judges the size against the text
           they actually read. */}
       <View
-        className="rounded-md border border-border bg-card px-4 py-3 gap-1.5"
+        className="gap-2 rounded-2xl border border-border bg-surface-1 px-4 py-4"
         // The inline muted colour is what the high-contrast switch changes, so
         // the sample below it has to read from the same palette or the switch
         // would only take effect after leaving this screen.
@@ -280,7 +280,7 @@ export default function TextAppearanceScreen() {
         />
       </Section>
 
-      <View className="rounded-md border border-border bg-card overflow-hidden">
+      <View className="overflow-hidden rounded-2xl border border-border/70 bg-card">
         <Separator />
         <ResetRow
           label={t("settings.appearance.typeReset")}
@@ -315,7 +315,7 @@ function Section({
       {description ? (
         <Text className="text-body text-muted-foreground px-1">{description}</Text>
       ) : null}
-      <View className="rounded-md border border-border bg-card overflow-hidden">
+      <View className="overflow-hidden rounded-2xl border border-border/70 bg-card">
         {children}
       </View>
     </View>

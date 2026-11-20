@@ -34,6 +34,7 @@ function code(rel: string): string {
 }
 
 const SWITCH_SHEET = "app/(app)/[workspace]/switch-workspace.tsx";
+const CHOICE_ROW = "components/workspace/workspace-choice-row.tsx";
 const MORE_POPOVER = "components/nav/more-tab-dropdown.tsx";
 const BADGE = "lib/workspace-unread-badge.ts";
 
@@ -50,7 +51,7 @@ describe("switch-workspace sheet wiring", () => {
   });
 
   it("dots the row from that derivation, not from its own scan", () => {
-    expect(src).toContain("hasUnread={badge.unreadIds.has(ws.id)}");
+    expect(src).toMatch(/<WorkspaceChoiceRow[\s\S]*?hasUnread=\{badge\.unreadIds\.has\(ws\.id\)\}/);
     expect(src).not.toMatch(/\.count\s*>\s*0/);
   });
 });
@@ -93,11 +94,17 @@ describe("the badge helper has no mirror of the web derivation", () => {
   });
 });
 
-describe("the unread row announces itself", () => {
-  const src = code(SWITCH_SHEET);
+describe("the shared workspace row announces itself", () => {
+  const src = code(CHOICE_ROW);
 
   it("uses the unread-specific label when the row has unread items", () => {
-    expect(src).toContain('tr.t("a11y.switchToUnread"');
+    expect(src).toMatch(/unread\s*\? t\("a11y\.switchToUnread"/);
+    expect(src).toContain("!active && hasUnread");
+  });
+
+  it("marks the active workspace selected and announces it separately", () => {
+    expect(src).toContain("accessibilityState={{ selected: active, disabled: active }}");
+    expect(src).toContain('t("a11y.currentWorkspace"');
   });
 
   it("resolves that key in both mobile bundles", () => {

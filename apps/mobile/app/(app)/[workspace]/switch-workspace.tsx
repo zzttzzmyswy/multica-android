@@ -32,21 +32,22 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import type { Workspace } from "@multica/core/types";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { Text } from "@/components/ui/text";
-import { WorkspaceAvatar } from "@/components/workspace/workspace-avatar";
+import { WorkspaceChoiceRow } from "@/components/workspace/workspace-choice-row";
 import { inboxUnreadSummaryOptions } from "@/data/queries/inbox";
 import { workspaceListOptions } from "@/data/queries/workspaces";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useTranslation } from "@/lib/i18n/react";
 import { workspaceUnreadBadge } from "@/lib/workspace-unread-badge";
-import { cn } from "@/lib/utils";
 import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 
 export default function SwitchWorkspaceRoute() {
   const activeSlug = useWorkspaceStore((s) => s.currentWorkspaceSlug);
   const t = useThemePalette();
   const tr = useTranslation();
-  const { data, isLoading } = useQuery(workspaceListOptions());
+  const { data, isLoading, isError, refetch } = useQuery(workspaceListOptions());
 
   // Which OTHER workspaces have unread inbox items. Account-level query: one
   // cache entry shared with the More popover's WorkspaceCard, not refetched
@@ -78,33 +79,46 @@ export default function SwitchWorkspaceRoute() {
   };
 
   return (
-    <View className="flex-1">
-      <View className="px-4 pt-4 pb-3">
-        <Text className="text-title-sm font-semibold text-foreground">
+    <View className="flex-1 bg-background">
+      <View className="flex-row items-center gap-3 border-b border-border/60 px-4 pb-3 pt-4">
+        <View className="size-10 items-center justify-center rounded-xl bg-secondary">
+          <Ionicons name="layers-outline" size={20} color={t.foreground} />
+        </View>
+        <Text accessibilityRole="header" className="min-w-0 flex-1 text-title font-semibold text-foreground">
           {tr.t("switchWorkspace.title")}
         </Text>
       </View>
       {isLoading ? (
-        <View className="py-6 items-center">
+        <View className="items-center py-8">
           <ActivityIndicator />
         </View>
       ) : (
-        <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-          {(data ?? []).map((ws) => (
-            <WorkspaceRow
-              key={ws.id}
-              workspace={ws}
-              active={ws.slug === activeSlug}
-              hasUnread={badge.unreadIds.has(ws.id)}
-              onPress={() => onSelect(ws)}
-              iconTint={t.foreground}
-              dotTint={t.brand}
-            />
-          ))}
-          {/* Create-new entry — pushes the onboarding create step
-              (new_workspace mode: no welcome/about-you, straight to the
-              form). After creation the flow dismisses back down to HERE out
-              of the sheet stack and lands in the new workspace. */}
+        <ScrollView className="flex-1" contentContainerClassName="gap-3 px-4 py-4">
+          {isError && !data ? (
+            <View className="items-start gap-3 rounded-2xl border border-border bg-surface-1 p-3">
+              <Text accessibilityLiveRegion="polite" className="text-body text-foreground">
+                {tr.t("settings.workspacesLoadError")}
+              </Text>
+              <Button variant="outline" onPress={() => void refetch()} className="min-h-12 rounded-xl">
+                <Text>{tr.t("common.retry")}</Text>
+              </Button>
+            </View>
+          ) : data?.length ? (
+            <View className="overflow-hidden rounded-2xl border border-border/70 bg-card">
+              {data.map((ws, index) => (
+                <View key={ws.id}>
+                  {index > 0 ? <Separator /> : null}
+                  <WorkspaceChoiceRow
+                    workspace={ws}
+                    active={ws.slug === activeSlug}
+                    hasUnread={badge.unreadIds.has(ws.id)}
+                    onPress={() => onSelect(ws)}
+                  />
+                </View>
+              ))}
+            </View>
+          ) : null}
+          {/* Keep onboarding on its existing route; the create action is not a workspace. */}
           <Pressable
             onPress={() =>
               router.push({
@@ -112,81 +126,17 @@ export default function SwitchWorkspaceRoute() {
                 params: { mode: "new_workspace" },
               })
             }
+            accessibilityRole="button"
             accessibilityLabel={tr.t("workspace.createNew")}
-            className="flex-row items-center gap-2 px-4 py-3"
+            className="min-h-12 flex-row items-center gap-2.5 rounded-xl border border-dashed border-border px-3 py-3 active:bg-secondary"
           >
-            <Ionicons name="add-circle-outline" size={20} color={t.foreground} />
-            <Text className="text-body font-medium text-foreground">
+            <Ionicons name="add-circle-outline" size={21} color={t.foreground} />
+            <Text className="min-w-0 flex-1 text-body font-semibold text-foreground">
               {tr.t("workspace.createNew")}
             </Text>
           </Pressable>
         </ScrollView>
       )}
     </View>
-  );
-}
-
-function WorkspaceRow({
-  workspace,
-  active,
-  hasUnread,
-  onPress,
-  iconTint,
-  dotTint,
-}: {
-  workspace: Workspace;
-  active: boolean;
-  hasUnread: boolean;
-  onPress: () => void;
-  iconTint: string;
-  dotTint: string;
-}) {
-  const tr = useTranslation();
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={active}
-      accessibilityLabel={
-        active
-          ? tr.t("a11y.currentWorkspace", { name: workspace.name })
-          : hasUnread
-            ? tr.t("a11y.switchToUnread", { name: workspace.name })
-            : tr.t("a11y.switchTo", { name: workspace.name })
-      }
-      className={cn(
-        "flex-row items-center gap-3 px-4 py-3 active:bg-secondary",
-        active && "opacity-100",
-      )}
-    >
-      <WorkspaceAvatar
-        name={workspace.name}
-        avatarUrl={workspace.avatar_url}
-        size={24}
-      />
-      <Text
-        className={cn(
-          "flex-1 text-body text-foreground",
-          active && "font-semibold",
-        )}
-        numberOfLines={1}
-      >
-        {workspace.name}
-      </Text>
-      {/* Points at the workspace holding unread inbox items. Sits in the same
-          right-edge slot as the active-workspace check; the active workspace
-          is excluded upstream (lib/workspace-unread-badge.ts), so dot and
-          check never collide on one row. Mirrors web's switcher row
-          (packages/views/layout/app-sidebar.tsx:658). */}
-      {hasUnread ? (
-        <View
-          className="size-2 rounded-full"
-          style={{ backgroundColor: dotTint }}
-          testID="workspace-unread-dot"
-        />
-      ) : null}
-      {active ? (
-        <Ionicons name="checkmark" color={iconTint} size={16} />
-      ) : null}
-    </Pressable>
   );
 }
