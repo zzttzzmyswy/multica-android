@@ -62,7 +62,9 @@ jobs:
           for pid in "$p1" "$p2" "$p3" "$p4" "$p5" "$p6"; do wait "$pid"; done
           export PATH="$ANDROID_HOME/platform-tools:$PATH"
           pnpm exec expo prebuild --platform android --no-install
-          (cd android; ./gradlew assembleRelease --console=plain --max-workers 2 -Dorg.gradle.jvmargs='-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8' -Pkotlin.compiler.execution.strategy=in-process)
+          # Use the documented NDK 28.2 from the last released builds.
+          sed -i '/^apply plugin: "expo-root-project"/i ext.ndkVersion = "28.2.13676358"' android/build.gradle
+          (cd android; ./gradlew assembleRelease --console=plain --max-workers 2 -Dorg.gradle.jvmargs='-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8' -PndkVersion=28.2.13676358 -Pkotlin.compiler.execution.strategy=in-process)
           node scripts/verify-apk.mjs
           mkdir -p "$RUNNER_TEMP/multica-145-apks"
           cp android/app/build/outputs/apk/release/app-*-release.apk "$RUNNER_TEMP/multica-145-apks/"
