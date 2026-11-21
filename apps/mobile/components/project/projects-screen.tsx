@@ -80,10 +80,7 @@ import {
   type ProjectListFilters,
   type ProjectSortField,
 } from "@/lib/filter-projects";
-import { ProjectTableView } from "@/components/project/project-table-view";
 import { ProjectCellEditor } from "@/components/project/project-cell-editor";
-import { SegmentedControl } from "@/components/ui/segmented-control";
-import { useProjectTableColumnsStore } from "@/data/stores/project-table-columns";
 import {
   PROJECT_CELL_TITLE_KEY,
   type ProjectCellColumn,
@@ -94,28 +91,16 @@ import { useThemePalette } from "@/lib/appearance-a11y-runtime";
 // its view store but a session-scoped store keeps the phone honest when a
 // teammate re-shares a filter — and matches how mobile's issue list treats
 // filters (see data/stores/issue-filter-slice.ts).
-//
-// `viewMode` joins them in iteration 135. It is the mobile spelling of web's
-// `ProjectViewMode` (`packages/core/projects/stores/view-store.ts:13`, whose
-// values are the density names `compact` / `comfortable`): on the phone the
-// choice reads as "table or cards", which is what the toggle's own labels
-// say, and nothing else branches on the identifier but this screen. The
-// default matches web's — `compact`, i.e. the table.
 interface ProjectMobileViewState {
-  viewMode: ProjectViewMode;
   sortField: ProjectSortField;
   sortDirection: "asc" | "desc";
   filters: ProjectListFilters;
-  setViewMode: (mode: ProjectViewMode) => void;
   setSort: (field: ProjectSortField, direction: "asc" | "desc") => void;
   toggleFilter: (key: "statuses" | "priorities" | "leads", value: string) => void;
   clearFilters: () => void;
 }
 
-export type ProjectViewMode = "table" | "cards";
-
 const DEFAULT_VIEW = {
-  viewMode: "table" as ProjectViewMode,
   sortField: "created" as ProjectSortField,
   sortDirection: PROJECT_SORT_DEFAULT_DIRECTION.created,
   filters: EMPTY_PROJECT_FILTERS,
@@ -124,7 +109,6 @@ const DEFAULT_VIEW = {
 export const useProjectMobileViewStore = create<ProjectMobileViewState>()(
   (set) => ({
     ...DEFAULT_VIEW,
-    setViewMode: (viewMode) => set({ viewMode }),
     setSort: (field, direction) =>
       set({ sortField: field, sortDirection: direction }),
     toggleFilter: (key, value) =>
@@ -170,35 +154,12 @@ export function ProjectsScreen({
   const sortField = useProjectMobileViewStore((s) => s.sortField);
   const sortDirection = useProjectMobileViewStore((s) => s.sortDirection);
   const filters = useProjectMobileViewStore((s) => s.filters);
-  const viewMode = useProjectMobileViewStore((s) => s.viewMode);
-  const setViewMode = useProjectMobileViewStore((s) => s.setViewMode);
   const setSort = useProjectMobileViewStore((s) => s.setSort);
   const toggleFilter = useProjectMobileViewStore((s) => s.toggleFilter);
   const clearFilters = useProjectMobileViewStore((s) => s.clearFilters);
 
-  // Column configuration lives in its own store so a column hidden here never
-  // touches the issue table's same-named columns (see
-  // data/stores/project-table-columns.ts).
-  const tableColumns = useProjectTableColumnsStore((s) => s.projectTableColumns);
-  const tableColumnWidths = useProjectTableColumnsStore(
-    (s) => s.projectTableColumnWidths,
-  );
-  const toggleTableColumn = useProjectTableColumnsStore(
-    (s) => s.toggleProjectTableColumn,
-  );
-  const setTableColumnWidth = useProjectTableColumnsStore(
-    (s) => s.setProjectTableColumnWidth,
-  );
-  const reorderTableColumn = useProjectTableColumnsStore(
-    (s) => s.reorderProjectTableColumn,
-  );
-  const resetTableColumns = useProjectTableColumnsStore(
-    (s) => s.resetProjectTableColumns,
-  );
-
   const [search, setSearch] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
-  const [columnMenuOpen, setColumnMenuOpen] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
 
@@ -526,50 +487,6 @@ export function ProjectsScreen({
           </View>
         ) : null}
 
-        {/* View + column controls. The toggle is web's `viewMode` Tabs
-            (projects-page.tsx:1210-1219) as a two-target segmented control;
-            `列` only exists for the table, so a user who never leaves the card
-            view is not shown a control that does nothing.
-            The control sits in a `flex-1` wrapper rather than being sized by
-            `justify-between`: its segments are `flexBasis: 0`, so left to
-            itself it has no intrinsic width to divide and instead eats the
-            row, pushing `列` off the right edge. */}
-        <View className="flex-row items-center gap-2">
-          <View className="flex-1">
-            <SegmentedControl
-              options={[
-                {
-                  value: "table",
-                  label: t("projects.viewTable"),
-                  a11yLabel: t("a11y.projectsViewTable"),
-                  icon: "grid-outline",
-                },
-                {
-                  value: "cards",
-                  label: t("projects.viewCards"),
-                  a11yLabel: t("a11y.projectsViewCards"),
-                  icon: "albums-outline",
-                },
-              ]}
-              value={viewMode}
-              onChange={setViewMode}
-            />
-          </View>
-          {viewMode === "table" ? (
-            <Pressable
-              onPress={() => setColumnMenuOpen(true)}
-              accessibilityRole="button"
-              accessibilityLabel={t("table.columns")}
-              className="flex-row items-center gap-1 rounded-md border border-border bg-secondary/50 px-2.5 py-1.5 active:opacity-70"
-            >
-              <Ionicons name="options-outline" size={14} color={theme.mutedForeground} />
-              <Text className="text-caption text-muted-foreground">
-                {t("table.columns")}
-              </Text>
-            </Pressable>
-          ) : null}
-        </View>
-
         {visible.length !== data.length ? (
           <Text className="text-micro text-muted-foreground">
             {t("projects.resultsCount", { count: visible.length })}
@@ -577,73 +494,42 @@ export function ProjectsScreen({
         ) : null}
       </View>
 
-      {viewMode === "table" ? (
-        <ProjectTableView
-          projects={visible}
-          sortField={sortField}
-          sortDirection={sortDirection}
-          onSort={setSort}
-          columns={tableColumns}
-          columnWidths={tableColumnWidths}
-          onToggleColumn={toggleTableColumn}
-          onResizeColumn={setTableColumnWidth}
-          onReorderColumn={reorderTableColumn}
-          onResetColumns={resetTableColumns}
-          columnMenuOpen={columnMenuOpen}
-          onColumnMenuClose={() => setColumnMenuOpen(false)}
-          rowMenu={rowMenu}
-          inlineEdit={inlineEdit}
-          onOpenProject={(project) => {
-            if (wsSlug) router.push(`/${wsSlug}/project/${project.id}`);
-          }}
-          selectionMode={selectionMode}
-          selectedIds={selectedIds}
-          onToggleSelected={toggleSelected}
-          onEnterSelection={(id) => {
-            if (!selectionMode) setSelectionMode(true);
-            toggleSelected(id);
-          }}
-          refreshing={isRefetching}
-          onRefresh={refetch}
-        />
-      ) : (
-        <FlatList
-          data={visible}
-          keyExtractor={(item) => item.id}
-          ItemSeparatorComponent={ProjectSeparator}
-          initialNumToRender={12}
-          windowSize={9}
-          maxToRenderPerBatch={10}
-          updateCellsBatchingPeriod={40}
-          ListEmptyComponent={
-            <EmptyState icon="search-outline" title={t("projects.noMatches")} className="py-10" />
-          }
-          renderItem={({ item }) => (
-            <ProjectRow
-              project={item}
-              menu={rowMenu}
-              inlineEdit={inlineEdit}
-              selectionMode={selectionMode}
-              selected={selectedIds.has(item.id)}
-              onLongPress={() => {
-                if (!selectionMode) setSelectionMode(true);
+      <FlatList
+        data={visible}
+        keyExtractor={(item) => item.id}
+        ItemSeparatorComponent={ProjectSeparator}
+        initialNumToRender={12}
+        windowSize={9}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={40}
+        ListEmptyComponent={
+          <EmptyState icon="search-outline" title={t("projects.noMatches")} className="py-10" />
+        }
+        renderItem={({ item }) => (
+          <ProjectRow
+            project={item}
+            menu={rowMenu}
+            inlineEdit={inlineEdit}
+            selectionMode={selectionMode}
+            selected={selectedIds.has(item.id)}
+            onLongPress={() => {
+              if (!selectionMode) setSelectionMode(true);
+              toggleSelected(item.id);
+            }}
+            onPress={() => {
+              if (selectionMode) {
                 toggleSelected(item.id);
-              }}
-              onPress={() => {
-                if (selectionMode) {
-                  toggleSelected(item.id);
-                  return;
-                }
-                if (wsSlug) router.push(`/${wsSlug}/project/${item.id}`);
-              }}
-            />
-          )}
-          refreshControl={
-            <RefreshControl refreshing={isRefetching} onRefresh={refetch} />
-          }
-          contentContainerClassName="pb-6"
-        />
-      )}
+                return;
+              }
+              if (wsSlug) router.push(`/${wsSlug}/project/${item.id}`);
+            }}
+          />
+        )}
+        refreshControl={
+          <RefreshControl refreshing={isRefetching} onRefresh={refetch} />
+        }
+        contentContainerClassName="pb-6"
+      />
 
       {/* Batch toolbar — pinned above the tab bar, mirrors the other lists */}
       {selectionMode ? (
@@ -700,8 +586,8 @@ export function ProjectsScreen({
       ) : null}
 
       {/* In-row cell editor (MYS-2202). Mounted once for the whole list and
-          hosted here rather than inside the row: both views share it, and a
-          sheet rendered per row would remount on every list re-render. */}
+          hosted here rather than inside the row so there is one editor for
+          the entire list. */}
       <ProjectCellEditor
         target={cellTarget}
         onClose={closeCellEditor}

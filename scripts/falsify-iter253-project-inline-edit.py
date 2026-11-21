@@ -11,9 +11,7 @@ An absence is the shape that mutates most deceptively, because several
 plausible edits make a control *appear* while leaving the feature wrong in a way
 the eye cannot catch:
 
-  - the editor reaching the CARD list only, while the table is `viewMode`'s
-    default (most users never see the card, and the table is what a cold open
-    renders);
+  - the editor no longer reaching the project cards;
   - a cell rendered beside the row's tap target instead of inside it, so the
     row tap swallows the edit — or inside it in a way that steals navigation;
   - the write going through a second mutation instead of `useUpdateProject`, so
@@ -44,7 +42,6 @@ ROOT = Path(__file__).resolve().parent.parent
 APP = ROOT / "apps" / "mobile"
 SCREEN = APP / "components" / "project" / "projects-screen.tsx"
 CARD_ROW = APP / "components" / "project" / "project-row.tsx"
-TABLE_ROW = APP / "components" / "project" / "project-table-view.tsx"
 CELLS = APP / "components" / "project" / "project-inline-cells.tsx"
 EDITOR = APP / "components" / "project" / "project-cell-editor.tsx"
 DECISIONS = APP / "lib" / "project-inline-edit.ts"
@@ -74,16 +71,10 @@ def run_suite() -> tuple[bool, str]:
 
 MUTATIONS: list[tuple[str, Path, str, str]] = [
     (
-        "1. the editor reaches the table only (the card list never gets it)",
+        "1. the editor never reaches the card list",
         SCREEN,
-        "              menu={rowMenu}\n              inlineEdit={inlineEdit}\n",
-        "              menu={rowMenu}\n",
-    ),
-    (
-        "2. the editor reaches the card only (the table is the default view)",
-        SCREEN,
-        "          rowMenu={rowMenu}\n          inlineEdit={inlineEdit}\n",
-        "          rowMenu={rowMenu}\n",
+        "            menu={rowMenu}\n            inlineEdit={inlineEdit}\n",
+        "            menu={rowMenu}\n",
     ),
     (
         "3. the cells keep working in multi-select, swallowing the pick tap",
@@ -154,12 +145,6 @@ MUTATIONS: list[tuple[str, Path, str, str]] = [
           onChange={(priority) => commit({ priority })}
         />
       ) : target.column === "priority" ? (""",
-    ),
-    (
-        "12. the status column loses its in-place editor in the pinned pane",
-        TABLE_ROW,
-        "            <ProjectStatusCell\n              project={item}\n              edit={inlineEdit}",
-        "            <ProjectStatusCell\n              project={item}",
     ),
     (
         "13. the card drops the lead chip (the field the card never had)",

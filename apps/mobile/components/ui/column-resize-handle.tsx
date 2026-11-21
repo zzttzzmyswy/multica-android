@@ -1,9 +1,5 @@
 /**
- * The drag target that resizes one table column. Extracted from the issue
- * table (iteration 134) so the projects compact table (iteration 135) shares
- * one gesture implementation instead of a second, subtly different one — the
- * responder negotiation below is the part that took the iteration to get
- * right, and a copy would rot independently.
+ * The drag target that resizes one issue-table column.
  *
  * Owns its own PanResponder: the gesture starts from whatever the column's
  * width was when the finger landed (captured in a ref, so a re-render mid-drag

@@ -73,9 +73,8 @@ export function ProjectRow({
   const showCount = totalIssues > 0;
 
   // The card's own selectionMode is what the cells consult: `ProjectRow` takes
-  // it as a prop with a default, while the table view threads the screen's flag
-  // straight through. Combining here keeps the rule in one place
-  // (`projectCellIsEditable`) rather than asking every host to pre-mix it.
+  // it as a prop with a default. Keep selection in sync with the edit
+  // context so `projectCellIsEditable` can disable edits during selection.
   const cellEdit: ProjectInlineEdit | undefined = inlineEdit
     ? { ...inlineEdit, selectionMode }
     : undefined;

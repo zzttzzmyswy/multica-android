@@ -1,33 +1,4 @@
-/**
- * Wiring ratchet for the projects-list inline editors (iteration 253,
- * MYS-2202).
- *
- * `lib/project-inline-edit.test.ts` proves the decisions answer correctly. None
- * of that reaches a user unless the two list views actually render the cells
- * and route their writes to the real mutation — and this list is precisely
- * where the gap lived: both views rendered status, priority and lead as static
- * text, so changing any of the three meant opening the project first. The
- * helper existing and staying unused is exactly the failure this file catches.
- *
- * Each assertion is paired with its negative, because presence alone passes on
- * a file that kept the old static cell beside the new control:
- *
- *   1. BOTH views host the cells — the table is `viewMode`'s default, so a
- *      card-only editor would be invisible on a cold open;
- *   2. the screen owns the write path and the sheet, once, so the two views
- *      cannot drift on which mutation they call or on what the sheet contains;
- *   3. the sheet hosts the same picker bodies the detail page's routes use —
- *      not a second set of options;
- *   4. the old static cells are gone from both views;
- *   5. the lead cell does not assert an absence from an unanswered read;
- *   6. every locale key the new surface renders exists in both bundles.
- *
- * Mobile's vitest lane is Node-only (`vitest.config.ts`), so this is asserted
- * against source rather than rendered markup — the convention this repo already
- * uses for wiring (`project-row-actions-wiring.test.ts`,
- * `skill-row-actions-wiring.test.ts`). Comments are stripped so a comment
- * describing the wiring cannot satisfy it.
- */
+// Source wiring checks (the mobile Vitest runner does not render native UI).
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -42,41 +13,24 @@ function code(rel: string): string {
 
 const SCREEN = "components/project/projects-screen.tsx";
 const CARD_ROW = "components/project/project-row.tsx";
-const TABLE_ROW = "components/project/project-table-view.tsx";
 const CELLS = "components/project/project-inline-cells.tsx";
 const EDITOR = "components/project/project-cell-editor.tsx";
 const DETAIL_PICKER = "app/(app)/[workspace]/project/[id]/picker/lead.tsx";
 
-describe("both projects views edit status / priority / lead in place", () => {
+describe("project cards edit status / priority / lead in place", () => {
   const screen = code(SCREEN);
 
-  it("threads one shared edit prop into both the table and the card list", () => {
-    // The table is `viewMode`'s DEFAULT, so a card-only editor would leave the
-    // feature invisible on a cold open — the same trap the row kebab's own
-    // wiring test pins one iteration earlier.
-    //
-    // Asserted per VIEW rather than on the file: `toContain` on the whole
-    // screen passes while either half is missing, which is precisely the
-    // half-defect this pins (found by mutation 2 of
-    // `scripts/falsify-iter253-project-inline-edit.py`).
-    const tableBlock = screen.slice(
-      screen.indexOf("<ProjectTableView"),
-      screen.indexOf("<FlatList", screen.indexOf("<ProjectTableView")),
-    );
-    expect(tableBlock).toContain("inlineEdit={inlineEdit}");
+  it("threads the edit prop into the card list", () => {
     const cardBlock = screen.slice(
       screen.indexOf("<ProjectRow\n"),
-      screen.indexOf("</ProjectRow>", screen.indexOf("<ProjectRow\n")),
+      screen.indexOf("refreshControl=", screen.indexOf("<ProjectRow\n")),
     );
     expect(cardBlock).toContain("inlineEdit={inlineEdit}");
   });
 
-  it("builds that prop once, so the two views cannot diverge", () => {
+  it("builds that prop once for the list", () => {
     expect(screen).toContain("const inlineEdit = useMemo(");
     expect(screen).toMatch(/onEdit:\s*openCellEditor/);
-    // Selection mode travels WITH the prop: the table takes the screen's flag
-    // and the card takes its own prop, so mixing it in here is what keeps one
-    // rule (`projectCellIsEditable`) true on both.
     expect(screen).toMatch(/inlineEdit = useMemo\(\s*\(\) => \(\{ onEdit: openCellEditor, selectionMode \}/);
   });
 
@@ -95,21 +49,14 @@ describe("both projects views edit status / priority / lead in place", () => {
   });
 
   it("lets the cells give way in multi-select, like the row kebab", () => {
-    // The rule: `projectCellIsEditable` returns false while selection mode is
-    // on. Both views have to feed it the flag.
-    //
-    // The card's `selectionMode` is a prop with a default, so the row folds it
-    // into the edit prop it hands down instead of asking the cell to know.
     expect(code(CARD_ROW)).toMatch(/cellEdit[\s\S]{0,160}selectionMode/);
-    // The table takes the screen's flag inside the shared prop it was handed,
-    // so the mixing happens once rather than in each view's render loop.
     expect(screen).toMatch(
       /inlineEdit = useMemo\(\s*\(\) => \(\{ onEdit: openCellEditor, selectionMode \}/,
     );
   });
 });
 
-describe("the row cells host the editors in both views", () => {
+describe("the project card cells host the editors", () => {
   it("the card renders all three as controls, each with the write path", () => {
     const card = code(CARD_ROW);
     for (const cell of ["ProjectStatusCell", "ProjectPriorityCell", "ProjectLeadCell"]) {
@@ -121,34 +68,12 @@ describe("the row cells host the editors in both views", () => {
     expect(card.match(/edit=\{cellEdit\}/g) ?? []).toHaveLength(3);
   });
 
-  it("the table renders all three, status in the pinned pane", () => {
-    const table = code(TABLE_ROW);
-    for (const cell of ["ProjectStatusCell", "ProjectPriorityCell", "ProjectLeadCell"]) {
-      expect(table, `table missing ${cell}`).toContain(`<${cell}`);
-    }
-    // Status is pinned with the title (web's non-hideable core column), so the
-    // pinned pane has to host its editor — otherwise changing a status would
-    // require panning the column strip into view first. Both halves matter: the
-    // cell being there, and it being handed the write path.
-    const pinnedBlock = table.slice(
-      table.indexOf("if (pinned) {"),
-      table.indexOf("return (\n      <Pressable", table.indexOf("if (pinned) {")),
-    );
-    expect(pinnedBlock).toContain("<ProjectStatusCell");
-    expect(pinnedBlock).toContain("edit={inlineEdit}");
-  });
-
   it("does not keep the old static cells beside the new ones", () => {
     // Both of these are the pre-253 rendering. Leaving either in place would
     // paint a second, uneditable copy of a field the row can now change.
     const card = code(CARD_ROW);
     expect(card).not.toContain("projectStatusLabel(project.status)");
     expect(card).not.toContain("projectPriorityLabel(project.priority)");
-    const table = code(TABLE_ROW);
-    expect(table).not.toContain("ProjectPriorityIcon");
-    // The pinned status line was `ProjectStatusIcon` + `projectStatusLabel`;
-    // the icon still imports for… nothing else in this file, so it must go too.
-    expect(table).not.toContain("projectStatusLabel(item.status)");
   });
 
   it("makes each cell its own tap target so the row tap still navigates", () => {
