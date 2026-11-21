@@ -72,7 +72,6 @@ const ISSUE_SENSE_NO_TOKEN_KEYS = [
   "newIssue.agentSentBody",
   "newIssue.agentSentTitle",
   "newIssue.parentChipClear",
-  "projects.column.issues",
   // "…start assigning work right after creation" — the `work` a squad leader
   // hands out IS the filed issue, and the sentence needs the entity noun for
   // its object. Upstream's own zh-Hans renders the same web string

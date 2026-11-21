@@ -8,8 +8,7 @@ neither pin nor delete was reachable from the list. An absence is the shape that
 mutates most deceptively, because several plausible edits make the kebab appear
 while leaving the feature wrong in a way the eye cannot catch:
 
-  - a kebab on the CARD list only, while the table is the default view mode
-    (most users never see it, and the table is what a cold open renders);
+  - a kebab that is no longer wired into the card renderer;
   - a delete entry shown to a plain member, which the server then rejects —
     web gates it on `isWorkspaceAdmin` and so does the batch bar;
   - a kebab whose delete does not ask first, or asks a *different* question
@@ -35,7 +34,6 @@ ROOT = Path(__file__).resolve().parent.parent
 APP = ROOT / "apps" / "mobile"
 SCREEN = APP / "components" / "project" / "projects-screen.tsx"
 CARD_ROW = APP / "components" / "project" / "project-row.tsx"
-TABLE_ROW = APP / "components" / "project" / "project-table-view.tsx"
 ROW_MENU = APP / "components" / "project" / "project-row-menu.tsx"
 ACTIONS = APP / "lib" / "project-row-actions.ts"
 
@@ -62,15 +60,9 @@ def run_suite() -> tuple[bool, str]:
 
 MUTATIONS: list[tuple[str, Path, str, str]] = [
     (
-        "1. the kebab reaches the card list only (table is the default view)",
+        "2. the card kebab is dropped — the row menu never reaches a row",
         SCREEN,
-        "          rowMenu={rowMenu}\n",
-        "",
-    ),
-    (
-        "2. the card kebab is dropped too — the row menu never reaches a row",
-        SCREEN,
-        "              menu={rowMenu}\n",
+        "            menu={rowMenu}\n",
         "",
     ),
     (
@@ -167,33 +159,6 @@ MUTATIONS: list[tuple[str, Path, str, str]] = [
         CARD_ROW,
         "{menu && !selectionMode ? <ProjectRowMenu project={project} {...menu} /> : null}",
         "{menu ? <ProjectRowMenu project={project} {...menu} /> : null}",
-    ),
-    (
-        "15. the table kebab is moved into the scrolling body pane (off-screen "
-        "at rest)",
-        TABLE_ROW,
-        """          ) : rowMenu ? (
-            /* The row's "⋯" (MYS-2197). In selection mode it gives way to the
-               checkbox — one control per row, and picking is what the mode is
-               for (the rule the card list and the other eight row menus
-               follow). */
-            <ProjectRowMenu project={item} {...rowMenu} />
-          ) : null}
-        </Pressable>
-      );
-    }
-    return (""",
-        """          ) : null}
-        </Pressable>
-      );
-    }
-    return (""",
-    ),
-    (
-        "16. the table's pinned pane is narrowed back, cutting the kebab off",
-        TABLE_ROW,
-        "const PINNED_WIDTH = 196;",
-        "const PINNED_WIDTH = 148;",
     ),
 ]
 

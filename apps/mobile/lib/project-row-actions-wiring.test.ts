@@ -1,36 +1,4 @@
-/**
- * Wiring ratchet for the projects-list row actions (iteration 252, MYS-2197).
- *
- * `lib/project-row-actions.test.ts` proves the gates answer correctly. None of
- * that reaches a user unless the LIST screen actually renders the kebab and
- * routes its choices to the real mutations — and this list is precisely where
- * the gap lived: `projects` was the last of the nine list surfaces without a
- * row menu, so every row was a bare `router.push` to the detail page with no
- * pin and no delete anywhere on it. The helper existing and staying unused is
- * exactly the failure this file is here to catch.
- *
- * Each assertion is paired with its negative, because presence alone passes on
- * a file that kept the old path beside the new one:
- *
- *   1. the row hosts the shared menu, in BOTH views — the table is the default
- *      view mode, so a kebab only on the card list would be missing for most
- *      users;
- *   2. the menu asks `projectRowActionsFor` which items to show — not a second
- *      hand-rolled gate in JSX;
- *   3. the screen owns both writes, routing them through the mutations the
- *      batch toolbar already uses, so the two entry points cannot drift;
- *   4. the pin direction reaches the menu as a resolved-or-not pair, never as a
- *      bare `pinnedProjectIds.has(...)`;
- *   5. the delete confirm reuses the detail page's copy verbatim — that
- *      sentence is what tells the user the issues survive;
- *   6. every locale key the new surface renders exists in both bundles.
- *
- * Mobile's vitest lane is Node-only (`vitest.config.ts`), so this is asserted
- * against source rather than rendered markup — the convention this repo already
- * uses for wiring (`skill-row-actions-wiring.test.ts`,
- * `label-row-actions-wiring.test.ts`). Comments are stripped so a comment
- * describing the wiring cannot satisfy it.
- */
+// Source wiring checks (the mobile Vitest runner does not render native UI).
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -45,21 +13,17 @@ function code(rel: string): string {
 
 const SCREEN = "components/project/projects-screen.tsx";
 const CARD_ROW = "components/project/project-row.tsx";
-const TABLE_ROW = "components/project/project-table-view.tsx";
 const ROW_MENU = "components/project/project-row-menu.tsx";
 const DETAIL = "app/(app)/[workspace]/project/[id].tsx";
 
-describe("the projects list exposes a row kebab in both views", () => {
+describe("the projects list exposes a card menu", () => {
   const src = code(SCREEN);
 
-  it("threads one shared menu prop into both the table and the card list", () => {
-    // The table is `viewMode`'s DEFAULT, so a card-only kebab would leave the
-    // feature invisible on a cold open.
-    expect(src).toContain("rowMenu={rowMenu}");
+  it("threads the menu prop into the card list", () => {
     expect(src).toContain("menu={rowMenu}");
   });
 
-  it("builds that prop once, so the two views cannot diverge", () => {
+  it("builds the menu with pin and permission information", () => {
     expect(src).toContain("const rowMenu = useMemo(");
     expect(src).toContain("pinnedIds: pinnedProjectIds");
     expect(src).toContain("pinsResolved: pinsRead.isResolved");
@@ -134,59 +98,11 @@ describe("the projects list exposes a row kebab in both views", () => {
   });
 });
 
-describe("both row renderers host the kebab", () => {
-  it("the card row renders it beside the counts column", () => {
+describe("the project card hosts the menu", () => {
+  it("renders the menu outside selection mode", () => {
     const row = code(CARD_ROW);
     expect(row).toContain("<ProjectRowMenu");
     expect(row).toContain("menu && !selectionMode");
-  });
-
-  it("the table row renders it in the pinned pane", () => {
-    // Not in the scrolling body: that strip is 440dp wide before any resize, so
-    // a trailing cell there is off-screen at rest and the actions would be
-    // reachable only by panning the columns first.
-    const table = code(TABLE_ROW);
-    expect(table).toContain("<ProjectRowMenu");
-    expect(table).toContain("rowMenu ?");
-    // …and the menu is inside the pinned `Pressable`, which is the block that
-    // closes over `pinned === true`.
-    const pinnedBlock = table.slice(
-      table.indexOf("if (pinned) {"),
-      table.indexOf("return (\n      <Pressable", table.indexOf("if (pinned) {")),
-    );
-    expect(pinnedBlock).toContain("<ProjectRowMenu");
-  });
-
-  it("leaves the pinned pane wide enough to actually hold the kebab", () => {
-    // The pane holds icon + title + kebab in one `flex-row` with `gap-2`, and
-    // the title wrapper is `flex-1`, so the menu is laid out AFTER the title
-    // takes its share. At the pre-252 width (148) the icon (18) and the gaps
-    // leave roughly 106dp for a two-line title, and the 36dp `size-icon` button
-    // then eats a quarter of it — the kebab renders but the title clips to a
-    // few characters. The pin is what makes this a real bound rather than a
-    // guess: 148 fails it, so a later "tidying" of the constant cannot silently
-    // undo the room the kebab was given.
-    const table = code(TABLE_ROW);
-    const width = Number(
-      /const PINNED_WIDTH = (\d+);/.exec(table)?.[1] ?? "0",
-    );
-    // Icon 18 + left pad 12 + right pad 8 + two `gap-2` gutters 16 + the 36dp
-    // icon-button = the fixed cost the title shares the pane with.
-    const ICON = 18;
-    const PADDING = 12 + 8;
-    const GUTTERS = 16;
-    const BUTTON = 36;
-    const MIN_TITLE = 96;
-    expect(width).toBeGreaterThanOrEqual(
-      ICON + PADDING + GUTTERS + BUTTON + MIN_TITLE,
-    );
-  });
-
-  it("keeps the kebab out of selection mode on both", () => {
-    // One trailing control per row: picking is what the mode is for. A kebab
-    // beside the checkbox is the defect this pins.
-    expect(code(CARD_ROW)).toMatch(/menu && !selectionMode/);
-    expect(code(TABLE_ROW)).toMatch(/selectionMode \?[\s\S]{0,400}rowMenu \?/);
   });
 });
 
